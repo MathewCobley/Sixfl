@@ -7,6 +7,9 @@ export const CAPTAIN_COLLECTED_NOTE_MARKERS = [
   "Paid captain directly: captain collected",
 ] as const;
 
+export const CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER =
+  "Removed from captain collection: resolved privately";
+
 export type CaptainCollectedRemittanceEntry = {
   chargeId: string;
   teamId: string;
@@ -16,6 +19,9 @@ export type CaptainCollectedRemittanceEntry = {
 export type CaptainCollectedRemittanceSnapshot = {
   collectedPence: number;
   collectedPlayerCount: number;
+  removedPence: number;
+  removedPlayerCount: number;
+  removalNotes: string[];
   remittedPence: number;
   pendingPence: number;
   unremittedPence: number;
@@ -24,6 +30,60 @@ export type CaptainCollectedRemittanceSnapshot = {
 
 function key(teamId: string, fixtureId: string) {
   return `${teamId}:${fixtureId}`;
+}
+
+function lastIndexOfInsensitive(value: string, marker: string) {
+  return value.toLowerCase().lastIndexOf(marker.toLowerCase());
+}
+
+function latestCaptainCollectedIndex(note?: string | null) {
+  const value = note ?? "";
+  return Math.max(
+    ...CAPTAIN_COLLECTED_NOTE_MARKERS.map((marker) =>
+      lastIndexOfInsensitive(value, marker),
+    ),
+  );
+}
+
+export function isCaptainCollectionRemovedNote(note?: string | null) {
+  const value = note ?? "";
+  const removedIndex = lastIndexOfInsensitive(
+    value,
+    CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER,
+  );
+  const collectedIndex = latestCaptainCollectedIndex(value);
+
+  return removedIndex >= 0 && removedIndex > collectedIndex;
+}
+
+export function isCaptainCollectionActiveNote(note?: string | null) {
+  const value = note ?? "";
+  const collectedIndex = latestCaptainCollectedIndex(value);
+  const removedIndex = lastIndexOfInsensitive(
+    value,
+    CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER,
+  );
+
+  return collectedIndex >= 0 && collectedIndex > removedIndex;
+}
+
+export function getLatestCaptainCollectionRemovalNote(note?: string | null) {
+  const lines = (note ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (
+      lines[index]
+        .toLowerCase()
+        .includes(CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER.toLowerCase())
+    ) {
+      return lines[index];
+    }
+  }
+
+  return null;
 }
 
 export async function ensureCaptainCollectedRemittanceTable() {
@@ -54,6 +114,9 @@ function emptySnapshot(): CaptainCollectedRemittanceSnapshot {
   return {
     collectedPence: 0,
     collectedPlayerCount: 0,
+    removedPence: 0,
+    removedPlayerCount: 0,
+    removalNotes: [],
     remittedPence: 0,
     pendingPence: 0,
     unremittedPence: 0,
@@ -95,6 +158,7 @@ export async function getCaptainCollectedRemittanceSnapshots(
         teamId: true,
         fixtureId: true,
         amountPence: true,
+        note: true,
       },
     }),
     prisma.$queryRaw<
@@ -125,16 +189,39 @@ export async function getCaptainCollectedRemittanceSnapshots(
     string,
     { amountPence: number; playerCount: number }
   >();
+  const removedByTeamFixture = new Map<
+    string,
+    { amountPence: number; playerCount: number; notes: string[] }
+  >();
 
   for (const fee of collectedFees) {
     const feeKey = key(fee.teamId, fee.fixtureId);
-    const current = collectedByTeamFixture.get(feeKey) ?? {
-      amountPence: 0,
-      playerCount: 0,
-    };
-    current.amountPence += fee.amountPence;
-    current.playerCount += 1;
-    collectedByTeamFixture.set(feeKey, current);
+
+    if (isCaptainCollectionActiveNote(fee.note)) {
+      const current = collectedByTeamFixture.get(feeKey) ?? {
+        amountPence: 0,
+        playerCount: 0,
+      };
+      current.amountPence += fee.amountPence;
+      current.playerCount += 1;
+      collectedByTeamFixture.set(feeKey, current);
+      continue;
+    }
+
+    if (isCaptainCollectionRemovedNote(fee.note)) {
+      const current = removedByTeamFixture.get(feeKey) ?? {
+        amountPence: 0,
+        playerCount: 0,
+        notes: [],
+      };
+      current.amountPence += fee.amountPence;
+      current.playerCount += 1;
+      const removalNote = getLatestCaptainCollectionRemovalNote(fee.note);
+      if (removalNote && !current.notes.includes(removalNote)) {
+        current.notes.push(removalNote);
+      }
+      removedByTeamFixture.set(feeKey, current);
+    }
   }
 
   const remittanceByCharge = new Map(
@@ -148,9 +235,15 @@ export async function getCaptainCollectedRemittanceSnapshots(
   );
 
   for (const entry of uniqueEntries) {
-    const collected = collectedByTeamFixture.get(key(entry.teamId, entry.fixtureId)) ?? {
+    const entryKey = key(entry.teamId, entry.fixtureId);
+    const collected = collectedByTeamFixture.get(entryKey) ?? {
       amountPence: 0,
       playerCount: 0,
+    };
+    const removed = removedByTeamFixture.get(entryKey) ?? {
+      amountPence: 0,
+      playerCount: 0,
+      notes: [],
     };
     const remittance = remittanceByCharge.get(entry.chargeId) ?? {
       remittedPence: 0,
@@ -168,6 +261,9 @@ export async function getCaptainCollectedRemittanceSnapshots(
     snapshots.set(entry.chargeId, {
       collectedPence: collected.amountPence,
       collectedPlayerCount: collected.playerCount,
+      removedPence: removed.amountPence,
+      removedPlayerCount: removed.playerCount,
+      removalNotes: removed.notes,
       remittedPence: remittance.remittedPence,
       pendingPence: remittance.pendingPence,
       unremittedPence,
