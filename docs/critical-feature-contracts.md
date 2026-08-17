@@ -84,7 +84,7 @@ When a critical feature currently depends on a preparation script, its final beh
 - the lead can explicitly choose to confirm the team name later and return to the same link without losing the reserved place;
 - once the lead has been converted into an actual team, the public confirmation page must not allow the lead team name to be changed.
 
-These assertions live in `scripts/check-critical-feature-contracts.mjs` and are checked after the complete production source-preparation chain.
+These assertions live in `scripts/check-critical-feature-contracts.mjs` and dedicated executable contract scripts such as `scripts/check-team-confirmation-contract.mjs`; the critical-feature workflow runs them after the complete production source-preparation chain.
 
 ## Areas to add next
 
