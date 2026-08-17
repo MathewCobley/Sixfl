@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { permanentRedirect } from "next/navigation";
 
 import FormingLeagueLanding from "@/components/leagues/FormingLeagueLanding";
 import LeagueQuickLinks from "@/components/leagues/LeagueQuickLinks";
@@ -12,6 +13,11 @@ export default async function PublicLeagueLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+
+  if (slug.toLowerCase().includes("heartlands")) {
+    permanentRedirect("/leagues");
+  }
+
   const homepageLeagues = await getHomepageLeagues({ includeHidden: true });
   const homepageLeague = homepageLeagues.find((league) => league.slug === slug);
   const isPreLaunch =
