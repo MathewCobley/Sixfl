@@ -76,7 +76,15 @@ When a critical feature currently depends on a preparation script, its final beh
 - captains retain the introduction-request action;
 - approved introductions retain the add-to-squad action.
 
-These assertions live in `scripts/check-critical-feature-contracts.mjs` and are checked after the complete production source-preparation chain.
+### Team lead confirmation
+
+- the public confirmation page must read league name, start date, match length, fee, venue and kick-off context from the lead's current prospective league rather than hard-coded launch details;
+- confirming a place reserves/qualifies the lead but does not automatically create a `Team` or fixtures;
+- after confirmation, an unconverted team lead can save or update its team name on the same signed confirmation link;
+- the lead can explicitly choose to confirm the team name later and return to the same link without losing the reserved place;
+- once the lead has been converted into an actual team, the public confirmation page must not allow the lead team name to be changed.
+
+These assertions live in `scripts/check-critical-feature-contracts.mjs` and dedicated executable contract scripts such as `scripts/check-team-confirmation-contract.mjs`; the critical-feature workflow runs them after the complete production source-preparation chain.
 
 ## Areas to add next
 
