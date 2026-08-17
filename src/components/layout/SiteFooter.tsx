@@ -33,7 +33,6 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
       { label: "Harrogate 6-a-side", href: "/harrogate-6-a-side-football", featured: true },
       { label: "Northallerton 6-a-side", href: "/northallerton-6-a-side-football" },
       { label: "Wetherby 6-a-side", href: "/wetherby-6-a-side-football" },
-      { label: "Heartlands 6-a-side", href: "/north-yorkshire-heartlands-6-a-side-football" },
       { label: "Venues", href: "/venues" },
     ],
   },
