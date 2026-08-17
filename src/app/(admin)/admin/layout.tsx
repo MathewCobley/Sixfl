@@ -9,7 +9,6 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import { prisma } from "@/lib/prisma";
 import AdminSidebar from "@/components/admin/AdminSidebar";
-import AdminSidebarDesktopColumnsBridge from "@/components/admin/AdminSidebarDesktopColumnsBridge";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
 import EmailBrandOptionBridge from "@/components/admin/email-templates/EmailBrandOptionBridge";
@@ -25,6 +24,7 @@ import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHin
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
 import PlayerPoolNudgeBridge from "@/components/admin/player-pool/PlayerPoolNudgeBridge";
+import AdminQueueItemDetailsLinksBridge from "@/components/admin/queue/AdminQueueItemDetailsLinksBridge";
 import RefereeNightCashDistributionBridge from "@/components/admin/referee-nights/RefereeNightCashDistributionBridge";
 import RefereeNightFixtureSyncBridge from "@/components/admin/referee-nights/RefereeNightFixtureSyncBridge";
 import AdminRefereeCommsHistoryBridge from "@/components/admin/referees/AdminRefereeCommsHistoryBridge";
@@ -88,7 +88,7 @@ export default async function AdminLayout({
       <EmailBrandOptionBridge />
       <PlayerPoolTemplateCtaBridge />
       <PlayerPoolNudgeBridge />
-      <AdminSidebarDesktopColumnsBridge />
+      <AdminQueueItemDetailsLinksBridge />
       <AdminLeagueSeasonsBridge />
       <AdminDivisionSelectBridge />
       <FreeKitTeamBadgesBridge />

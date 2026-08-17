@@ -31,6 +31,9 @@ jobs:
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
+      - name: Check native admin Kits navigation
+        run: node scripts/check-native-admin-kits-navigation.mjs
+
       - name: Snapshot protected kit source
         run: |
           git diff --binary -- \

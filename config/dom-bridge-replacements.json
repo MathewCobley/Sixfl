@@ -21,6 +21,62 @@
       ]
     },
     {
+      "id": "admin-kits-navigation-and-sidebar-layout",
+      "removedPaths": [],
+      "retainedPaths": [
+        "src/components/admin/AdminSidebarDesktopColumnsBridge.tsx"
+      ],
+      "responsibilities": [
+        "Expose Kits in the admin League setup navigation without cloning or inserting a rendered sidebar link.",
+        "Keep the current admin sidebar column layout owned by AdminSidebar rather than mutating classes after render.",
+        "Keep the historical combined bridge path as an inert compatibility shell while queue View details remains owned by its dedicated existing compatibility component."
+      ],
+      "checks": [
+        {
+          "path": "src/components/admin/AdminSidebar.tsx",
+          "contains": [
+            "name: \"Kits\"",
+            "href: \"/admin/kits\"",
+            "description: \"Orders\"",
+            "className=\"grid grid-cols-3 gap-1.5\""
+          ]
+        },
+        {
+          "path": "src/components/admin/AdminSidebarDesktopColumnsBridge.tsx",
+          "contains": [
+            "Retired compatibility shell",
+            "return null;"
+          ],
+          "notContains": [
+            "MutationObserver",
+            "document.querySelector",
+            "document.createElement",
+            "injectKitsNavigation",
+            "data-admin-kits-nav",
+            "/admin/kits"
+          ]
+        },
+        {
+          "path": "src/components/admin/queue/AdminQueueItemDetailsLinksBridge.tsx",
+          "contains": [
+            "AdminQueueItemDetailsLinksBridge",
+            "View details",
+            "/admin/queue/${encodeURIComponent(id)}"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/layout.tsx",
+          "contains": [
+            "AdminQueueItemDetailsLinksBridge",
+            "<AdminQueueItemDetailsLinksBridge />"
+          ],
+          "notContains": [
+            "<AdminSidebarDesktopColumnsBridge />"
+          ]
+        }
+      ]
+    },
+    {
       "id": "captain-player-pool-navigation",
       "removedPaths": [
         "src/components/captain/CaptainPlayerPoolNavBridge.tsx"
