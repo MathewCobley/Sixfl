@@ -64,6 +64,19 @@ function DetailRow({
   );
 }
 
+function getPreviewHtml(html: string | null | undefined) {
+  const value = html?.trim();
+  if (!value) return "";
+
+  const baseTag = '<base target="_blank" />';
+
+  if (/<head[\s>]/i.test(value)) {
+    return value.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
+  }
+
+  return `${baseTag}${value}`;
+}
+
 function MessagePreview({
   html,
   text,
@@ -73,6 +86,7 @@ function MessagePreview({
 }) {
   const hasHtml = Boolean(html?.trim());
   const hasText = Boolean(text?.trim());
+  const previewHtml = hasHtml ? getPreviewHtml(html) : "";
 
   if (!hasHtml && !hasText) return null;
 
@@ -83,7 +97,7 @@ function MessagePreview({
       </h2>
       <p className="mt-1 text-sm text-white/45">
         {hasHtml
-          ? "Rendered from the exact HTML saved on this dispatch."
+          ? "Rendered from the exact HTML saved on this dispatch. Links open safely in a new tab."
           : "Preview of the exact text saved on this dispatch."}
       </p>
 
@@ -91,8 +105,8 @@ function MessagePreview({
         <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white">
           <iframe
             title="Rendered email preview"
-            srcDoc={html ?? ""}
-            sandbox=""
+            srcDoc={previewHtml}
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
             referrerPolicy="no-referrer"
             loading="lazy"
             className="h-[48rem] w-full bg-white"
