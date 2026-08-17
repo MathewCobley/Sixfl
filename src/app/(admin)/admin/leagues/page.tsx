@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
@@ -48,6 +49,40 @@ function normaliseSeasonRows(rows: SeasonRow[]) {
     teamCount: Number(row.teamCount ?? 0),
     fixtureCount: Number(row.fixtureCount ?? 0),
   }));
+}
+
+async function updateCompetitionNameAction(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+
+  const competitionId = String(formData.get("competitionId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+
+  if (!competitionId || !name || name.length > 160) return;
+
+  const competition = await prisma.leagueCompetition.findUnique({
+    where: { id: competitionId },
+    select: {
+      id: true,
+      leagues: {
+        select: { slug: true },
+      },
+    },
+  });
+
+  if (!competition) return;
+
+  await prisma.leagueCompetition.update({
+    where: { id: competitionId },
+    data: { name },
+  });
+
+  revalidatePath("/admin/leagues");
+  revalidatePath("/leagues");
+  for (const league of competition.leagues) {
+    revalidatePath(`/leagues/${league.slug}`);
+  }
 }
 
 export default async function AdminLeaguesPage() {
@@ -160,11 +195,31 @@ export default async function AdminLeaguesPage() {
             return (
               <div key={competition.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-semibold text-white">{competition.name}</h3>
                     <p className="mt-1 text-sm text-white/50">
                       Current season: {competition.currentSeason || currentSeason?.season || "Not set"} · {competition.seasonCount} season{competition.seasonCount === 1 ? "" : "s"} · {competition.teamCount} team{competition.teamCount === 1 ? "" : "s"}
                     </p>
+
+                    <form action={updateCompetitionNameAction} className="mt-4 flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-end">
+                      <input type="hidden" name="competitionId" value={competition.id} />
+                      <label className="min-w-0 flex-1 text-xs font-medium text-white/55">
+                        <span className="mb-1.5 block">Parent competition name</span>
+                        <input
+                          name="name"
+                          defaultValue={competition.name}
+                          required
+                          maxLength={160}
+                          className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="min-h-10 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-100"
+                      >
+                        Save name
+                      </button>
+                    </form>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
