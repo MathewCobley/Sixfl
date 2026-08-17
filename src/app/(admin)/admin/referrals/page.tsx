@@ -2,7 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamReferrals, referralStatus } from "@/lib/team-referrals";
-import { attachExistingLeadReferralAction, markReferralPaidAction } from "./actions";
+import {
+  attachExistingLeadReferralAction,
+  markReferralPaidAction,
+  retryReferralRecordedEmailAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,6 +16,7 @@ export const metadata = { title: "Team Referrals | SIXFL Admin" };
 type SearchParams = Promise<{
   added?: string;
   error?: string;
+  email?: string;
 }>;
 
 type AvailableLeadRow = {
@@ -30,12 +35,34 @@ type PlayerOptionRow = {
   email: string;
 };
 
+type ReferralEmailDeliveryRow = {
+  referralId: string;
+  dispatchId: string | null;
+  status: string | null;
+  failureReason: string | null;
+  createdAt: Date | null;
+  sentAt: Date | null;
+  failedAt: Date | null;
+};
+
+const RECOVERABLE_MISSING_EMAIL_REASON = "Recipient has no email address.";
+
 function money(pence: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 }
 
 function date(value: Date) {
   return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(value);
+}
+
+function dateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
 }
 
 function errorMessage(value?: string) {
@@ -57,11 +84,98 @@ function errorMessage(value?: string) {
   }
 }
 
+function emailNotice(value?: string) {
+  switch (value) {
+    case "queued":
+      return {
+        tone: "success" as const,
+        message: "Referral confirmation email queued. The notification worker will send it shortly.",
+      };
+    case "already":
+      return {
+        tone: "info" as const,
+        message: "That referral email is already queued, sending, or has been sent.",
+      };
+    case "blocked":
+      return {
+        tone: "warning" as const,
+        message: "SIXFL did not retry that email because the player is currently blocked, suppressed, or has email notifications disabled.",
+      };
+    case "no_email":
+      return {
+        tone: "warning" as const,
+        message: "That player does not currently have an email address on their SIXFL account.",
+      };
+    case "not_found":
+      return {
+        tone: "error" as const,
+        message: "That referral could not be found.",
+      };
+    case "missing":
+    case "failed":
+      return {
+        tone: "error" as const,
+        message: "SIXFL could not queue that referral email. Check the delivery status below and try again after correcting the issue.",
+      };
+    default:
+      return null;
+  }
+}
+
+function noticeClass(tone: "success" | "info" | "warning" | "error") {
+  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (tone === "info") return "border-sky-200 bg-sky-50 text-sky-800";
+  if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-red-200 bg-red-50 text-red-800";
+}
+
+function emailStatusLabel(status: string | null) {
+  switch (status) {
+    case "SENT":
+      return "Sent";
+    case "QUEUED":
+      return "Queued";
+    case "PROCESSING":
+      return "Sending";
+    case "FAILED":
+      return "Failed";
+    case "SKIPPED":
+      return "Skipped";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return "Not queued";
+  }
+}
+
+function emailStatusClass(status: string | null) {
+  switch (status) {
+    case "SENT":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "QUEUED":
+    case "PROCESSING":
+      return "border-sky-200 bg-sky-50 text-sky-800";
+    case "FAILED":
+    case "CANCELLED":
+      return "border-red-200 bg-red-50 text-red-800";
+    case "SKIPPED":
+      return "border-amber-200 bg-amber-50 text-amber-900";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
+function canRetryReferralEmail(delivery?: ReferralEmailDeliveryRow) {
+  if (!delivery?.dispatchId) return true;
+  if (delivery.status === "FAILED") return true;
+  return delivery.status === "SKIPPED" && delivery.failureReason === RECOVERABLE_MISSING_EMAIL_REASON;
+}
+
 export default async function AdminReferralsPage({ searchParams }: { searchParams?: SearchParams }) {
   await requireAdmin();
   const sp = (await searchParams) ?? {};
 
-  const [referrals, availableLeads, playerOptions] = await Promise.all([
+  const [referrals, availableLeads, playerOptions, referralEmailDeliveries] = await Promise.all([
     getTeamReferrals(),
     prisma.$queryRaw<AvailableLeadRow[]>`
       SELECT
@@ -95,13 +209,42 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
         )
       ORDER BY COALESCE(NULLIF(BTRIM(u."name"), ''), u."email"), u."email"
     `,
+    prisma.$queryRaw<ReferralEmailDeliveryRow[]>`
+      SELECT
+        referral."id" AS "referralId",
+        dispatch."id" AS "dispatchId",
+        dispatch."status"::text AS "status",
+        dispatch."failureReason",
+        dispatch."createdAt",
+        dispatch."sentAt",
+        dispatch."failedAt"
+      FROM "TeamReferral" referral
+      LEFT JOIN LATERAL (
+        SELECT
+          item."id",
+          item."status",
+          item."failureReason",
+          item."createdAt",
+          item."sentAt",
+          item."failedAt"
+        FROM "NotificationDispatch" item
+        WHERE item."sourceType" = 'team-referral-recorded'
+          AND item."sourceId" = referral."id"
+        ORDER BY item."createdAt" DESC
+        LIMIT 1
+      ) dispatch ON TRUE
+    `,
   ]);
 
+  const referralEmailById = new Map(
+    referralEmailDeliveries.map((delivery) => [delivery.referralId, delivery]),
+  );
   const readyCount = referrals.filter((row) => referralStatus(row) === "READY").length;
   const unpaidValue = referrals
     .filter((row) => referralStatus(row) === "READY")
     .reduce((total, row) => total + row.rewardPence, 0);
   const attachError = errorMessage(sp.error);
+  const retryNotice = emailNotice(sp.email);
 
   return (
     <div className="space-y-6">
@@ -127,6 +270,12 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
       {attachError ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800">
           {attachError}
+        </div>
+      ) : null}
+
+      {retryNotice ? (
+        <div className={`rounded-2xl border px-5 py-4 text-sm font-bold ${noticeClass(retryNotice.tone)}`}>
+          {retryNotice.message}
         </div>
       ) : null}
 
@@ -215,11 +364,42 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
             {referrals.map((row) => {
               const status = referralStatus(row);
               const displayedTeam = row.teamName ?? row.leadTeamName ?? "Unnamed team";
+              const emailDelivery = referralEmailById.get(row.id);
               return (
-                <div key={row.id} className="grid gap-4 p-5 lg:grid-cols-[1.2fr_1.2fr_0.8fr_auto] lg:items-center">
+                <div key={row.id} className="grid gap-4 p-5 lg:grid-cols-[1.4fr_1.2fr_0.8fr_auto] lg:items-center">
                   <div>
                     <p className="font-black text-slate-950">{row.referrerName ?? row.referrerEmail ?? "Player"}</p>
                     <p className="mt-1 text-xs text-slate-500">{row.referrerEmail ?? "No email"}</p>
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Referral email</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black ${emailStatusClass(emailDelivery?.status ?? null)}`}>
+                          {emailStatusLabel(emailDelivery?.status ?? null)}
+                        </span>
+                      </div>
+                      {emailDelivery?.status === "SENT" && emailDelivery.sentAt ? (
+                        <p className="mt-2 text-xs text-slate-500">Sent {dateTime(emailDelivery.sentAt)}</p>
+                      ) : emailDelivery?.status === "QUEUED" && emailDelivery.createdAt ? (
+                        <p className="mt-2 text-xs text-slate-500">Queued {dateTime(emailDelivery.createdAt)}</p>
+                      ) : emailDelivery?.status === "PROCESSING" ? (
+                        <p className="mt-2 text-xs text-slate-500">The notification worker is sending this now.</p>
+                      ) : emailDelivery?.failureReason ? (
+                        <p className="mt-2 text-xs leading-5 text-slate-600">{emailDelivery.failureReason}</p>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-500">No confirmation email attempt has been recorded yet.</p>
+                      )}
+                      {canRetryReferralEmail(emailDelivery) ? (
+                        <form action={retryReferralRecordedEmailAction} className="mt-3">
+                          <input type="hidden" name="referralId" value={row.id} />
+                          <button
+                            type="submit"
+                            className="inline-flex items-center justify-center rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-800 transition hover:bg-sky-100"
+                          >
+                            Retry email
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
                   </div>
                   <div>
                     <p className="font-bold text-slate-900">{displayedTeam}</p>

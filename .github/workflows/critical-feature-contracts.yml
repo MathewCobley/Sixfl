@@ -37,6 +37,9 @@ jobs:
       - name: Check managed squad to PlayerPool handoff
         run: node scripts/check-managed-squad-playerpool-handoff.mjs
 
+      - name: Check admin referral email status
+        run: node scripts/check-admin-referral-email-status.mjs
+
       - name: Snapshot protected kit source
         run: |
           git diff --binary -- \
