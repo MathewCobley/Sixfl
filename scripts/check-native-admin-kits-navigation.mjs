@@ -3,14 +3,13 @@ import path from "node:path";
 
 const root = process.cwd();
 const sidebarPath = "src/components/admin/AdminSidebar.tsx";
-const bridgePath = "src/components/admin/AdminSidebarDesktopColumnsBridge.tsx";
+const retiredBridgePath = "src/components/admin/AdminSidebarDesktopColumnsBridge.tsx";
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
 const sidebar = read(sidebarPath);
-const bridge = read(bridgePath);
 const failures = [];
 
 if (!sidebar.includes('name: "Kits"')) {
@@ -29,12 +28,10 @@ if (!sidebar.includes('description: "Orders"')) {
   failures.push("AdminSidebar Kits navigation must retain the Orders description.");
 }
 
-for (const forbidden of ["injectKitsNavigation", "data-admin-kits-nav", "/admin/kits"]) {
-  if (bridge.includes(forbidden)) {
-    failures.push(
-      `AdminSidebarDesktopColumnsBridge must not inject Kits navigation (${forbidden}).`,
-    );
-  }
+if (fs.existsSync(path.join(root, retiredBridgePath))) {
+  failures.push(
+    "AdminSidebarDesktopColumnsBridge must stay retired; Kits navigation belongs in AdminSidebar.",
+  );
 }
 
 if (failures.length) {
