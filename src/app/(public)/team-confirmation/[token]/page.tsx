@@ -429,6 +429,10 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
                 </p>
               </div>
 
+              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 text-sm leading-6 text-white/70">
+                By reserving a place, you’re simply letting us know you’d like us to hold a place for your team while we finalise the league. There’s no payment due and you’re not committing to take part at this stage.
+              </div>
+
               <div className="flex flex-col gap-3 sm:flex-row">
                 <form action={confirmTeamPlaceAction}>
                   <input type="hidden" name="token" value={token} />
