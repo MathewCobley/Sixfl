@@ -60,6 +60,12 @@ const navigationGroups = [
         description: "Squads",
       },
       {
+        name: "Kits",
+        href: "/admin/kits",
+        icon: PhotoIcon,
+        description: "Orders",
+      },
+      {
         name: "Users",
         href: "/admin/users",
         icon: UsersIcon,
