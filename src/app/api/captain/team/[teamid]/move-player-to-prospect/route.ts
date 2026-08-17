@@ -6,9 +6,9 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
+import { requireAdmin } from "@/lib/requireAdmin";
 import { sendProspectToPlayerPool } from "@/lib/player-pool/sendProspectToPlayerPool";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/requireAdmin";
 
 type MoveBody = {
   membershipId?: unknown;
@@ -87,7 +87,7 @@ export async function POST(
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: "Squad member could not be moved to PlayerPool." },
+        { error: "Squad member could not be moved to prospects." },
         { status: 404 },
       );
     }
