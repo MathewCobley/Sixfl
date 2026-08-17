@@ -69,8 +69,9 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
     : null;
   const isLive = league.homepageStage === "LIVE";
   const isForming = league.homepageStage === "FORMING";
+  const detailsHref = `/leagues/${league.slug}`;
   const primaryHref = isLive
-    ? `/leagues/${league.slug}`
+    ? detailsHref
     : `/leagues/${league.slug}?type=team#register`;
   const secondaryHref = isLive
     ? `/leagues/${league.slug}/fixtures`
@@ -156,20 +157,45 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
           </div>
         )}
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href={primaryHref}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-emerald-400 px-5 text-center text-sm font-black text-black transition hover:bg-emerald-300"
-          >
-            {isLive ? "View league" : league.homepageStage === "PLANNED" ? "Register early interest" : "Enter a team"}
-          </Link>
-          <Link
-            href={secondaryHref}
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-5 text-center text-sm font-black text-white transition hover:bg-white/[0.09]"
-          >
-            {isLive ? "View fixtures" : "Join as a player"}
-          </Link>
-        </div>
+        {isLive ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href={primaryHref}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-emerald-400 px-5 text-center text-sm font-black text-black transition hover:bg-emerald-300"
+            >
+              View league
+            </Link>
+            <Link
+              href={secondaryHref}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-5 text-center text-sm font-black text-white transition hover:bg-white/[0.09]"
+            >
+              View fixtures
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-3">
+            <Link
+              href={detailsHref}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-sky-300/30 bg-sky-400/[0.10] px-5 text-center text-sm font-black text-sky-50 transition hover:bg-sky-400/[0.16]"
+            >
+              View details
+            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={primaryHref}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-emerald-400 px-5 text-center text-sm font-black text-black transition hover:bg-emerald-300"
+              >
+                {league.homepageStage === "PLANNED" ? "Register early interest" : "Enter a team"}
+              </Link>
+              <Link
+                href={secondaryHref}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-5 text-center text-sm font-black text-white transition hover:bg-white/[0.09]"
+              >
+                Join as a player
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );
