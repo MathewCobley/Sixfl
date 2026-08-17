@@ -19,6 +19,9 @@ export type CaptainCollectedRemittanceEntry = {
 export type CaptainCollectedRemittanceSnapshot = {
   collectedPence: number;
   collectedPlayerCount: number;
+  removedPence: number;
+  removedPlayerCount: number;
+  removalNotes: string[];
   remittedPence: number;
   pendingPence: number;
   unremittedPence: number;
@@ -111,6 +114,9 @@ function emptySnapshot(): CaptainCollectedRemittanceSnapshot {
   return {
     collectedPence: 0,
     collectedPlayerCount: 0,
+    removedPence: 0,
+    removedPlayerCount: 0,
+    removalNotes: [],
     remittedPence: 0,
     pendingPence: 0,
     unremittedPence: 0,
@@ -183,18 +189,39 @@ export async function getCaptainCollectedRemittanceSnapshots(
     string,
     { amountPence: number; playerCount: number }
   >();
+  const removedByTeamFixture = new Map<
+    string,
+    { amountPence: number; playerCount: number; notes: string[] }
+  >();
 
   for (const fee of collectedFees) {
-    if (!isCaptainCollectionActiveNote(fee.note)) continue;
-
     const feeKey = key(fee.teamId, fee.fixtureId);
-    const current = collectedByTeamFixture.get(feeKey) ?? {
-      amountPence: 0,
-      playerCount: 0,
-    };
-    current.amountPence += fee.amountPence;
-    current.playerCount += 1;
-    collectedByTeamFixture.set(feeKey, current);
+
+    if (isCaptainCollectionActiveNote(fee.note)) {
+      const current = collectedByTeamFixture.get(feeKey) ?? {
+        amountPence: 0,
+        playerCount: 0,
+      };
+      current.amountPence += fee.amountPence;
+      current.playerCount += 1;
+      collectedByTeamFixture.set(feeKey, current);
+      continue;
+    }
+
+    if (isCaptainCollectionRemovedNote(fee.note)) {
+      const current = removedByTeamFixture.get(feeKey) ?? {
+        amountPence: 0,
+        playerCount: 0,
+        notes: [],
+      };
+      current.amountPence += fee.amountPence;
+      current.playerCount += 1;
+      const removalNote = getLatestCaptainCollectionRemovalNote(fee.note);
+      if (removalNote && !current.notes.includes(removalNote)) {
+        current.notes.push(removalNote);
+      }
+      removedByTeamFixture.set(feeKey, current);
+    }
   }
 
   const remittanceByCharge = new Map(
@@ -208,9 +235,15 @@ export async function getCaptainCollectedRemittanceSnapshots(
   );
 
   for (const entry of uniqueEntries) {
-    const collected = collectedByTeamFixture.get(key(entry.teamId, entry.fixtureId)) ?? {
+    const entryKey = key(entry.teamId, entry.fixtureId);
+    const collected = collectedByTeamFixture.get(entryKey) ?? {
       amountPence: 0,
       playerCount: 0,
+    };
+    const removed = removedByTeamFixture.get(entryKey) ?? {
+      amountPence: 0,
+      playerCount: 0,
+      notes: [],
     };
     const remittance = remittanceByCharge.get(entry.chargeId) ?? {
       remittedPence: 0,
@@ -228,6 +261,9 @@ export async function getCaptainCollectedRemittanceSnapshots(
     snapshots.set(entry.chargeId, {
       collectedPence: collected.amountPence,
       collectedPlayerCount: collected.playerCount,
+      removedPence: removed.amountPence,
+      removedPlayerCount: removed.playerCount,
+      removalNotes: removed.notes,
       remittedPence: remittance.remittedPence,
       pendingPence: remittance.pendingPence,
       unremittedPence,
