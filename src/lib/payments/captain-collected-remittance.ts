@@ -7,6 +7,9 @@ export const CAPTAIN_COLLECTED_NOTE_MARKERS = [
   "Paid captain directly: captain collected",
 ] as const;
 
+export const CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER =
+  "Removed from captain collection: resolved privately";
+
 export type CaptainCollectedRemittanceEntry = {
   chargeId: string;
   teamId: string;
@@ -24,6 +27,60 @@ export type CaptainCollectedRemittanceSnapshot = {
 
 function key(teamId: string, fixtureId: string) {
   return `${teamId}:${fixtureId}`;
+}
+
+function lastIndexOfInsensitive(value: string, marker: string) {
+  return value.toLowerCase().lastIndexOf(marker.toLowerCase());
+}
+
+function latestCaptainCollectedIndex(note?: string | null) {
+  const value = note ?? "";
+  return Math.max(
+    ...CAPTAIN_COLLECTED_NOTE_MARKERS.map((marker) =>
+      lastIndexOfInsensitive(value, marker),
+    ),
+  );
+}
+
+export function isCaptainCollectionRemovedNote(note?: string | null) {
+  const value = note ?? "";
+  const removedIndex = lastIndexOfInsensitive(
+    value,
+    CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER,
+  );
+  const collectedIndex = latestCaptainCollectedIndex(value);
+
+  return removedIndex >= 0 && removedIndex > collectedIndex;
+}
+
+export function isCaptainCollectionActiveNote(note?: string | null) {
+  const value = note ?? "";
+  const collectedIndex = latestCaptainCollectedIndex(value);
+  const removedIndex = lastIndexOfInsensitive(
+    value,
+    CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER,
+  );
+
+  return collectedIndex >= 0 && collectedIndex > removedIndex;
+}
+
+export function getLatestCaptainCollectionRemovalNote(note?: string | null) {
+  const lines = (note ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (
+      lines[index]
+        .toLowerCase()
+        .includes(CAPTAIN_COLLECTION_REMOVED_NOTE_MARKER.toLowerCase())
+    ) {
+      return lines[index];
+    }
+  }
+
+  return null;
 }
 
 export async function ensureCaptainCollectedRemittanceTable() {
@@ -95,6 +152,7 @@ export async function getCaptainCollectedRemittanceSnapshots(
         teamId: true,
         fixtureId: true,
         amountPence: true,
+        note: true,
       },
     }),
     prisma.$queryRaw<
@@ -127,6 +185,8 @@ export async function getCaptainCollectedRemittanceSnapshots(
   >();
 
   for (const fee of collectedFees) {
+    if (!isCaptainCollectionActiveNote(fee.note)) continue;
+
     const feeKey = key(fee.teamId, fee.fixtureId);
     const current = collectedByTeamFixture.get(feeKey) ?? {
       amountPence: 0,
