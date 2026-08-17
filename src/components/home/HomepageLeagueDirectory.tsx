@@ -54,10 +54,10 @@ function buildFallbackBody(league: HomepageLeague) {
   }
 
   if (league.homepageStage === "PLANNED") {
-    return `SIXFL is exploring a new ${day.toLowerCase()} league${venue ? ` at ${venue}` : ` in ${area}`}. Register early interest as a team or individual player.`;
+    return `SIXFL is exploring a new ${day} league${venue ? ` at ${venue}` : ` in ${area}`}. Register early interest as a team or individual player.`;
   }
 
-  return `A new ${day.toLowerCase()} SIXFL league is forming${venue ? ` at ${venue}` : ` in ${area}`}. Full teams and individual players can register now.`;
+  return `A new ${day} SIXFL league is forming${venue ? ` at ${venue}` : ` in ${area}`}. Full teams and individual players can register now.`;
 }
 
 function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
