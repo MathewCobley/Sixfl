@@ -32,6 +32,8 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
       { label: "All leagues", href: "/leagues" },
       { label: "Harrogate 6-a-side", href: "/harrogate-6-a-side-football", featured: true },
       { label: "Northallerton 6-a-side", href: "/northallerton-6-a-side-football" },
+      { label: "Thirsk 6-a-side", href: "/north-yorkshire-heartlands-6-a-side-football" },
+      { label: "Catterick 6-a-side", href: "/north-yorkshire-heartlands-6-a-side-football" },
       { label: "Wetherby 6-a-side", href: "/wetherby-6-a-side-football" },
       { label: "Venues", href: "/venues" },
     ],
@@ -149,7 +151,7 @@ export default function SiteFooter() {
               <nav className="mt-4 flex flex-col gap-1 text-sm text-white/80" aria-label={`${group.title} footer links`}>
                 {group.links.map((link) => (
                   <Link
-                    key={link.href}
+                    key={`${link.href}-${link.label}`}
                     href={link.href}
                     className={[
                       "inline-flex min-h-9 items-center leading-5 transition hover:text-emerald-400",
