@@ -69,6 +69,12 @@ export default async function CaptainCollectedRemittancePanel({
       <p className="mt-2 max-w-4xl text-sm leading-6 text-cyan-50/70">
         These amounts come from players marked <strong>Paid captain directly</strong>. For each fixture, either pass the collected money to SIXFL or use available team credit instead. Your own player link and any other open player links stay separate.
       </p>
+
+      <div className="mt-4 max-w-4xl rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/65">
+        <strong className="text-white/85">When to use “Remove from captain collection”:</strong>{" "}
+        use it only if you and the player have sorted that money out between yourselves — for example, you returned the money or agreed a different private arrangement — so you no longer hold it to pass to SIXFL. Removing it does <strong>not</strong> reduce the fixture balance and is not a refund. If a Stripe checkout is pending, cancel that first; money already passed to SIXFL cannot be removed this way.
+      </div>
+
       {creditBalancePence > 0 ? (
         <div className="mt-3 inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-50">
           Team credit available: {formatMoney(creditBalancePence)}
@@ -81,6 +87,10 @@ export default async function CaptainCollectedRemittancePanel({
           const cappedByOutstanding =
             snapshot.availablePence > amountAvailableToRemitPence;
           const hasPendingCheckout = snapshot.pendingPence > 0;
+          const canRemoveFromCaptainCollection =
+            snapshot.remittedPence === 0 &&
+            !hasPendingCheckout &&
+            snapshot.unremittedPence > 0;
 
           return (
             <article
@@ -242,6 +252,34 @@ export default async function CaptainCollectedRemittancePanel({
                       This fixture balance is fully settled. No collected player money needs to be passed to SIXFL for it.
                     </div>
                   )}
+
+                  {canRemoveFromCaptainCollection ? (
+                    <details className="mt-3 rounded-2xl border border-red-300/20 bg-red-500/[0.07] p-3">
+                      <summary className="cursor-pointer text-sm font-semibold text-red-100/85">
+                        Remove from captain collection
+                      </summary>
+                      <p className="mt-3 text-xs leading-5 text-red-50/65">
+                        Use this only if the money has been resolved privately between you and the player and you no longer hold it for SIXFL. The fixture balance will stay exactly as it is.
+                      </p>
+                      <form
+                        action={`/captain/team/${teamId}/payments/remove-collected`}
+                        method="post"
+                        className="mt-3"
+                      >
+                        <input type="hidden" name="chargeId" value={entry.chargeId} />
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-red-300/30 bg-red-500/15 px-4 py-2.5 text-sm font-bold text-red-50 transition hover:bg-red-500/25"
+                        >
+                          Confirm — remove {formatMoney(snapshot.unremittedPence)} from captain collection
+                        </button>
+                      </form>
+                    </details>
+                  ) : snapshot.remittedPence > 0 ? (
+                    <p className="mt-3 text-xs leading-5 text-white/40">
+                      Money already passed to SIXFL cannot be removed from captain collection.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </article>
