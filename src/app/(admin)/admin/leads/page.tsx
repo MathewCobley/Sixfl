@@ -22,6 +22,7 @@ import {
   sendBulkLeadSmsAction,
 } from "./guarded-bulk-actions";
 import { convertLeadToManagedSquadPlayerAction } from "./managed-squad-actions";
+import { sendPlayerPoolProfileInviteAction } from "../player-pool/actions";
 
 type SearchParams = Promise<{
   type?: string;
@@ -476,6 +477,10 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                     lead.status !== "CLOSED" &&
                     Boolean(lead.email?.trim()) &&
                     Boolean(managedTeamForLeague);
+                  const canSendPlayerPoolInvite =
+                    lead.interestType === "PLAYER" &&
+                    lead.status !== "CLOSED" &&
+                    Boolean(lead.email?.trim());
                   const managedSquadActionTitle =
                     lead.status === "CLOSED"
                       ? "This lead is already closed"
@@ -488,6 +493,12 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                             : managedTeamsForLeague.length > 1
                               ? "More than one managed squad exists for this league. Open the lead to choose the correct squad."
                               : `Add to ${managedTeamForLeague?.name ?? "managed squad"} and email the signup form`;
+                  const playerPoolActionTitle =
+                    lead.status === "CLOSED"
+                      ? "This lead is already closed"
+                      : lead.email?.trim()
+                        ? "Create or update the PlayerPool profile and send the invitation email"
+                        : "Add an email address before sending a PlayerPool invitation";
 
                   return (
                     <tr key={lead.id} className="align-top transition hover:bg-white/[0.035]">
@@ -552,7 +563,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                                   Add to managed squad
                                 </button>
                               </form>
-                            ) : (
+                            ) : managedTeamsForLeague.length > 1 ? (
                               <button
                                 type="button"
                                 disabled
@@ -561,6 +572,18 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                               >
                                 Add to managed squad
                               </button>
+                            ) : (
+                              <form action={sendPlayerPoolProfileInviteAction}>
+                                <input type="hidden" name="leadId" value={lead.id} />
+                                <button
+                                  type="submit"
+                                  disabled={!canSendPlayerPoolInvite}
+                                  title={playerPoolActionTitle}
+                                  className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-center text-xs font-bold leading-4 text-sky-100 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30"
+                                >
+                                  Send to PlayerPool
+                                </button>
+                              </form>
                             )
                           ) : null}
                           <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
