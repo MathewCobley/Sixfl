@@ -40,6 +40,9 @@ jobs:
       - name: Check admin referral email status
         run: node scripts/check-admin-referral-email-status.mjs
 
+      - name: Check captain collection removal
+        run: node scripts/check-captain-collected-removal.mjs
+
       - name: Snapshot protected kit source
         run: |
           git diff --binary -- \
