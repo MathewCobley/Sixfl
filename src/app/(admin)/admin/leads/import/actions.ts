@@ -256,6 +256,23 @@ function inferMetaArea(row: Record<string, string>) {
   return "";
 }
 
+function inferMetaLeagueSlug(row: Record<string, string>) {
+  if (!isMetaRow(row)) return "";
+
+  const campaignName = getFirstNonEmpty(row, ["campaignName", "campaign_name"]);
+  const formName = getFirstNonEmpty(row, ["formName", "form_name"]);
+  const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
+  const adSetName = getFirstNonEmpty(row, ["adsetName", "adset_name"]);
+  const haystack = [campaignName, formName, adName, adSetName]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (haystack.includes("heartlands")) return "heartlands";
+
+  return "";
+}
+
 function parseCreatedAt(row: Record<string, string>) {
   const raw = getFirstNonEmpty(row, ["createdTime", "created_time"]);
   if (!raw) return null;
@@ -334,6 +351,22 @@ export async function importLeadsAction(
     };
   }
 
+  const inferredLeagueSlugs = Array.from(
+    new Set(rows.map(inferMetaLeagueSlug).filter(Boolean)),
+  );
+  const inferredLeagues = inferredLeagueSlugs.length
+    ? await prisma.league.findMany({
+        where: {
+          slug: { in: inferredLeagueSlugs },
+          isActive: true,
+        },
+        select: { id: true, slug: true },
+      })
+    : [];
+  const inferredLeagueIdBySlug = new Map(
+    inferredLeagues.map((league) => [league.slug, league.id]),
+  );
+
   const parsedRows = rows.map((row, index) => {
     const email = findEmail(row);
     const contactName = buildContactName(row);
@@ -342,6 +375,10 @@ export async function importLeadsAction(
     const phoneNormalized = normalizeUkMobileNumber(phone);
     const area = areaOverride || getFirstNonEmpty(row, ["area", "location"]) || inferMetaArea(row);
     const source = buildSource(row, sourceOverride);
+    const inferredLeagueSlug = inferMetaLeagueSlug(row);
+    const leagueId = inferredLeagueSlug
+      ? inferredLeagueIdBySlug.get(inferredLeagueSlug) ?? null
+      : null;
 
     return {
       rowNumber: index + 2,
@@ -352,6 +389,7 @@ export async function importLeadsAction(
       phoneNormalized,
       area,
       source,
+      leagueId,
       interestType: inferInterestType(row, defaultInterestType),
       message: buildMetaMessage(row),
       createdAt: parseCreatedAt(row),
@@ -504,6 +542,7 @@ export async function importLeadsAction(
     phoneNormalized: row.phoneNormalized,
     teamName: row.teamName || null,
     area: row.area || null,
+    leagueId: row.leagueId,
     message: row.message || null,
     source: row.source,
     ...(row.createdAt ? { createdAt: row.createdAt } : {}),
