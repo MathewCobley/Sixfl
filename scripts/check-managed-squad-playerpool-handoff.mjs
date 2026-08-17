@@ -7,6 +7,8 @@ const moveRoutePath =
 const prospectRoutePath =
   "src/app/api/admin/player-prospects/[prospectId]/player-pool/route.ts";
 const servicePath = "src/lib/player-pool/sendProspectToPlayerPool.ts";
+const managedSquadLinksPath =
+  "src/components/captain/ManagedSquadEditLinks.tsx";
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -15,6 +17,7 @@ function read(relativePath) {
 const moveRoute = read(moveRoutePath);
 const prospectRoute = read(prospectRoutePath);
 const service = read(servicePath);
+const managedSquadLinks = read(managedSquadLinksPath);
 const failures = [];
 
 function expect(source, marker, message) {
@@ -66,6 +69,34 @@ expect(
   "queueNotificationFromTemplate({",
   "Shared PlayerPool service must preserve the normal profile-form invitation.",
 );
+
+const moveFunctionStart = managedSquadLinks.indexOf(
+  "async function movePlayerToProspects(",
+);
+const moveFunctionEnd = managedSquadLinks.indexOf(
+  "\nasync function markPlayerNotInterested(",
+  moveFunctionStart,
+);
+if (moveFunctionStart < 0 || moveFunctionEnd < 0) {
+  failures.push("Managed squad PlayerPool move UI function must remain available.");
+} else {
+  const moveFunction = managedSquadLinks.slice(moveFunctionStart, moveFunctionEnd);
+  expect(
+    moveFunction,
+    "/move-player-to-prospect",
+    "Managed squad PlayerPool button must call the direct PlayerPool handoff endpoint.",
+  );
+  expect(
+    moveFunction,
+    'window.location.href = "/admin/player-pool";',
+    "Successful managed squad PlayerPool moves must finish on Admin PlayerPool.",
+  );
+  if (moveFunction.includes('window.location.href = "/admin/player-prospects";')) {
+    failures.push(
+      "Successful managed squad PlayerPool moves must not redirect back to Player Prospects.",
+    );
+  }
+}
 
 if (failures.length) {
   console.error("\nMANAGED SQUAD → PLAYERPOOL HANDOFF CHECK FAILED\n");

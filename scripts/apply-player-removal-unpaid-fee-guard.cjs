@@ -314,6 +314,28 @@ patchFile("src/app/api/captain/team/[teamid]/move-managed-player/route.ts", (inp
   return source;
 });
 
+patchFile("src/components/captain/ManagedSquadEditLinks.tsx", (input) => {
+  const functionStart = input.indexOf("async function movePlayerToProspects(");
+  const functionEnd = input.indexOf("\nasync function markPlayerNotInterested(", functionStart);
+
+  if (functionStart < 0 || functionEnd < 0) {
+    throw new Error("Expected managed squad PlayerPool move function was not found.");
+  }
+
+  const beforeBlock = input.slice(0, functionStart);
+  const moveBlock = input.slice(functionStart, functionEnd);
+  const afterBlock = input.slice(functionEnd);
+  const currentDestination = 'window.location.href = "/admin/player-prospects";';
+  const playerPoolDestination = 'window.location.href = "/admin/player-pool";';
+
+  if (moveBlock.includes(playerPoolDestination)) return input;
+  if (!moveBlock.includes(currentDestination)) {
+    throw new Error("Expected managed squad PlayerPool success destination was not found.");
+  }
+
+  return `${beforeBlock}${moveBlock.replace(currentDestination, playerPoolDestination)}${afterBlock}`;
+});
+
 const verificationFiles = [
   "src/app/(admin)/admin/teams/[id]/squad/actions.ts",
   "src/lib/managed-squad/movePlayerToProspect.ts",
@@ -330,6 +352,25 @@ for (const relativePath of verificationFiles) {
   }
 }
 
+const managedSquadLinks = fs.readFileSync(
+  path.join(root, "src/components/captain/ManagedSquadEditLinks.tsx"),
+  "utf8",
+);
+const playerPoolMoveStart = managedSquadLinks.indexOf("async function movePlayerToProspects(");
+const playerPoolMoveEnd = managedSquadLinks.indexOf(
+  "\nasync function markPlayerNotInterested(",
+  playerPoolMoveStart,
+);
+const playerPoolMoveBlock = managedSquadLinks.slice(playerPoolMoveStart, playerPoolMoveEnd);
+if (
+  playerPoolMoveStart < 0 ||
+  playerPoolMoveEnd < 0 ||
+  !playerPoolMoveBlock.includes('window.location.href = "/admin/player-pool";') ||
+  playerPoolMoveBlock.includes('window.location.href = "/admin/player-prospects";')
+) {
+  throw new Error("Managed squad PlayerPool moves must finish on Admin PlayerPool.");
+}
+
 console.log(
-  "Players with open match fees cannot be removed, moved to another team, moved to the player pool, marked not interested or marked as duplicates until those fees are resolved.",
+  "Players with open match fees cannot be removed, moved to another team, moved to the player pool, marked not interested or marked as duplicates until those fees are resolved. Successful PlayerPool moves finish on Admin PlayerPool.",
 );
