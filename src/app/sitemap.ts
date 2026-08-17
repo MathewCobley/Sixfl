@@ -17,6 +17,10 @@ function absoluteUrl(path: string) {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function isRetiredHeartlandsLeague(slug: string) {
+  return slug.toLowerCase().includes("heartlands");
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const currentLeagueIds = await getCurrentLeagueIds();
@@ -64,12 +68,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.92,
     },
     {
-      url: absoluteUrl("/north-yorkshire-heartlands-6-a-side-football"),
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.92,
-    },
-    {
       url: absoluteUrl("/register-interest"),
       lastModified: now,
       changeFrequency: "weekly",
@@ -83,26 +81,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const leagueRoutes: MetadataRoute.Sitemap = leagues.flatMap((league) => [
-    {
-      url: absoluteUrl(`/leagues/${league.slug}`),
-      lastModified: league.updatedAt,
-      changeFrequency: "daily" as const,
-      priority: 0.95,
-    },
-    {
-      url: absoluteUrl(`/leagues/${league.slug}/fixtures`),
-      lastModified: league.updatedAt,
-      changeFrequency: "daily" as const,
-      priority: 0.8,
-    },
-    {
-      url: absoluteUrl(`/leagues/${league.slug}/stats`),
-      lastModified: league.updatedAt,
-      changeFrequency: "weekly" as const,
-      priority: 0.7,
-    },
-  ]);
+  const leagueRoutes: MetadataRoute.Sitemap = leagues
+    .filter((league) => !isRetiredHeartlandsLeague(league.slug))
+    .flatMap((league) => [
+      {
+        url: absoluteUrl(`/leagues/${league.slug}`),
+        lastModified: league.updatedAt,
+        changeFrequency: "daily" as const,
+        priority: 0.95,
+      },
+      {
+        url: absoluteUrl(`/leagues/${league.slug}/fixtures`),
+        lastModified: league.updatedAt,
+        changeFrequency: "daily" as const,
+        priority: 0.8,
+      },
+      {
+        url: absoluteUrl(`/leagues/${league.slug}/stats`),
+        lastModified: league.updatedAt,
+        changeFrequency: "weekly" as const,
+        priority: 0.7,
+      },
+    ]);
 
   return [...staticRoutes, ...leagueRoutes];
 }
