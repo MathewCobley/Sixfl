@@ -15,6 +15,10 @@ export async function createLeagueInterestLeadAction(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   const teamName = String(formData.get("teamName") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
+  const interestType =
+    String(formData.get("interestType") ?? "TEAM").trim().toUpperCase() === "PLAYER"
+      ? InterestType.PLAYER
+      : InterestType.TEAM;
 
   const leagueId = String(formData.get("leagueId") ?? "").trim();
   const area = String(formData.get("area") ?? "").trim();
@@ -48,7 +52,7 @@ export async function createLeagueInterestLeadAction(formData: FormData) {
 
   const lead = await prisma.interestLead.create({
     data: {
-      interestType: InterestType.TEAM,
+      interestType,
       status: "NEW",
       contactName,
       email,
