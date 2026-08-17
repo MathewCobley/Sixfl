@@ -34,6 +34,9 @@ jobs:
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
+      - name: Check managed squad to PlayerPool handoff
+        run: node scripts/check-managed-squad-playerpool-handoff.mjs
+
       - name: Snapshot protected kit source
         run: |
           git diff --binary -- \
