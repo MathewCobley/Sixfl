@@ -242,9 +242,9 @@ export async function sendLeadEmailWithResponseLinksAction(formData: FormData) {
 
   for (const [key, value] of formData.entries()) {
     if (key === "subject" || key === "body") {
-      nextFormData.append(key, replaceLeadResponseTokens(String(value), leadId));
+      nextFormData.set(key, replaceLeadResponseTokens(String(value), leadId));
     } else {
-      nextFormData.append(key, value);
+      nextFormData.set(key, value);
     }
   }
 
