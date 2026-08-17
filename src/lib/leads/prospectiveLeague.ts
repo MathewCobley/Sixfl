@@ -2,7 +2,7 @@
 // File: src/lib/leads/prospectiveLeague.ts
 // ========================================
 
-import { InterestType, LeagueType, PreferredNight } from "@prisma/client";
+import { InterestType, LeagueType, PreferredNight, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type ProspectiveLeagueMatchInput = {
@@ -62,7 +62,7 @@ export async function resolveProspectiveLeagueId(input: ProspectiveLeagueMatchIn
 
   const area = clean(input.area);
   const nights = normaliseNights(input.preferredNights);
-  const sharedWhere = {
+  const sharedWhere: Prisma.LeagueWhereInput = {
     isActive: true,
     leagueType: input.leagueType,
     OR: [
@@ -76,7 +76,7 @@ export async function resolveProspectiveLeagueId(input: ProspectiveLeagueMatchIn
           },
         }
       : {}),
-  } as const;
+  };
 
   // Prefer an exact area match. This keeps the normal case deterministic when
   // the public form and league record use the same customer-facing area name.
