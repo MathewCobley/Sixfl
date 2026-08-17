@@ -8,6 +8,7 @@ import {
   NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
+  Prisma,
 } from "@prisma/client";
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
@@ -67,19 +68,105 @@ export function getManagedSquadJoinConfirmationUrl(prospectId: string) {
   return `${getSiteUrl()}/squad/join/${encodeURIComponent(token)}`;
 }
 
-function getTeamContextLine(team: {
-  name: string;
-  league: { dayOfWeek: string | null; venueName: string | null } | null;
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function getUkDateKey(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+
+  return `${year}-${month}-${day}`;
+}
+
+function getStartDateTiming(value: Date | null) {
+  if (!value) return "unknown" as const;
+
+  const startDateKey = getUkDateKey(value);
+  const todayKey = getUkDateKey(new Date());
+
+  if (startDateKey === todayKey) return "today" as const;
+  return startDateKey < todayKey ? ("past" as const) : ("future" as const);
+}
+
+function getVenueName(value: string | null | undefined) {
+  const venueName = value?.trim();
+  if (!venueName || venueName.toUpperCase() === "TBC") return null;
+  return venueName;
+}
+
+function getNewLeagueLabel(area: string | null | undefined) {
+  const cleanArea = area?.trim();
+  return cleanArea ? `the new SIXFL ${cleanArea} league` : "the new SIXFL league";
+}
+
+function getMatchScheduleLine(input: {
+  night: string | null;
+  venueName: string | null;
+  futureTense: boolean;
 }) {
+  const verb = input.futureTense ? "will be played" : "are played";
+
+  if (input.night && input.venueName) {
+    return `Matches ${verb} on ${input.night} nights at ${input.venueName}.`;
+  }
+
+  if (input.night) {
+    return `Matches ${verb} on ${input.night} nights.`;
+  }
+
+  if (input.venueName) {
+    return `Matches ${verb} at ${input.venueName}.`;
+  }
+
+  return null;
+}
+
+function getTeamContextLine(
+  team: {
+    name: string;
+    league: {
+      area: string | null;
+      dayOfWeek: string | null;
+      venueName: string | null;
+    } | null;
+  },
+  proposedStartDate: Date | null,
+) {
   const night = formatPreferredNight(team.league?.dayOfWeek);
-  const venueName = team.league?.venueName?.trim();
+  const venueName = getVenueName(team.league?.venueName);
+  const timing = getStartDateTiming(proposedStartDate);
+  const newLeagueLabel = getNewLeagueLabel(team.league?.area);
+
+  if (timing === "future" && proposedStartDate) {
+    const scheduleLine = getMatchScheduleLine({ night, venueName, futureTense: true });
+    return `${newLeagueLabel.charAt(0).toUpperCase()}${newLeagueLabel.slice(1)} is due to start on ${formatLongDate(proposedStartDate)}.${scheduleLine ? ` ${scheduleLine}` : ""}`;
+  }
+
+  if (timing === "today") {
+    const scheduleLine = getMatchScheduleLine({ night, venueName, futureTense: true });
+    return `${newLeagueLabel.charAt(0).toUpperCase()}${newLeagueLabel.slice(1)} starts today.${scheduleLine ? ` ${scheduleLine}` : ""}`;
+  }
 
   if (night && venueName) {
-    return `${team.name} plays on a ${night} night at ${venueName}.`;
+    return `${team.name} plays on ${night} nights at ${venueName}.`;
   }
 
   if (night) {
-    return `${team.name} plays on a ${night} night.`;
+    return `${team.name} plays on ${night} nights.`;
   }
 
   if (venueName) {
@@ -89,11 +176,35 @@ function getTeamContextLine(team: {
   return `${team.name} is a SIXFL squad.`;
 }
 
+function getSquadInviteIntroLine(input: {
+  teamName: string;
+  area: string | null | undefined;
+  proposedStartDate: Date | null;
+}) {
+  const timing = getStartDateTiming(input.proposedStartDate);
+
+  if (timing === "future" || timing === "today") {
+    return `You’ve been added to the ${input.teamName} squad for ${getNewLeagueLabel(input.area)}.`;
+  }
+
+  return `You’ve been added to the ${input.teamName} squad on SIXFL.`;
+}
+
+function getSquadAccessLine(proposedStartDate: Date | null) {
+  const timing = getStartDateTiming(proposedStartDate);
+
+  if (timing === "future" || timing === "today") {
+    return "Once confirmed, you’ll receive squad updates and, when fixtures begin, you’ll be included in match availability checks and other team messages.";
+  }
+
+  return "Once confirmed, you’ll be included in squad messages and fixture availability checks when games are coming up.";
+}
+
 function getSquadInviteBody() {
   return [
     "Hi {{firstName}},",
     "",
-    "You’ve been added to the {{teamName}} squad on SIXFL.",
+    "{{squadInviteIntroLine}}",
     "",
     "{{teamContextLine}}",
     "",
@@ -101,7 +212,7 @@ function getSquadInviteBody() {
     "",
     "{{cta}}",
     "",
-    "Once confirmed, you’ll be included in squad messages and fixture availability checks when games are coming up.",
+    "{{squadAccessLine}}",
     "",
     "Thanks,",
     "SIXFL",
@@ -257,6 +368,23 @@ async function alreadyQueuedOrSent(prospectId: string) {
 
 type LoadedProspect = NonNullable<Awaited<ReturnType<typeof loadProspectForSquadEmail>>>;
 
+type LeagueStartRow = {
+  proposedStartDate: Date | null;
+};
+
+async function getLeagueProposedStartDate(leagueId: string | null | undefined) {
+  if (!leagueId) return null;
+
+  const rows = await prisma.$queryRaw<Array<LeagueStartRow>>(Prisma.sql`
+    SELECT "proposedStartDate" AS "proposedStartDate"
+    FROM "League"
+    WHERE id = ${leagueId}
+    LIMIT 1
+  `);
+
+  return rows[0]?.proposedStartDate ?? null;
+}
+
 async function loadProspectForSquadEmail(prospectId: string) {
   return prisma.teamPlayerProspect.findUnique({
     where: { id: prospectId },
@@ -275,8 +403,10 @@ async function loadProspectForSquadEmail(prospectId: string) {
           logoUrl: true,
           league: {
             select: {
+              id: true,
               name: true,
               season: true,
+              area: true,
               dayOfWeek: true,
               venueName: true,
             },
@@ -287,7 +417,7 @@ async function loadProspectForSquadEmail(prospectId: string) {
   });
 }
 
-function buildProspectEmailContext(prospect: LoadedProspect) {
+async function buildProspectEmailContext(prospect: LoadedProspect) {
   if (!prospect.teamId || !prospect.team) return null;
 
   const email = prospect.email?.trim().toLowerCase() || null;
@@ -300,6 +430,7 @@ function buildProspectEmailContext(prospect: LoadedProspect) {
         prospect.team.league.season ? ` · ${prospect.team.league.season}` : ""
       }`
     : "";
+  const proposedStartDate = await getLeagueProposedStartDate(prospect.team.league?.id);
 
   return {
     email,
@@ -313,7 +444,13 @@ function buildProspectEmailContext(prospect: LoadedProspect) {
       leagueName,
       venueName: prospect.team.league?.venueName ?? "",
       preferredNight: formatPreferredNight(prospect.team.league?.dayOfWeek) ?? "",
-      teamContextLine: getTeamContextLine(prospect.team),
+      squadInviteIntroLine: getSquadInviteIntroLine({
+        teamName: prospect.team.name,
+        area: prospect.team.league?.area,
+        proposedStartDate,
+      }),
+      teamContextLine: getTeamContextLine(prospect.team, proposedStartDate),
+      squadAccessLine: getSquadAccessLine(proposedStartDate),
       joinConfirmationUrl,
       teamJoinUrl: joinConfirmationUrl,
     },
@@ -342,7 +479,7 @@ export async function queueManagedSquadJoinConfirmationEmail(input: {
     return { ok: false as const, status: "prospect_not_found" as const };
   }
 
-  const context = buildProspectEmailContext(prospect);
+  const context = await buildProspectEmailContext(prospect);
 
   if (!context) {
     return { ok: false as const, status: "no_email" as const };
@@ -449,7 +586,7 @@ export async function queueManagedSquadJoinChaseEmail(input: {
     return { ok: false as const, status: "prospect_not_found" as const };
   }
 
-  const context = buildProspectEmailContext(prospect);
+  const context = await buildProspectEmailContext(prospect);
 
   if (!context) {
     return { ok: false as const, status: "no_email" as const };
