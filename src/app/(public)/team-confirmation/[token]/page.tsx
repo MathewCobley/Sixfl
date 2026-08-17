@@ -2,6 +2,7 @@
 // File: src/app/(public)/team-confirmation/[token]/page.tsx
 // ========================================
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -25,8 +26,60 @@ type PageProps = {
   searchParams?: Promise<{ confirmed?: string; declined?: string }>;
 };
 
+type LeagueConfirmationDetails = {
+  proposedStartDate: Date | null;
+  minutesPerGame: number | null;
+  costPerTeamPerMatchPence: number | null;
+};
+
 function getLeadTitle(input: { teamName: string | null; contactName: string }) {
   return input.teamName?.trim() || `${input.contactName}'s team`;
+}
+
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function formatPreferredNight(value: string | null | undefined) {
+  if (!value || value === "ANY") return null;
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
+function formatCurrencyPence(value: number | null) {
+  if (value === null) return null;
+
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: value % 100 === 0 ? 0 : 2,
+  }).format(value / 100);
+}
+
+function formatVenue(value: string | null | undefined) {
+  const venue = value?.trim();
+  if (!venue || venue.toUpperCase() === "TBC") return null;
+  return venue;
+}
+
+async function getLeagueConfirmationDetails(leagueId: string | null | undefined) {
+  if (!leagueId) return null;
+
+  const rows = await prisma.$queryRaw<Array<LeagueConfirmationDetails>>(Prisma.sql`
+    SELECT
+      "proposedStartDate" AS "proposedStartDate",
+      "minutesPerGame"::int AS "minutesPerGame",
+      "costPerTeamPerMatchPence"::int AS "costPerTeamPerMatchPence"
+    FROM "League"
+    WHERE "id" = ${leagueId}
+    LIMIT 1
+  `);
+
+  return rows[0] ?? null;
 }
 
 async function confirmTeamPlaceAction(formData: FormData) {
@@ -94,6 +147,32 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
         area: true,
         leagueType: true,
         status: true,
+        league: {
+          select: {
+            id: true,
+            name: true,
+            season: true,
+            area: true,
+            dayOfWeek: true,
+            venueName: true,
+            kickoffInfo: true,
+            competition: {
+              select: {
+                currentLeague: {
+                  select: {
+                    id: true,
+                    name: true,
+                    season: true,
+                    area: true,
+                    dayOfWeek: true,
+                    venueName: true,
+                    kickoffInfo: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     }),
     getTeamPlaceConfirmationStatus(leadId),
@@ -101,9 +180,42 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
 
   if (!lead) return <InvalidLinkCard />;
 
+  const effectiveLeague = lead.league?.competition?.currentLeague ?? lead.league;
+  const leagueDetails = await getLeagueConfirmationDetails(effectiveLeague?.id);
+  const leagueName = effectiveLeague
+    ? `${effectiveLeague.name}${effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""}`
+    : lead.area
+      ? `${lead.area} SIXFL league`
+      : "the SIXFL league";
+  const startDateLabel = leagueDetails?.proposedStartDate
+    ? formatLongDate(leagueDetails.proposedStartDate)
+    : null;
+  const matchNightLabel = formatPreferredNight(effectiveLeague?.dayOfWeek);
+  const matchLengthLabel = leagueDetails?.minutesPerGame
+    ? `${leagueDetails.minutesPerGame} minute matches`
+    : null;
+  const fee = formatCurrencyPence(leagueDetails?.costPerTeamPerMatchPence ?? null);
+  const feeLabel = fee ? `${fee} per team per match` : null;
+  const locationLabel =
+    formatVenue(effectiveLeague?.venueName) ||
+    effectiveLeague?.area?.trim() ||
+    lead.area?.trim() ||
+    null;
+  const kickoffLabel = effectiveLeague?.kickoffInfo?.trim() || null;
+
   const isConfirmed = sp.confirmed === "1" || confirmation?.status === "CONFIRMED" || lead.status === "QUALIFIED";
   const isDeclined = sp.declined === "1" || confirmation?.status === "DECLINED" || lead.status === "CLOSED";
   const leadTitle = getLeadTitle(lead);
+  const confirmationPrompt = startDateLabel
+    ? `Please confirm whether ${leadTitle} would like a place in ${leagueName}, planned to start ${startDateLabel}.`
+    : `Please confirm whether ${leadTitle} would like a place in ${leagueName}.`;
+  const detailPills = [
+    startDateLabel ? `${startDateLabel} start` : matchNightLabel ? `${matchNightLabel} nights` : null,
+    matchLengthLabel,
+    feeLabel,
+    locationLabel,
+    kickoffLabel,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
@@ -117,28 +229,24 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
           </h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
             {isConfirmed
-              ? `Thanks — ${leadTitle} is confirmed for fixture planning.`
+              ? `Thanks — ${leadTitle} is confirmed for ${leagueName}.`
               : isDeclined
                 ? `Thanks for letting us know. We’ll release the space for another team.`
-                : `Please confirm whether ${leadTitle} would like a place in the SIXFL league starting Tuesday 8 July.`}
+                : confirmationPrompt}
           </p>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-              Tuesday 8 July start
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-              40 minute matches
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-              £40 per team per match
-            </span>
-            {lead.area ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                {lead.area}
-              </span>
-            ) : null}
-          </div>
+          {detailPills.length ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {detailPills.map((detail) => (
+                <span
+                  key={detail}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75"
+                >
+                  {detail}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
