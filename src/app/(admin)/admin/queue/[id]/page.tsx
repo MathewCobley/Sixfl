@@ -64,7 +64,50 @@ function DetailRow({
   );
 }
 
-function CodeBlock({
+function MessagePreview({
+  html,
+  text,
+}: {
+  html: string | null | undefined;
+  text: string | null | undefined;
+}) {
+  const hasHtml = Boolean(html?.trim());
+  const hasText = Boolean(text?.trim());
+
+  if (!hasHtml && !hasText) return null;
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+      <h2 className="text-lg font-semibold text-white">
+        {hasHtml ? "Email preview" : "Message preview"}
+      </h2>
+      <p className="mt-1 text-sm text-white/45">
+        {hasHtml
+          ? "Rendered from the exact HTML saved on this dispatch."
+          : "Preview of the exact text saved on this dispatch."}
+      </p>
+
+      {hasHtml ? (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white">
+          <iframe
+            title="Rendered email preview"
+            srcDoc={html ?? ""}
+            sandbox=""
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            className="h-[48rem] w-full bg-white"
+          />
+        </div>
+      ) : (
+        <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white/75 sixfl-mobile-scroll">
+          {text}
+        </pre>
+      )}
+    </section>
+  );
+}
+
+function SourceDetails({
   title,
   value,
 }: {
@@ -74,12 +117,14 @@ function CodeBlock({
   if (!value?.trim()) return null;
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white/75 sixfl-mobile-scroll">
+    <details className="rounded-2xl border border-white/10 bg-black/20">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-white/70 transition hover:text-white">
+        {title}
+      </summary>
+      <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap border-t border-white/10 p-4 text-sm leading-6 text-white/65 sixfl-mobile-scroll">
         {value}
       </pre>
-    </section>
+    </details>
   );
 }
 
@@ -146,6 +191,7 @@ export default async function AdminQueueItemPage({
   const recipientName = dispatch.recipient.displayName || "Unknown recipient";
   const recipientContact = dispatch.recipient.email || dispatch.recipient.phone || "No email or phone saved";
   const latestMessage = dispatch.messageEntries[0] ?? null;
+  const hasMessageSource = Boolean(dispatch.bodyText?.trim() || dispatch.bodyHtml?.trim());
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -239,8 +285,20 @@ export default async function AdminQueueItemPage({
         </div>
       </section>
 
-      <CodeBlock title="Message text" value={dispatch.bodyText} />
-      <CodeBlock title="Message HTML" value={dispatch.bodyHtml} />
+      <MessagePreview html={dispatch.bodyHtml} text={dispatch.bodyText} />
+
+      {hasMessageSource ? (
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <h2 className="text-lg font-semibold text-white">Message source</h2>
+          <p className="mt-1 text-sm text-white/45">
+            Raw source is kept here for troubleshooting and stays collapsed by default.
+          </p>
+          <div className="mt-4 space-y-3">
+            <SourceDetails title="Plain text" value={dispatch.bodyText} />
+            <SourceDetails title="HTML source" value={dispatch.bodyHtml} />
+          </div>
+        </section>
+      ) : null}
 
       {dispatch.attempts.length > 0 ? (
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">

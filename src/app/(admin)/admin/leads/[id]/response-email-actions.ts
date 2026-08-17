@@ -85,20 +85,44 @@ function getFirstName(value: string | null | undefined) {
 
 function formatLongDate(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(value);
 }
 
-function isDateInPast(value: Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function getUkDateKey(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
 
-  const proposed = new Date(value);
-  proposed.setHours(0, 0, 0, 0);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
 
-  return proposed.getTime() < today.getTime();
+  return `${year}-${month}-${day}`;
+}
+
+function getStartDateTiming(value: Date) {
+  const startDateKey = getUkDateKey(value);
+  const todayKey = getUkDateKey(new Date());
+
+  if (startDateKey === todayKey) return "today";
+  return startDateKey < todayKey ? "past" : "future";
+}
+
+function formatVenueName(value: string | null | undefined) {
+  const venueName = value?.trim();
+
+  if (!venueName || venueName.toUpperCase() === "TBC") {
+    return "To be confirmed";
+  }
+
+  return venueName;
 }
 
 function formatCurrencyPence(value: number | null) {
@@ -117,12 +141,17 @@ function buildLeagueStartLine(startDate: Date | null) {
   }
 
   const formattedDate = formatLongDate(startDate);
+  const timing = getStartDateTiming(startDate);
 
-  if (isDateInPast(startDate)) {
-    return `This league is already underway and started on ${formattedDate}. We’re currently confirming teams for the remaining available places.`;
+  if (timing === "future") {
+    return `This league is due to start on ${formattedDate}. We’re currently confirming teams for the remaining available places.`;
   }
 
-  return `Proposed start date: ${formattedDate}.`;
+  if (timing === "today") {
+    return `This league is due to start today (${formattedDate}). We’re currently confirming teams for the remaining available places.`;
+  }
+
+  return `The proposed start date was ${formattedDate}. We’re currently confirming teams for the remaining available places.`;
 }
 
 function buildLeagueDetailsBlock(input: {
@@ -134,9 +163,9 @@ function buildLeagueDetailsBlock(input: {
 }) {
   const rows = [
     `League: ${input.leagueName}`,
-    input.venueName?.trim() ? `Venue: ${input.venueName.trim()}` : null,
+    `Venue: ${formatVenueName(input.venueName)}`,
     input.details?.proposedStartDate
-      ? `${isDateInPast(input.details.proposedStartDate) ? "Started" : "Proposed start date"}: ${formatLongDate(input.details.proposedStartDate)}`
+      ? `Proposed start date: ${formatLongDate(input.details.proposedStartDate)}`
       : null,
     input.kickoffInfo?.trim() ? `Kick-off: ${input.kickoffInfo.trim()}` : null,
     input.details?.minutesPerGame
@@ -213,9 +242,9 @@ export async function sendLeadEmailWithResponseLinksAction(formData: FormData) {
 
   for (const [key, value] of formData.entries()) {
     if (key === "subject" || key === "body") {
-      nextFormData.append(key, replaceLeadResponseTokens(String(value), leadId));
+      nextFormData.set(key, replaceLeadResponseTokens(String(value), leadId));
     } else {
-      nextFormData.append(key, value);
+      nextFormData.set(key, value);
     }
   }
 
@@ -299,6 +328,7 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
   const confirmation = await ensureTeamPlaceConfirmationRecord(lead.id);
   const leagueDetails = await getLeagueConfirmationEmailDetails(effectiveLeagueId);
   const leagueName = `${effectiveLeague.name}${effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""}`;
+  const venueName = formatVenueName(effectiveLeague.venueName);
   const displayName = lead.contactName?.trim() || lead.teamName?.trim() || email;
 
   const recipient = await upsertNotificationRecipient({
@@ -328,7 +358,7 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
     teamName: lead.teamName?.trim() || "",
     area: lead.area?.trim() || "",
     leagueName,
-    venueName: effectiveLeague.venueName?.trim() || "TBC",
+    venueName,
     kickoffInfo: effectiveLeague.kickoffInfo?.trim() || "",
     format: effectiveLeague.format?.trim() || "Weekly 6-a-side fixtures",
     proposedStartDate: leagueDetails?.proposedStartDate
@@ -343,7 +373,7 @@ export async function sendTeamPlaceConfirmationSystemEmailAction(formData: FormD
       : "",
     leagueDetailsBlock: buildLeagueDetailsBlock({
       leagueName,
-      venueName: effectiveLeague.venueName,
+      venueName,
       kickoffInfo: effectiveLeague.kickoffInfo,
       format: effectiveLeague.format,
       details: leagueDetails,
