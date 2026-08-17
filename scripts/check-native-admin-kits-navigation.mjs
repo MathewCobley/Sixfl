@@ -10,6 +10,7 @@ function read(relativePath) {
 }
 
 const sidebar = read(sidebarPath);
+const retiredBridge = read(retiredBridgePath);
 const failures = [];
 
 if (!sidebar.includes('name: "Kits"')) {
@@ -28,10 +29,25 @@ if (!sidebar.includes('description: "Orders"')) {
   failures.push("AdminSidebar Kits navigation must retain the Orders description.");
 }
 
-if (fs.existsSync(path.join(root, retiredBridgePath))) {
-  failures.push(
-    "AdminSidebarDesktopColumnsBridge must stay retired; Kits navigation belongs in AdminSidebar.",
-  );
+if (!sidebar.includes('className="grid grid-cols-3 gap-1.5"')) {
+  failures.push("AdminSidebar must own its column layout natively.");
+}
+
+if (!retiredBridge.includes("Retired compatibility shell") || !retiredBridge.includes("return null;")) {
+  failures.push("AdminSidebarDesktopColumnsBridge must remain an inert retired compatibility shell.");
+}
+
+for (const forbidden of [
+  "MutationObserver",
+  "document.querySelector",
+  "document.createElement",
+  "injectKitsNavigation",
+  "data-admin-kits-nav",
+  "/admin/kits",
+]) {
+  if (retiredBridge.includes(forbidden)) {
+    failures.push(`Retired admin sidebar bridge contains forbidden DOM/navigation marker: ${forbidden}.`);
+  }
 }
 
 if (failures.length) {
