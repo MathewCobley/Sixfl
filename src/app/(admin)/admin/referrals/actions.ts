@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueReferralRecordedEmail } from "@/lib/team-referral-notifications";
 import {
   attachReferralToLead,
   getOrCreateReferralCode,
@@ -100,6 +101,36 @@ export async function attachExistingLeadReferralAction(formData: FormData) {
   revalidatePath("/admin/referrals");
   revalidatePath("/player/referrals");
   referralRedirect({ added: "1" });
+}
+
+export async function retryReferralRecordedEmailAction(formData: FormData) {
+  await requireAdmin();
+
+  const referralId = String(formData.get("referralId") ?? "").trim();
+  if (!referralId) {
+    referralRedirect({ email: "missing" });
+  }
+
+  const result = await queueReferralRecordedEmail(referralId);
+
+  revalidatePath("/admin/referrals");
+
+  if (result.queued) {
+    referralRedirect({ email: "queued" });
+  }
+
+  switch (result.reason) {
+    case "already_queued":
+      referralRedirect({ email: "already" });
+    case "recipient_blocked":
+      referralRedirect({ email: "blocked" });
+    case "missing_email":
+      referralRedirect({ email: "no_email" });
+    case "not_found":
+      referralRedirect({ email: "not_found" });
+    default:
+      referralRedirect({ email: "failed" });
+  }
 }
 
 export async function markReferralPaidAction(formData: FormData) {
