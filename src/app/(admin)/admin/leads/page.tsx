@@ -307,7 +307,6 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     prisma.team.findMany({
       where: {
         teamMode: "MANAGED",
-        isRecruiting: true,
       },
       orderBy: { name: "asc" },
       select: { id: true, name: true, leagueId: true },
@@ -489,7 +488,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                         : !lead.leagueId
                           ? "Set a prospective league before adding this player to a managed squad"
                           : managedTeamsForLeague.length === 0
-                            ? "No recruiting managed squad is set up for this prospective league"
+                            ? "No managed squad is set up for this prospective league"
                             : managedTeamsForLeague.length > 1
                               ? "More than one managed squad exists for this league. Open the lead to choose the correct squad."
                               : `Add to ${managedTeamForLeague?.name ?? "managed squad"} and email the signup form`;
@@ -550,29 +549,30 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                             </>
                           ) : null}
                           {lead.interestType === "PLAYER" ? (
-                            managedTeamForLeague ? (
-                              <form action={convertLeadToManagedSquadPlayerAction}>
-                                <input type="hidden" name="leadId" value={lead.id} />
-                                <input type="hidden" name="teamId" value={managedTeamForLeague.id} />
+                            <>
+                              {managedTeamForLeague ? (
+                                <form action={convertLeadToManagedSquadPlayerAction}>
+                                  <input type="hidden" name="leadId" value={lead.id} />
+                                  <input type="hidden" name="teamId" value={managedTeamForLeague.id} />
+                                  <button
+                                    type="submit"
+                                    disabled={!canAddToManagedSquad}
+                                    title={managedSquadActionTitle}
+                                    className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-center text-xs font-bold leading-4 text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30"
+                                  >
+                                    Add to managed squad
+                                  </button>
+                                </form>
+                              ) : managedTeamsForLeague.length > 1 ? (
                                 <button
-                                  type="submit"
-                                  disabled={!canAddToManagedSquad}
+                                  type="button"
+                                  disabled
                                   title={managedSquadActionTitle}
-                                  className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-center text-xs font-bold leading-4 text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30"
+                                  className="inline-flex min-h-9 max-w-[150px] cursor-not-allowed items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-xs font-bold leading-4 text-white/30"
                                 >
                                   Add to managed squad
                                 </button>
-                              </form>
-                            ) : managedTeamsForLeague.length > 1 ? (
-                              <button
-                                type="button"
-                                disabled
-                                title={managedSquadActionTitle}
-                                className="inline-flex min-h-9 max-w-[150px] cursor-not-allowed items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-xs font-bold leading-4 text-white/30"
-                              >
-                                Add to managed squad
-                              </button>
-                            ) : (
+                              ) : null}
                               <form action={sendPlayerPoolProfileInviteAction}>
                                 <input type="hidden" name="leadId" value={lead.id} />
                                 <button
@@ -584,7 +584,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                                   Send to PlayerPool
                                 </button>
                               </form>
-                            )
+                            </>
                           ) : null}
                           <Link href={`/admin/leads/${lead.id}`} className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-500/20">
                             Open
