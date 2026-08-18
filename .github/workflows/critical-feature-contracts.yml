@@ -40,6 +40,9 @@ jobs:
       - name: Check last-minute replacement resolution
         run: node scripts/check-last-minute-replacement-resolution.mjs
 
+      - name: Check AI prediction matchup integrity
+        run: node scripts/check-ai-prediction-matchup-integrity.mjs
+
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
@@ -86,6 +89,7 @@ jobs:
           node scripts/check-team-confirmation-contract.mjs
           node scripts/check-standard-team-player-payment-links.mjs
           node scripts/check-last-minute-replacement-resolution.mjs
+          node scripts/check-ai-prediction-matchup-integrity.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate

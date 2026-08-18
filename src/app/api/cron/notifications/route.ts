@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
+import { repairUpcomingAiPredictionIntegrity } from "@/lib/fixtures/aiPredictionIntegrity";
 import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emails";
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
 import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures/confirmation-warning-emails";
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
     const fixtureConfirmationEmails = await runFixtureConfirmationEmailJob();
     const fixtureConfirmationWarnings =
       await backfillUpcomingFixtureConfirmationWarningEmails();
+    const aiPredictionIntegrity = await repairUpcomingAiPredictionIntegrity();
     const lastMinuteReplacements = await reconcilePendingLastMinuteReplacements();
     const refereeAssignmentSync = await syncUpcomingRefereeAssignmentsForConfirmations();
     const refereeNights = await queueDueRefereeNightReminderEmails();
@@ -106,6 +108,7 @@ export async function GET(request: NextRequest) {
       fixtureConfirmations,
       fixtureConfirmationEmails,
       fixtureConfirmationWarnings,
+      aiPredictionIntegrity,
       lastMinuteReplacements,
       refereeAssignmentSync,
       refereeNights,
