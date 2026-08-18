@@ -26,8 +26,7 @@ BEGIN
   IF (
     OLD."homeTeamId" IS DISTINCT FROM NEW."homeTeamId"
     OR OLD."awayTeamId" IS DISTINCT FROM NEW."awayTeamId"
-  ) AND NEW."status"::text = 'SCHEDULED'
-    AND NEW."kickoffAt" > CURRENT_TIMESTAMP
+  ) AND NEW."kickoffAt" > CURRENT_TIMESTAMP
   THEN
     DELETE FROM "FixtureAiPrediction"
     WHERE "fixtureId" = NEW."id";
