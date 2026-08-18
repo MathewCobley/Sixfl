@@ -1,9 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { sendLastMinuteReplacementAlert } from "@/lib/fixtures/last-minute-replacement";
+import { getLastMinuteReplacementControlState } from "@/lib/fixtures/last-minute-replacement-resolution";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  await requireAdmin();
+
+  const fixtureId = request.nextUrl.searchParams.get("fixtureId")?.trim() ?? "";
+  const currentTeamId = request.nextUrl.searchParams.get("currentTeamId")?.trim() ?? "";
+
+  if (!fixtureId || !currentTeamId) {
+    return NextResponse.json(
+      { ok: false, error: "Fixture and team are required." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const state = await getLastMinuteReplacementControlState({
+      fixtureId,
+      currentTeamId,
+    });
+    return NextResponse.json({ ok: true, state });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "The replacement status could not be loaded.",
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   const access = await requireAdmin();
