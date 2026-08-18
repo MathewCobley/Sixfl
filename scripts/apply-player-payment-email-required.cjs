@@ -8,7 +8,9 @@ const pagePath = path.join(root, "src", "app", "captain", "team", "[teamid]", "p
 let actions = fs.readFileSync(actionsPath, "utf8");
 let page = fs.readFileSync(pagePath, "utf8");
 
-if (!actions.includes('if (error === "missing_player_email")')) {
+// Native source now owns this guard. Keep this compatibility patch safe for older
+// branches, but do not duplicate the native server-side check during prebuild.
+if (!actions.includes("selectedMemberIdsForEmailCheck")) {
   const actionGuardAnchor = '  if (players.length === 0) {\n    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=no_players"));\n  }';
   if (!actions.includes(actionGuardAnchor)) throw new Error("Player payment no-players guard not found.");
   actions = actions.replace(actionGuardAnchor, `${actionGuardAnchor}\n\n  const selectedMemberIdsForEmailCheck = players.filter((player) => player.type === "member").map((player) => player.id);\n  const selectedProspectIdsForEmailCheck = players.filter((player) => player.type === "prospect").map((player) => player.id);\n  const [membersForEmailCheck, prospectsForEmailCheck] = await Promise.all([\n    prisma.teamMember.findMany({\n      where: { id: { in: selectedMemberIdsForEmailCheck }, teamId },\n      select: { id: true, user: { select: { email: true } } },\n    }),\n    prisma.teamPlayerProspect.findMany({\n      where: { id: { in: selectedProspectIdsForEmailCheck }, teamId },\n      select: { id: true, email: true },\n    }),\n  ]);\n  const memberEmailById = new Map(membersForEmailCheck.map((member) => [member.id, member.user.email?.trim() || null]));\n  const prospectEmailById = new Map(prospectsForEmailCheck.map((prospect) => [prospect.id, prospect.email?.trim() || null]));\n  for (const player of players) {\n    const enteredAmountPence = getPlayerAmountPence({ formData, type: player.type, id: player.id, defaultAmountPence });\n    if (enteredAmountPence === null) continue;\n    const method = getCollectionMethod({ formData, type: player.type, id: player.id, amountPence: enteredAmountPence });\n    const email = player.type === "member" ? memberEmailById.get(player.id) : prospectEmailById.get(player.id);\n    if (method === "link" && !email) {\n      redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_player_email"));\n    }\n  }`);
@@ -59,4 +61,4 @@ if (!page.includes('Email required')) {
 
 fs.writeFileSync(actionsPath, actions, "utf8");
 fs.writeFileSync(pagePath, page, "utf8");
-console.log("Player payment links now require a saved email; SMS-only players remain visible but cannot be selected for link collection.");
+console.log("Player payment email requirement is present and the legacy compatibility patch is idempotent.");
