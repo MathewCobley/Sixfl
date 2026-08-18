@@ -37,6 +37,9 @@ jobs:
       - name: Check standard-team player payment links
         run: node scripts/check-standard-team-player-payment-links.mjs
 
+      - name: Check last-minute replacement resolution
+        run: node scripts/check-last-minute-replacement-resolution.mjs
+
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
@@ -82,6 +85,7 @@ jobs:
           node scripts/check-critical-feature-contracts.mjs
           node scripts/check-team-confirmation-contract.mjs
           node scripts/check-standard-team-player-payment-links.mjs
+          node scripts/check-last-minute-replacement-resolution.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate
