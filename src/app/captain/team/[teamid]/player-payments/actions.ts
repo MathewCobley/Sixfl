@@ -251,6 +251,51 @@ async function emailPlayerPaymentLinks(feeIds: string[]) {
   return { queued, skipped };
 }
 
+export async function resendCaptainPlayerPaymentLinkAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const feeId = getString(formData, "feeId");
+
+  if (!teamId || !fixtureId || !feeId) {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=payment_request_not_found"));
+  }
+
+  await requireCaptain(teamId);
+
+  const fee = await prisma.playerMatchFee.findFirst({
+    where: {
+      id: feeId,
+      teamId,
+      fixtureId,
+      status: "OPEN",
+    },
+    select: { id: true },
+  });
+
+  if (!fee) {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=payment_request_not_found"));
+  }
+
+  const result = await queuePlayerMatchFeeReminder({
+    feeId: fee.id,
+    mode: "request",
+    channels: ["EMAIL"],
+    force: true,
+  });
+
+  revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));
+
+  if (result.queued > 0) {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&saved=payment_link_resent"));
+  }
+
+  if (result.status === "no_contact") {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_player_email"));
+  }
+
+  redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=payment_link_not_sent"));
+}
+
 export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
@@ -269,6 +314,53 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
   if (players.length === 0) {
     redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=no_players"));
+  }
+
+  const selectedMemberIdsForEmailCheck = players
+    .filter((player) => player.type === "member")
+    .map((player) => player.id);
+  const selectedProspectIdsForEmailCheck = players
+    .filter((player) => player.type === "prospect")
+    .map((player) => player.id);
+  const [membersForEmailCheck, prospectsForEmailCheck] = await Promise.all([
+    prisma.teamMember.findMany({
+      where: { id: { in: selectedMemberIdsForEmailCheck }, teamId },
+      select: { id: true, user: { select: { email: true } } },
+    }),
+    prisma.teamPlayerProspect.findMany({
+      where: { id: { in: selectedProspectIdsForEmailCheck }, teamId },
+      select: { id: true, email: true },
+    }),
+  ]);
+  const memberEmailById = new Map(
+    membersForEmailCheck.map((member) => [member.id, member.user.email?.trim() || null]),
+  );
+  const prospectEmailById = new Map(
+    prospectsForEmailCheck.map((prospect) => [prospect.id, prospect.email?.trim() || null]),
+  );
+
+  for (const player of players) {
+    const enteredAmountPence = getPlayerAmountPence({
+      formData,
+      type: player.type,
+      id: player.id,
+      defaultAmountPence,
+    });
+    if (enteredAmountPence === null) continue;
+
+    const method = getCollectionMethod({
+      formData,
+      type: player.type,
+      id: player.id,
+      amountPence: enteredAmountPence,
+    });
+    const email = player.type === "member"
+      ? memberEmailById.get(player.id)
+      : prospectEmailById.get(player.id);
+
+    if (method === "link" && !email) {
+      redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_player_email"));
+    }
   }
 
   const fixtureOk = await assertFixtureBelongsToTeam({ fixtureId, teamId });
@@ -461,8 +553,14 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
   await syncTeamChargeForZeroFeeWaivers({ teamId, fixtureId });
   await ensurePlayerMatchFeePaymentDetailsForFees(createdOrUpdatedFeeIds);
-  await emailPlayerPaymentLinks(createdOrUpdatedFeeIds);
+  const delivery = await emailPlayerPaymentLinks(createdOrUpdatedFeeIds);
 
   revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));
-  redirect(getPlayerPaymentsPath(teamId, fixtureId, "&saved=collection_created"));
+  redirect(
+    getPlayerPaymentsPath(
+      teamId,
+      fixtureId,
+      `&saved=collection_created&emailsQueued=${delivery.queued}&emailsSkipped=${delivery.skipped}`,
+    ),
+  );
 }
