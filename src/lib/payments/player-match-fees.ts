@@ -34,6 +34,11 @@ type PlayerMatchFeeReminderTemplate = {
   ctaUrlKey: string | null;
 };
 
+type TeamPaymentDispatchBoundaryRow = {
+  teamMode: string;
+  standardCreditStartedAt: Date | null;
+};
+
 const PLAYER_MATCH_FEE_SOURCE_TYPES: Record<PlayerMatchFeeReminderMode, string> = {
   request: "PLAYER_MATCH_FEE_REQUEST",
   chase24h: "PLAYER_MATCH_FEE_CHASE_24H",
@@ -147,7 +152,7 @@ const PLAYER_MATCH_FEE_SYSTEM_TEMPLATES: PlayerMatchFeeReminderTemplate[] = [
   {
     key: PLAYER_MATCH_FEE_TEMPLATE_KEYS.chase72h.SMS,
     name: "Player match fee 72h final chase SMS",
-    description: "72-hour final chase SMS for unpaid player match fees.",
+    description: "72-hour final chase SMS with a direct payment link.",
     channel: "SMS",
     subject: null,
     body: "Final reminder: {{amount}} match fee due. Pay: {{paymentUrl}}",
@@ -183,6 +188,36 @@ function getFirstName(value: string) {
 
 function getSourceId(feeId: string) {
   return feeId;
+}
+
+async function getStandardTeamPaymentDispatchBoundary(teamId: string) {
+  try {
+    const rows = await prisma.$queryRaw<TeamPaymentDispatchBoundaryRow[]>`
+      SELECT
+        "teamMode"::text AS "teamMode",
+        "standardCreditStartedAt" AS "standardCreditStartedAt"
+      FROM "Team"
+      WHERE "id" = ${teamId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row || row.teamMode !== "STANDARD") return null;
+    return row.standardCreditStartedAt ?? null;
+  } catch {
+    // Older/local databases may not yet have the raw transition-boundary column.
+    // In that case retain the legacy dedupe behaviour rather than blocking payment requests.
+    return null;
+  }
+}
+
+async function getPlayerMatchFeeDispatchBoundary(feeId: string) {
+  const fee = await prisma.playerMatchFee.findUnique({
+    where: { id: feeId },
+    select: { teamId: true },
+  });
+
+  return fee?.teamId ? getStandardTeamPaymentDispatchBoundary(fee.teamId) : null;
 }
 
 export function buildPlayerMatchFeePaymentPath(paymentToken: string) {
@@ -282,12 +317,14 @@ async function hasPlayerMatchFeeDispatch(input: {
   feeId: string;
   mode: PlayerMatchFeeReminderMode;
   channel?: ReminderChannel;
+  notBefore?: Date | null;
 }) {
   return prisma.notificationDispatch.findFirst({
     where: {
       sourceType: PLAYER_MATCH_FEE_SOURCE_TYPES[input.mode],
       sourceId: getSourceId(input.feeId),
       ...(input.channel ? { channel: input.channel } : {}),
+      ...(input.notBefore ? { createdAt: { gte: input.notBefore } } : {}),
       status: {
         in: [
           NotificationDispatchStatus.QUEUED,
@@ -310,14 +347,17 @@ async function getPlayerMatchFeeReminderMode(input: {
   feeId: string;
   now: Date;
 }): Promise<PlayerMatchFeeReminderMode | null> {
+  const dispatchNotBefore = await getPlayerMatchFeeDispatchBoundary(input.feeId);
   const initial = await hasPlayerMatchFeeDispatch({
     feeId: input.feeId,
     mode: "request",
+    notBefore: dispatchNotBefore,
   });
   const initialSms = await hasPlayerMatchFeeDispatch({
     feeId: input.feeId,
     mode: "request",
     channel: "SMS",
+    notBefore: dispatchNotBefore,
   });
 
   if (!initial || !initialSms) return "request";
@@ -330,11 +370,13 @@ async function getPlayerMatchFeeReminderMode(input: {
     const chase72 = await hasPlayerMatchFeeDispatch({
       feeId: input.feeId,
       mode: "chase72h",
+      notBefore: dispatchNotBefore,
     });
     const chase72Sms = await hasPlayerMatchFeeDispatch({
       feeId: input.feeId,
       mode: "chase72h",
       channel: "SMS",
+      notBefore: dispatchNotBefore,
     });
 
     if (!chase72 || !chase72Sms) return "chase72h";
@@ -344,11 +386,13 @@ async function getPlayerMatchFeeReminderMode(input: {
     const chase24 = await hasPlayerMatchFeeDispatch({
       feeId: input.feeId,
       mode: "chase24h",
+      notBefore: dispatchNotBefore,
     });
     const chase24Sms = await hasPlayerMatchFeeDispatch({
       feeId: input.feeId,
       mode: "chase24h",
       channel: "SMS",
+      notBefore: dispatchNotBefore,
     });
 
     if (!chase24 || !chase24Sms) return "chase24h";
@@ -379,6 +423,7 @@ export async function queuePlayerMatchFeeReminder(input: {
   feeId: string;
   mode: PlayerMatchFeeReminderMode;
   channels?: ReminderChannel[];
+  force?: boolean;
 }) {
   await ensurePlayerMatchFeeReminderTemplates();
   const ensured = await ensurePlayerMatchFeePaymentDetails(input.feeId);
@@ -466,18 +511,21 @@ export async function queuePlayerMatchFeeReminder(input: {
     return { queued: 0, skipped: 1, status: "no_contact" as const };
   }
 
-  const existingEmailDispatch = shouldQueueEmail
+  const dispatchNotBefore = await getStandardTeamPaymentDispatchBoundary(fee.team.id);
+  const existingEmailDispatch = shouldQueueEmail && !input.force
     ? await hasPlayerMatchFeeDispatch({
         feeId: fee.id,
         mode: input.mode,
         channel: "EMAIL",
+        notBefore: dispatchNotBefore,
       })
     : null;
-  const existingSmsDispatch = shouldQueueSms
+  const existingSmsDispatch = shouldQueueSms && !input.force
     ? await hasPlayerMatchFeeDispatch({
         feeId: fee.id,
         mode: input.mode,
         channel: "SMS",
+        notBefore: dispatchNotBefore,
       })
     : null;
 
@@ -538,6 +586,7 @@ export async function queuePlayerMatchFeeReminder(input: {
         origin: "player_match_fee_automation",
         originLabel: "Player match fee automation",
         mode: input.mode,
+        manualResend: Boolean(input.force),
         playerMatchFeeId: fee.id,
         fixtureId: fee.fixture.id,
         teamId: fee.team.id,
@@ -571,6 +620,7 @@ export async function queuePlayerMatchFeeReminder(input: {
         origin: "player_match_fee_automation",
         originLabel: "Player match fee automation",
         mode: input.mode,
+        manualResend: Boolean(input.force),
         playerMatchFeeId: fee.id,
         fixtureId: fee.fixture.id,
         teamId: fee.team.id,

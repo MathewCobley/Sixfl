@@ -13,11 +13,20 @@ import {
 import { ensurePlayerMatchFeePaymentDetailsForFees } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { createCaptainSquadPaymentCollectionAction } from "./actions";
+import {
+  createCaptainSquadPaymentCollectionAction,
+  resendCaptainPlayerPaymentLinkAction,
+} from "./actions";
 
 type Props = {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ fixtureId?: string; saved?: string; error?: string }>;
+  searchParams?: Promise<{
+    fixtureId?: string;
+    saved?: string;
+    error?: string;
+    emailsQueued?: string;
+    emailsSkipped?: string;
+  }>;
 };
 
 type Tone = "white" | "emerald" | "amber" | "red";
@@ -134,10 +143,19 @@ function collectionMethod(
   return "link";
 }
 
-function messageForSaved(saved?: string) {
-  return saved === "collection_created"
-    ? "Player collection saved. Payment requests and statuses are shown below."
-    : null;
+function messageForSaved(saved?: string, emailsQueuedRaw?: string) {
+  if (saved === "payment_link_resent") {
+    return "Payment link email queued again for this player.";
+  }
+
+  if (saved !== "collection_created") return null;
+
+  const emailsQueued = Number(emailsQueuedRaw ?? "0");
+  if (Number.isFinite(emailsQueued) && emailsQueued > 0) {
+    return `Player collection saved. ${emailsQueued} payment link email${emailsQueued === 1 ? "" : "s"} queued.`;
+  }
+
+  return "Player collection saved. No new payment-link email was queued. If a player is awaiting payment and says the link has not arrived, use Send payment link again below.";
 }
 
 function messageForError(error?: string) {
@@ -145,6 +163,15 @@ function messageForError(error?: string) {
   if (error === "invalid_amount") return "Enter a valid default amount per player.";
   if (error === "invalid_player_amount") return "One player amount is invalid.";
   if (error === "no_players") return "Select at least one player.";
+  if (error === "missing_player_email") {
+    return "Payment links can only be emailed to players with a saved email address. Add the missing email first.";
+  }
+  if (error === "payment_request_not_found") {
+    return "That open player payment request could not be found for this fixture.";
+  }
+  if (error === "payment_link_not_sent") {
+    return "The payment request is still open, but the email could not be queued. Check the player's email address and try Send payment link again.";
+  }
   if (error === "fixture_not_found") {
     return "That fixture could not be found for this team.";
   }
@@ -346,6 +373,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
       value: `member:${member.id}`,
       label: member.user.name || member.user.email || "Unnamed member",
       contact: member.user.email,
+      emailRequired: !member.user.email?.trim(),
       checked: selectedMemberIds.has(member.id),
       fee: feeByMemberId.get(member.id),
     })),
@@ -362,6 +390,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
         prospectEmail: prospect.email,
         prospectPhone: prospect.phone,
       }),
+      emailRequired: !prospect.email?.trim(),
       checked: selectedProspectIds.has(prospect.id),
       fee: feeByProspectId.get(prospect.id),
     })),
@@ -398,7 +427,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   const captainSettledPence = collectedPence + zeroFeeSettledPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
   const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;
-  const savedMessage = messageForSaved(sp.saved);
+  const savedMessage = messageForSaved(sp.saved, sp.emailsQueued);
   const errorMessage = messageForError(sp.error);
 
   const summaryTone: Tone = !selectedEntry
@@ -430,7 +459,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     summaryText = `${formatMoney(playerAllocationPence)} has been assigned across ${selectedFees.length} player${selectedFees.length === 1 ? "" : "s"}. ${formatMoney(captainSettledPence)} of player shares are settled and ${formatMoney(playerOutstandingPence)} is still awaiting payment from players. The team balance remaining is ${formatMoney(stillToCoverPence)}.`;
     summaryNextStep =
       playerOutstandingPence > 0
-        ? "Payment links remain open for the players shown as awaiting payment below."
+        ? "Payment links remain open for the players shown as awaiting payment below. If someone has not received theirs, use Send payment link again."
         : stillToCoverPence > 0
           ? "There are no open player requests, but part of the team fee is still not covered. Update the player collection or arrange the remaining team payment."
           : null;
@@ -689,6 +718,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                         <input
                           type="checkbox"
                           name="player"
+                          disabled={player.emailRequired && !player.fee}
                           value={player.value}
                           defaultChecked={player.checked}
                           className="mt-1"
@@ -698,7 +728,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                             {player.label}
                           </span>
                           <span className="mt-1 block text-xs text-white/45">
-                            {player.contact || "No contact saved"}
+                            {player.emailRequired
+                              ? "Email required — add an email before sending a payment link"
+                              : player.contact || "No contact saved"}
                           </span>
                         </span>
                       </label>
@@ -771,13 +803,14 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <h2 className="text-lg font-semibold text-white">Player payment status</h2>
           <p className="mt-1 text-sm text-white/55">
-            This shows what has happened for each player in the selected fixture.
+            This shows what has happened for each player in the selected fixture. Open requests can be sent again if a player has not received the email.
           </p>
           <div className="mt-4 divide-y divide-white/10">
             {selectedFees.map((fee) => {
               const captainStatus = isZeroFeeCaptainSettled(fee.status, fee.note)
                 ? "SETTLED"
                 : fee.status;
+              const canResend = fee.status === "OPEN" && fee.teamId === teamid;
 
               return (
                 <div
@@ -791,11 +824,26 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                       {fee.teamId === teamid ? "Current team" : "Historical team row"}
                     </div>
                   </div>
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(captainStatus)}`}
-                  >
-                    {statusLabel(fee.status, fee.note)}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(captainStatus)}`}
+                    >
+                      {statusLabel(fee.status, fee.note)}
+                    </span>
+                    {canResend ? (
+                      <form action={resendCaptainPlayerPaymentLinkAction}>
+                        <input type="hidden" name="teamId" value={teamid} />
+                        <input type="hidden" name="fixtureId" value={fee.fixtureId} />
+                        <input type="hidden" name="feeId" value={fee.id} />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center rounded-full border border-sky-400/25 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/20"
+                        >
+                          Send payment link again
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
