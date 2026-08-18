@@ -19,8 +19,10 @@ function expect(condition, message) {
 
 const pagePath = "src/app/(public)/team-confirmation/[token]/page.tsx";
 const confirmationPath = "src/lib/leads/teamPlaceConfirmation.ts";
+const emailActionPath = "src/app/(admin)/admin/leads/[id]/response-email-actions.ts";
 const page = read(pagePath);
 const confirmation = read(confirmationPath);
+const emailAction = read(emailActionPath);
 
 expect(
   page.includes("getLeagueConfirmationDetails") && page.includes("const effectiveLeague ="),
@@ -45,6 +47,15 @@ expect(
 expect(
   page.includes("No team or fixtures have been created automatically"),
   "confirmation page must clearly state that reserving a place does not auto-create a team or fixtures",
+);
+expect(
+  emailAction.includes("we’ll ask you to confirm your team name") &&
+    emailAction.includes("you can add it later"),
+  "team confirmation email must explain that team name is requested after reserving and can be supplied later",
+);
+expect(
+  emailAction.includes("Reserving a place does not create the team automatically"),
+  "team confirmation email must not imply that reserving the place creates the actual team",
 );
 
 const confirmStart = confirmation.indexOf("export async function confirmTeamPlaceFromLead");
