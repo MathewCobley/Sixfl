@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
+import { refreshStoredAiPreviewForFixture } from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -86,6 +87,7 @@ export async function replaceTeamInFutureFixturesAction(formData: FormData) {
       homeTeamId: true,
       awayTeamId: true,
       kickoffAt: true,
+      publishedAt: true,
     },
     orderBy: [{ kickoffAt: "asc" }],
   });
@@ -188,6 +190,18 @@ export async function replaceTeamInFutureFixturesAction(formData: FormData) {
       },
     });
   });
+
+  for (const fixture of targetFixtures) {
+    if (!fixture.publishedAt) continue;
+    try {
+      await refreshStoredAiPreviewForFixture(fixture.id, { force: true });
+    } catch (predictionError) {
+      console.error("Failed to regenerate AI prediction after future team replacement", {
+        fixtureId: fixture.id,
+        error: predictionError,
+      });
+    }
+  }
 
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/replace-team");
