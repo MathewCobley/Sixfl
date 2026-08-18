@@ -34,7 +34,7 @@ for (const marker of [
   "reconcileLastMinuteReplacement",
   "replacementTeamId",
   "opponentTeamId",
-  'role: "not_selected"',
+  '"not_selected"',
   "There is no charge for this extra game.",
   "are not required for this extra game",
   "Your normal fixture arrangements remain in place.",
