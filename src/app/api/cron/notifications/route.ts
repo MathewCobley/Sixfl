@@ -7,6 +7,7 @@ import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
 import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emails";
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
 import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures/confirmation-warning-emails";
+import { reconcilePendingLastMinuteReplacements } from "@/lib/fixtures/last-minute-replacement-resolution";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
 import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
     const fixtureConfirmationEmails = await runFixtureConfirmationEmailJob();
     const fixtureConfirmationWarnings =
       await backfillUpcomingFixtureConfirmationWarningEmails();
+    const lastMinuteReplacements = await reconcilePendingLastMinuteReplacements();
     const refereeAssignmentSync = await syncUpcomingRefereeAssignmentsForConfirmations();
     const refereeNights = await queueDueRefereeNightReminderEmails();
     const refereeConfirmations = await queueDueRefereeNightConfirmationChasers();
@@ -104,6 +106,7 @@ export async function GET(request: NextRequest) {
       fixtureConfirmations,
       fixtureConfirmationEmails,
       fixtureConfirmationWarnings,
+      lastMinuteReplacements,
       refereeAssignmentSync,
       refereeNights,
       refereeConfirmations,

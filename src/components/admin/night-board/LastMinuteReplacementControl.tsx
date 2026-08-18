@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Result = {
   ok?: boolean;
@@ -9,6 +9,19 @@ type Result = {
   email?: { sent: number; skipped: number; failed: number; queued: number };
   sms?: { sent: number; skipped: number; failed: number; queued: number };
 };
+
+type ControlState =
+  | { status: "idle" }
+  | { status: "alert_sent"; droppedTeamId: string }
+  | {
+      status: "resolved";
+      droppedTeamId: string;
+      replacementTeamId: string;
+      replacementTeamName: string;
+      opponentTeamId: string;
+      opponentTeamName: string;
+      resolvedAt: string;
+    };
 
 export default function LastMinuteReplacementControl({
   fixtureId,
@@ -20,11 +33,51 @@ export default function LastMinuteReplacementControl({
   teamName: string;
 }) {
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [controlState, setControlState] = useState<ControlState>({ status: "idle" });
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadState() {
+      try {
+        // If the fixture teams have already been changed after an alert was sent,
+        // reconcile it now. The server is idempotent, so both team controls can
+        // safely ask without creating duplicate messages.
+        await fetch("/api/admin/night-board/last-minute-replacement/reconcile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fixtureId }),
+          cache: "no-store",
+        });
+
+        const params = new URLSearchParams({ fixtureId, currentTeamId: droppedTeamId });
+        const response = await fetch(
+          `/api/admin/night-board/last-minute-replacement?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json().catch(() => null)) as
+          | { ok?: boolean; state?: ControlState }
+          | null;
+
+        if (!cancelled && response.ok && payload?.ok && payload.state) {
+          setControlState(payload.state);
+        }
+      } catch {
+        // Keep the manual alert control available if the status check cannot be loaded.
+      }
+    }
+
+    void loadState();
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtureId, droppedTeamId]);
+
+  const sent = controlState.status === "alert_sent";
+
   async function sendAlert() {
-    if (sending || sent) return;
+    if (sending || sent || controlState.status === "resolved") return;
 
     const confirmed = window.confirm(
       `Send a last-minute FREE fixture alert by email and SMS to every eligible team in this league because ${teamName} has dropped out?`,
@@ -56,7 +109,9 @@ export default function LastMinuteReplacementControl({
         (payload.email?.skipped ?? 0) +
         (payload.sms?.skipped ?? 0);
 
-      setSent(true);
+      if (eligible > 0) {
+        setControlState({ status: "alert_sent", droppedTeamId });
+      }
       setMessage(
         eligible === 0
           ? "No eligible teams were available to contact."
@@ -71,6 +126,22 @@ export default function LastMinuteReplacementControl({
     } finally {
       setSending(false);
     }
+  }
+
+  if (controlState.status === "resolved") {
+    const isReplacement = controlState.replacementTeamId === droppedTeamId;
+    const isOpponent = controlState.opponentTeamId === droppedTeamId;
+    const label = isReplacement
+      ? "✓ Last-minute replacement confirmed"
+      : isOpponent
+        ? `Replacement confirmed · ${controlState.replacementTeamName}`
+        : `Replacement resolved · ${controlState.replacementTeamName}`;
+
+    return (
+      <div className="mt-1 inline-flex max-w-full rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-100">
+        {label}
+      </div>
+    );
   }
 
   return (
