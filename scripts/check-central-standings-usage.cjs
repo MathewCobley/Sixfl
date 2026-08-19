@@ -77,6 +77,7 @@ require("./fix-fixture-abandonment-build.cjs");
 require("./apply-fixture-abandonment-result-decision.cjs");
 require("./fix-fixture-abandonment-result-decision-build.cjs");
 require("./fix-fixture-abandonment-runtime-schema.cjs");
+require("./apply-fixture-abandonment-email-recovery.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
