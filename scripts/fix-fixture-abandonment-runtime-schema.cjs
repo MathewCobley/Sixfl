@@ -85,6 +85,23 @@ patch("src/lib/fixtures/abandonment.ts", [
       "        ${input.recordedByUserId},",
     ].join("\n"),
   },
+  {
+    label: "notification queue resilience",
+    before: [
+      "  if (dispatchIds.length > 0) {",
+      "    await processNotificationQueue(Math.max(20, dispatchIds.length + 10));",
+      "  }",
+    ].join("\n"),
+    after: [
+      "  if (dispatchIds.length > 0) {",
+      "    try {",
+      "      await processNotificationQueue(Math.max(20, dispatchIds.length + 10));",
+      "    } catch (error) {",
+      '      console.error("Abandonment notifications were queued but immediate processing failed", error);',
+      "    }",
+      "  }",
+    ].join("\n"),
+  },
 ]);
 
 patch("src/components/referee/AbandonedMatchForm.tsx", [
@@ -171,4 +188,18 @@ patch("src/app/(public)/referee/night/[id]/page.tsx", [
   },
 ]);
 
-console.log("Abandoned-match result decisions now use MatchResult as the runtime source of truth and do not require the optional audit columns to exist before the page can load.");
+patch("src/app/(public)/referee/abandonment-actions.ts", [
+  {
+    label: "cashup recalculation resilience",
+    before: "  await recalculateRefereeNightCashup(refereeNightId);",
+    after: [
+      "  try {",
+      "    await recalculateRefereeNightCashup(refereeNightId);",
+      "  } catch (error) {",
+      '    console.error("Abandonment was saved but referee-night cashup recalculation failed", error);',
+      "  }",
+    ].join("\n"),
+  },
+]);
+
+console.log("Abandoned-match result decisions now use MatchResult as the runtime source of truth, avoid optional audit-column dependency, and do not turn post-save notification/cashup work into a blank application-error page.");
