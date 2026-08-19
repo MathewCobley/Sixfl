@@ -1,0 +1,5 @@
+ALTER TABLE "FixtureAbandonment"
+  ADD COLUMN IF NOT EXISTS "awardedHomeScore" INTEGER,
+  ADD COLUMN IF NOT EXISTS "awardedAwayScore" INTEGER,
+  ADD COLUMN IF NOT EXISTS "resultDecidedByUserId" TEXT,
+  ADD COLUMN IF NOT EXISTS "resultDecidedAt" TIMESTAMP(3);
