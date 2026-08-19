@@ -71,6 +71,8 @@ require("./apply-ai-prediction-publication-snapshot.cjs");
 require("./fix-ai-prediction-publication-selects.cjs");
 require("./apply-ai-prediction-matchup-integrity.cjs");
 require("./apply-ai-prediction-text-team-integrity.cjs");
+require("./apply-fixture-abandonment-workflow.cjs");
+require("./fix-fixture-abandonment-build.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
@@ -98,9 +100,6 @@ function walk(directory) {
       violations.push(`${relative}: direct leagueTable import: ${directImports.join(" | ").trim()}`);
     }
 
-    // League-facing pages must never maintain a second standings calculator.
-    // Other pages can have local presentation helpers with the same function
-    // name without representing the canonical league standings contract.
     if (relative.includes("/leagues/") && /\bfunction\s+buildLeagueTable\s*\(/.test(source)) {
       violations.push(`${relative}: local buildLeagueTable() calculator`);
     }
