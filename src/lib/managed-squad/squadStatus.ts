@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
-export type TeamMemberSquadStatus = "ACTIVE" | "INJURED";
+export type TeamMemberSquadStatus = "ACTIVE" | "INJURED" | "INACTIVE";
 
 export type TeamMemberSquadStatusRow = {
   id: string;
@@ -45,9 +45,10 @@ export async function ensureTeamMemberSquadStatusColumns(db: DbClient = prisma) 
   `);
 }
 
-async function cancelQueuedAvailabilityChasesForInjuredPlayer(input: {
+async function cancelQueuedAvailabilityChasesForUnavailablePlayer(input: {
   membershipId: string;
   db: DbClient;
+  reason: string;
 }) {
   await input.db.notificationDispatch.updateMany({
     where: {
@@ -64,7 +65,7 @@ async function cancelQueuedAvailabilityChasesForInjuredPlayer(input: {
     data: {
       status: NotificationDispatchStatus.CANCELLED,
       cancelledAt: new Date(),
-      failureReason: "Player marked injured; future availability chase cancelled.",
+      failureReason: input.reason,
     },
   });
 }
@@ -75,7 +76,11 @@ export async function getTeamMemberSquadStatusMap(teamId: string, db: DbClient =
   const rows = await db.$queryRaw<TeamMemberSquadStatusRow[]>(Prisma.sql`
     SELECT
       "id",
-      CASE WHEN "squadStatus" = 'INJURED' THEN 'INJURED' ELSE 'ACTIVE' END AS "squadStatus",
+      CASE
+        WHEN "squadStatus" = 'INJURED' THEN 'INJURED'
+        WHEN "squadStatus" = 'INACTIVE' THEN 'INACTIVE'
+        ELSE 'ACTIVE'
+      END AS "squadStatus",
       "squadStatusUpdatedAt",
       "squadStatusNote"
     FROM "TeamMember"
@@ -110,9 +115,18 @@ export async function setTeamMemberSquadStatus(input: {
   const didUpdate = Number(updated) > 0;
 
   if (didUpdate && input.status === "INJURED") {
-    await cancelQueuedAvailabilityChasesForInjuredPlayer({
+    await cancelQueuedAvailabilityChasesForUnavailablePlayer({
       membershipId: input.membershipId,
       db,
+      reason: "Player marked injured; future availability chase cancelled.",
+    });
+  }
+
+  if (didUpdate && input.status === "INACTIVE") {
+    await cancelQueuedAvailabilityChasesForUnavailablePlayer({
+      membershipId: input.membershipId,
+      db,
+      reason: "Player marked inactive; future availability chase cancelled.",
     });
   }
 
