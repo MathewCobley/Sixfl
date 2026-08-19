@@ -2,8 +2,69 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = process.cwd();
-const pagePath = path.join(root, "src", "app", "(public)", "referee", "night", "[id]", "page.tsx");
 
+// Keep the native abandonment service compatible with the current payment helper
+// signatures and avoid relying on mutation-based TypeScript narrowing across a
+// transaction callback.
+const servicePath = path.join(root, "src", "lib", "fixtures", "abandonment.ts");
+let service = fs.readFileSync(servicePath, "utf8");
+
+service = service.replace(
+  [
+    "        getPlayerFeeCashReceivedPence({",
+    "          amountPence: fee.amountPence,",
+    "          status: fee.status,",
+    "          note: fee.note,",
+    "        }),",
+  ].join("\n"),
+  [
+    "        getPlayerFeeCashReceivedPence({",
+    "          amountPence: fee.amountPence,",
+    "          status: fee.status,",
+    "        }),",
+  ].join("\n"),
+);
+
+if (!service.includes("const finalResponsibleCharge = responsibleTeam")) {
+  const before = [
+    "  const chargeIds = fixture.paymentCharges.map((charge) => charge.id);",
+    "  if (updatedResponsibleCharge?.id && !chargeIds.includes(updatedResponsibleCharge.id)) {",
+    "    chargeIds.push(updatedResponsibleCharge.id);",
+    "  }",
+  ].join("\n");
+  const after = [
+    "  const finalResponsibleCharge = responsibleTeam",
+    "    ? await prisma.paymentCharge.findUnique({",
+    "        where: {",
+    "          fixtureId_teamId: {",
+    "            fixtureId: fixture.id,",
+    "            teamId: responsibleTeam.id,",
+    "          },",
+    "        },",
+    "        select: { id: true, paymentToken: true, amountPence: true },",
+    "      })",
+    "    : null;",
+    "",
+    "  const chargeIds = fixture.paymentCharges.map((charge) => charge.id);",
+    "  if (finalResponsibleCharge?.id && !chargeIds.includes(finalResponsibleCharge.id)) {",
+    "    chargeIds.push(finalResponsibleCharge.id);",
+    "  }",
+  ].join("\n");
+
+  if (!service.includes(before)) {
+    throw new Error("Expected abandonment responsible-charge post-transaction block was not found.");
+  }
+  service = service.replace(before, after);
+}
+
+service = service.replaceAll(
+  "updatedResponsibleCharge?.paymentToken",
+  "finalResponsibleCharge?.paymentToken",
+);
+
+fs.writeFileSync(servicePath, service, "utf8");
+
+const pagePath = path.join(root, "src", "app", "(public)", "referee", "night", "[id]", "page.tsx");
 let source = fs.readFileSync(pagePath, "utf8");
 
 function replaceOnce(before, after, label) {
