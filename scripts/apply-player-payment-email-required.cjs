@@ -148,4 +148,5 @@ if (!page.includes('Email required')) {
 
 fs.writeFileSync(actionsPath, actions, "utf8");
 fs.writeFileSync(pagePath, page, "utf8");
+require("./apply-inactive-squad-player-surfaces.cjs");
 console.log("Player payment email requirement is present, inactive players are excluded, and the compatibility patch is idempotent.");
