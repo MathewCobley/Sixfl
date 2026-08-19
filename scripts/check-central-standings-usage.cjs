@@ -71,6 +71,7 @@ require("./apply-ai-prediction-publication-snapshot.cjs");
 require("./fix-ai-prediction-publication-selects.cjs");
 require("./apply-ai-prediction-matchup-integrity.cjs");
 require("./apply-ai-prediction-text-team-integrity.cjs");
+require("./apply-referee-night-score-update-fix.cjs");
 require("./apply-fixture-abandonment-workflow.cjs");
 require("./fix-fixture-abandonment-build.cjs");
 require("./apply-fixture-abandonment-result-decision.cjs");
