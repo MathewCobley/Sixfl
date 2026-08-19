@@ -8,9 +8,23 @@ const pagePath = path.join(root, "src", "app", "captain", "team", "[teamid]", "p
 let actions = fs.readFileSync(actionsPath, "utf8");
 let page = fs.readFileSync(pagePath, "utf8");
 
-// Require the whole current squad to have email addresses before a captain can
-// create or update Squad payments. The page wrapper enforces the same rule in
-// the UI; this server-side check also protects stale/open forms.
+const statusImport = 'import { getTeamMemberSquadStatusMap } from "@/lib/managed-squad/squadStatus";';
+if (!actions.includes(statusImport)) {
+  const importAnchor = 'import { prisma } from "@/lib/prisma";';
+  if (!actions.includes(importAnchor)) throw new Error("Player payment action Prisma import not found.");
+  actions = actions.replace(importAnchor, `${statusImport}\n${importAnchor}`);
+}
+
+if (!page.includes(statusImport)) {
+  const importAnchor = 'import { prisma } from "@/lib/prisma";';
+  if (!page.includes(importAnchor)) throw new Error("Player payment page Prisma import not found.");
+  page = page.replace(importAnchor, `${statusImport}\n${importAnchor}`);
+}
+
+// Require every ACTIVE current squad member to have an email before a captain can
+// create or update Squad payments. INACTIVE historic players deliberately do not
+// count. The page wrapper enforces the same rule in the UI; this server-side check
+// also protects stale/open forms.
 if (!actions.includes("squadMembersForEmailReadiness")) {
   const readinessAnchor = `export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
@@ -32,12 +46,17 @@ if (!actions.includes("squadMembersForEmailReadiness")) {
     readinessAnchor,
     `${readinessAnchor}
 
-  const squadMembersForEmailReadiness = await prisma.teamMember.findMany({
-    where: { teamId },
-    select: { id: true, user: { select: { email: true } } },
-  });
+  const [squadMembersForEmailReadiness, squadStatusByMemberIdForEmailReadiness] = await Promise.all([
+    prisma.teamMember.findMany({
+      where: { teamId },
+      select: { id: true, user: { select: { email: true } } },
+    }),
+    getTeamMemberSquadStatusMap(teamId),
+  ]);
   const hasMissingSquadEmail = squadMembersForEmailReadiness.some(
-    (member) => !member.user.email?.trim(),
+    (member) =>
+      squadStatusByMemberIdForEmailReadiness.get(member.id)?.squadStatus !== "INACTIVE" &&
+      !member.user.email?.trim(),
   );
 
   if (hasMissingSquadEmail) {
@@ -58,6 +77,30 @@ if (!actions.includes("selectedMemberIdsForEmailCheck")) {
   const actionGuardAnchor = '  if (players.length === 0) {\n    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=no_players"));\n  }';
   if (!actions.includes(actionGuardAnchor)) throw new Error("Player payment no-players guard not found.");
   actions = actions.replace(actionGuardAnchor, `${actionGuardAnchor}\n\n  const selectedMemberIdsForEmailCheck = players.filter((player) => player.type === "member").map((player) => player.id);\n  const selectedProspectIdsForEmailCheck = players.filter((player) => player.type === "prospect").map((player) => player.id);\n  const [membersForEmailCheck, prospectsForEmailCheck] = await Promise.all([\n    prisma.teamMember.findMany({\n      where: { id: { in: selectedMemberIdsForEmailCheck }, teamId },\n      select: { id: true, user: { select: { email: true } } },\n    }),\n    prisma.teamPlayerProspect.findMany({\n      where: { id: { in: selectedProspectIdsForEmailCheck }, teamId },\n      select: { id: true, email: true },\n    }),\n  ]);\n  const memberEmailById = new Map(membersForEmailCheck.map((member) => [member.id, member.user.email?.trim() || null]));\n  const prospectEmailById = new Map(prospectsForEmailCheck.map((prospect) => [prospect.id, prospect.email?.trim() || null]));\n  for (const player of players) {\n    const enteredAmountPence = getPlayerAmountPence({ formData, type: player.type, id: player.id, defaultAmountPence });\n    if (enteredAmountPence === null) continue;\n    const method = getCollectionMethod({ formData, type: player.type, id: player.id, amountPence: enteredAmountPence });\n    const email = player.type === "member" ? memberEmailById.get(player.id) : prospectEmailById.get(player.id);\n    if (method === "link" && !email) {\n      redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_player_email"));\n    }\n  }`);
+}
+
+// Keep inactive historic players out of the current player-collection picker. Existing
+// historic PlayerMatchFee rows are still loaded separately and remain visible in history.
+if (!page.includes("activeMembersForPayments")) {
+  const activeAnchor = '  const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));';
+  if (!page.includes(activeAnchor)) throw new Error("Player payment active-member anchor not found.");
+  page = page.replace(
+    activeAnchor,
+    `  const squadStatusByMemberIdForPayments = await getTeamMemberSquadStatusMap(teamid);
+  const activeMembersForPayments = members.filter(
+    (member) => squadStatusByMemberIdForPayments.get(member.id)?.squadStatus !== "INACTIVE",
+  );
+
+${activeAnchor}`,
+  );
+
+  const linkedMemberAnchor = '    members.flatMap(';
+  if (!page.includes(linkedMemberAnchor)) throw new Error("Player payment linked-member anchor not found.");
+  page = page.replace(linkedMemberAnchor, '    activeMembersForPayments.flatMap(');
+
+  const playerFormAnchor = '    ...members.map((member) => ({';
+  if (!page.includes(playerFormAnchor)) throw new Error("Player payment member-form anchor not found.");
+  page = page.replace(playerFormAnchor, '    ...activeMembersForPayments.map((member) => ({');
 }
 
 if (!page.includes('if (error === "missing_player_email")')) {
@@ -105,4 +148,5 @@ if (!page.includes('Email required')) {
 
 fs.writeFileSync(actionsPath, actions, "utf8");
 fs.writeFileSync(pagePath, page, "utf8");
-console.log("Player payment email requirement is present and the legacy compatibility patch is idempotent.");
+require("./apply-inactive-squad-player-surfaces.cjs");
+console.log("Player payment email requirement is present, inactive players are excluded, and the compatibility patch is idempotent.");
