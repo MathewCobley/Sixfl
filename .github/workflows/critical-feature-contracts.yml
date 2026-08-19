@@ -46,6 +46,9 @@ jobs:
       - name: Check AI prediction text/team integrity
         run: node scripts/check-ai-prediction-text-team-integrity.mjs
 
+      - name: Check fixture abandonment workflow
+        run: node scripts/check-fixture-abandonment-workflow.mjs
+
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
@@ -94,6 +97,7 @@ jobs:
           node scripts/check-last-minute-replacement-resolution.mjs
           node scripts/check-ai-prediction-matchup-integrity.mjs
           node scripts/check-ai-prediction-text-team-integrity.mjs
+          node scripts/check-fixture-abandonment-workflow.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate
