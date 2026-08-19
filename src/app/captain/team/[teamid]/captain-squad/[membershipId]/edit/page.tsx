@@ -5,10 +5,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getTeamMemberSquadStatusMap } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import { updateManagedSquadMemberDetailsAction } from "../../../squad/edit-actions";
+import { updateCaptainSquadMemberActivityAction } from "../../../squad/status-actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -136,11 +138,14 @@ function WhatsAppToggle({ defaultChecked }: { defaultChecked: boolean }) {
 
 export default async function EditCaptainSquadPlayerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamid: string; membershipId: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string }>;
 }) {
   const { teamid, membershipId } = await params;
-  await requireCaptain(teamid);
+  const filters = (await searchParams) ?? {};
+  const access = await requireCaptain(teamid);
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
@@ -189,9 +194,21 @@ export default async function EditCaptainSquadPlayerPage({
 
   const usesWhatsapp = Boolean(whatsappRows[0]?.usesWhatsapp);
 
-  const profiles = await getTeamMemberProfilesByTeamMemberIds([membership.id]);
+  const [profiles, squadStatusMap] = await Promise.all([
+    getTeamMemberProfilesByTeamMemberIds([membership.id]),
+    getTeamMemberSquadStatusMap(teamid),
+  ]);
   const profile = profiles.get(membership.id) ?? null;
+  const squadStatus = squadStatusMap.get(membership.id)?.squadStatus ?? "ACTIVE";
+  const squadStatusNote = squadStatusMap.get(membership.id)?.squadStatusNote ?? null;
   const preferredNights = formatPreferredNights(profile?.preferredNights);
+  const savedMessage =
+    filters.saved === "player-marked-inactive"
+      ? "Player marked inactive. They remain in the team history but no longer count as a current player for Squad payments."
+      : filters.saved === "player-marked-active"
+        ? "Player marked active again."
+        : null;
+  const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
     <div className="space-y-8">
@@ -223,6 +240,17 @@ export default async function EditCaptainSquadPlayerPage({
                 <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
                   {team.teamMode === "MANAGED" ? "SIXFL-managed" : "Team-managed"}
                 </span>
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                    squadStatus === "INACTIVE"
+                      ? "border-white/15 bg-white/[0.04] text-white/55"
+                      : squadStatus === "INJURED"
+                        ? "border-red-400/25 bg-red-500/10 text-red-100"
+                        : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                  }`}
+                >
+                  {squadStatus === "INACTIVE" ? "Inactive" : squadStatus === "INJURED" ? "Injured" : "Active"}
+                </span>
               </div>
             </div>
           </div>
@@ -236,6 +264,78 @@ export default async function EditCaptainSquadPlayerPage({
             </Link>
           </div>
         </div>
+      </section>
+
+      {savedMessage ? (
+        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          {savedMessage}
+        </section>
+      ) : null}
+
+      {errorMessage ? (
+        <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          {errorMessage}
+        </section>
+      ) : null}
+
+      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          Player status
+        </p>
+        <h2 className="mt-2 text-xl font-semibold text-white">Active or historic player?</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+          Historic players who no longer play can be made inactive. They stay attached to their historic matches, statistics and payments, but they are ignored for current Squad payments and do not need an email address to unlock Squad payments.
+        </p>
+
+        {squadStatus === "INJURED" && !access.isAdmin ? (
+          <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100/80">
+            This player is currently marked injured by SIXFL. Contact SIXFL before changing their squad status.
+            {squadStatusNote ? <span className="mt-2 block text-red-100/60">{squadStatusNote}</span> : null}
+          </div>
+        ) : (
+          <form action={updateCaptainSquadMemberActivityAction} className="mt-5 space-y-4">
+            <input type="hidden" name="teamid" value={teamid} />
+            <input type="hidden" name="membershipId" value={membership.id} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex cursor-pointer gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.05] p-4">
+                <input
+                  type="radio"
+                  name="squadStatus"
+                  value="ACTIVE"
+                  defaultChecked={squadStatus !== "INACTIVE"}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-white">Active player</span>
+                  <span className="mt-1 block text-xs leading-5 text-white/50">
+                    Current squad member. Included in Squad payments and future squad planning.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <input
+                  type="radio"
+                  name="squadStatus"
+                  value="INACTIVE"
+                  defaultChecked={squadStatus === "INACTIVE"}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-white">Inactive / historic player</span>
+                  <span className="mt-1 block text-xs leading-5 text-white/50">
+                    Keep their history, but do not include them in current Squad payments or future squad planning.
+                  </span>
+                </span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.1]"
+            >
+              Save player status
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] lg:p-8">
