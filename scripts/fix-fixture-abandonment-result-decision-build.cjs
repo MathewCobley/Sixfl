@@ -17,4 +17,13 @@ source = source
   );
 
 fs.writeFileSync(servicePath, source, "utf8");
-console.log("Hardened abandoned-match official result build and email wording.");
+
+const pagePath = path.join(process.cwd(), "src", "app", "(public)", "referee", "night", "[id]", "page.tsx");
+let page = fs.readFileSync(pagePath, "utf8");
+page = page.replace(
+  '{abandonment ? "Match abandoned · result to be decided by SIXFL" : fixture.result ? `Current result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}',
+  '{abandonment ? abandonment.awardedHomeScore !== null && abandonment.awardedAwayScore !== null ? `Match abandoned · official result ${abandonment.awardedHomeScore}-${abandonment.awardedAwayScore}` : "Match abandoned · result to be decided by SIXFL" : fixture.result ? `Current result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}',
+);
+fs.writeFileSync(pagePath, page, "utf8");
+
+console.log("Hardened abandoned-match official result build, email wording and referee display.");
