@@ -81,20 +81,24 @@ function replaceRequired(source, before, after, label) {
     source = replaceRequired(source, sectionAnchor, guidance, "Captain squad inactive guidance");
   }
 
+  // The role/badge row has legacy build-time variants. Add an inline badge when the
+  // native shape is available, but never make the whole prebuild depend on cosmetic markup.
   if (!source.includes("isInactiveCaptainSquadMember")) {
     const mapAnchor = `            {team.members.map((member) => {
               const profile = profileByMemberId.get(member.id);`;
-    const mapReplacement = `            {team.members.map((member) => {
-              const profile = profileByMemberId.get(member.id);
-              const isInactiveCaptainSquadMember =
-                squadStatusByMemberIdForCaptainSquad.get(member.id)?.squadStatus === "INACTIVE";`;
-    source = replaceRequired(source, mapAnchor, mapReplacement, "Captain squad inactive row state");
-
     const badgeAnchor = `                        <span className={\`rounded-full border px-2.5 py-1 text-[11px] font-medium \${getRoleBadgeClasses(member.role)}\`}>
                           {getRoleLabel(member.role)}
                         </span>
                         {whatsAppUrl ? <WhatsAppLink href={whatsAppUrl} playerName={playerName} /> : null}`;
-    const badgeReplacement = `                        <span className={\`rounded-full border px-2.5 py-1 text-[11px] font-medium \${getRoleBadgeClasses(member.role)}\`}>
+
+    if (source.includes(mapAnchor) && source.includes(badgeAnchor)) {
+      const mapReplacement = `            {team.members.map((member) => {
+              const profile = profileByMemberId.get(member.id);
+              const isInactiveCaptainSquadMember =
+                squadStatusByMemberIdForCaptainSquad.get(member.id)?.squadStatus === "INACTIVE";`;
+      source = source.replace(mapAnchor, mapReplacement);
+
+      const badgeReplacement = `                        <span className={\`rounded-full border px-2.5 py-1 text-[11px] font-medium \${getRoleBadgeClasses(member.role)}\`}>
                           {getRoleLabel(member.role)}
                         </span>
                         {isInactiveCaptainSquadMember ? (
@@ -103,7 +107,8 @@ function replaceRequired(source, before, after, label) {
                           </span>
                         ) : null}
                         {whatsAppUrl ? <WhatsAppLink href={whatsAppUrl} playerName={playerName} /> : null}`;
-    source = replaceRequired(source, badgeAnchor, badgeReplacement, "Captain squad inactive badge");
+      source = source.replace(badgeAnchor, badgeReplacement);
+    }
   }
 
   write(file, source);
