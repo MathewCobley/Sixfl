@@ -70,6 +70,7 @@ require("./apply-free-kit-expiry-paid-kit-mode.cjs");
 require("./apply-ai-prediction-publication-snapshot.cjs");
 require("./fix-ai-prediction-publication-selects.cjs");
 require("./apply-ai-prediction-matchup-integrity.cjs");
+require("./apply-ai-prediction-text-team-integrity.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
