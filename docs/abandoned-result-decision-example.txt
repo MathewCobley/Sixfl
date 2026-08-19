@@ -1,0 +1,1 @@
+Example: if the innocent team is awarded the match, choose “Award 3-0 to <team>” while marking the fixture abandoned. The 3-0 becomes the official result and both abandonment emails state it.
