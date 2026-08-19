@@ -8,6 +8,50 @@ const pagePath = path.join(root, "src", "app", "captain", "team", "[teamid]", "p
 let actions = fs.readFileSync(actionsPath, "utf8");
 let page = fs.readFileSync(pagePath, "utf8");
 
+// Require the whole current squad to have email addresses before a captain can
+// create or update Squad payments. The page wrapper enforces the same rule in
+// the UI; this server-side check also protects stale/open forms.
+if (!actions.includes("squadMembersForEmailReadiness")) {
+  const readinessAnchor = `export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const fixtureId = getString(formData, "fixtureId");
+  const defaultAmountPence = parseAmountPence(getString(formData, "amount"));
+  const players = getSelectedPlayers(formData);
+
+  if (!teamId || !fixtureId) {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_fixture"));
+  }
+
+  await requireCaptain(teamId);`;
+
+  if (!actions.includes(readinessAnchor)) {
+    throw new Error("Captain squad-payment action readiness anchor not found.");
+  }
+
+  actions = actions.replace(
+    readinessAnchor,
+    `${readinessAnchor}
+
+  const squadMembersForEmailReadiness = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { id: true, user: { select: { email: true } } },
+  });
+  const hasMissingSquadEmail = squadMembersForEmailReadiness.some(
+    (member) => !member.user.email?.trim(),
+  );
+
+  if (hasMissingSquadEmail) {
+    redirect(
+      getPlayerPaymentsPath(
+        teamId,
+        fixtureId,
+        "&error=squad_emails_incomplete",
+      ),
+    );
+  }`,
+  );
+}
+
 // Native source now owns this guard. Keep this compatibility patch safe for older
 // branches, but do not duplicate the native server-side check during prebuild.
 if (!actions.includes("selectedMemberIdsForEmailCheck")) {
