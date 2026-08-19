@@ -52,6 +52,9 @@ jobs:
       - name: Check abandoned result decision
         run: node scripts/check-abandoned-result-decision.mjs
 
+      - name: Check abandonment runtime resilience
+        run: node scripts/check-fixture-abandonment-runtime-resilience.mjs
+
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
@@ -102,6 +105,7 @@ jobs:
           node scripts/check-ai-prediction-text-team-integrity.mjs
           node scripts/check-fixture-abandonment-workflow.mjs
           node scripts/check-abandoned-result-decision.mjs
+          node scripts/check-fixture-abandonment-runtime-resilience.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate
