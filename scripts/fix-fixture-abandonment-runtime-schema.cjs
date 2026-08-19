@@ -174,6 +174,11 @@ patch("src/app/(public)/referee/night/[id]/page.tsx", [
     ].join("\n"),
   },
   {
+    label: "abandonment header official result copy",
+    before: '{abandonment ? abandonment.awardedHomeScore !== null && abandonment.awardedAwayScore !== null ? `Match abandoned · official result ${abandonment.awardedHomeScore}-${abandonment.awardedAwayScore}` : "Match abandoned · result to be decided by SIXFL" : fixture.result ? `Current result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}',
+    after: '{abandonment ? fixture.result ? `Match abandoned · official result ${fixture.result.homeScore}-${fixture.result.awayScore}` : "Match abandoned · result to be decided by SIXFL" : fixture.result ? `Current result: ${fixture.result.homeScore}-${fixture.result.awayScore}${fixture.result.isDisputed ? " · disputed" : ""}` : "No result entered"}',
+  },
+  {
     label: "abandonment page official result copy",
     before: [
       "                            ? abandonment.awardedHomeScore !== null && abandonment.awardedAwayScore !== null",
