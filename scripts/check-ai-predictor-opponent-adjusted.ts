@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   calculateFixtureWinChance,
@@ -127,5 +128,15 @@ assert.notEqual(
   lowScoring.predictedResult.label,
   "Different scoring environments should not collapse to the same stock scoreline.",
 );
+
+const repairSource = fs.readFileSync("src/lib/fixtures/aiPredictionIntegrity.ts", "utf8");
+const migrationSource = fs.readFileSync(
+  "prisma/migrations/20260820015500_ai_predictor_model_version/migration.sql",
+  "utf8",
+);
+assert.match(repairSource, /opponent-adjusted-poisson-v2/);
+assert.match(repairSource, /prediction\."modelVersion" IS DISTINCT FROM/);
+assert.match(repairSource, /"modelVersion" = \$\{PREDICTOR_MODEL_VERSION\}/);
+assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "modelVersion" TEXT/);
 
 console.log("Opponent-adjusted Poisson predictor contract passed.");
