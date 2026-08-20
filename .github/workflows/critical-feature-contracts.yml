@@ -46,6 +46,9 @@ jobs:
       - name: Check AI prediction text/team integrity
         run: node scripts/check-ai-prediction-text-team-integrity.mjs
 
+      - name: Check opponent-adjusted AI predictor
+        run: npx tsx scripts/check-ai-predictor-opponent-adjusted.ts
+
       - name: Check fixture abandonment workflow
         run: node scripts/check-fixture-abandonment-workflow.mjs
 
@@ -109,6 +112,7 @@ jobs:
           node scripts/check-last-minute-replacement-resolution.mjs
           node scripts/check-ai-prediction-matchup-integrity.mjs
           node scripts/check-ai-prediction-text-team-integrity.mjs
+          npx tsx scripts/check-ai-predictor-opponent-adjusted.ts
           node scripts/check-fixture-abandonment-workflow.mjs
           node scripts/check-abandoned-result-decision.mjs
           node scripts/check-fixture-abandonment-runtime-resilience.mjs
