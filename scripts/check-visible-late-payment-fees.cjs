@@ -12,10 +12,12 @@ const page = read("src/app/(admin)/admin/fixtures/late-fees/page.tsx");
 const ledger = read("src/lib/payments/team-payment-ledger.ts");
 const captainPayments = read("src/app/captain/team/[teamid]/payments/page.tsx");
 
+const appliedRowsRemainInQuery = /WHERE charge\."status" IN \('OPEN', 'PART_PAID'\)\s+GROUP BY charge\."id"/.test(actions);
+
 const checks = [
   {
-    ok: !actions.includes('latePaymentFeeStatus" <> \'APPLIED\''),
-    message: "applied late-payment fees must not be filtered out of the admin query",
+    ok: appliedRowsRemainInQuery,
+    message: "applied late-payment fees must remain in the open-charge admin query",
   },
   {
     ok: actions.includes("queueLatePaymentAppliedEmail") && actions.includes("PAYMENT_LATE_FEE_APPLIED"),
