@@ -34,12 +34,28 @@ type TeamWinChanceStats = {
 };
 
 type LeagueBaselines = {
-  pointsPerGame: number;
-  winRate: number;
-  goalDifferencePerGame: number;
   goalsForPerGame: number;
   goalsAgainstPerGame: number;
-  recentAverage: number;
+};
+
+type Outcome = "home" | "draw" | "away";
+
+type ScoreCandidate = {
+  homeScore: number;
+  awayScore: number;
+  probability: number;
+};
+
+type PoissonModel = {
+  home: number;
+  draw: number;
+  away: number;
+  bestByOutcome: Record<Outcome, ScoreCandidate | null>;
+};
+
+type OpponentPerformance = {
+  value: number;
+  time: number;
 };
 
 export type PredictedResult = {
@@ -59,12 +75,16 @@ export type FixtureWinChance = {
 
 type UsableResultFixture = WinChanceFixture & { result: FixtureResult };
 
-const OUTCOME_PRIOR_GAMES = 2;
-const SCORING_PRIOR_GAMES = 1;
+const SCORING_PRIOR_GAMES = 1.25;
 const RECENT_GOAL_PRIOR_GAMES = 1.25;
 const RECENT_GOAL_WINDOW = 5;
 const MAX_RECENT_GOAL_WEIGHT = 0.42;
 const MAX_PREDICTED_SCORE = 12;
+const ELO_K = 30;
+const ELO_SCALE = 1200;
+const MAX_ELO_DIFFERENCE = 350;
+const HEAD_TO_HEAD_WINDOW = 4;
+const COMMON_OPPONENT_WINDOW = 4;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -101,10 +121,7 @@ function getOrCreateStats(
   teamId: string,
 ) {
   const existing = statsByTeamId.get(teamId);
-
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
 
   const created = emptyStats(teamId);
   statsByTeamId.set(teamId, created);
@@ -142,7 +159,6 @@ function addResult(input: {
 
 function buildStats(fixtures: WinChanceFixture[]) {
   const statsByTeamId = new Map<string, TeamWinChanceStats>();
-
   const completedFixtures = fixtures
     .filter(hasUsableResult)
     .sort((a, b) => getFixtureTime(a.kickoffAt) - getFixtureTime(b.kickoffAt));
@@ -156,7 +172,6 @@ function buildStats(fixtures: WinChanceFixture[]) {
       goalsFor: fixture.result.homeScore,
       goalsAgainst: fixture.result.awayScore,
     });
-
     addResult({
       stats: away,
       goalsFor: fixture.result.awayScore,
@@ -167,45 +182,24 @@ function buildStats(fixtures: WinChanceFixture[]) {
   return statsByTeamId;
 }
 
-function getLeagueBaselines(
-  statsByTeamId: Map<string, TeamWinChanceStats>,
-): LeagueBaselines {
+function getLeagueBaselines(statsByTeamId: Map<string, TeamWinChanceStats>): LeagueBaselines {
   let played = 0;
-  let wins = 0;
-  let points = 0;
   let goalsFor = 0;
   let goalsAgainst = 0;
-  let recentTotal = 0;
-  let recentCount = 0;
 
   for (const stats of statsByTeamId.values()) {
     played += stats.played;
-    wins += stats.wins;
-    points += stats.points;
     goalsFor += stats.goalsFor;
     goalsAgainst += stats.goalsAgainst;
-    recentTotal += stats.recent.reduce((sum, value) => sum + value, 0);
-    recentCount += stats.recent.length;
   }
 
   if (played === 0) {
-    return {
-      pointsPerGame: 1.5,
-      winRate: 0.4,
-      goalDifferencePerGame: 0,
-      goalsForPerGame: 2.5,
-      goalsAgainstPerGame: 2.5,
-      recentAverage: 0.5,
-    };
+    return { goalsForPerGame: 2.5, goalsAgainstPerGame: 2.5 };
   }
 
   return {
-    pointsPerGame: points / played,
-    winRate: wins / played,
-    goalDifferencePerGame: (goalsFor - goalsAgainst) / played,
     goalsForPerGame: clamp(goalsFor / played, 0.5, 8),
     goalsAgainstPerGame: clamp(goalsAgainst / played, 0.5, 8),
-    recentAverage: recentCount > 0 ? recentTotal / recentCount : 0.5,
   };
 }
 
@@ -213,59 +207,9 @@ function getSmoothedPerGame(
   total: number,
   played: number,
   leagueAverage: number,
-  priorGames = OUTCOME_PRIOR_GAMES,
+  priorGames = SCORING_PRIOR_GAMES,
 ) {
-  return (
-    (total + leagueAverage * priorGames) /
-    (played + priorGames)
-  );
-}
-
-function getStrength(
-  stats: TeamWinChanceStats | undefined,
-  baselines: LeagueBaselines,
-) {
-  const played = stats?.played ?? 0;
-  const pointsPerGame = getSmoothedPerGame(
-    stats?.points ?? 0,
-    played,
-    baselines.pointsPerGame,
-  );
-  const winRate = getSmoothedPerGame(
-    stats?.wins ?? 0,
-    played,
-    baselines.winRate,
-  );
-  const goalDifferencePerGame = getSmoothedPerGame(
-    (stats?.goalsFor ?? 0) - (stats?.goalsAgainst ?? 0),
-    played,
-    baselines.goalDifferencePerGame,
-  );
-  const goalsForPerGame = getSmoothedPerGame(
-    stats?.goalsFor ?? 0,
-    played,
-    baselines.goalsForPerGame,
-  );
-  const goalsAgainstPerGame = getSmoothedPerGame(
-    stats?.goalsAgainst ?? 0,
-    played,
-    baselines.goalsAgainstPerGame,
-  );
-  const recent = stats?.recent.slice(-5) ?? [];
-  const recentAverage =
-    (recent.reduce((sum, value) => sum + value, 0) +
-      baselines.recentAverage * OUTCOME_PRIOR_GAMES) /
-    (recent.length + OUTCOME_PRIOR_GAMES);
-
-  return (
-    50 +
-    pointsPerGame * 12 +
-    winRate * 10 +
-    goalDifferencePerGame * 5 +
-    goalsForPerGame * 2 -
-    goalsAgainstPerGame * 1.5 +
-    (recentAverage - 0.5) * 14
-  );
+  return (total + leagueAverage * priorGames) / (played + priorGames);
 }
 
 function getWeightedRecentAverage(values: number[]) {
@@ -274,7 +218,6 @@ function getWeightedRecentAverage(values: number[]) {
 
   let weightedTotal = 0;
   let totalWeight = 0;
-
   recent.forEach((value, index) => {
     const weight = index + 1;
     weightedTotal += value * weight;
@@ -297,17 +240,12 @@ function getScoringProfile(input: {
     SCORING_PRIOR_GAMES,
   );
   const weightedRecent = getWeightedRecentAverage(input.recentValues);
-
-  if (weightedRecent === null) {
-    return seasonRate;
-  }
+  if (weightedRecent === null) return seasonRate;
 
   const recentCount = Math.min(input.recentValues.length, RECENT_GOAL_WINDOW);
-  const recentEvidence =
-    recentCount / (recentCount + RECENT_GOAL_PRIOR_GAMES);
+  const recentEvidence = recentCount / (recentCount + RECENT_GOAL_PRIOR_GAMES);
   const recentRate =
-    input.leagueAverage +
-    (weightedRecent - input.leagueAverage) * recentEvidence;
+    input.leagueAverage + (weightedRecent - input.leagueAverage) * recentEvidence;
   const recentWeight = Math.min(
     MAX_RECENT_GOAL_WEIGHT,
     (input.played / 6) * MAX_RECENT_GOAL_WEIGHT,
@@ -316,227 +254,248 @@ function getScoringProfile(input: {
   return seasonRate * (1 - recentWeight) + recentRate * recentWeight;
 }
 
-function getPredictedOutcome(input: {
-  home: number;
-  draw: number;
-  away: number;
-}) {
-  if (input.draw >= input.home && input.draw >= input.away) return "draw" as const;
-  if (input.home >= input.away) return "home" as const;
-  return "away" as const;
+function buildEloRatings(fixtures: WinChanceFixture[]) {
+  const ratings = new Map<string, number>();
+  const getRating = (teamId: string) => ratings.get(teamId) ?? 1500;
+
+  const completedFixtures = fixtures
+    .filter(hasUsableResult)
+    .sort((a, b) => getFixtureTime(a.kickoffAt) - getFixtureTime(b.kickoffAt));
+
+  for (const fixture of completedFixtures) {
+    const homeRating = getRating(fixture.homeTeam.id);
+    const awayRating = getRating(fixture.awayTeam.id);
+    const expectedHome = 1 / (1 + Math.pow(10, (awayRating - homeRating) / 400));
+    const actualHome =
+      fixture.result.homeScore > fixture.result.awayScore
+        ? 1
+        : fixture.result.homeScore < fixture.result.awayScore
+          ? 0
+          : 0.5;
+    const margin = Math.abs(fixture.result.homeScore - fixture.result.awayScore);
+    const marginMultiplier = 1 + Math.log1p(margin) * 0.22;
+    const change = ELO_K * marginMultiplier * (actualHome - expectedHome);
+
+    ratings.set(fixture.homeTeam.id, homeRating + change);
+    ratings.set(fixture.awayTeam.id, awayRating - change);
+  }
+
+  return ratings;
 }
 
-function logFactorial(value: number) {
+function weightedAverage(values: Array<{ value: number; time: number }>, window: number) {
+  const recent = [...values]
+    .sort((a, b) => a.time - b.time)
+    .slice(-window);
+  if (recent.length === 0) return null;
+
   let total = 0;
-  for (let index = 2; index <= value; index += 1) {
-    total += Math.log(index);
-  }
-  return total;
-}
-
-function poissonLogProbability(score: number, expectedGoals: number) {
-  return (
-    score * Math.log(Math.max(expectedGoals, 0.01)) -
-    expectedGoals -
-    logFactorial(score)
-  );
-}
-
-function scorelineMatchesOutcome(input: {
-  homeScore: number;
-  awayScore: number;
-  outcome: "home" | "draw" | "away";
-}) {
-  if (input.outcome === "home") return input.homeScore > input.awayScore;
-  if (input.outcome === "away") return input.awayScore > input.homeScore;
-  return input.homeScore === input.awayScore;
-}
-
-function getMostLikelyScoreline(input: {
-  homeExpected: number;
-  awayExpected: number;
-  outcome: "home" | "draw" | "away";
-}) {
-  let best:
-    | {
-        homeScore: number;
-        awayScore: number;
-        logProbability: number;
-        expectedDistance: number;
-      }
-    | null = null;
-
-  for (let homeScore = 0; homeScore <= MAX_PREDICTED_SCORE; homeScore += 1) {
-    for (let awayScore = 0; awayScore <= MAX_PREDICTED_SCORE; awayScore += 1) {
-      if (!scorelineMatchesOutcome({ homeScore, awayScore, outcome: input.outcome })) {
-        continue;
-      }
-
-      const logProbability =
-        poissonLogProbability(homeScore, input.homeExpected) +
-        poissonLogProbability(awayScore, input.awayExpected);
-      const expectedDistance =
-        Math.abs(homeScore - input.homeExpected) +
-        Math.abs(awayScore - input.awayExpected);
-
-      if (
-        !best ||
-        logProbability > best.logProbability + 1e-9 ||
-        (Math.abs(logProbability - best.logProbability) <= 1e-9 &&
-          expectedDistance < best.expectedDistance)
-      ) {
-        best = {
-          homeScore,
-          awayScore,
-          logProbability,
-          expectedDistance,
-        };
-      }
-    }
-  }
-
-  return best ?? { homeScore: 0, awayScore: 0 };
-}
-
-function buildPredictedResult(input: {
-  homeStats: TeamWinChanceStats | undefined;
-  awayStats: TeamWinChanceStats | undefined;
-  baselines: LeagueBaselines;
-  strengthDifference: number;
-  percentages: { home: number; draw: number; away: number };
-}): PredictedResult {
-  const leagueScoringRate = clamp(
-    (input.baselines.goalsForPerGame + input.baselines.goalsAgainstPerGame) / 2,
-    0.75,
-    8,
-  );
-  const homeAttack = getScoringProfile({
-    total: input.homeStats?.goalsFor ?? 0,
-    played: input.homeStats?.played ?? 0,
-    recentValues: input.homeStats?.recentGoalsFor ?? [],
-    leagueAverage: leagueScoringRate,
-  });
-  const awayAttack = getScoringProfile({
-    total: input.awayStats?.goalsFor ?? 0,
-    played: input.awayStats?.played ?? 0,
-    recentValues: input.awayStats?.recentGoalsFor ?? [],
-    leagueAverage: leagueScoringRate,
-  });
-  const homeDefenceConceded = getScoringProfile({
-    total: input.homeStats?.goalsAgainst ?? 0,
-    played: input.homeStats?.played ?? 0,
-    recentValues: input.homeStats?.recentGoalsAgainst ?? [],
-    leagueAverage: leagueScoringRate,
-  });
-  const awayDefenceConceded = getScoringProfile({
-    total: input.awayStats?.goalsAgainst ?? 0,
-    played: input.awayStats?.played ?? 0,
-    recentValues: input.awayStats?.recentGoalsAgainst ?? [],
-    leagueAverage: leagueScoringRate,
+  let weightTotal = 0;
+  recent.forEach((item, index) => {
+    const weight = index + 1;
+    total += item.value * weight;
+    weightTotal += weight;
   });
 
-  // A team's own scoring record is the strongest signal for its expected goals,
-  // with the opponent's conceding record providing the second part of the matchup.
-  // Ratios preserve genuine high/low-scoring team identities instead of pulling
-  // every fixture back towards the same league-average scoreline.
-  const homeExpectedBase =
-    leagueScoringRate *
-    Math.pow(clamp(homeAttack / leagueScoringRate, 0.25, 3), 0.64) *
-    Math.pow(clamp(awayDefenceConceded / leagueScoringRate, 0.25, 3), 0.36);
-  const awayExpectedBase =
-    leagueScoringRate *
-    Math.pow(clamp(awayAttack / leagueScoringRate, 0.25, 3), 0.64) *
-    Math.pow(clamp(homeDefenceConceded / leagueScoringRate, 0.25, 3), 0.36);
-  const strengthGoalAdjustment = clamp(
-    input.strengthDifference * 0.018,
-    -0.75,
-    0.75,
-  );
-
-  const homeExpected = clamp(
-    homeExpectedBase + strengthGoalAdjustment,
-    0.35,
-    10.5,
-  );
-  const awayExpected = clamp(
-    awayExpectedBase - strengthGoalAdjustment,
-    0.35,
-    10.5,
-  );
-  const outcome = getPredictedOutcome(input.percentages);
-  const scoreline = getMostLikelyScoreline({
-    homeExpected,
-    awayExpected,
-    outcome,
-  });
-
-  return {
-    homeScore: scoreline.homeScore,
-    awayScore: scoreline.awayScore,
-    label: `${scoreline.homeScore}-${scoreline.awayScore}`,
-  };
+  return weightTotal > 0 ? total / weightTotal : null;
 }
 
-function getHeadToHeadAdjustment(input: {
+function getHeadToHeadGoalAdjustment(input: {
   homeTeamId: string;
   awayTeamId: string;
   fixtures: WinChanceFixture[];
 }) {
-  let goalDifferenceFromHomePerspective = 0;
-  let games = 0;
+  const samples: OpponentPerformance[] = [];
+
+  for (const fixture of input.fixtures) {
+    if (!hasUsableResult(fixture)) continue;
+    const sameDirection =
+      fixture.homeTeam.id === input.homeTeamId &&
+      fixture.awayTeam.id === input.awayTeamId;
+    const reverseDirection =
+      fixture.homeTeam.id === input.awayTeamId &&
+      fixture.awayTeam.id === input.homeTeamId;
+    if (!sameDirection && !reverseDirection) continue;
+
+    samples.push({
+      value: sameDirection
+        ? fixture.result.homeScore - fixture.result.awayScore
+        : fixture.result.awayScore - fixture.result.homeScore,
+      time: getFixtureTime(fixture.kickoffAt),
+    });
+  }
+
+  const averageDifference = weightedAverage(samples, HEAD_TO_HEAD_WINDOW);
+  if (averageDifference === null) return 0;
+
+  const evidence = Math.min(samples.length, HEAD_TO_HEAD_WINDOW);
+  const evidenceWeight = evidence / (evidence + 2);
+  return clamp(averageDifference * 0.16 * evidenceWeight, -0.65, 0.65);
+}
+
+function resultValue(goalsFor: number, goalsAgainst: number) {
+  if (goalsFor > goalsAgainst) return 1;
+  if (goalsFor < goalsAgainst) return -1;
+  return 0;
+}
+
+function buildOpponentPerformanceMap(input: {
+  teamId: string;
+  fixtures: WinChanceFixture[];
+}) {
+  const map = new Map<string, OpponentPerformance[]>();
 
   for (const fixture of input.fixtures) {
     if (!hasUsableResult(fixture)) continue;
 
-    const homeIsCurrentHome = fixture.homeTeam.id === input.homeTeamId;
-    const awayIsCurrentHome = fixture.awayTeam.id === input.homeTeamId;
-    const isSamePair =
-      (fixture.homeTeam.id === input.homeTeamId &&
-        fixture.awayTeam.id === input.awayTeamId) ||
-      (fixture.homeTeam.id === input.awayTeamId &&
-        fixture.awayTeam.id === input.homeTeamId);
+    let opponentId: string | null = null;
+    let goalsFor = 0;
+    let goalsAgainst = 0;
 
-    if (!isSamePair) continue;
+    if (fixture.homeTeam.id === input.teamId) {
+      opponentId = fixture.awayTeam.id;
+      goalsFor = fixture.result.homeScore;
+      goalsAgainst = fixture.result.awayScore;
+    } else if (fixture.awayTeam.id === input.teamId) {
+      opponentId = fixture.homeTeam.id;
+      goalsFor = fixture.result.awayScore;
+      goalsAgainst = fixture.result.homeScore;
+    }
 
-    games += 1;
+    if (!opponentId) continue;
 
-    if (homeIsCurrentHome) {
-      goalDifferenceFromHomePerspective +=
-        fixture.result.homeScore - fixture.result.awayScore;
-    } else if (awayIsCurrentHome) {
-      goalDifferenceFromHomePerspective +=
-        fixture.result.awayScore - fixture.result.homeScore;
+    const goalDifferenceSignal = clamp(goalsFor - goalsAgainst, -6, 6) / 6;
+    const performance = resultValue(goalsFor, goalsAgainst) + goalDifferenceSignal;
+    map.set(opponentId, [
+      ...(map.get(opponentId) ?? []),
+      { value: performance, time: getFixtureTime(fixture.kickoffAt) },
+    ]);
+  }
+
+  return map;
+}
+
+function getCommonOpponentGoalAdjustment(input: {
+  homeTeamId: string;
+  awayTeamId: string;
+  fixtures: WinChanceFixture[];
+}) {
+  const homeByOpponent = buildOpponentPerformanceMap({
+    teamId: input.homeTeamId,
+    fixtures: input.fixtures,
+  });
+  const awayByOpponent = buildOpponentPerformanceMap({
+    teamId: input.awayTeamId,
+    fixtures: input.fixtures,
+  });
+
+  let weightedDifference = 0;
+  let totalWeight = 0;
+  let commonOpponents = 0;
+
+  for (const [opponentId, homeSamples] of homeByOpponent) {
+    if (opponentId === input.awayTeamId || opponentId === input.homeTeamId) continue;
+    const awaySamples = awayByOpponent.get(opponentId);
+    if (!awaySamples?.length) continue;
+
+    const homePerformance = weightedAverage(homeSamples, COMMON_OPPONENT_WINDOW);
+    const awayPerformance = weightedAverage(awaySamples, COMMON_OPPONENT_WINDOW);
+    if (homePerformance === null || awayPerformance === null) continue;
+
+    const sharedEvidence = Math.min(homeSamples.length, awaySamples.length, COMMON_OPPONENT_WINDOW);
+    const opponentWeight = sharedEvidence / (sharedEvidence + 1);
+    weightedDifference += (homePerformance - awayPerformance) * opponentWeight;
+    totalWeight += opponentWeight;
+    commonOpponents += 1;
+  }
+
+  if (totalWeight === 0 || commonOpponents === 0) return 0;
+
+  const averageDifference = weightedDifference / totalWeight;
+  const breadthWeight = commonOpponents / (commonOpponents + 2);
+  return clamp(averageDifference * 0.22 * breadthWeight, -0.55, 0.55);
+}
+
+function logFactorial(value: number) {
+  let total = 0;
+  for (let index = 2; index <= value; index += 1) total += Math.log(index);
+  return total;
+}
+
+function poissonProbability(score: number, expectedGoals: number) {
+  const lambda = Math.max(expectedGoals, 0.01);
+  return Math.exp(score * Math.log(lambda) - lambda - logFactorial(score));
+}
+
+function outcomeForScore(homeScore: number, awayScore: number): Outcome {
+  if (homeScore > awayScore) return "home";
+  if (awayScore > homeScore) return "away";
+  return "draw";
+}
+
+function buildPoissonModel(homeExpected: number, awayExpected: number): PoissonModel {
+  let home = 0;
+  let draw = 0;
+  let away = 0;
+  let total = 0;
+  const bestByOutcome: Record<Outcome, ScoreCandidate | null> = {
+    home: null,
+    draw: null,
+    away: null,
+  };
+
+  for (let homeScore = 0; homeScore <= MAX_PREDICTED_SCORE; homeScore += 1) {
+    const homeProbability = poissonProbability(homeScore, homeExpected);
+
+    for (let awayScore = 0; awayScore <= MAX_PREDICTED_SCORE; awayScore += 1) {
+      const probability = homeProbability * poissonProbability(awayScore, awayExpected);
+      const outcome = outcomeForScore(homeScore, awayScore);
+      total += probability;
+
+      if (outcome === "home") home += probability;
+      else if (outcome === "away") away += probability;
+      else draw += probability;
+
+      const currentBest = bestByOutcome[outcome];
+      if (!currentBest || probability > currentBest.probability) {
+        bestByOutcome[outcome] = { homeScore, awayScore, probability };
+      }
     }
   }
 
-  if (games === 0) return 0;
-
-  const evidenceWeight = games / (games + OUTCOME_PRIOR_GAMES);
-  return clamp(
-    (goalDifferenceFromHomePerspective / games) * 4 * evidenceWeight,
-    -10,
-    10,
-  );
-}
-
-function roundPercentages(input: { home: number; draw: number; away: number }) {
-  const home = Math.round(input.home);
-  const draw = Math.round(input.draw);
-  const away = 100 - home - draw;
-
-  if (away < 0) {
+  if (total <= 0) {
     return {
-      home: clamp(home + away, 1, 98),
-      draw,
-      away: 0,
+      home: 1 / 3,
+      draw: 1 / 3,
+      away: 1 / 3,
+      bestByOutcome,
     };
   }
 
   return {
-    home,
-    draw,
-    away,
+    home: home / total,
+    draw: draw / total,
+    away: away / total,
+    bestByOutcome,
   };
+}
+
+function getPredictedOutcome(model: Pick<PoissonModel, "home" | "draw" | "away">): Outcome {
+  if (model.draw >= model.home && model.draw >= model.away) return "draw";
+  if (model.home >= model.away) return "home";
+  return "away";
+}
+
+function roundPercentages(input: { home: number; draw: number; away: number }) {
+  const home = Math.round(input.home * 100);
+  const draw = Math.round(input.draw * 100);
+  const away = 100 - home - draw;
+
+  if (away < 0) {
+    return { home: clamp(home + away, 0, 100), draw, away: 0 };
+  }
+
+  return { home, draw, away };
 }
 
 function getConfidence(
@@ -569,49 +528,100 @@ export function calculateFixtureWinChance(input: {
       home: 35,
       draw: 30,
       away: 35,
-      predictedResult: {
-        homeScore: 0,
-        awayScore: 0,
-        label: "Too early",
-      },
+      predictedResult: { homeScore: 0, awayScore: 0, label: "Too early" },
       confidence: "Low",
       explanation:
         "No completed results were found for these teams yet, so a score prediction will appear once there is usable match data.",
     };
   }
 
-  const homeStrength = getStrength(homeStats, baselines);
-  const awayStrength = getStrength(awayStats, baselines);
-  const headToHeadAdjustment = getHeadToHeadAdjustment(input);
-  const strengthDifference =
-    homeStrength - awayStrength + headToHeadAdjustment;
+  const leagueScoringRate = clamp(
+    (baselines.goalsForPerGame + baselines.goalsAgainstPerGame) / 2,
+    0.75,
+    8,
+  );
 
-  const homeShare = 1 / (1 + Math.exp(-strengthDifference / 18));
-  const draw = clamp(28 - Math.abs(strengthDifference) * 0.45, 12, 30);
-  const availableWinShare = 100 - draw;
-
-  const rounded = roundPercentages({
-    home: availableWinShare * homeShare,
-    draw,
-    away: availableWinShare * (1 - homeShare),
+  const homeAttack = getScoringProfile({
+    total: homeStats?.goalsFor ?? 0,
+    played: homeGames,
+    recentValues: homeStats?.recentGoalsFor ?? [],
+    leagueAverage: leagueScoringRate,
+  });
+  const awayAttack = getScoringProfile({
+    total: awayStats?.goalsFor ?? 0,
+    played: awayGames,
+    recentValues: awayStats?.recentGoalsFor ?? [],
+    leagueAverage: leagueScoringRate,
+  });
+  const homeConceding = getScoringProfile({
+    total: homeStats?.goalsAgainst ?? 0,
+    played: homeGames,
+    recentValues: homeStats?.recentGoalsAgainst ?? [],
+    leagueAverage: leagueScoringRate,
+  });
+  const awayConceding = getScoringProfile({
+    total: awayStats?.goalsAgainst ?? 0,
+    played: awayGames,
+    recentValues: awayStats?.recentGoalsAgainst ?? [],
+    leagueAverage: leagueScoringRate,
   });
 
-  const predictedResult = buildPredictedResult({
-    homeStats,
-    awayStats,
-    baselines,
-    strengthDifference,
-    percentages: rounded,
-  });
+  const homeExpectedBase =
+    leagueScoringRate *
+    Math.pow(clamp(homeAttack / leagueScoringRate, 0.25, 3), 0.64) *
+    Math.pow(clamp(awayConceding / leagueScoringRate, 0.25, 3), 0.36);
+  const awayExpectedBase =
+    leagueScoringRate *
+    Math.pow(clamp(awayAttack / leagueScoringRate, 0.25, 3), 0.64) *
+    Math.pow(clamp(homeConceding / leagueScoringRate, 0.25, 3), 0.36);
 
+  const ratings = buildEloRatings(input.fixtures);
+  const homeRating = ratings.get(input.homeTeamId) ?? 1500;
+  const awayRating = ratings.get(input.awayTeamId) ?? 1500;
+  const eloDifference = clamp(homeRating - awayRating, -MAX_ELO_DIFFERENCE, MAX_ELO_DIFFERENCE);
+  const homeEloMultiplier = Math.exp(eloDifference / ELO_SCALE);
+  const awayEloMultiplier = Math.exp(-eloDifference / ELO_SCALE);
+
+  const headToHeadAdjustment = getHeadToHeadGoalAdjustment(input);
+  const commonOpponentAdjustment = getCommonOpponentGoalAdjustment(input);
+  const matchupAdjustment = clamp(
+    headToHeadAdjustment + commonOpponentAdjustment,
+    -0.85,
+    0.85,
+  );
+
+  const homeExpected = clamp(
+    homeExpectedBase * homeEloMultiplier + matchupAdjustment,
+    0.35,
+    10.5,
+  );
+  const awayExpected = clamp(
+    awayExpectedBase * awayEloMultiplier - matchupAdjustment,
+    0.35,
+    10.5,
+  );
+
+  const poisson = buildPoissonModel(homeExpected, awayExpected);
+  const predictedOutcome = getPredictedOutcome(poisson);
+  const predictedScore =
+    poisson.bestByOutcome[predictedOutcome] ?? {
+      homeScore: Math.max(0, Math.round(homeExpected)),
+      awayScore: Math.max(0, Math.round(awayExpected)),
+      probability: 0,
+    };
+  const percentages = roundPercentages(poisson);
   const isEarlySeason = Math.min(homeGames, awayGames) < 3;
 
   return {
-    ...rounded,
-    predictedResult,
+    ...percentages,
+    predictedResult: {
+      homeScore: predictedScore.homeScore,
+      awayScore: predictedScore.awayScore,
+      label: `${predictedScore.homeScore}-${predictedScore.awayScore}`,
+    },
     confidence: getConfidence(homeGames, awayGames),
     explanation: isEarlySeason
-      ? "Early-season estimate: limited team results are blended with league averages, recent form, goals scored, goals conceded and any head-to-head results."
-      : "Based on completed results, team-specific scoring and conceding rates, recent goals, points per game, goal difference, recent form and head-to-head record.",
+      ? "Early-season estimate: limited results are blended with league scoring levels, recent goals, opponent-adjusted strength, common-opponent results and any direct head-to-head meetings."
+      : "Based on team scoring and conceding rates, recent goals, opponent-adjusted strength, common-opponent comparisons and direct head-to-head history. Win, draw and loss percentages are derived from the same Poisson score model as the predicted score.",
   };
 }

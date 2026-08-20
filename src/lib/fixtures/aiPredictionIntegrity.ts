@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { refreshStoredAiPreviewForFixture } from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 
+const PREDICTOR_MODEL_VERSION = "opponent-adjusted-poisson-v2";
+
 type PredictionRepairRow = {
   fixtureId: string;
   homeTeamId: string;
@@ -15,6 +17,9 @@ async function ensureMatchupSnapshotColumns() {
   );
   await prisma.$executeRawUnsafe(
     'ALTER TABLE "FixtureAiPrediction" ADD COLUMN IF NOT EXISTS "awayTeamIdSnapshot" TEXT',
+  );
+  await prisma.$executeRawUnsafe(
+    'ALTER TABLE "FixtureAiPrediction" ADD COLUMN IF NOT EXISTS "modelVersion" TEXT',
   );
 }
 
@@ -40,6 +45,7 @@ export async function repairUpcomingAiPredictionIntegrity(limit = 60) {
         prediction."fixtureId" IS NULL
         OR prediction."predictedHomeScore" IS NULL
         OR prediction."predictedAwayScore" IS NULL
+        OR prediction."modelVersion" IS DISTINCT FROM ${PREDICTOR_MODEL_VERSION}
         OR prediction."homeTeamIdSnapshot" IS DISTINCT FROM fixture."homeTeamId"
         OR prediction."awayTeamIdSnapshot" IS DISTINCT FROM fixture."awayTeamId"
       )
@@ -61,14 +67,16 @@ export async function repairUpcomingAiPredictionIntegrity(limit = 60) {
         continue;
       }
 
-      // The database trigger normally stamps this automatically. Keep this
-      // explicit update as a recovery fallback for environments deployed while
-      // a migration is still being applied.
+      // The database trigger normally stamps matchup snapshots automatically.
+      // Keep this explicit update as a recovery fallback and also stamp the
+      // predictor model version so a future model change can deliberately
+      // invalidate and rebuild scheduled calls without touching played history.
       await prisma.$executeRaw(Prisma.sql`
         UPDATE "FixtureAiPrediction"
         SET
           "homeTeamIdSnapshot" = ${row.homeTeamId},
-          "awayTeamIdSnapshot" = ${row.awayTeamId}
+          "awayTeamIdSnapshot" = ${row.awayTeamId},
+          "modelVersion" = ${PREDICTOR_MODEL_VERSION}
         WHERE "fixtureId" = ${row.fixtureId}
       `);
 
