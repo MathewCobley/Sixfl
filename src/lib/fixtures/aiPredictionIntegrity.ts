@@ -45,9 +45,9 @@ export async function repairUpcomingAiPredictionIntegrity(limit = 60) {
         prediction."fixtureId" IS NULL
         OR prediction."predictedHomeScore" IS NULL
         OR prediction."predictedAwayScore" IS NULL
+        OR prediction."modelVersion" IS DISTINCT FROM ${PREDICTOR_MODEL_VERSION}
         OR prediction."homeTeamIdSnapshot" IS DISTINCT FROM fixture."homeTeamId"
         OR prediction."awayTeamIdSnapshot" IS DISTINCT FROM fixture."awayTeamId"
-        OR prediction."modelVersion" IS DISTINCT FROM ${PREDICTOR_MODEL_VERSION}
       )
     ORDER BY fixture."kickoffAt" ASC
     LIMIT ${safeLimit}
