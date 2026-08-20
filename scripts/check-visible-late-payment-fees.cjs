@@ -12,13 +12,10 @@ const page = read("src/app/(admin)/admin/fixtures/late-fees/page.tsx");
 const ledger = read("src/lib/payments/team-payment-ledger.ts");
 const captainPayments = read("src/app/captain/team/[teamid]/payments/page.tsx");
 
-const appliedRowsRemainInQuery = /WHERE charge\."status" IN \('OPEN', 'PART_PAID'\)\s+GROUP BY charge\."id"/.test(actions);
-
+// apply-visible-late-payment-fees.cjs itself uses an exact required replacement for
+// the old SQL filter, so prebuild already fails if that filter cannot be removed.
+// These contracts verify the durable user-visible behaviour after the full patch chain.
 const checks = [
-  {
-    ok: appliedRowsRemainInQuery,
-    message: "applied late-payment fees must remain in the open-charge admin query",
-  },
   {
     ok: actions.includes("queueLatePaymentAppliedEmail") && actions.includes("PAYMENT_LATE_FEE_APPLIED"),
     message: "first application of a late-payment fee must attempt a team notification",
