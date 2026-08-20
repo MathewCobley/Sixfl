@@ -61,6 +61,7 @@ require("./apply-native-single-fixture-publish.cjs");
 require("./fix-goal-of-week-dashboard-promo-payload-narrowing.cjs");
 require("./apply-critical-player-dashboard-features.cjs");
 require("./apply-late-payment-72h-review.cjs");
+require("./apply-visible-late-payment-fees.cjs");
 require("./apply-admin-outstanding-balance-copy.cjs");
 require("./apply-reopen-failed-stripe-player-payment.cjs");
 require("./apply-team-credit-cap-policy.cjs");
@@ -79,6 +80,7 @@ require("./fix-fixture-abandonment-result-decision-build.cjs");
 require("./fix-fixture-abandonment-runtime-schema.cjs");
 require("./apply-fixture-abandonment-email-recovery.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
+require("./check-visible-late-payment-fees.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
