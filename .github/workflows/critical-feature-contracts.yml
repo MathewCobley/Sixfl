@@ -58,6 +58,9 @@ jobs:
       - name: Check abandonment email recovery
         run: node scripts/check-fixture-abandonment-email-recovery.mjs
 
+      - name: Check formal conduct notice
+        run: node scripts/check-fixture-formal-conduct-notice.mjs
+
       - name: Check native admin Kits navigation
         run: node scripts/check-native-admin-kits-navigation.mjs
 
@@ -110,6 +113,7 @@ jobs:
           node scripts/check-abandoned-result-decision.mjs
           node scripts/check-fixture-abandonment-runtime-resilience.mjs
           node scripts/check-fixture-abandonment-email-recovery.mjs
+          node scripts/check-fixture-formal-conduct-notice.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate

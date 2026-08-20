@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 
 import { requireReferee } from "@/lib/admin";
 import { recordFixtureAbandonment } from "@/lib/fixtures/abandonment";
+import {
+  isFixtureConductAbandonmentReason,
+  sendFixtureFormalConductNotice,
+} from "@/lib/fixtures/formal-conduct-notice";
 import { getRefereeNightFixtureIds, recalculateRefereeNightCashup } from "@/lib/referee-nights";
 import { prisma } from "@/lib/prisma";
 
@@ -63,6 +67,20 @@ export async function recordNightFixtureAbandonmentAction(formData: FormData) {
     details,
     recordedByUserId: user.id,
   });
+
+  if (responsibleTeamId && isFixtureConductAbandonmentReason(reason)) {
+    try {
+      await sendFixtureFormalConductNotice({
+        fixtureId,
+        createdByUserId: user.id,
+      });
+    } catch (error) {
+      console.error(
+        "Abandonment was saved but the separate formal conduct notice could not be sent",
+        error,
+      );
+    }
+  }
 
   await recalculateRefereeNightCashup(refereeNightId);
 
