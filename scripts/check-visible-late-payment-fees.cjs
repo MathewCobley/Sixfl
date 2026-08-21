@@ -11,10 +11,11 @@ const actions = read("src/app/(admin)/admin/fixtures/late-fees/actions.ts");
 const page = read("src/app/(admin)/admin/fixtures/late-fees/page.tsx");
 const ledger = read("src/lib/payments/team-payment-ledger.ts");
 const captainPayments = read("src/app/captain/team/[teamid]/payments/page.tsx");
+const fixtureMatchFees = read("src/lib/payments/fixture-match-fees.ts");
 
 // apply-visible-late-payment-fees.cjs itself uses an exact required replacement for
 // the old SQL filter, so prebuild already fails if that filter cannot be removed.
-// These contracts verify the durable user-visible behaviour after the full patch chain.
+// These contracts verify the durable user-visible and financial behaviour after the full patch chain.
 const checks = [
   {
     ok: actions.includes("queueLatePaymentAppliedEmail") && actions.includes("PAYMENT_LATE_FEE_APPLIED"),
@@ -35,6 +36,14 @@ const checks = [
   {
     ok: captainPayments.includes("Late-payment admin fee applied") && captainPayments.includes("base charge"),
     message: "captain payment screen must explain the £10 addition instead of only showing a larger total",
+  },
+  {
+    ok:
+      fixtureMatchFees.includes("const appliedLatePaymentFeePence =") &&
+      fixtureMatchFees.includes("const effectiveAmountPence =") &&
+      fixtureMatchFees.includes("amountPence: effectiveAmountPence") &&
+      fixtureMatchFees.includes("getChargeStatusFromAmounts(effectiveAmountPence, paidTotalPence)"),
+    message: "fixture match-fee sync must preserve an applied late-payment admin fee on top of the base fixture charge",
   },
 ];
 
