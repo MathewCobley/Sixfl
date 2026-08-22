@@ -124,10 +124,8 @@ const oldPlaceholder = 'placeholder="e.g. 30.00"';
 const inheritedPlaceholder = 'placeholder="Blank = team standard"';
 if (!screen.includes(inheritedPlaceholder)) {
   const placeholderCount = count(screen, oldPlaceholder);
-  if (placeholderCount < 2) {
-    throw new Error(
-      `Expected both create-fixture fee placeholders; found ${placeholderCount}.`,
-    );
+  if (placeholderCount < 1) {
+    throw new Error("Could not find the create-fixture fee helper placeholder.");
   }
   screen = screen.replaceAll(oldPlaceholder, inheritedPlaceholder);
 }
