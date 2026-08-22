@@ -3,6 +3,7 @@
 // ========================================
 
 import { archivedLeagueRulesV2 } from "@/lib/archived-league-rules-v2";
+import { archivedMatchRulesV2 } from "@/lib/archived-match-rules-v2";
 import {
   LEAGUE_AGREEMENT_EFFECTIVE_DATE,
   LEAGUE_AGREEMENT_VERSION,
@@ -52,6 +53,7 @@ const currentDocuments = [
 
 const supersededDocuments = [
   archivedLeagueRulesV2,
+  ...archivedMatchRulesV2,
   ...archivedRuleDocuments,
   ...archivedKitOfferTermsDocuments,
 ];
