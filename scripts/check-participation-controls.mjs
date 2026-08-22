@@ -11,6 +11,7 @@ const checks = [
   ["src/app/(admin)/admin/participation-controls/actions.ts", "BLOCK_TEAM_REGISTRATION"],
   ["src/lib/participation/controls.ts", "BLOCKED_TEAM_OVERLAP_THRESHOLD"],
   ["prisma/migrations/20260822153000_participation_reentry_controls/migration.sql", "TeamMember_blocked_team_overlap_guard"],
+  ["prisma/migrations/20260822153100_enforce_participation_restrictions/migration.sql", "FixtureSelection_participation_restriction_guard"],
 ];
 
 for (const [file, marker] of checks) {
