@@ -8,6 +8,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { InterestType, LeagueType } from "@prisma/client";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
+import {
+  buildTeamEmailConflictPath,
+  findTeamEmailRegistrationConflict,
+} from "@/lib/leads/team-email-registration-guard";
 
 function clean(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -43,6 +47,15 @@ export async function submitTeamLeadAction(formData: FormData) {
 
   const leagueType = mapLeagueType(leagueTypeRaw);
   if (!leagueType) redirect("/register-team?error=league-type");
+
+  const registrationConflict = await findTeamEmailRegistrationConflict({
+    email,
+    teamName,
+  });
+
+  if (registrationConflict) {
+    redirect(buildTeamEmailConflictPath(registrationConflict));
+  }
 
   const messageParts = [
     `Submitted from the SIXFL register-team page.`,
