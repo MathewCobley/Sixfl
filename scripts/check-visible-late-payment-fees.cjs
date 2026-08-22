@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-fixture-matchup-grid-screen-fit.cjs");
+
 const root = process.cwd();
 
 function read(relativePath) {
