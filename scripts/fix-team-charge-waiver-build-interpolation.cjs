@@ -37,6 +37,29 @@ if (labelOccurrences > 0) {
   source = source.replaceAll(oldCreditLabel, contextualCreditLabel);
 }
 
+// Team-credit cap preparation now owns the public team checkout balance flow.
+// Let the waiver preparation add its imports/transaction notes without failing
+// on the old immutable balance anchor; a dedicated follow-up combines both
+// policies and verifies the final checkout source.
+const strictMissingGuard = [
+  '  if (!source.includes(before)) {',
+  '    throw new Error(`Expected ${label} source was not found.`);',
+  '  }',
+].join("\n");
+const capCompatibleMissingGuard = [
+  '  if (!source.includes(before)) {',
+  '    if (label === "public charge waiver-aware outstanding") return source;',
+  '    throw new Error(`Expected ${label} source was not found.`);',
+  '  }',
+].join("\n");
+
+if (!source.includes(capCompatibleMissingGuard)) {
+  if (!source.includes(strictMissingGuard)) {
+    throw new Error("Could not find waiver preparation missing-source guard.");
+  }
+  source = source.replace(strictMissingGuard, capCompatibleMissingGuard);
+}
+
 fs.writeFileSync(target, source, "utf8");
 
 console.log(
