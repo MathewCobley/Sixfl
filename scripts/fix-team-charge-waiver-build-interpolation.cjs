@@ -11,19 +11,34 @@ let source = fs.readFileSync(target, "utf8");
 // names such as `amount` while running the build preparation itself.
 const brokenInterpolationPrefix = "\\\\" + "${";
 const escapedInterpolationPrefix = "\\" + "${";
-const occurrences = source.split(brokenInterpolationPrefix).length - 1;
+const interpolationOccurrences =
+  source.split(brokenInterpolationPrefix).length - 1;
 
-if (occurrences > 0) {
-  source = source.replaceAll(brokenInterpolationPrefix, escapedInterpolationPrefix);
-  fs.writeFileSync(target, source, "utf8");
+if (interpolationOccurrences > 0) {
+  source = source.replaceAll(
+    brokenInterpolationPrefix,
+    escapedInterpolationPrefix,
+  );
 }
 
 if (source.includes(brokenInterpolationPrefix)) {
   throw new Error("Team-charge waiver build interpolation repair did not complete.");
 }
 
+// The contextual payment-label preparation runs before the waiver preparation
+// and changes the Team credit row label for kit charges. Keep the waiver
+// preparation's exact source anchor aligned with that already-prepared markup.
+const oldCreditLabel = '<span>Team credit used</span>';
+const contextualCreditLabel =
+  '<span>{isKitCharge ? "Credit used" : "Team credit used"}</span>';
+const labelOccurrences = source.split(oldCreditLabel).length - 1;
+
+if (labelOccurrences > 0) {
+  source = source.replaceAll(oldCreditLabel, contextualCreditLabel);
+}
+
+fs.writeFileSync(target, source, "utf8");
+
 console.log(
-  occurrences > 0
-    ? `Repaired ${occurrences} generated-source interpolation escape(s) in team-charge waiver accounting.`
-    : "Team-charge waiver build interpolations are already safe.",
+  `Repaired ${interpolationOccurrences} generated-source interpolation escape(s) and ${labelOccurrences} contextual credit-label anchor(s) in team-charge waiver accounting.`,
 );
