@@ -44,6 +44,7 @@ const agreement = read("src/lib/league-agreement.ts");
 const archive = read("src/lib/rules-archive.ts");
 const archivedLeagueRulesV2 = read("src/lib/archived-league-rules-v2.ts");
 const archivedMatchRulesV2 = read("src/lib/archived-match-rules-v2.ts");
+const archivedMatchRulesV21 = read("src/lib/archived-match-rules-v2-1.ts");
 const captainGuide = read("src/app/captain/team/[teamid]/guide/page.tsx");
 const kitTerms = read("src/lib/kits/terms.ts");
 const kitTermsPage = read("src/app/(public)/founding-team-kit-terms/page.tsx");
@@ -64,8 +65,9 @@ const checks = [
   [leagueRules.includes("administrative forfeit result will be 3–0"), "League Rules must define the default 3–0 forfeit result"],
   [leagueRules.includes("less than 24 hours before kick-off"), "League Rules must retain the late-cancellation rule"],
   [leagueRules.includes("There is no automatic right to an independent appeal"), "League Rules must retain the review/appeal wording"],
-  [matchRules.includes('MATCH_RULES_VERSION = "Version 2.1 — August 2026"'), "Match Rules must remain on v2.1"],
+  [matchRules.includes('MATCH_RULES_VERSION = "Version 2.2 — August 2026"'), "Match Rules must remain on v2.2"],
   [matchRules.includes("A kick-in may not be played directly to the taker's own goalkeeper"), "Match Rules must retain the direct kick-in goalkeeper restriction"],
+  [matchRules.includes("If the goalkeeper handles the ball outside the goalkeeper area, a penalty kick is awarded"), "Match Rules must retain the goalkeeper handball penalty rule"],
   [matchRules.includes("Shin pads are mandatory"), "Match Rules must retain mandatory shin pads"],
   [matchRules.includes("A dismissed player must promptly leave"), "Match Rules must retain the red-card leave requirement"],
   [matchRules.includes("does not by itself establish that it did not happen"), "Match Rules must retain limited-camera evidence wording"],
@@ -73,8 +75,10 @@ const checks = [
   [archive.includes('id: "league-rules-1-4"'), "League Rules v1.4 must remain archived"],
   [archivedLeagueRulesV2.includes('id: "league-rules-2-0"'), "League Rules v2.0 must remain archived"],
   [archivedMatchRulesV2.includes('id: "match-rules-2-0"'), "Match Rules v2.0 must remain archived"],
+  [archivedMatchRulesV21.includes('id: "match-rules-2-1"'), "Match Rules v2.1 must remain archived"],
   [rulesArchivePage.includes("archivedLeagueRulesV2"), "Admin rules archive must show League Rules v2.0"],
   [rulesArchivePage.includes("archivedMatchRulesV2"), "Admin rules archive must show Match Rules v2.0"],
+  [rulesArchivePage.includes("archivedMatchRulesV21"), "Admin rules archive must show Match Rules v2.1"],
   [archive.includes('id: "match-rules-1-4"'), "Match Rules v1.4 must remain archived"],
   [archive.includes('id: "league-agreement-1-2"'), "League Agreement v1.2 must remain archived"],
   [captainGuide.includes("accepted before version tracking"), "Captain guide must show legacy acceptance state"],
@@ -108,8 +112,8 @@ execFileSync(process.execPath, [path.join(root, "scripts/check-participation-con
   stdio: "inherit",
 });
 
-// The no-show update intentionally runs after the v2.1/v2.0 source-contract
-// checks above, then publishes the next versioned rule wording and workflow.
+// The no-show update intentionally runs after the source-contract checks above,
+// then publishes the next versioned league-rule wording and workflow.
 require("./apply-confirmed-fixture-no-show-liability-v2.cjs");
 require("./apply-confirmed-fixture-no-show-ui-polish.cjs");
 
