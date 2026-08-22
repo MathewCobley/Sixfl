@@ -23,14 +23,14 @@ function whitespaceFlexiblePattern(value) {
 
 function replaceRequired(source, before, after, label) {
   if (source.includes(after)) return source;
-  if (source.includes(before)) return source.replace(before, after);
+  if (source.includes(before)) return source.replace(before, () => after);
 
   const flexibleAfter = whitespaceFlexiblePattern(after);
   if (flexibleAfter.test(source)) return source;
 
   const flexibleBefore = whitespaceFlexiblePattern(before);
   const match = source.match(flexibleBefore);
-  if (match) return source.replace(match[0], after);
+  if (match) return source.replace(match[0], () => after);
 
   throw new Error(\`Expected \${label} source was not found.\`);
 }`;
@@ -39,7 +39,7 @@ if (!source.includes("function whitespaceFlexiblePattern")) {
   if (!source.includes(before)) {
     throw new Error("TBC publish compatibility function anchor not found.");
   }
-  source = source.replace(before, after);
+  source = source.replace(before, () => after);
   fs.writeFileSync(file, source, "utf8");
   console.log("Made TBC publish safety patch whitespace tolerant.");
 }
