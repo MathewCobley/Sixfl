@@ -87,6 +87,7 @@ export const matchRuleSections: MatchRuleSection[] = [
     title: "Scoring",
     points: [
       "A goal is scored when the whole of the ball passes over the goal line, between the goalposts and under the crossbar, unless the rules say the restart cannot score directly.",
+      "Goals may be scored directly from a kick-off.",
       "The team scoring the greater number of goals wins the match.",
     ],
   },
@@ -102,7 +103,7 @@ export const matchRuleSections: MatchRuleSection[] = [
     points: [
       "All free kicks are direct and are awarded to the opposing team for offences in accordance with the rules of play.",
       "Opponents must stand at least five yards from the ball until it is in play.",
-      "Where the rules require a free kick outside the goalkeeper area, place the ball five yards outside the area in line with the offence or the point where the ball entered the area.",
+      "Where a free kick is required within five yards of the penalty area or within the penalty area, place the ball five yards outside the area in line with the offence or the point where the ball entered the area.",
     ],
   },
   {
@@ -130,7 +131,7 @@ export const matchRuleSections: MatchRuleSection[] = [
       "Backpasses to the goalkeeper are allowed.",
       "However, if a player receives the ball from their own goalkeeper, that player may not pass it straight back to the goalkeeper until another player has touched the ball.",
       "If this keeper-return offence happens, award a free kick to the opposing team five yards outside the goalkeeper area, in line with the point where the ball entered the area.",
-      "Goalkeepers may save or stop the ball with their feet, but may not kick the ball out from their hands.",
+      "Goalkeepers may save or stop the ball with their feet, but may not kick the ball out.",
     ],
   },
   {
@@ -147,7 +148,7 @@ export const matchRuleSections: MatchRuleSection[] = [
     title: "Discipline, Cards and Dismissals",
     points: [
       "Referees may use temporary suspensions, known as sin bins, for cautionable offences.",
-      "A player shown a blue card is temporarily suspended from play.",
+      "A player shown a blue card is temporarily suspended from play for a period of at least three minutes, as determined by the referee.",
       "A second blue card in the same match results in permanent exclusion from the match.",
       "A red card results in immediate dismissal from the match.",
       "A dismissed player must promptly leave the playing area and any nearby area the referee reasonably directs them to leave.",
