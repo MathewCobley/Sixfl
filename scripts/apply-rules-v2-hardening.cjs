@@ -5,6 +5,7 @@ const { execFileSync } = require("node:child_process");
 require("./apply-hidden-tbc-admin-ui.cjs");
 require("./fix-publish-tbc-fee-safety-compat.cjs");
 require("./apply-publish-tbc-fee-safety.cjs");
+require("./apply-resilient-published-fee-repair.cjs");
 require("./apply-participation-controls.cjs");
 
 const root = process.cwd();
