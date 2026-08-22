@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 2.0 — August 2026";
+export const MATCH_RULES_VERSION = "Version 2.1 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -118,6 +118,8 @@ export const matchRuleSections: MatchRuleSection[] = [
     points: [
       "Kick-ins replace throw-ins when the ball leaves the pitch over the touchline.",
       "A goal cannot be scored directly from a kick-in.",
+      "A kick-in may not be played directly to the taker's own goalkeeper. Another player must touch the ball before it is played to the goalkeeper.",
+      "If the goalkeeper plays or receives the ball directly from a teammate's kick-in, award a free kick to the opposing team from where the goalkeeper first plays the ball. If that point is inside the goalkeeper area, take the free kick five yards outside the area in line with the offence.",
       "The ball should be stationary on or behind the line and opponents should give at least five yards where possible.",
     ],
   },
