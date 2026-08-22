@@ -8,6 +8,7 @@ require("./apply-publish-tbc-fee-safety.cjs");
 require("./apply-resilient-published-fee-repair.cjs");
 require("./apply-participation-controls.cjs");
 require("./apply-kit-terms-v2-2.cjs");
+require("./apply-team-name-soft-review.cjs");
 
 const root = process.cwd();
 
@@ -48,6 +49,13 @@ const kitTermsPage = read("src/app/(public)/founding-team-kit-terms/page.tsx");
 const kitForm = read("src/components/captain/TeamKitOrderForm.tsx");
 const kitSave = read("src/app/captain/team/[teamid]/kit/save-v2.ts");
 const rulesArchivePage = read("src/app/(admin)/admin/rules-archive/page.tsx");
+const teamNameSuitability = read("src/lib/leads/team-name-suitability.ts");
+const registerTeamAction = read("src/app/(public)/register-team/actions.ts");
+const registerInterestAction = read("src/app/(public)/register-interest/actions.ts");
+const leagueLeadAction = read("src/app/(public)/leagues/[slug]/actions.ts");
+const heartlandsLeadAction = read("src/app/(public)/leagues/heartlands/actions.ts");
+const adminLeadPage = read("src/app/(admin)/admin/leads/[id]/page.tsx");
+const convertLeadButton = read("src/components/admin/leads/ConvertLeadToTeamButton.tsx");
 
 const checks = [
   [leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"'), "League Rules must remain on v2.1"],
@@ -73,6 +81,14 @@ const checks = [
   [kitForm.includes('name="acceptKitTerms"'), "Kit submission form must require an explicit terms acknowledgement"],
   [kitSave.includes('error: "kit_terms_required"'), "Kit submission server action must enforce terms acceptance"],
   [kitSave.includes('"kitTermsAcceptedAt" = CASE'), "Kit submission must snapshot terms acceptance details"],
+  [teamNameSuitability.includes("TEAM_NAME_REVIEW_MARKER"), "Team-name suitability review helper must remain present"],
+  [teamNameSuitability.includes("mongs"), "High-confidence disability-slur review trigger must remain present"],
+  [registerTeamAction.includes("teamNameReview.requiresReview"), "Register-team must hold flagged names for review"],
+  [registerInterestAction.includes("holdTeamWelcome"), "Register-interest must hold flagged names for review"],
+  [leagueLeadAction.includes("holdTeamWelcome"), "League landing registrations must hold flagged names for review"],
+  [heartlandsLeadAction.includes("holdTeamWelcome"), "Heartlands registrations must hold flagged names for review"],
+  [adminLeadPage.includes("Team name review required"), "Admin lead detail must show the team-name review warning"],
+  [convertLeadButton.includes("Approve name & convert"), "Admin conversion must provide an explicit team-name approval step"],
 ];
 
 const failures = checks.filter(([ok]) => !ok);
