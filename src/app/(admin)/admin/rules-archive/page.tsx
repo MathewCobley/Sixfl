@@ -10,6 +10,11 @@ import {
   LEAGUE_RULES_EFFECTIVE_DATE,
   LEAGUE_RULES_VERSION,
 } from "@/lib/league-rules";
+import {
+  KIT_OFFER_TERMS_EFFECTIVE_DATE,
+  KIT_OFFER_TERMS_VERSION,
+  archivedKitOfferTermsDocuments,
+} from "@/lib/kits/terms";
 import { MATCH_RULES_VERSION } from "@/lib/match-rules";
 import { archivedRuleDocuments } from "@/lib/rules-archive";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -37,6 +42,16 @@ const currentDocuments = [
     version: LEAGUE_AGREEMENT_VERSION,
     effectiveDate: LEAGUE_AGREEMENT_EFFECTIVE_DATE,
   },
+  {
+    document: "Founding Team Kit Offer Terms",
+    version: KIT_OFFER_TERMS_VERSION,
+    effectiveDate: KIT_OFFER_TERMS_EFFECTIVE_DATE,
+  },
+];
+
+const supersededDocuments = [
+  ...archivedRuleDocuments,
+  ...archivedKitOfferTermsDocuments,
 ];
 
 export default async function RulesArchivePage() {
@@ -52,13 +67,13 @@ export default async function RulesArchivePage() {
           Rules archive
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-emerald-50/75">
-          Superseded rules are retained here so SIXFL can identify the wording
-          that applied at an earlier date. Before publishing a new rules version,
+          Superseded rules and terms are retained here so SIXFL can identify the wording
+          that applied at an earlier date. Before publishing a new version,
           the outgoing active version should be copied into this archive.
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {currentDocuments.map((document) => (
           <div
             key={document.document}
@@ -90,7 +105,7 @@ export default async function RulesArchivePage() {
           </h2>
         </div>
 
-        {archivedRuleDocuments.map((document) => (
+        {supersededDocuments.map((document) => (
           <article
             key={document.id}
             className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]"
