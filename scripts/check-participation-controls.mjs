@@ -1,10 +1,16 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
+
+execFileSync(process.execPath, ["scripts/fix-participation-type-compat.cjs"], {
+  stdio: "inherit",
+});
 
 const checks = [
   ["src/components/admin/AdminSidebar.tsx", "/admin/participation-controls"],
   ["src/app/(public)/claim/page.tsx", "getCaptainClaimRestriction"],
   ["src/lib/requireCaptain.ts", "getCaptainClaimRestriction"],
-  ["src/lib/players/add-player-without-duplicates.ts", "PLAYING_RESTRICTED"],
+  ["src/lib/players/add-player-without-duplicates.ts", 'code: "PLAYING_RESTRICTED"'],
+  ["src/lib/players/add-player-without-duplicates.ts", '| "PLAYING_RESTRICTED";'],
   ["src/app/teams/join/[joinSlug]/actions.ts", "requires%20SIXFL%20admin%20review"],
   ["src/app/(admin)/admin/teams/[id]/page.tsx", "Participation controls"],
   ["src/app/(admin)/admin/participation-controls/page.tsx", "four shared registered players"],
