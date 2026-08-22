@@ -7,6 +7,7 @@ require("./fix-publish-tbc-fee-safety-compat.cjs");
 require("./apply-publish-tbc-fee-safety.cjs");
 require("./apply-resilient-published-fee-repair.cjs");
 require("./apply-participation-controls.cjs");
+require("./apply-kit-terms-v2-2.cjs");
 
 const root = process.cwd();
 
@@ -41,6 +42,11 @@ const matchRules = read("src/lib/match-rules.ts");
 const agreement = read("src/lib/league-agreement.ts");
 const archive = read("src/lib/rules-archive.ts");
 const captainGuide = read("src/app/captain/team/[teamid]/guide/page.tsx");
+const kitTerms = read("src/lib/kits/terms.ts");
+const kitTermsPage = read("src/app/(public)/founding-team-kit-terms/page.tsx");
+const kitForm = read("src/components/captain/TeamKitOrderForm.tsx");
+const kitSave = read("src/app/captain/team/[teamid]/kit/save-v2.ts");
+const rulesArchivePage = read("src/app/(admin)/admin/rules-archive/page.tsx");
 
 const checks = [
   [leagueRules.includes('LEAGUE_RULES_VERSION = "2.0"'), "League Rules must remain on v2.0"],
@@ -55,6 +61,14 @@ const checks = [
   [archive.includes('id: "match-rules-1-4"'), "Match Rules v1.4 must remain archived"],
   [archive.includes('id: "league-agreement-1-2"'), "League Agreement v1.2 must remain archived"],
   [captainGuide.includes("accepted before version tracking"), "Captain guide must show legacy acceptance state"],
+  [kitTerms.includes('KIT_OFFER_TERMS_VERSION = "2.2"'), "Kit Offer Terms must remain on v2.2"],
+  [kitTerms.includes('id: "founding-team-kit-terms-2-1"'), "Kit Offer Terms v2.1 must remain archived"],
+  [kitTerms.includes("Paid additional kits are treated separately"), "Kit terms must separate paid kit purchases from league participation"],
+  [kitTermsPage.includes("kitOfferTermsSections"), "Public kit terms page must use the versioned terms source"],
+  [rulesArchivePage.includes("archivedKitOfferTermsDocuments"), "Admin rules archive must include previous kit terms"],
+  [kitForm.includes('name="acceptKitTerms"'), "Kit submission form must require an explicit terms acknowledgement"],
+  [kitSave.includes('error: "kit_terms_required"'), "Kit submission server action must enforce terms acceptance"],
+  [kitSave.includes('"kitTermsAcceptedAt" = CASE'), "Kit submission must snapshot terms acceptance details"],
 ];
 
 const failures = checks.filter(([ok]) => !ok);
