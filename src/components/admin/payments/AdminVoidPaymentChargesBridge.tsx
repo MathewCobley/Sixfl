@@ -15,9 +15,11 @@ type VoidableCharge = {
   description: string | null;
   status: string;
   amount: string;
+  amountPence: number;
   outstanding: string;
   outstandingPence: number;
   paidTotalPence: number;
+  coveredPence: number;
   fixtureLabel: string | null;
 };
 
@@ -26,15 +28,24 @@ type VoidableChargesResponse = {
 };
 
 const TEAM_VOID_BUTTON_SELECTOR = "[data-admin-void-payment-charge-button]";
+const TEAM_ADJUST_BUTTON_SELECTOR = "[data-admin-adjust-payment-charge-button]";
 const PLAYER_VOID_BUTTON_SELECTOR = "[data-admin-void-player-fee-button]";
 
 function removeExistingButtons() {
   document.querySelectorAll(TEAM_VOID_BUTTON_SELECTOR).forEach((node) => node.remove());
+  document.querySelectorAll(TEAM_ADJUST_BUTTON_SELECTOR).forEach((node) => node.remove());
   document.querySelectorAll(PLAYER_VOID_BUTTON_SELECTOR).forEach((node) => node.remove());
 }
 
 function normaliseText(value: string) {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function formatMoney(amountPence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(amountPence / 100);
 }
 
 function countActionsByLabels(element: Element, labels: string[]) {
@@ -164,6 +175,100 @@ function createTeamVoidButton(input: {
   return button;
 }
 
+function createTeamAdjustmentButton(input: {
+  item: VoidableCharge;
+  onAdjusted: () => void;
+}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.adminAdjustPaymentChargeButton = input.item.id;
+  button.disabled = input.item.outstandingPence <= 0;
+  button.className =
+    "inline-flex items-center rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-2.5 text-sm font-semibold text-amber-50 transition hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-40";
+  button.textContent = "Reduce / waive";
+  button.title = "Reduce this match fee or waive some/all of the outstanding balance";
+
+  button.addEventListener("click", async () => {
+    const defaultAmount = (input.item.outstandingPence / 100).toFixed(2);
+    const amountText = window.prompt(
+      `How much do you want to reduce/waive?\n\n${input.item.teamName}\n${input.item.title}\nCurrent charge: ${input.item.amount}\nOutstanding: ${input.item.outstanding}\n\nEnter amount in £:`,
+      defaultAmount,
+    );
+
+    if (amountText === null) return;
+
+    const amountPounds = Number(amountText.replace(/[£,\s]/g, ""));
+    const waivePence = Math.round(amountPounds * 100);
+
+    if (!Number.isFinite(amountPounds) || waivePence <= 0) {
+      window.alert("Enter a valid amount greater than £0.00.");
+      return;
+    }
+
+    if (waivePence > input.item.outstandingPence) {
+      window.alert(`You can waive up to ${input.item.outstanding} on this charge.`);
+      return;
+    }
+
+    const reason = window.prompt(
+      "Reason for reducing/waiving this fee (this is kept in the charge audit note):",
+      "Goodwill adjustment",
+    );
+
+    if (reason === null) return;
+    if (!reason.trim()) {
+      window.alert("Please enter a reason for the adjustment.");
+      return;
+    }
+
+    const newAmountPence = input.item.amountPence - waivePence;
+    const newOutstandingPence = input.item.outstandingPence - waivePence;
+    const confirmed = window.confirm(
+      `Confirm fee adjustment?\n\n${input.item.teamName}\n${input.item.title}\n\nReduce/waive: ${formatMoney(waivePence)}\nNew charge total: ${formatMoney(newAmountPence)}\nRemaining outstanding: ${formatMoney(newOutstandingPence)}\n\nReason: ${reason.trim()}\n\nNo fake payment will be recorded. The charge itself will be reduced and the adjustment will be noted.`,
+    );
+
+    if (!confirmed) return;
+
+    button.disabled = true;
+    button.textContent = "Adjusting...";
+
+    try {
+      const response = await fetch("/api/admin/payments/adjust-charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chargeId: input.item.id,
+          waivePence,
+          reason: reason.trim(),
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            newAmountPence?: number;
+            outstandingPence?: number;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Could not adjust charge.");
+      }
+
+      window.alert(
+        `Fee adjusted successfully.\n\nNew charge: ${formatMoney(data?.newAmountPence ?? newAmountPence)}\nOutstanding: ${formatMoney(data?.outstandingPence ?? newOutstandingPence)}`,
+      );
+      input.onAdjusted();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not adjust charge.");
+      button.disabled = input.item.outstandingPence <= 0;
+      button.textContent = "Reduce / waive";
+    }
+  });
+
+  return button;
+}
+
 function injectTeamVoidButtons(input: {
   items: VoidableCharge[];
   onVoided: () => void;
@@ -187,6 +292,31 @@ function injectTeamVoidButtons(input: {
       createTeamVoidButton({
         item,
         onVoided: input.onVoided,
+      }),
+    );
+    usedChargeIds.add(item.id);
+  }
+}
+
+function injectTeamAdjustmentButtons(input: {
+  items: VoidableCharge[];
+  onAdjusted: () => void;
+}) {
+  const usedChargeIds = new Set<string>();
+
+  for (const card of findTeamChargeCards()) {
+    if (card.querySelector(TEAM_ADJUST_BUTTON_SELECTOR)) continue;
+
+    const item = findMatchingTeamCharge(card, input.items);
+    if (!item || item.outstandingPence <= 0 || usedChargeIds.has(item.id)) continue;
+
+    const actions = findTeamActionsContainer(card);
+    if (!actions) continue;
+
+    actions.appendChild(
+      createTeamAdjustmentButton({
+        item,
+        onAdjusted: input.onAdjusted,
       }),
     );
     usedChargeIds.add(item.id);
@@ -318,8 +448,11 @@ export default function AdminVoidPaymentChargesBridge() {
     const refreshPage = () => {
       router.refresh();
       window.setTimeout(() => {
+        if (cancelled) return;
         removeExistingButtons();
+        void loadTeamCharges();
         injectTeamVoidButtons({ items: latestTeamItems, onVoided: refreshPage });
+        injectTeamAdjustmentButtons({ items: latestTeamItems, onAdjusted: refreshPage });
         injectPlayerVoidButtons({ onVoided: refreshPage });
       }, 350);
     };
@@ -348,6 +481,7 @@ export default function AdminVoidPaymentChargesBridge() {
 
         latestTeamItems = data.items;
         injectTeamVoidButtons({ items: latestTeamItems, onVoided: refreshPage });
+        injectTeamAdjustmentButtons({ items: latestTeamItems, onAdjusted: refreshPage });
       } catch {
         // Do not block the payments page if this admin-only helper cannot load.
       }
@@ -355,16 +489,17 @@ export default function AdminVoidPaymentChargesBridge() {
 
     function injectAllButtons() {
       injectTeamVoidButtons({ items: latestTeamItems, onVoided: refreshPage });
+      injectTeamAdjustmentButtons({ items: latestTeamItems, onAdjusted: refreshPage });
       injectPlayerVoidButtons({ onVoided: refreshPage });
     }
 
     void cleanCancelledCharges();
-    loadTeamCharges();
+    void loadTeamCharges();
     injectAllButtons();
 
     const timer = window.setTimeout(() => {
       void cleanCancelledCharges();
-      loadTeamCharges();
+      void loadTeamCharges();
       injectAllButtons();
     }, 600);
 
