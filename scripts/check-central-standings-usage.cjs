@@ -86,6 +86,7 @@ require("./fix-fixture-abandonment-runtime-schema.cjs");
 require("./apply-fixture-abandonment-email-recovery.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
 require("./apply-rules-v2-hardening.cjs");
+require("./apply-team-email-registration-guard.cjs");
 require("./check-visible-late-payment-fees.cjs");
 require("./fix-team-kickoff-window-enforcement-build.cjs");
 require("./apply-team-kickoff-window-enforcement.cjs");
