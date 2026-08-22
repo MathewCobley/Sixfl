@@ -1,8 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 require("./apply-hidden-tbc-admin-ui.cjs");
+require("./fix-publish-tbc-fee-safety-compat.cjs");
 require("./apply-publish-tbc-fee-safety.cjs");
+require("./apply-participation-controls.cjs");
 
 const root = process.cwd();
 
@@ -59,5 +62,10 @@ if (failures.length > 0) {
   for (const [, message] of failures) console.error(`- ${message}`);
   process.exit(1);
 }
+
+execFileSync(process.execPath, [path.join(root, "scripts/check-participation-controls.mjs")], {
+  cwd: root,
+  stdio: "inherit",
+});
 
 console.log("Rules v2 hardening contract passed.");
