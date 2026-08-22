@@ -7,7 +7,7 @@ const checks = [
   ["src/lib/players/add-player-without-duplicates.ts", "PLAYING_RESTRICTED"],
   ["src/app/teams/join/[joinSlug]/actions.ts", "requires%20SIXFL%20admin%20review"],
   ["src/app/(admin)/admin/teams/[id]/page.tsx", "Participation controls"],
-  ["src/app/(admin)/admin/participation-controls/page.tsx", "Possible re-formed blocked team"],
+  ["src/app/(admin)/admin/participation-controls/page.tsx", "four shared registered players"],
   ["src/app/(admin)/admin/participation-controls/actions.ts", "BLOCK_TEAM_REGISTRATION"],
   ["src/lib/participation/controls.ts", "BLOCKED_TEAM_OVERLAP_THRESHOLD"],
   ["prisma/migrations/20260822153000_participation_reentry_controls/migration.sql", "TeamMember_blocked_team_overlap_guard"],
