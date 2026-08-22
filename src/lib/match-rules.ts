@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 2.1 — August 2026";
+export const MATCH_RULES_VERSION = "Version 2.2 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -111,7 +111,7 @@ export const matchRuleSections: MatchRuleSection[] = [
     points: [
       "If a defending player enters their own penalty area and either touches the ball or affects play in any way, as determined by the referee, a penalty kick is awarded.",
       "If an attacking player enters the goalkeeper area and gains an advantage, the referee may award possession to the goalkeeper.",
-      "If the goalkeeper handles the ball outside the goalkeeper area, award a free kick from where the offence happened.",
+      "If the goalkeeper handles the ball outside the goalkeeper area, a penalty kick is awarded to the opposing team.",
     ],
   },
   {
