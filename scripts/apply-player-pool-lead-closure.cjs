@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-team-lead-confirmation-chase.cjs");
+
 const root = process.cwd();
 const actionsPath = path.join(
   root,
