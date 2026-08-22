@@ -7,6 +7,10 @@
 import { InterestType, LeagueType } from "@prisma/client";
 import { redirect } from "next/navigation";
 
+import {
+  buildTeamEmailConflictPath,
+  findTeamEmailRegistrationConflict,
+} from "@/lib/leads/team-email-registration-guard";
 import { prisma } from "@/lib/prisma";
 import { queueLeadWelcomeNotifications } from "@/lib/notifications/transactional";
 
@@ -30,6 +34,17 @@ export async function createHeartlandsInterestLeadAction(formData: FormData) {
   if (!contactName) throw new Error("Contact name is required.");
   if (!email) throw new Error("Email is required.");
   if (!leagueId) throw new Error("League is required.");
+
+  if (interestType === InterestType.TEAM) {
+    const registrationConflict = await findTeamEmailRegistrationConflict({
+      email,
+      teamName,
+    });
+
+    if (registrationConflict) {
+      redirect(buildTeamEmailConflictPath(registrationConflict));
+    }
+  }
 
   const league = await prisma.league.findUnique({
     where: { id: leagueId },
