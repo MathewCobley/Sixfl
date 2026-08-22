@@ -21,6 +21,21 @@ function whitespaceFlexiblePattern(value) {
   return new RegExp(parts.join("\\\\s+"));
 }
 
+function replaceFeeDeclarationBlock(source, after, input) {
+  const scopeIndex = source.indexOf(input.scopeMarker);
+  if (scopeIndex < 0) return null;
+
+  const start = source.indexOf(input.startMarker, scopeIndex);
+  if (start < 0) return null;
+
+  const end = source.indexOf(input.endMarker, start);
+  if (end < 0) return null;
+
+  const afterLines = after.split("\\n");
+  const replacement = afterLines.slice(1).join("\\n") + "\\n";
+  return source.slice(0, start) + replacement + source.slice(end);
+}
+
 function replaceRequired(source, before, after, label) {
   if (source.includes(after)) return source;
   if (source.includes(before)) return source.replace(before, () => after);
@@ -32,14 +47,32 @@ function replaceRequired(source, before, after, label) {
   const match = source.match(flexibleBefore);
   if (match) return source.replace(match[0], () => after);
 
+  if (label === "week publish TBC fee resolution") {
+    const patched = replaceFeeDeclarationBlock(source, after, {
+      scopeMarker: "  for (const fixture of unpublishedFixtures) {",
+      startMarker: "    const homeMatchFeePence =",
+      endMarker: "    const chargeResult =",
+    });
+    if (patched) return patched;
+  }
+
+  if (label === "single publish TBC fee resolution") {
+    const patched = replaceFeeDeclarationBlock(source, after, {
+      scopeMarker: "  const { fixture, league } = input;",
+      startMarker: "  const homeMatchFeePence =",
+      endMarker: "  const chargeResult =",
+    });
+    if (patched) return patched;
+  }
+
   throw new Error(\`Expected \${label} source was not found.\`);
 }`;
 
-if (!source.includes("function whitespaceFlexiblePattern")) {
+if (!source.includes("function replaceFeeDeclarationBlock")) {
   if (!source.includes(before)) {
     throw new Error("TBC publish compatibility function anchor not found.");
   }
   source = source.replace(before, () => after);
   fs.writeFileSync(file, source, "utf8");
-  console.log("Made TBC publish safety patch whitespace tolerant.");
+  console.log("Made TBC publish safety patch compatible with evolved fixture-fee source.");
 }
