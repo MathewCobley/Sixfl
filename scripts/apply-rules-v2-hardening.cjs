@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-automatic-league-tbc.cjs");
+
 const root = process.cwd();
 
 function read(relativePath) {
