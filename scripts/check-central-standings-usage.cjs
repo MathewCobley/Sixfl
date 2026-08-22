@@ -87,6 +87,7 @@ require("./apply-fixture-abandonment-email-recovery.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
 require("./apply-rules-v2-hardening.cjs");
 require("./check-visible-late-payment-fees.cjs");
+require("./apply-team-kickoff-window-enforcement.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
 const violations = [];
