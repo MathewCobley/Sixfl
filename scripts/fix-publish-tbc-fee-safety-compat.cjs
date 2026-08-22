@@ -60,7 +60,7 @@ function replaceRequired(source, before, after, label) {
     const patched = replaceFeeDeclarationBlock(source, after, {
       scopeMarker: "  const { fixture, league } = input;",
       startMarker: "  const homeMatchFeePence =",
-      endMarker: "  const chargeResult =",
+      endMarker: "  const leagueDisplayName =",
     });
     if (patched) return patched;
   }
