@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 require("./apply-hidden-tbc-admin-ui.cjs");
+require("./apply-publish-tbc-fee-safety.cjs");
 
 const root = process.cwd();
 
