@@ -4,12 +4,19 @@
 
 import Link from "next/link";
 
+import {
+  LEAGUE_AGREEMENT_EFFECTIVE_DATE,
+  LEAGUE_AGREEMENT_NEXT_REVIEW,
+  LEAGUE_AGREEMENT_VERSION,
+  leagueAgreementSections,
+} from "@/lib/league-agreement";
+
 const documentDetails = [
   { label: "Document", value: "League Participation Agreement" },
-  { label: "Version", value: "1.2" },
+  { label: "Version", value: LEAGUE_AGREEMENT_VERSION },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "3 August 2026" },
-  { label: "Next review", value: "3 August 2027" },
+  { label: "Effective", value: LEAGUE_AGREEMENT_EFFECTIVE_DATE },
+  { label: "Next review", value: LEAGUE_AGREEMENT_NEXT_REVIEW },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "Registered teams, captains and players" },
 ];
@@ -29,9 +36,8 @@ export default function LeagueAgreementPage() {
             </h1>
 
             <p className="mt-4 text-white/70 md:text-lg">
-              This agreement outlines the responsibilities of teams and players
-              participating in SIXFL leagues. By registering a team or
-              participating in a SIXFL competition, you agree to the terms below.
+              This agreement sets out the responsibilities accepted by teams,
+              captains and players participating in SIXFL leagues.
             </p>
 
             <div className="mt-6 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5">
@@ -39,8 +45,8 @@ export default function LeagueAgreementPage() {
                 Agreement statement
               </p>
               <p className="mt-3 text-sm leading-6 text-white/75">
-                This agreement supports fair league management, clear team
-                responsibilities and respectful participation in SIXFL fixtures.
+                The active agreement is versioned and dated. Superseded versions
+                are retained internally alongside earlier League and Match Rules.
               </p>
             </div>
           </div>
@@ -63,63 +69,13 @@ export default function LeagueAgreementPage() {
       </section>
 
       <div className="space-y-6">
-        <AgreementSection
-          title="1. Team Registration"
-          text="Teams register for a SIXFL league through a designated team captain or organiser. The captain confirms they are authorised to enter the team into the league and communicate with SIXFL on behalf of the team."
-        />
-
-        <AgreementSection
-          title="2. Captain Responsibilities"
-          text="The team captain acts as the primary contact for the league. The captain is responsible for ensuring team members are aware of fixtures, league rules and conduct expectations."
-        />
-
-        <AgreementSection
-          title="3. Match Attendance"
-          text="Teams are expected to attend scheduled fixtures. If a team cannot attend a match, they should notify the league as early as possible. Failure to attend may result in the match being recorded as a forfeit."
-        />
-
-        <AgreementSection
-          title="4. Player Conduct"
-          text="Players are expected to behave respectfully toward opponents, referees and league organisers. Unsporting or abusive behaviour may result in disciplinary action or removal from the league."
-        />
-
-        <AgreementSection
-          title="5. Referee Authority"
-          text="All matches are officiated by referees appointed by the league. Decisions made by the referee during the match are final."
-        />
-
-        <AgreementSection
-          title="6. Fixtures and Scheduling"
-          text="Fixtures are organised and communicated by SIXFL. Match schedules may occasionally change due to weather, venue availability or other operational factors."
-        />
-
-        <AgreementSection
-          title="7. League Management"
-          text="SIXFL reserves the right to make reasonable decisions in the interest of fair play, safety and the smooth running of the league."
-        />
-
-        <AgreementSection
-          title="8. Participation Risk"
-          text="Football is a physical sport and participation carries a risk of injury. Players take part at their own risk and are responsible for ensuring they are fit to play."
-        />
-
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-6">
-          <h2 className="text-lg font-bold text-white">9. Founding Team Kit Offer</h2>
-          <p className="mt-2 leading-7 text-white/75">
-            Where SIXFL expressly allocates the Founding Team Kit Offer, the team receives seven complete personalised playing kits free of charge. There is no printing contribution. Additional complete kits cost £20 each. The captain is responsible for checking all designs, sizes, names and numbers before submission.
-          </p>
-          <Link
-            href="/founding-team-kit-terms"
-            className="mt-4 inline-flex min-h-10 items-center rounded-full border border-emerald-300/25 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-100 transition hover:bg-emerald-500/15"
-          >
-            Read the full Kit Offer Terms
-          </Link>
-        </div>
-
-        <AgreementSection
-          title="10. Agreement Acceptance"
-          text="By registering a team, joining a team or participating in a SIXFL match, players acknowledge and agree to these participation terms. A captain who submits a Founding Team Kit Offer order also confirms acceptance of the separate Kit Offer Terms."
-        />
+        {leagueAgreementSections.map((section) => (
+          <AgreementSection
+            key={section.title}
+            title={section.title}
+            points={section.points}
+          />
+        ))}
       </div>
 
       <section className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-8">
@@ -128,7 +84,8 @@ export default function LeagueAgreementPage() {
         </h2>
 
         <p className="mt-3 text-white/70">
-          If you have any questions about league participation, team registration or the Founding Team Kit Offer, please contact SIXFL.
+          If you have a genuine question about league participation or a rule
+          which applies to your team, please contact SIXFL.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-4">
@@ -183,15 +140,19 @@ export default function LeagueAgreementPage() {
 
 function AgreementSection({
   title,
-  text,
+  points,
 }: {
   title: string;
-  text: string;
+  points: string[];
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+    <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
       <h2 className="text-lg font-bold text-white">{title}</h2>
-      <p className="mt-2 leading-7 text-white/75">{text}</p>
-    </div>
+      <div className="mt-3 space-y-2 leading-7 text-white/75">
+        {points.map((point) => (
+          <p key={point}>{point}</p>
+        ))}
+      </div>
+    </section>
   );
 }

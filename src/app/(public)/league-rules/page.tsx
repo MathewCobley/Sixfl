@@ -4,12 +4,19 @@
 
 import Link from "next/link";
 
+import {
+  LEAGUE_RULES_EFFECTIVE_DATE,
+  LEAGUE_RULES_NEXT_REVIEW,
+  LEAGUE_RULES_VERSION,
+  leagueRuleSections,
+} from "@/lib/league-rules";
+
 const documentDetails = [
   { label: "Document", value: "League Rules" },
-  { label: "Version", value: "1.4" },
+  { label: "Version", value: LEAGUE_RULES_VERSION },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "12 August 2026" },
-  { label: "Next review", value: "12 August 2027" },
+  { label: "Effective", value: LEAGUE_RULES_EFFECTIVE_DATE },
+  { label: "Next review", value: LEAGUE_RULES_NEXT_REVIEW },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL teams, players and league fixtures" },
 ];
@@ -29,9 +36,9 @@ export default function LeagueRulesPage() {
             </h1>
 
             <p className="mt-4 text-white/70 md:text-lg">
-              These rules outline the basic structure and expectations for teams
-              participating in SIXFL competitions. Our aim is to provide a fair,
-              well-organised and enjoyable football experience for all players.
+              These rules set out the competition, payment, conduct and fixture
+              requirements for SIXFL teams. The Match Rules cover the laws and
+              procedures used on the pitch.
             </p>
 
             <div className="mt-6 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5">
@@ -39,8 +46,9 @@ export default function LeagueRulesPage() {
                 Rules statement
               </p>
               <p className="mt-3 text-sm leading-6 text-white/75">
-                These rules apply to all SIXFL leagues unless a league, venue or
-                competition format confirms a specific local rule.
+                Active rules are versioned and dated. SIXFL retains superseded
+                versions internally so the wording in force at an earlier date
+                can be identified.
               </p>
             </div>
           </div>
@@ -63,64 +71,18 @@ export default function LeagueRulesPage() {
       </section>
 
       <div className="space-y-6">
-        <RulesSection
-          title="1. Team Registration"
-          text="All teams must complete the SIXFL registration process and provide accurate captain and player details before participating in league matches."
-        />
-
-        <RulesSection
-          title="2. Match Format"
-          text="Matches are played as 6-a-side fixtures in accordance with SIXFL competition regulations. Specific venue rules, kick-off times and fixture details will be communicated by the league."
-        />
-
-        <RulesSection
-          title="3. Player Eligibility"
-          text="Only properly registered players may represent a team in league fixtures. Teams may not field ineligible players or deliberately misrepresent player identity."
-        />
-
-        <RulesSection
-          title="4. Squad Size and Matchday Player Limit"
-          text="There is no maximum squad size. Teams may register as many players to their squad as they wish. However, a maximum of nine players may take part in any single fixture: six players on the pitch and up to three rolling substitutes. All players who participate in the fixture, including guest players, count towards this nine-player limit. Exceptions require prior approval from SIXFL."
-        />
-
-        <RulesSection
-          title="5. Respect and Conduct"
-          text="Players, captains and spectators must behave respectfully towards referees, opponents and league staff. Abuse, threatening behaviour and serious misconduct may result in suspension or removal from the league."
-        />
-
-        <RulesSection
-          title="6. Results and League Table"
-          text="Match results are recorded by the referee or league administrator and used to update the standings. SIXFL may correct administrative recording errors or amend results where an ineligible player, serious misconduct, cheating or another significant rule breach is established. Ordinary refereeing decisions made during play will not normally be reconsidered retrospectively."
-        />
-
-        <RulesSection
-          title="7. Discipline"
-          text="SIXFL may take disciplinary action in response to misconduct, dangerous play, abusive language, repeated non-attendance or any behaviour that brings the league into disrepute."
-        />
-
-        <RulesSection
-          title="8. Abandoned Matches"
-          text="Where a referee abandons a match because of the conduct of one team, the referee's decision to abandon the match is final. The team whose conduct caused the abandonment will be responsible for payment of both its own match fee and the opposing team's match fee. The result and league outcome of any abandoned fixture will be determined by SIXFL at its sole discretion, taking into account the circumstances of the abandonment. This may include allowing the score at the time of abandonment to stand, awarding the match to either team, recording a forfeit or taking any other action SIXFL considers appropriate."
-        />
-
-        <RulesSection
-          title="9. Fixtures and Cancellations"
-          text="Fixtures are scheduled by SIXFL and may be changed where necessary due to venue issues, weather, operational requirements or exceptional circumstances."
-        />
-
-        <RulesSection
-          title="10. Video Footage and Post-Match Review"
-          text="Referee decisions regarding facts connected with play are final. Video footage may be reviewed for disciplinary, safeguarding, administrative and referee-development purposes, including serious misconduct, violence, abuse, mistaken identity, suspected cheating, use of an ineligible player or an incorrectly entered score. Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or change a result arising from that decision. There is no automatic right to a video review, and footage may not be available or of equal quality for every match."
-        />
-
-        <RulesSection
-          title="11. League Decisions"
-          text="SIXFL reserves the right to interpret and apply league rules in the interests of fairness, safety and good league management. League decisions are final unless otherwise stated."
-        />
+        {leagueRuleSections.map((section) => (
+          <RulesSection
+            key={section.title}
+            title={section.title}
+            points={section.points}
+          />
+        ))}
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-6 text-sm text-white/70">
-        These rules apply to all SIXFL leagues unless otherwise stated.
+        These rules apply to all SIXFL leagues unless SIXFL has expressly
+        notified a more specific competition or venue rule.
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm">
@@ -151,15 +113,19 @@ export default function LeagueRulesPage() {
 
 function RulesSection({
   title,
-  text,
+  points,
 }: {
   title: string;
-  text: string;
+  points: string[];
 }) {
   return (
     <section className="rounded-2xl border border-white/10 bg-white/5 px-6 py-6">
       <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <p className="mt-2 text-white/70">{text}</p>
+      <div className="mt-3 space-y-2 leading-7 text-white/70">
+        {points.map((point) => (
+          <p key={point}>{point}</p>
+        ))}
+      </div>
     </section>
   );
 }

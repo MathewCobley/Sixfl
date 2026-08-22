@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 1.4 — August 2026";
+export const MATCH_RULES_VERSION = "Version 2.0 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
@@ -11,22 +11,30 @@ export type MatchRuleSection = {
 
 export const matchRuleSections: MatchRuleSection[] = [
   {
+    title: "Rule Scope and Hierarchy",
+    points: [
+      "These Match Rules govern on-pitch play in SIXFL fixtures. The League Rules govern competition administration, eligibility, payments, discipline and league outcomes.",
+      "A competition-specific rule or mandatory venue safety rule notified by SIXFL applies where it is more specific.",
+      "Where the Match Rules and League Rules appear to conflict on an administrative matter, the League Rules take priority.",
+    ],
+  },
+  {
     title: "Referee Decisions",
     points: [
       "Decisions of the referee regarding facts connected with play are final.",
       "An ordinary on-field decision will not be overturned merely because later video footage suggests that a different decision may have been made.",
       "Goals and match results will not normally be changed because of a retrospective disagreement with a refereeing decision made during play.",
-      "There is no automatic right to a video review, and the availability or quality of footage may differ between matches.",
+      "There is no automatic right to a video review.",
     ],
   },
   {
-    title: "Use of Video Footage",
+    title: "Use of Video Footage and Other Evidence",
     points: [
       "Video footage may be reviewed for disciplinary, safeguarding, administrative and referee-development purposes.",
       "SIXFL may use footage to investigate serious misconduct, violence, abuse, mistaken identity, suspected cheating, the use of an ineligible player or another significant rule breach.",
-      "Footage may also be used to correct an administrative error, such as an incorrectly entered score, where the referee's actual decision or the agreed final score is clear.",
-      "Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an on-field decision or amend a result arising from that decision.",
-      "SIXFL may still use footage privately to support referee feedback, training and performance review without changing the match result.",
+      "Footage may be incomplete, obstructed, silent, recorded from a limited angle or fail to capture an incident or conversation outside the camera view. Something not appearing on a particular recording does not by itself establish that it did not happen.",
+      "SIXFL may consider referee reports, available footage, contemporaneous messages, system records, witness information and player or captain accounts when making an administrative or disciplinary decision.",
+      "Unless SIXFL has announced a formal competition-specific video-review process in advance, footage will not normally be used to re-referee a match, overturn an ordinary on-field decision or amend a result arising solely from that decision.",
     ],
   },
   {
@@ -34,8 +42,16 @@ export const matchRuleSections: MatchRuleSection[] = [
     points: [
       "There is no maximum registered squad size.",
       "A maximum of nine players may take part for a team in any single fixture: six players on the pitch and up to three rolling substitutes.",
-      "Every player who participates in the fixture, including any guest player, counts towards the nine-player limit.",
+      "Every player who participates in the fixture, including any permitted guest player, counts towards the nine-player limit.",
       "A team may only exceed the nine-player fixture limit with prior approval from SIXFL.",
+    ],
+  },
+  {
+    title: "Required Safety Equipment",
+    points: [
+      "Shin pads are mandatory for every player taking part in a SIXFL fixture.",
+      "A referee may prevent a player from taking part, or require them to leave the pitch until the issue is corrected, if required safety equipment is not being worn.",
+      "Repeated failure to comply with safety-equipment requirements may be reported to SIXFL for disciplinary action.",
     ],
   },
   {
@@ -126,12 +142,14 @@ export const matchRuleSections: MatchRuleSection[] = [
     ],
   },
   {
-    title: "Discipline and Sin Bin Rule",
+    title: "Discipline, Cards and Dismissals",
     points: [
       "Referees may use temporary suspensions, known as sin bins, for cautionable offences.",
       "A player shown a blue card is temporarily suspended from play.",
       "A second blue card in the same match results in permanent exclusion from the match.",
       "A red card results in immediate dismissal from the match.",
+      "A dismissed player must promptly leave the playing area and any nearby area the referee reasonably directs them to leave.",
+      "Refusal or unreasonable delay in complying with an instruction to leave may be treated as further misconduct and may result in the fixture being abandoned if the referee considers that the match cannot safely or properly continue.",
       "Serious disciplinary incidents may be reported to the relevant County FA.",
     ],
   },
@@ -140,8 +158,10 @@ export const matchRuleSections: MatchRuleSection[] = [
     points: [
       "Where a referee abandons a match because of the conduct of one team, the referee's decision to abandon the match is final.",
       "The team whose conduct caused the abandonment is responsible for payment of both its own match fee and the opposing team's match fee.",
-      "The result and league outcome of any abandoned fixture will be determined by SIXFL at its sole discretion, taking into account the circumstances of the abandonment.",
-      "SIXFL may allow the score at the time of abandonment to stand, award the match to either team, record a forfeit or take any other action it considers appropriate.",
+      "The result and league outcome of any abandoned fixture will be determined by SIXFL at its sole discretion, taking into account the circumstances available to it.",
+      "SIXFL may allow the score at the time of abandonment to stand, award the match to either team, record a forfeit, leave the result pending while an administrative decision is made or take any other competition action it considers appropriate.",
+      "Where SIXFL records a forfeit and does not expressly determine a different score, the administrative forfeit result will be 3–0.",
+      "A result decision, fee decision and disciplinary decision are separate and may all apply to the same incident.",
     ],
   },
 ];

@@ -10,8 +10,8 @@ const documentDetails = [
   { label: "Document", value: "Match Rules" },
   { label: "Version", value: MATCH_RULES_VERSION.replace("Version ", "") },
   { label: "Status", value: "Active" },
-  { label: "Last updated", value: "12 August 2026" },
-  { label: "Next review", value: "12 August 2027" },
+  { label: "Effective", value: "22 August 2026" },
+  { label: "Next review", value: "22 August 2027" },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL matches and competitions" },
 ];
@@ -41,7 +41,8 @@ export default function MatchRulesPage() {
               </p>
               <p className="mt-3 text-sm leading-6 text-white/75">
                 These match rules support fair play, safe match management and a
-                consistent experience across SIXFL fixtures.
+                consistent experience across SIXFL fixtures. League administration,
+                payments and competition outcomes are governed by the League Rules.
               </p>
             </div>
           </div>

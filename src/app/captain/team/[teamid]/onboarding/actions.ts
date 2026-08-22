@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { CAPTAIN_AGREEMENT_VERSION } from "@/lib/captain/onboarding";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -38,6 +39,7 @@ export async function acceptCaptainAgreementAction(formData: FormData) {
     SET
       "captainAgreementAcceptedAt" = COALESCE("captainAgreementAcceptedAt", NOW()),
       "captainAgreementAcceptedById" = COALESCE("captainAgreementAcceptedById", ${userId}),
+      "captainAgreementVersion" = COALESCE("captainAgreementVersion", ${CAPTAIN_AGREEMENT_VERSION}),
       "onboardingCompletedAt" = COALESCE("onboardingCompletedAt", NOW())
     WHERE "id" = ${teamid}
   `;

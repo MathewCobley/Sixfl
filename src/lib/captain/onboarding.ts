@@ -10,13 +10,15 @@ import {
 
 import { prisma } from "@/lib/prisma";
 
+export const CAPTAIN_AGREEMENT_VERSION = "2.0";
 export const CAPTAIN_AGREEMENT_TEXT =
-  "I understand that as team captain I am responsible for keeping squad details up to date, confirming fixture availability, arranging payment of match fees, and making sure my team follows SIXFL matchday rules.";
+  "I understand that as team captain I am responsible for keeping squad details up to date, confirming fixture availability, arranging payment of match fees, making sure my team follows SIXFL matchday rules, and complying with the current SIXFL League Rules and Match Rules.";
 
 export type CaptainOnboardingSummary = {
   teamId: string;
   captainAgreementAcceptedAt: Date | null;
   captainAgreementAcceptedById: string | null;
+  captainAgreementVersion: string | null;
   onboardingCompletedAt: Date | null;
   onboardingWelcomeEmailSentAt: Date | null;
   onboardingFirstFixtureEmailSentAt: Date | null;
@@ -40,6 +42,7 @@ type RawCaptainOnboardingSummary = {
   id: string;
   captainAgreementAcceptedAt: Date | null;
   captainAgreementAcceptedById: string | null;
+  captainAgreementVersion: string | null;
   onboardingCompletedAt: Date | null;
   onboardingWelcomeEmailSentAt: Date | null;
   onboardingFirstFixtureEmailSentAt: Date | null;
@@ -54,6 +57,7 @@ async function ensureCaptainOnboardingColumns() {
       ALTER TABLE "Team"
         ADD COLUMN IF NOT EXISTS "captainAgreementAcceptedAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "captainAgreementAcceptedById" TEXT,
+        ADD COLUMN IF NOT EXISTS "captainAgreementVersion" TEXT,
         ADD COLUMN IF NOT EXISTS "onboardingCompletedAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "onboardingWelcomeEmailSentAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "onboardingFirstFixtureEmailSentAt" TIMESTAMP(3),
@@ -82,6 +86,7 @@ function emptySummary(teamId: string): CaptainOnboardingSummary {
     teamId,
     captainAgreementAcceptedAt: null,
     captainAgreementAcceptedById: null,
+    captainAgreementVersion: null,
     onboardingCompletedAt: null,
     onboardingWelcomeEmailSentAt: null,
     onboardingFirstFixtureEmailSentAt: null,
@@ -94,6 +99,7 @@ function normaliseSummary(row: RawCaptainOnboardingSummary): CaptainOnboardingSu
     teamId: row.id,
     captainAgreementAcceptedAt: row.captainAgreementAcceptedAt,
     captainAgreementAcceptedById: row.captainAgreementAcceptedById,
+    captainAgreementVersion: row.captainAgreementVersion,
     onboardingCompletedAt: row.onboardingCompletedAt,
     onboardingWelcomeEmailSentAt: row.onboardingWelcomeEmailSentAt,
     onboardingFirstFixtureEmailSentAt: row.onboardingFirstFixtureEmailSentAt,
@@ -117,6 +123,7 @@ export async function getTeamOnboardingSummaries(teamIds: string[]) {
         "id",
         "captainAgreementAcceptedAt",
         "captainAgreementAcceptedById",
+        "captainAgreementVersion",
         "onboardingCompletedAt",
         "onboardingWelcomeEmailSentAt",
         "onboardingFirstFixtureEmailSentAt",
@@ -179,7 +186,10 @@ export async function getCaptainOnboardingStatus(teamId: string): Promise<Captai
   const squadEmailCount = squadMembers.filter((member) => Boolean(member.user.email?.trim())).length;
   const nextFixtureConfirmationStatus = nextFixture?.captainConfirmations[0]?.status ?? null;
   const isAgreementAccepted = Boolean(summary.captainAgreementAcceptedAt);
-  const availabilityComplete = !nextFixture || nextFixtureConfirmationStatus === "CONFIRMED" || nextFixtureConfirmationStatus === "ISSUE_RAISED";
+  const availabilityComplete =
+    !nextFixture ||
+    nextFixtureConfirmationStatus === "CONFIRMED" ||
+    nextFixtureConfirmationStatus === "ISSUE_RAISED";
   const squadComplete = squadMembers.length >= 6;
   const emailsComplete = squadMembers.length === 0 || squadEmailCount === squadMembers.length;
   const paymentsComplete = openTeamChargeCount === 0;
@@ -195,6 +205,11 @@ export async function getCaptainOnboardingStatus(teamId: string): Promise<Captai
     nextFixtureConfirmationStatus,
     openTeamChargeCount,
     isAgreementAccepted,
-    isChecklistComplete: isAgreementAccepted && squadComplete && emailsComplete && availabilityComplete && paymentsComplete,
+    isChecklistComplete:
+      isAgreementAccepted &&
+      squadComplete &&
+      emailsComplete &&
+      availabilityComplete &&
+      paymentsComplete,
   };
 }

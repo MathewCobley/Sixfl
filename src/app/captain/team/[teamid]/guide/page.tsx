@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import {
   CAPTAIN_AGREEMENT_TEXT,
+  CAPTAIN_AGREEMENT_VERSION,
   getCaptainOnboardingStatus,
 } from "@/lib/captain/onboarding";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -28,7 +29,7 @@ const guideSections = [
       "Add your squad and make sure player names are clear.",
       "Add player email addresses if you want to use squad payment links.",
       "Check your first fixture, venue and kick-off time.",
-      "Read the captain responsibilities and terms below.",
+      "Read the captain responsibilities, League Rules and Match Rules.",
     ],
   },
   {
@@ -36,9 +37,8 @@ const guideSections = [
     items: [
       "The captain is responsible for team communication, squad management, fixture confirmation and making sure team fees are covered.",
       "The captain should raise fixture, payment or player issues early using the captain area or official SIXFL contact routes.",
-      "Late cancellations can affect the opposition, referee, venue and league schedule, so SIXFL should be told as early as possible.",
       "Repeated late payment, late confirmation, poor conduct or avoidable fixture issues may lead to admin fees, fixture action or review of the team's place in the league.",
-      "The captain agreement below records that the captain understands and accepts these responsibilities.",
+      "The captain agreement below records acceptance of these responsibilities. Active rules are versioned and previous versions are retained by SIXFL.",
     ],
   },
   {
@@ -56,7 +56,7 @@ const guideSections = [
     items: [
       "Availability should be confirmed at least 72 hours before kick-off.",
       "If there is a problem, raise it early through the fixture tools rather than waiting until matchday.",
-      "We do not want to charge admin fees, but a £10 late confirmation admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
+      "A £10 late confirmation admin fee may be added if avoidable late confirmation creates extra admin, fixture chasing or rearranging work.",
       "SIXFL may send reminders or warnings first where practical, but captains should not rely on a warning before acting.",
     ],
   },
@@ -75,7 +75,8 @@ const guideSections = [
     items: [
       "The standard team fee is £40 per fixture unless SIXFL has agreed otherwise.",
       "The captain remains responsible for the team fee even when squad payments are used.",
-      "We do not want to charge late payment admin fees, but a £10 late payment admin fee may be added if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
+      "Match fees are due on match day unless SIXFL has agreed otherwise.",
+      "A £10 late payment admin fee may be added if a team fee is more than 7 days overdue and SIXFL has to spend extra time chasing it.",
       "Payment reminders or warnings may be sent first where practical, but payment issues should still be raised early so they can be sorted before they become a problem.",
     ],
   },
@@ -89,19 +90,30 @@ const guideSections = [
     ],
   },
   {
-    title: "Referees and results",
+    title: "Safety, referees and results",
     items: [
-      "Referees manage the game on the night and their decisions should be respected.",
-      "Results should be checked promptly after each fixture.",
-      "If something is wrong with a result, raise a dispute through the results area rather than informal messages.",
+      "Shin pads are mandatory for every player. A referee may prevent a player taking part until required safety equipment is being worn.",
+      "Referees manage the game on the night and decisions regarding facts connected with play are final.",
+      "A player shown a red card must promptly leave the playing area and any nearby area the referee reasonably directs them to leave.",
+      "Refusal or unreasonable delay in leaving may be treated as further misconduct and can lead to abandonment if the match cannot safely or properly continue.",
+      "If something is wrong with a recorded result, raise a dispute through the results area rather than informal messages.",
     ],
   },
   {
     title: "What happens if a team cancels",
     items: [
-      "Tell SIXFL as early as possible if you cannot fulfil a fixture.",
-      "Late cancellations can affect the opposition, referee, venue and league schedule.",
-      "Repeated late cancellations may lead to charges, fixture action or review of the team's place in the league.",
+      "Tell SIXFL directly as early as possible if you cannot fulfil a fixture. An agreement only with the opposition does not cancel or rearrange the fixture.",
+      "A team cancelling less than 24 hours before kick-off remains liable for its own match fee unless SIXFL expressly agrees otherwise.",
+      "A no-show or repeated avoidable late cancellation may lead to a forfeit, disciplinary action or review of the team's place in the league.",
+    ],
+  },
+  {
+    title: "Reviews and evidence",
+    items: [
+      "SIXFL may consider referee reports, available footage, messages, system records and relevant witness or player accounts.",
+      "Video can be incomplete or limited to one angle; something not visible on a recording does not by itself establish that it did not happen.",
+      "There is no automatic right to an independent appeal or to a frame-by-frame re-refereeing process.",
+      "SIXFL may reconsider a decision if genuinely new and material evidence is provided or an obvious administrative error is identified.",
     ],
   },
   {
@@ -117,8 +129,8 @@ const guideSections = [
 const quickLinks = [
   "Captain terms and conditions",
   "Availability confirmation",
-  "Earliest and latest kick-off times",
   "Payments and late fees",
+  "What happens if a team cancels",
 ];
 
 function getSectionId(title: string) {
@@ -183,7 +195,9 @@ export default async function CaptainGuidePage({
             Captain guide and terms
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
-            A short reference for {team.name}. This keeps payment responsibilities, captain terms and key SIXFL processes in one place. Playing rules are kept on the separate Match Rules page.
+            A short reference for {team.name}. This keeps payment responsibilities,
+            captain terms and key SIXFL processes in one place. The League Rules
+            and Match Rules remain the authoritative rule documents.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -197,6 +211,12 @@ export default async function CaptainGuidePage({
               className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
             >
               Open match rules
+            </Link>
+            <Link
+              href="/league-rules"
+              className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+            >
+              Open league rules
             </Link>
           </div>
         </div>
@@ -250,7 +270,10 @@ export default async function CaptainGuidePage({
         <div className="px-6 py-6">
           {onboardingStatus.isAgreementAccepted ? (
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100/85">
-              Captain agreement accepted{acceptedAt ? ` on ${acceptedAt}` : ""}.
+              Captain agreement accepted{acceptedAt ? ` on ${acceptedAt}` : ""}
+              {onboardingStatus.captainAgreementVersion
+                ? ` · version ${onboardingStatus.captainAgreementVersion}`
+                : " · accepted before version tracking"}.
             </div>
           ) : (
             <form action={acceptCaptainAgreementAction} className="space-y-4">
@@ -262,7 +285,10 @@ export default async function CaptainGuidePage({
                   required
                   className="mt-1 h-5 w-5 shrink-0 rounded border-white/20 bg-black text-emerald-400"
                 />
-                <span className="text-sm leading-6 text-white/76">{CAPTAIN_AGREEMENT_TEXT}</span>
+                <span className="text-sm leading-6 text-white/76">
+                  {CAPTAIN_AGREEMENT_TEXT} (Captain terms version{" "}
+                  {CAPTAIN_AGREEMENT_VERSION}.)
+                </span>
               </label>
               <button
                 type="submit"
