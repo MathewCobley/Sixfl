@@ -83,6 +83,7 @@ require("./fix-fixture-abandonment-result-decision-build.cjs");
 require("./fix-fixture-abandonment-runtime-schema.cjs");
 require("./apply-fixture-abandonment-email-recovery.cjs");
 require("./apply-harrogate-current-league-landing.cjs");
+require("./apply-rules-v2-hardening.cjs");
 require("./check-visible-late-payment-fees.cjs");
 
 const srcRoot = path.join(process.cwd(), "src");
