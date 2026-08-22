@@ -2,7 +2,7 @@
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 2.2 — August 2026";
+export const MATCH_RULES_VERSION = "Version 2.1 — August 2026";
 
 export type MatchRuleSection = {
   title: string;
