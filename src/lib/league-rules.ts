@@ -2,7 +2,7 @@
 // File: src/lib/league-rules.ts
 // ========================================
 
-export const LEAGUE_RULES_VERSION = "2.0";
+export const LEAGUE_RULES_VERSION = "2.1";
 export const LEAGUE_RULES_EFFECTIVE_DATE = "22 August 2026";
 export const LEAGUE_RULES_NEXT_REVIEW = "22 August 2027";
 
@@ -26,6 +26,8 @@ export const leagueRuleSections: LeagueRuleSection[] = [
     title: "2. Team Registration and Captain Responsibility",
     points: [
       "Teams must complete the SIXFL registration process and provide accurate captain and player details.",
+      "Team names, badges and other public-facing team identity must be suitable for public use. SIXFL may reject or require a change to any name or branding it reasonably considers discriminatory, hateful, abusive, obscene, threatening or otherwise unsuitable for a community football competition.",
+      "SIXFL may require a team to change its name or public-facing branding after registration if a suitability concern later becomes apparent.",
       "The registered captain or organiser acts as the primary team contact and is responsible for making sure players are aware of fixtures, payment responsibilities, safety requirements and league rules.",
       "Teams must keep contact and squad information reasonably up to date. Where a SIXFL feature requires an email address or other contact detail, the team is responsible for providing accurate information.",
     ],
