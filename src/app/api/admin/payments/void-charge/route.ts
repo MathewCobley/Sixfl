@@ -2,9 +2,11 @@
 // File: src/app/api/admin/payments/void-charge/route.ts
 // ========================================
 
+import { PlayerMatchFeeStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -36,16 +38,12 @@ export async function POST(request: Request) {
   try {
     const charge = await prisma.paymentCharge.findUnique({
       where: { id: chargeId },
-      select: {
-        id: true,
-        teamId: true,
-        status: true,
-        title: true,
-        description: true,
+      include: {
         transactions: {
           select: {
             id: true,
             amountPence: true,
+            notes: true,
           },
         },
       },
@@ -59,21 +57,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, voided: false, alreadyVoid: true });
     }
 
-    const paidTotalPence = charge.transactions.reduce(
-      (sum, transaction) => sum + transaction.amountPence,
-      0,
-    );
+    const playerMatchFees = charge.fixtureId
+      ? await prisma.playerMatchFee.findMany({
+          where: {
+            teamId: charge.teamId,
+            fixtureId: charge.fixtureId,
+            status: {
+              in: [PlayerMatchFeeStatus.PAID, PlayerMatchFeeStatus.WAIVED],
+            },
+          },
+          select: {
+            fixtureId: true,
+            amountPence: true,
+            status: true,
+            note: true,
+          },
+        })
+      : [];
+
+    const [summary] = summariseChargesWithPlayerMatchFees([charge], playerMatchFees);
+    const coveredPence = summary?.coveredPence ?? 0;
 
     if (
       charge.status === "PAID" ||
       charge.status === "PART_PAID" ||
-      paidTotalPence > 0
+      coveredPence > 0
     ) {
       return NextResponse.json(
         {
           error:
-            "This charge is paid or part-paid, so it has not been voided. Review or refund the recorded payment first.",
-          paidTotalPence,
+            "This charge is paid or part-paid, so it has not been voided. Use Reduce / waive to write off only the outstanding balance instead.",
+          paidTotalPence: coveredPence,
         },
         { status: 409 },
       );
@@ -89,6 +103,10 @@ export async function POST(request: Request) {
       data: {
         status: "VOID",
         description,
+        lastStripeCheckoutUrl: null,
+        lastStripeCheckoutSessionId: null,
+        lastStripeCheckoutCreatedAt: null,
+        lastStripeCheckoutAmountPence: null,
       },
     });
 
