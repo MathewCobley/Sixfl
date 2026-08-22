@@ -20,24 +20,37 @@ if (!source.includes(chaseImport)) {
   source = source.replace(quickSendImport, `${quickSendImport}\n${chaseImport}`);
 }
 
-const quickSendBlock = `                              <LeadConfirmationQuickSendButton
-                                leadId={lead.id}
-                                canSend={canSendConfirmation}
-                                alreadySent={Boolean(confirmation?.sentAt)}
-                              />`;
-const chaseBlock = `${quickSendBlock}
-                              {confirmation?.status === "PENDING" && confirmation.sentAt ? (
-                                <LeadConfirmationChaseButton
-                                  leadId={lead.id}
-                                  canChase={canSendConfirmation}
-                                />
-                              ) : null}`;
+const confirmationMapBlock = `  const confirmationByLeadId = new Map(\n    confirmationRows.map((row) => [row.leadId, row]),\n  );`;
+const chaseHistoryBlock = `${confirmationMapBlock}\n\n  const confirmationChaseRows = leads.length\n    ? await prisma.notificationDispatch.findMany({\n        where: {\n          sourceType: \"LEAD_TEAM_CONFIRMATION_CHASE\",\n          sourceId: { in: leads.map((lead) => lead.id) },\n        },\n        orderBy: { createdAt: \"desc\" },\n        select: { sourceId: true, createdAt: true },\n      })\n    : [];\n  const latestChaseByLeadId = new Map<string, Date>();\n  for (const row of confirmationChaseRows) {\n    if (row.sourceId && !latestChaseByLeadId.has(row.sourceId)) {\n      latestChaseByLeadId.set(row.sourceId, row.createdAt);\n    }\n  }`;
 
-if (!source.includes("<LeadConfirmationChaseButton")) {
-  if (!source.includes(quickSendBlock)) {
-    throw new Error("Lead confirmation quick-send button block was not found.");
+if (!source.includes("const latestChaseByLeadId = new Map<string, Date>();")) {
+  if (!source.includes(confirmationMapBlock)) {
+    throw new Error("Lead confirmation map block was not found.");
   }
-  source = source.replace(quickSendBlock, chaseBlock);
+  source = source.replace(confirmationMapBlock, chaseHistoryBlock);
+}
+
+const rowMetaBlock = `                  const confirmation = confirmationByLeadId.get(lead.id) ?? null;\n                  const confirmationMeta = getConfirmationMeta(confirmation);`;
+const rowMetaWithChase = `${rowMetaBlock}\n                  const latestChasedAt = latestChaseByLeadId.get(lead.id) ?? null;`;
+if (!source.includes("const latestChasedAt = latestChaseByLeadId.get(lead.id) ?? null;")) {
+  if (!source.includes(rowMetaBlock)) {
+    throw new Error("Lead confirmation row metadata block was not found.");
+  }
+  source = source.replace(rowMetaBlock, rowMetaWithChase);
+}
+
+const quickSendBlock = `                              <LeadConfirmationQuickSendButton\n                                leadId={lead.id}\n                                canSend={canSendConfirmation}\n                                alreadySent={Boolean(confirmation?.sentAt)}\n                              />`;
+const chaseOnlyBlock = `${quickSendBlock}\n                              {confirmation?.status === \"PENDING\" && confirmation.sentAt ? (\n                                <LeadConfirmationChaseButton\n                                  leadId={lead.id}\n                                  canChase={canSendConfirmation}\n                                />\n                              ) : null}`;
+const chaseWithTimestampBlock = `${quickSendBlock}\n                              {confirmation?.status === \"PENDING\" && confirmation.sentAt ? (\n                                <>\n                                  <LeadConfirmationChaseButton\n                                    leadId={lead.id}\n                                    canChase={canSendConfirmation}\n                                  />\n                                  {latestChasedAt ? (\n                                    <div className=\"max-w-[150px] text-right text-[11px] leading-4 text-amber-200/75\">\n                                      Chased {formatDateTime(latestChasedAt)}\n                                    </div>\n                                  ) : null}\n                                </>\n                              ) : null}`;
+
+if (!source.includes("Chased {formatDateTime(latestChasedAt)}")) {
+  if (source.includes(chaseOnlyBlock)) {
+    source = source.replace(chaseOnlyBlock, chaseWithTimestampBlock);
+  } else if (source.includes(quickSendBlock)) {
+    source = source.replace(quickSendBlock, chaseWithTimestampBlock);
+  } else {
+    throw new Error("Lead confirmation chase button block was not found.");
+  }
 }
 
 source = source.replace(
@@ -48,12 +61,14 @@ source = source.replace(
 if (
   !source.includes(chaseImport) ||
   !source.includes("<LeadConfirmationChaseButton") ||
-  !source.includes('confirmation?.status === "PENDING"')
+  !source.includes('confirmation?.status === "PENDING"') ||
+  !source.includes("const latestChaseByLeadId = new Map<string, Date>();") ||
+  !source.includes("Chased {formatDateTime(latestChasedAt)}")
 ) {
   throw new Error("Team lead confirmation chase UI was not applied correctly.");
 }
 
 fs.writeFileSync(pagePath, source, "utf8");
 console.log(
-  "Pending team leads now have a dedicated chase-form email button on Admin Leads.",
+  "Pending team leads now show a chase-form button and the latest chase timestamp on Admin Leads.",
 );
