@@ -71,6 +71,7 @@ require("./fix-team-credit-cap-policy-build.cjs");
 require("./apply-team-credit-replenishment-fix.cjs");
 require("./fix-team-charge-waiver-build-interpolation.cjs");
 require("./apply-team-charge-waiver-accounting.cjs");
+require("./fix-team-charge-waiver-public-checkout.cjs");
 require("./apply-free-kit-expiry-paid-kit-mode.cjs");
 require("./apply-ai-prediction-publication-snapshot.cjs");
 require("./fix-ai-prediction-publication-selects.cjs");
