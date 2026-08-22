@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-confirmed-no-show-captain-agreement.cjs");
+
 const root = process.cwd();
 
 function read(file) {
