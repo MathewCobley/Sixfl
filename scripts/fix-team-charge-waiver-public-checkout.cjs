@@ -31,15 +31,27 @@ const waiverAwareInitialBalance = `  const playerMatchFees = charge.fixtureId
         select: { fixtureId: true, amountPence: true, status: true, note: true },
       })
     : [];
+  const chargeAmountPence = charge.amountPence;
+  const chargeFixtureId = charge.fixtureId;
+  const chargeStatus = charge.status;
+  const chargeDescription = charge.description;
 
   function getWaiverAwareOutstandingPence(
-    transactions: typeof charge.transactions,
+    transactions: Array<{ amountPence: number; notes?: string | null }>,
   ) {
     const [summary] = summariseChargesWithPlayerMatchFees(
-      [{ ...charge, transactions }],
+      [
+        {
+          amountPence: chargeAmountPence,
+          fixtureId: chargeFixtureId,
+          status: chargeStatus,
+          description: chargeDescription,
+          transactions,
+        },
+      ],
       playerMatchFees,
     );
-    return summary?.outstandingPence ?? charge.amountPence;
+    return summary?.outstandingPence ?? chargeAmountPence;
   }
 
   let outstandingPence = getWaiverAwareOutstandingPence(charge.transactions);`;
@@ -76,6 +88,7 @@ if (
   !source.includes('summariseChargesWithPlayerMatchFees') ||
   !source.includes('PlayerMatchFeeStatus.PAID') ||
   !source.includes('getWaiverAwareOutstandingPence') ||
+  !source.includes('const chargeAmountPence = charge.amountPence;') ||
   source.includes('getChargePaidTotal(') ||
   source.includes('getChargeOutstandingPence(')
 ) {
