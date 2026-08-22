@@ -65,6 +65,7 @@ require("./apply-late-payment-72h-review.cjs");
 require("./apply-visible-late-payment-fees.cjs");
 require("./apply-late-payment-fee-sync-safeguard.cjs");
 require("./apply-admin-outstanding-balance-copy.cjs");
+require("./fix-team-charge-waiver-build-interpolation.cjs");
 require("./apply-team-charge-waiver-accounting.cjs");
 require("./apply-reopen-failed-stripe-player-payment.cjs");
 require("./apply-team-credit-cap-policy.cjs");
