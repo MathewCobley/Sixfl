@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/rules-archive/page.tsx
 // ========================================
 
+import { archivedLeagueRulesV2 } from "@/lib/archived-league-rules-v2";
 import {
   LEAGUE_AGREEMENT_EFFECTIVE_DATE,
   LEAGUE_AGREEMENT_VERSION,
@@ -50,6 +51,7 @@ const currentDocuments = [
 ];
 
 const supersededDocuments = [
+  archivedLeagueRulesV2,
   ...archivedRuleDocuments,
   ...archivedKitOfferTermsDocuments,
 ];

@@ -41,6 +41,7 @@ const leagueRules = read("src/lib/league-rules.ts");
 const matchRules = read("src/lib/match-rules.ts");
 const agreement = read("src/lib/league-agreement.ts");
 const archive = read("src/lib/rules-archive.ts");
+const archivedLeagueRulesV2 = read("src/lib/archived-league-rules-v2.ts");
 const captainGuide = read("src/app/captain/team/[teamid]/guide/page.tsx");
 const kitTerms = read("src/lib/kits/terms.ts");
 const kitTermsPage = read("src/app/(public)/founding-team-kit-terms/page.tsx");
@@ -49,7 +50,8 @@ const kitSave = read("src/app/captain/team/[teamid]/kit/save-v2.ts");
 const rulesArchivePage = read("src/app/(admin)/admin/rules-archive/page.tsx");
 
 const checks = [
-  [leagueRules.includes('LEAGUE_RULES_VERSION = "2.0"'), "League Rules must remain on v2.0"],
+  [leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"'), "League Rules must remain on v2.1"],
+  [leagueRules.includes("public-facing team identity must be suitable for public use"), "League Rules must retain the team-name and branding suitability rule"],
   [leagueRules.includes("administrative forfeit result will be 3–0"), "League Rules must define the default 3–0 forfeit result"],
   [leagueRules.includes("less than 24 hours before kick-off"), "League Rules must retain the late-cancellation rule"],
   [leagueRules.includes("There is no automatic right to an independent appeal"), "League Rules must retain the review/appeal wording"],
@@ -58,6 +60,8 @@ const checks = [
   [matchRules.includes("does not by itself establish that it did not happen"), "Match Rules must retain limited-camera evidence wording"],
   [agreement.includes('LEAGUE_AGREEMENT_VERSION = "2.0"'), "League agreement must remain on v2.0"],
   [archive.includes('id: "league-rules-1-4"'), "League Rules v1.4 must remain archived"],
+  [archivedLeagueRulesV2.includes('id: "league-rules-2-0"'), "League Rules v2.0 must remain archived"],
+  [rulesArchivePage.includes("archivedLeagueRulesV2"), "Admin rules archive must show League Rules v2.0"],
   [archive.includes('id: "match-rules-1-4"'), "Match Rules v1.4 must remain archived"],
   [archive.includes('id: "league-agreement-1-2"'), "League Agreement v1.2 must remain archived"],
   [captainGuide.includes("accepted before version tracking"), "Captain guide must show legacy acceptance state"],
