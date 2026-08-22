@@ -108,7 +108,7 @@ export const matchRuleSections: MatchRuleSection[] = [
   {
     title: "Penalty Area",
     points: [
-      "A penalty kick may be awarded if a defender commits a direct-free-kick offence inside the penalty or goalkeeper area.",
+      "If a defending player enters their own penalty area and either touches the ball or affects play in any way, as determined by the referee, a penalty kick is awarded.",
       "If an attacking player enters the goalkeeper area and gains an advantage, the referee may award possession to the goalkeeper.",
       "If the goalkeeper handles the ball outside the goalkeeper area, award a free kick from where the offence happened.",
     ],
