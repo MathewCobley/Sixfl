@@ -103,4 +103,8 @@ execFileSync(process.execPath, [path.join(root, "scripts/check-participation-con
   stdio: "inherit",
 });
 
+// The no-show update intentionally runs after the v2.1/v2.0 source-contract
+// checks above, then publishes the next versioned rule wording and workflow.
+require("./apply-confirmed-fixture-no-show-liability.cjs");
+
 console.log("Rules v2 hardening contract passed.");
