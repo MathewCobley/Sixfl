@@ -69,11 +69,13 @@ function replaceRequired(source, before, after, label) {
   }
 
   if (!source.includes('error: "kit_terms_required"')) {
+    const statusAnchor = `  const status = intent === "submit" ? "SUBMITTED" : "DRAFT";\n`;
+    const acceptanceGuard = `${statusAnchor}  const acceptedKitTerms = readString(formData, "acceptKitTerms") === "on";\n\n  if (status === "SUBMITTED" && !acceptedKitTerms) {\n    redirect(buildRedirect(teamId, { error: "kit_terms_required" }));\n  }\n`;
     source = replaceRequired(
       source,
-      `  const intent = readString(formData, "intent");\n  const status = intent === "submit" ? "SUBMITTED" : "DRAFT";\n  const orderId = existingOrder?.id ?? randomUUID();`,
-      `  const intent = readString(formData, "intent");\n  const status = intent === "submit" ? "SUBMITTED" : "DRAFT";\n  const acceptedKitTerms = readString(formData, "acceptKitTerms") === "on";\n\n  if (status === "SUBMITTED" && !acceptedKitTerms) {\n    redirect(buildRedirect(teamId, { error: "kit_terms_required" }));\n  }\n\n  const orderId = existingOrder?.id ?? randomUUID();`,
-      "kit terms submit guard",
+      statusAnchor,
+      acceptanceGuard,
+      "kit terms submit status anchor",
     );
   }
 
