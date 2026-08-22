@@ -2,9 +2,10 @@
 // File: src/app/api/admin/payments/voidable-charges/route.ts
 // ========================================
 
+import { PlayerMatchFeeStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { summariseCharge } from "@/lib/payments/charge-status";
+import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -44,33 +45,66 @@ export async function GET() {
       transactions: {
         select: {
           amountPence: true,
+          notes: true,
         },
       },
     },
   });
 
-  return NextResponse.json({
-    items: charges.map((charge) => {
-      const summary = summariseCharge({
-        amountPence: charge.amountPence,
-        transactions: charge.transactions,
-      });
+  const fixtureIds = Array.from(
+    new Set(charges.map((charge) => charge.fixtureId).filter((value): value is string => Boolean(value))),
+  );
+  const teamIds = Array.from(new Set(charges.map((charge) => charge.teamId)));
 
-      return {
+  const playerMatchFees = fixtureIds.length
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          fixtureId: { in: fixtureIds },
+          teamId: { in: teamIds },
+          status: {
+            in: [PlayerMatchFeeStatus.PAID, PlayerMatchFeeStatus.WAIVED],
+          },
+        },
+        select: {
+          teamId: true,
+          fixtureId: true,
+          amountPence: true,
+          status: true,
+          note: true,
+        },
+      })
+    : [];
+
+  const items = charges.flatMap((charge) => {
+    const feesForCharge = charge.fixtureId
+      ? playerMatchFees.filter(
+          (fee) => fee.teamId === charge.teamId && fee.fixtureId === charge.fixtureId,
+        )
+      : [];
+    const [summary] = summariseChargesWithPlayerMatchFees([charge], feesForCharge);
+
+    if (!summary || summary.outstandingPence <= 0) return [];
+
+    return [
+      {
         id: charge.id,
         teamId: charge.team.id,
         teamName: charge.team.name,
         title: charge.title,
         description: charge.description,
-        status: charge.status,
+        status: summary.displayStatus,
         amount: formatMoney(charge.amountPence),
+        amountPence: charge.amountPence,
         outstanding: formatMoney(summary.outstandingPence),
         outstandingPence: summary.outstandingPence,
-        paidTotalPence: summary.paidTotalPence,
+        paidTotalPence: summary.coveredPence,
+        coveredPence: summary.coveredPence,
         fixtureLabel: charge.fixture
           ? `${charge.fixture.homeTeam.name} vs ${charge.fixture.awayTeam.name}`
           : null,
-      };
-    }),
+      },
+    ];
   });
+
+  return NextResponse.json({ items });
 }
