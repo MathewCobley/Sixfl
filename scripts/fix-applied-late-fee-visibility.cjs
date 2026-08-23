@@ -45,3 +45,5 @@ fs.writeFileSync(actionsPath, source, "utf8");
 console.log(
   "Applied late-payment fees now remain visible in the admin audit section, including after payment.",
 );
+
+require("./fix-legacy-waiver-reconciliation.cjs");
