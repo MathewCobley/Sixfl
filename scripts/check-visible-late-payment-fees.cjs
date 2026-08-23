@@ -7,6 +7,7 @@ require("./apply-late-fee-canonical-coverage.cjs");
 require("./fix-late-fee-stale-paid-candidates.cjs");
 require("./fix-late-fee-canonical-72h-review.cjs");
 require("./apply-late-fee-adjustment-integrity.cjs");
+require("./fix-applied-late-fee-visibility.cjs");
 
 const root = process.cwd();
 
@@ -87,6 +88,12 @@ const checks = [
       actions.includes("isReversingAppliedFee") &&
       actions.includes('row.paymentLateFeeStatus === "APPLIED"'),
     message: "an applied admin fee must remain reversible even after the higher total has been paid",
+  },
+  {
+    ok:
+      !actions.includes(`charge.\"latePaymentFeeStatus\" <> 'APPLIED'`) &&
+      actions.includes('row.paymentLateFeeStatus === "APPLIED" || row.outstandingPence > 0'),
+    message: "applied late-payment fees must remain in the admin audit data set even after payment",
   },
 ];
 
