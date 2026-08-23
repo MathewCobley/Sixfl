@@ -7,6 +7,7 @@ require("./apply-late-fee-canonical-coverage.cjs");
 require("./fix-late-fee-stale-paid-candidates.cjs");
 require("./fix-late-fee-canonical-72h-review.cjs");
 require("./apply-late-fee-adjustment-integrity.cjs");
+require("./apply-late-fee-fixture-base-authority.cjs");
 require("./fix-applied-late-fee-visibility.cjs");
 
 const root = process.cwd();
@@ -20,6 +21,8 @@ const page = read("src/app/(admin)/admin/fixtures/late-fees/page.tsx");
 const ledger = read("src/lib/payments/team-payment-ledger.ts");
 const captainPayments = read("src/app/captain/team/[teamid]/payments/page.tsx");
 const fixtureMatchFees = read("src/lib/payments/fixture-match-fees.ts");
+const reduceMatchFee = read("src/app/api/admin/payments/adjust-charge/route.ts");
+const waiveLateFee = read("src/app/api/admin/payments/waive-late-fee/route.ts");
 
 // apply-visible-late-payment-fees.cjs itself uses an exact required replacement for
 // the old SQL filter, so prebuild already fails if that filter cannot be removed.
@@ -94,6 +97,14 @@ const checks = [
       !actions.includes(`charge.\"latePaymentFeeStatus\" <> 'APPLIED'`) &&
       actions.includes('row.paymentLateFeeStatus === "APPLIED" || row.outstandingPence > 0'),
     message: "applied late-payment fees must remain in the admin audit data set even after payment",
+  },
+  {
+    ok:
+      reduceMatchFee.includes("fixtureBaseChargePence") &&
+      reduceMatchFee.includes("homeMatchFeePence ?? charge.fixture.matchFeePence") &&
+      waiveLateFee.includes("fixtureBaseChargePence") &&
+      waiveLateFee.includes("awayMatchFeePence ?? charge.fixture.matchFeePence"),
+    message: "reduce-match-fee and waive-admin-fee actions must use the fixture-side team fee as the authoritative base charge",
   },
 ];
 
