@@ -105,3 +105,4 @@ console.log(
 );
 
 require("./apply-late-player-payment-waiver-recovery.cjs");
+require("./apply-exact-payment-charge-button-binding.cjs");
