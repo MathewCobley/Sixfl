@@ -101,3 +101,5 @@ fs.writeFileSync(routePath, source, "utf8");
 console.log(
   "Public team checkout now combines team-credit-first application with player coverage and SIXFL waiver settlement.",
 );
+
+require("./apply-late-player-payment-waiver-recovery.cjs");
