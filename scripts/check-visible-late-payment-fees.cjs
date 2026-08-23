@@ -5,6 +5,7 @@ require("./apply-fixture-matchup-grid-screen-fit.cjs");
 require("./apply-meta-area-import-inference.cjs");
 require("./apply-late-fee-canonical-coverage.cjs");
 require("./fix-late-fee-stale-paid-candidates.cjs");
+require("./fix-late-fee-canonical-72h-review.cjs");
 
 const root = process.cwd();
 
@@ -70,6 +71,13 @@ const checks = [
       actions.includes("canonicalOutstandingPence") &&
       !actions.includes('charge.status === "PAID" ||'),
     message: "late-payment review must not hide genuinely unpaid charges just because their stored status is stale PAID",
+  },
+  {
+    ok:
+      actions.includes("INTERVAL '72 hours' <= NOW()") &&
+      actions.includes('COALESCE(fixture."kickoffAt", charge."dueDate")') &&
+      !actions.includes('WHERE "daysLate" >= 7'),
+    message: "canonical payment reconciliation must preserve the 72-hour post-fixture review window",
   },
 ];
 
