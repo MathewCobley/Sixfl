@@ -9,6 +9,7 @@ require("./apply-resilient-published-fee-repair.cjs");
 require("./apply-participation-controls.cjs");
 require("./apply-kit-terms-v2-2.cjs");
 require("./apply-team-name-soft-review.cjs");
+require("./apply-admin-lead-exclude-filters.cjs");
 
 const root = process.cwd();
 
@@ -58,6 +59,7 @@ const leagueLeadAction = read("src/app/(public)/leagues/[slug]/actions.ts");
 const heartlandsLeadAction = read("src/app/(public)/leagues/heartlands/actions.ts");
 const adminLeadPage = read("src/app/(admin)/admin/leads/[id]/page.tsx");
 const convertLeadButton = read("src/components/admin/leads/ConvertLeadToTeamButton.tsx");
+const adminLeadsPage = read("src/app/(admin)/admin/leads/page.tsx");
 
 const checks = [
   [leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"'), "League Rules must remain on v2.1"],
@@ -98,6 +100,9 @@ const checks = [
   [heartlandsLeadAction.includes("holdTeamWelcome"), "Heartlands registrations must hold flagged names for review"],
   [adminLeadPage.includes("Team name review required"), "Admin lead detail must show the team-name review warning"],
   [convertLeadButton.includes("Approve name & convert"), "Admin conversion must provide an explicit team-name approval step"],
+  [adminLeadsPage.includes("Exclude from results"), "Admin leads must retain include/exclude filters"],
+  [adminLeadsPage.includes("excludeType"), "Admin leads must retain type exclusions"],
+  [adminLeadsPage.includes("excludeStatus"), "Admin leads must retain status exclusions"],
 ];
 
 const failures = checks.filter(([ok]) => !ok);
