@@ -12,28 +12,59 @@ let source = fs.readFileSync(actionsPath, "utf8");
 // admin page, which intentionally splits the returned rows into review rows and
 // an "Applied £10 late-payment fees" audit section. Keep APPLIED rows in the data
 // set, including paid ones, so the fee remains visible and reversible.
+//
+// Do not depend on one exact surrounding WHERE block here. Several later payment
+// patches legitimately reshape that block, so remove only the obsolete APPLIED
+// exclusion itself and leave every other candidate condition intact.
 source = source.replace(
-  `      WHERE charge.\"status\" <> 'VOID'\n        AND charge.\"latePaymentFeeStatus\" <> 'APPLIED'`,
-  `      WHERE charge.\"status\" <> 'VOID'`,
-);
-source = source.replace(
-  `      WHERE charge.\"status\" IN ('OPEN', 'PART_PAID')\n        AND charge.\"latePaymentFeeStatus\" <> 'APPLIED'`,
-  `      WHERE charge.\"status\" <> 'VOID'`,
+  /^\s*AND\s+charge\."latePaymentFeeStatus"\s*<>\s*'APPLIED'\s*$/gm,
+  "",
 );
 
-const oldFilter = `.filter((row) => row.outstandingPence > 0 && row.chargeStatus !== \"VOID\");`;
-const newFilter = `.filter(\n      (row) =>\n        row.chargeStatus !== \"VOID\" &&\n        (row.paymentLateFeeStatus === \"APPLIED\" || row.outstandingPence > 0),\n    );`;
-if (source.includes(oldFilter)) {
-  source = source.replace(oldFilter, newFilter);
-}
+// Very old generated variants can still carry the OPEN/PART_PAID pre-filter.
+// Canonical reconciliation must be allowed to inspect stale PAID rows too.
+source = source.replace(
+  `      WHERE charge."status" IN ('OPEN', 'PART_PAID')`,
+  `      WHERE charge."status" <> 'VOID'`,
+);
 
-const olderFilter = `.filter(\n      (row) =>\n        row.outstandingPence > 0 &&\n        row.chargeStatus !== \"PAID\" &&\n        row.chargeStatus !== \"VOID\",\n    );`;
-if (source.includes(olderFilter)) {
-  source = source.replace(olderFilter, newFilter);
+const requiredFilter = [
+  '.filter(',
+  '      (row) =>',
+  '        row.chargeStatus !== "VOID" &&',
+  '        (row.paymentLateFeeStatus === "APPLIED" || row.outstandingPence > 0),',
+  '    );',
+].join("\n");
+
+if (!source.includes(requiredFilter)) {
+  const simpleFilter = `.filter((row) => row.outstandingPence > 0 && row.chargeStatus !== "VOID");`;
+  const legacyFilter = [
+    '.filter(',
+    '      (row) =>',
+    '        row.outstandingPence > 0 &&',
+    '        row.chargeStatus !== "PAID" &&',
+    '        row.chargeStatus !== "VOID",',
+    '    );',
+  ].join("\n");
+  const reversedOrderFilter = [
+    '.filter(',
+    '      (row) =>',
+    '        row.chargeStatus !== "VOID" &&',
+    '        (row.outstandingPence > 0 || row.paymentLateFeeStatus === "APPLIED"),',
+    '    );',
+  ].join("\n");
+
+  if (source.includes(simpleFilter)) {
+    source = source.replace(simpleFilter, requiredFilter);
+  } else if (source.includes(legacyFilter)) {
+    source = source.replace(legacyFilter, requiredFilter);
+  } else if (source.includes(reversedOrderFilter)) {
+    source = source.replace(reversedOrderFilter, requiredFilter);
+  }
 }
 
 if (
-  source.includes(`charge.\"latePaymentFeeStatus\" <> 'APPLIED'`) ||
+  /charge\."latePaymentFeeStatus"\s*<>\s*'APPLIED'/.test(source) ||
   !source.includes('row.paymentLateFeeStatus === "APPLIED" || row.outstandingPence > 0')
 ) {
   throw new Error(
@@ -45,3 +76,5 @@ fs.writeFileSync(actionsPath, source, "utf8");
 console.log(
   "Applied late-payment fees now remain visible in the admin audit section, including after payment.",
 );
+
+require("./fix-legacy-waiver-reconciliation.cjs");
