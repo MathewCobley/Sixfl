@@ -6,6 +6,7 @@ require("./apply-meta-area-import-inference.cjs");
 require("./apply-late-fee-canonical-coverage.cjs");
 require("./fix-late-fee-stale-paid-candidates.cjs");
 require("./fix-late-fee-canonical-72h-review.cjs");
+require("./apply-late-fee-adjustment-integrity.cjs");
 
 const root = process.cwd();
 
@@ -32,8 +33,10 @@ const checks = [
     message: "late-payment review rows and applied rows must be split explicitly",
   },
   {
-    ok: page.includes("Applied £10 late-payment fees") && page.includes("Applying a fee no longer makes the case disappear"),
-    message: "admin must retain an explicit visible section for applied £10 fees",
+    ok:
+      page.includes("Applied £10 late-payment fees") &&
+      page.includes("Applied fees stay visible here for audit even after the charge is paid"),
+    message: "admin must retain an explicit visible audit section for applied £10 fees, including paid charges",
   },
   {
     ok: ledger.includes("latePaymentFeeStatus: string;") && ledger.includes("latePaymentFeeAmountPence: number;"),
@@ -78,6 +81,12 @@ const checks = [
       actions.includes('COALESCE(fixture."kickoffAt", charge."dueDate")') &&
       !actions.includes('WHERE "daysLate" >= 7'),
     message: "canonical payment reconciliation must preserve the 72-hour post-fixture review window",
+  },
+  {
+    ok:
+      actions.includes("isReversingAppliedFee") &&
+      actions.includes('row.paymentLateFeeStatus === "APPLIED"'),
+    message: "an applied admin fee must remain reversible even after the higher total has been paid",
   },
 ];
 
