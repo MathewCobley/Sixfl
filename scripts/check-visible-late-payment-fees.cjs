@@ -3,6 +3,7 @@ const path = require("node:path");
 
 require("./apply-fixture-matchup-grid-screen-fit.cjs");
 require("./apply-meta-area-import-inference.cjs");
+require("./apply-late-fee-canonical-coverage.cjs");
 
 const root = process.cwd();
 
@@ -47,6 +48,18 @@ const checks = [
       fixtureMatchFees.includes("amountPence: effectiveAmountPence") &&
       fixtureMatchFees.includes("getChargeStatusFromAmounts(effectiveAmountPence, paidTotalPence)"),
     message: "fixture match-fee sync must preserve an applied late-payment admin fee on top of the base fixture charge",
+  },
+  {
+    ok:
+      actions.includes('getTeamPaymentLedger') &&
+      actions.includes('ledgerEntry?.coveredPence') &&
+      actions.includes('ledgerEntryByChargeId') &&
+      actions.includes('Charge is already fully covered and cannot receive a late payment fee.'),
+    message: "late-payment review and fee actions must use the same canonical fixture coverage as Team Payments",
+  },
+  {
+    ok: page.includes('Covered: {formatMoney(row.paidTotalPence)}'),
+    message: "late-payment review must label canonical fixture coverage accurately",
   },
 ];
 
