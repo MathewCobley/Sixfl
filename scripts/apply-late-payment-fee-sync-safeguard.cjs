@@ -36,3 +36,5 @@ fs.writeFileSync(absolutePath, source, "utf8");
 console.log(
   "Fixture match-fee sync now preserves any already-applied late-payment admin fee on top of the base fixture charge.",
 );
+
+require("./fix-paid-applied-late-fee-reset.cjs");
