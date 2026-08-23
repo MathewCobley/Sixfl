@@ -57,3 +57,5 @@ fs.writeFileSync(actionsPath, source, "utf8");
 console.log(
   "Canonical late-fee reconciliation now preserves the 72-hour post-fixture review window and the separate seven-day £10 fee grace period.",
 );
+
+require("./fix-late-fee-adjustment-integrity-build.cjs");
