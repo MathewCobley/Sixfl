@@ -116,3 +116,5 @@ if (
 console.log(
   "Open player links now remain collectible after a team waiver, and later payments reduce the waiver before team credit can arise.",
 );
+
+require("./apply-waiver-payment-ui-consistency.cjs");
