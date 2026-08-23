@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./fix-late-player-payment-waiver-recovery-build.cjs");
+
 const routePath = path.join(
   process.cwd(),
   "src/app/pay/charge/[token]/start/route.ts",
