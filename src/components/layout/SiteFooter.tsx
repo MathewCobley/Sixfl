@@ -153,10 +153,7 @@ export default function SiteFooter() {
                   <Link
                     key={`${link.href}-${link.label}`}
                     href={link.href}
-                    className={[
-                      "inline-flex min-h-9 items-center leading-5 transition hover:text-emerald-400",
-                      link.featured ? "font-semibold text-emerald-200" : "",
-                    ].join(" ")}
+                    className="inline-flex min-h-9 items-center leading-5 text-white/80 transition hover:text-emerald-400"
                   >
                     {link.label}
                   </Link>
