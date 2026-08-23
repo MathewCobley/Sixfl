@@ -4,6 +4,7 @@ const path = require("node:path");
 require("./apply-fixture-matchup-grid-screen-fit.cjs");
 require("./apply-meta-area-import-inference.cjs");
 require("./apply-late-fee-canonical-coverage.cjs");
+require("./fix-late-fee-stale-paid-candidates.cjs");
 
 const root = process.cwd();
 
@@ -60,6 +61,15 @@ const checks = [
   {
     ok: page.includes('Covered: {formatMoney(row.paidTotalPence)}'),
     message: "late-payment review must label canonical fixture coverage accurately",
+  },
+  {
+    ok:
+      actions.includes(`WHERE charge.\"status\" <> 'VOID'`) &&
+      !actions.includes(`charge.\"status\" IN ('OPEN', 'PART_PAID')`) &&
+      actions.includes("const settledPence = ledgerEntry?.settledPence ?? coveredPence;") &&
+      actions.includes("canonicalOutstandingPence") &&
+      !actions.includes('charge.status === "PAID" ||'),
+    message: "late-payment review must not hide genuinely unpaid charges just because their stored status is stale PAID",
   },
 ];
 
