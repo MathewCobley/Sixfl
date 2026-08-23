@@ -10,6 +10,7 @@ require("./apply-participation-controls.cjs");
 require("./apply-kit-terms-v2-2.cjs");
 require("./apply-team-name-soft-review.cjs");
 require("./apply-admin-lead-exclude-filters.cjs");
+require("./fix-admin-lead-exclude-filter-typo.cjs");
 
 const root = process.cwd();
 
