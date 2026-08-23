@@ -9,6 +9,7 @@ require("./fix-late-fee-canonical-72h-review.cjs");
 require("./apply-late-fee-adjustment-integrity.cjs");
 require("./apply-late-fee-fixture-base-authority.cjs");
 require("./fix-applied-late-fee-visibility.cjs");
+require("./apply-authoritative-late-fee-ledger-display.cjs");
 
 const root = process.cwd();
 
@@ -24,9 +25,6 @@ const fixtureMatchFees = read("src/lib/payments/fixture-match-fees.ts");
 const reduceMatchFee = read("src/app/api/admin/payments/adjust-charge/route.ts");
 const waiveLateFee = read("src/app/api/admin/payments/waive-late-fee/route.ts");
 
-// apply-visible-late-payment-fees.cjs itself uses an exact required replacement for
-// the old SQL filter, so prebuild already fails if that filter cannot be removed.
-// These contracts verify the durable user-visible and financial behaviour after the full patch chain.
 const checks = [
   {
     ok: actions.includes("queueLatePaymentAppliedEmail") && actions.includes("PAYMENT_LATE_FEE_APPLIED"),
@@ -47,8 +45,18 @@ const checks = [
     message: "captain payment ledger must expose late-payment fee composition",
   },
   {
-    ok: captainPayments.includes("Late-payment admin fee applied") && captainPayments.includes("base charge"),
-    message: "captain payment screen must explain the £10 addition instead of only showing a larger total",
+    ok:
+      captainPayments.includes("Late-payment admin fee applied") &&
+      captainPayments.includes("base charge") &&
+      captainPayments.includes("entry.baseMatchFeePence"),
+    message: "captain payment screen must show the authoritative fixture base fee rather than deriving it by subtraction",
+  },
+  {
+    ok:
+      ledger.includes("baseMatchFeePence: number;") &&
+      ledger.includes("const authoritativeBaseMatchFeePence =") &&
+      ledger.includes("effectiveChargeAmountPence"),
+    message: "captain ledger must calculate applied late fees on top of the authoritative fixture-side base fee",
   },
   {
     ok:
