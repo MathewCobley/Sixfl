@@ -5,13 +5,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  NotificationAudience,
   NotificationChannel,
   NotificationDispatchStatus,
 } from "@prisma/client";
 
 import ProspectInterestChaseCard from "@/components/captain/prospects/ProspectInterestChaseCard";
-import ProspectTemplateMessageForm from "@/components/captain/prospects/ProspectTemplateMessageForm";
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -19,14 +17,11 @@ import { requireCaptain } from "@/lib/requireCaptain";
 import {
   addProspectAction,
   convertProspectToMemberAction,
-  sendBulkProspectEmailAction,
-  sendBulkProspectSmsAction,
-  sendProspectEmailAction,
-  sendProspectSmsAction,
   updateProspectDetailsAction,
   updateProspectNotesAction,
   updateProspectStatusAction,
 } from "./actions";
+import { sendProspectInterestChaseAction } from "./chase-actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -98,7 +93,7 @@ function getSavedMessage(saved?: string) {
     case "bulk-sms-sent":
       return "Bulk prospect SMS queued.";
     case "interest-chase-sent":
-      return "YES/NO nudge queued and recorded on the prospect card.";
+      return "Prospect chase queued and recorded on the prospect card.";
     default:
       return saved ? "Saved." : null;
   }
@@ -295,36 +290,20 @@ export default async function CaptainProspectsPage({
 
   await requireCaptain(teamid);
 
-  const [team, emailTemplates, smsTemplates] = await Promise.all([
-    prisma.team.findUnique({
-      where: { id: teamid },
-      select: {
-        id: true,
-        name: true,
-        teamMode: true,
-        isRecruiting: true,
-        joinSlug: true,
-        prospects: {
-          where: { status: { not: "ACTIVE_SQUAD" } },
-          orderBy: [{ createdAt: "desc" }],
-        },
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: {
+      id: true,
+      name: true,
+      teamMode: true,
+      isRecruiting: true,
+      joinSlug: true,
+      prospects: {
+        where: { status: { not: "ACTIVE_SQUAD" } },
+        orderBy: [{ createdAt: "desc" }],
       },
-    }),
-    prisma.emailTemplate.findMany({
-      where: { isActive: true, audience: { in: ["PLAYER", "GENERAL"] } },
-      orderBy: [{ audience: "asc" }, { name: "asc" }],
-      select: { id: true, key: true, name: true, subject: true, body: true, description: true },
-    }),
-    prisma.notificationTemplate.findMany({
-      where: {
-        channel: NotificationChannel.SMS,
-        audience: { in: [NotificationAudience.PLAYER, NotificationAudience.GENERAL] },
-        isActive: true,
-      },
-      orderBy: [{ audience: "asc" }, { name: "asc" }],
-      select: { id: true, key: true, name: true, body: true, description: true },
-    }),
-  ]);
+    },
+  });
 
   if (!team) notFound();
 
@@ -394,8 +373,6 @@ export default async function CaptainProspectsPage({
   const absoluteJoinUrl = team.joinSlug
     ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
     : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
-  const prospectsWithEmail = typedProspects.filter((prospect) => Boolean(prospect.email?.trim()));
-  const prospectsWithPhone = typedProspects.filter((prospect) => Boolean(prospect.phone?.trim()));
   const completedProspectsCount = typedProspects.filter(hasCompletedProspectForm).length;
 
   return (
@@ -406,7 +383,7 @@ export default async function CaptainProspectsPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Recruitment pipeline</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Team prospects</h1>
             <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-              Track individual players who want to join, nudge them with a quick YES/NO chase, message them directly or in bulk, and promote them into the squad when ready.
+              Track individual players who want to join, chase them with a quick YES/NO message, and promote them into the squad when ready.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">Mode: {team.teamMode}</span>
@@ -432,41 +409,7 @@ export default async function CaptainProspectsPage({
       {errorMessage ? <section className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</section> : null}
 
       <section className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
-        Use the new YES/NO nudge button on each card to ask if a prospect still wants to play. Their reply and the latest nudge are shown directly on that card.
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        <ProspectTemplateMessageForm
-          channel="EMAIL"
-          title="Bulk email prospects"
-          subtitle="Send one email draft to every checked prospect with an email address."
-          action={sendBulkProspectEmailAction}
-          hiddenFields={[
-            { name: "teamid", value: teamid },
-            { name: "teamName", value: team.name },
-            { name: "joinUrl", value: absoluteJoinUrl },
-            ...prospectsWithEmail.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
-          ]}
-          emailTemplates={emailTemplates}
-          submitLabel="Send bulk email"
-          applyPersonalization={false}
-        />
-        <ProspectTemplateMessageForm
-          channel="SMS"
-          title="Bulk SMS prospects"
-          subtitle="Send one SMS draft to every checked prospect with a mobile number."
-          action={sendBulkProspectSmsAction}
-          hiddenFields={[
-            { name: "teamid", value: teamid },
-            { name: "teamName", value: team.name },
-            { name: "joinUrl", value: absoluteJoinUrl },
-            ...prospectsWithPhone.map((prospect) => ({ name: "prospectIds", value: prospect.id })),
-          ]}
-          smsTemplates={smsTemplates}
-          submitLabel="Send bulk SMS"
-          variant="secondary"
-          applyPersonalization={false}
-        />
+        Use Chase prospect on a player card to send a quick YES/NO check. SIXFL will use SMS when a mobile number is saved, otherwise email.
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
@@ -513,6 +456,7 @@ export default async function CaptainProspectsPage({
               const savedEmail = prospect.email?.trim().toLowerCase() ?? "";
               const linkedUser = savedEmail ? linkedUserByEmail.get(savedEmail) ?? null : null;
               const promotionState = getPromotionState({ prospect, hasLinkedUser: Boolean(linkedUser), isExistingTeamMember: Boolean(linkedUser?.teamMembers.length) });
+              const hasContact = Boolean(prospect.email?.trim() || prospect.phone?.trim());
 
               return (
                 <div key={prospect.id} className="space-y-5 px-6 py-5">
@@ -565,6 +509,22 @@ export default async function CaptainProspectsPage({
 
                     <div className="space-y-3 xl:self-start">
                       <ProspectInterestChaseCard teamid={teamid} prospectId={prospect.id} hasEmail={Boolean(prospect.email?.trim())} hasPhone={Boolean(prospect.phone?.trim())} />
+                      <form action={sendProspectInterestChaseAction} className="space-y-2 rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.07] p-3">
+                        <input type="hidden" name="teamid" value={teamid} />
+                        <input type="hidden" name="prospectId" value={prospect.id} />
+                        <button
+                          type="submit"
+                          disabled={!hasContact}
+                          className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition ${hasContact ? "border border-cyan-400/30 bg-cyan-500/15 text-cyan-50 hover:bg-cyan-500/20" : "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"}`}
+                        >
+                          {hasContact ? "Chase prospect" : "Add phone or email first"}
+                        </button>
+                        {hasContact ? (
+                          <p className="text-xs leading-5 text-white/50">
+                            Sends a quick YES/NO chase by SMS when a mobile is saved, otherwise by email.
+                          </p>
+                        ) : null}
+                      </form>
                       <div className={`rounded-2xl border px-4 py-3 text-sm ${getPromotionStateClasses(promotionState.tone)}`}>{promotionState.reason}</div>
                       <form action={convertProspectToMemberAction}>
                         <input type="hidden" name="teamid" value={teamid} />
@@ -591,11 +551,6 @@ export default async function CaptainProspectsPage({
                         </div>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <ProspectTemplateMessageForm channel="EMAIL" title="Email prospect" subtitle={`To: ${prospect.email || "No email"}`} action={sendProspectEmailAction} hiddenFields={[{ name: "teamid", value: teamid }, { name: "prospectId", value: prospect.id }, { name: "teamName", value: team.name }, { name: "joinUrl", value: absoluteJoinUrl }, { name: "prospectFirstName", value: prospect.firstName }, { name: "prospectFullName", value: prospectName }, { name: "prospectEmail", value: prospect.email ?? "" }]} emailTemplates={emailTemplates} submitLabel="Send email" />
-                    <ProspectTemplateMessageForm channel="SMS" title="SMS prospect" subtitle={`To: ${prospect.phone || "No phone"}`} action={sendProspectSmsAction} hiddenFields={[{ name: "teamid", value: teamid }, { name: "prospectId", value: prospect.id }, { name: "teamName", value: team.name }, { name: "joinUrl", value: absoluteJoinUrl }, { name: "prospectFirstName", value: prospect.firstName }, { name: "prospectFullName", value: prospectName }, { name: "prospectEmail", value: prospect.email ?? "" }]} smsTemplates={smsTemplates} submitLabel="Send SMS" variant="secondary" />
                   </div>
                 </div>
               );
