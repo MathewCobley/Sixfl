@@ -13,6 +13,8 @@ export type ExtraKitPaymentEmailCopy = {
   ctaLabel: string;
 };
 
+const COMPLETE_KIT_PRICE_PENCE = 2000;
+
 function formatMoney(amountPence: number) {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -30,11 +32,21 @@ export function buildExtraKitPaymentEmailCopy(
   input: ExtraKitPaymentEmailCopyInput,
 ): ExtraKitPaymentEmailCopy {
   if (input.purchaseOnly) {
-    return {
-      subject: `${input.teamName}: pay £20 for your SIXFL kit`,
-      body: `Hi ${input.payerName},\n\nYou have been added to the ${input.teamName} kit order. One complete SIXFL kit costs £20.\n\nUse the secure payment link below. Once it is paid, your kit details can be completed.`,
-      ctaLabel: "Pay £20 for my kit",
-    };
+    const remaining = formatMoney(input.amountPence);
+    const kitFundHasReducedPayment =
+      input.amountPence > 0 && input.amountPence < COMPLETE_KIT_PRICE_PENCE;
+
+    return kitFundHasReducedPayment
+      ? {
+          subject: `${input.teamName}: ${remaining} left to pay for your SIXFL kit`,
+          body: `Hi ${input.payerName},\n\nYou have been added to the ${input.teamName} kit order. One complete SIXFL kit costs £20, and the team kit fund has already covered part of the cost.\n\nOnly ${remaining} remains to pay. Use the secure payment link below. Once it is paid, your kit details can be completed.`,
+          ctaLabel: `Pay ${remaining} remaining`,
+        }
+      : {
+          subject: `${input.teamName}: pay £20 for your SIXFL kit`,
+          body: `Hi ${input.payerName},\n\nYou have been added to the ${input.teamName} kit order. One complete SIXFL kit costs £20.\n\nUse the secure payment link below. Once it is paid, your kit details can be completed.`,
+          ctaLabel: "Pay £20 for my kit",
+        };
   }
 
   const amount = formatMoney(input.amountPence);
@@ -42,7 +54,7 @@ export function buildExtraKitPaymentEmailCopy(
   const paymentCopy =
     input.payerCount === 1
       ? `You have been asked to pay ${amount} for the order.`
-      : `You have been asked to pay ${amount} towards the order. This is your share of the total cost.`;
+      : `You have been asked to pay ${amount} towards the order. This is your share of the remaining total cost after any team kit fund has been applied.`;
 
   return {
     subject: `${input.teamName}: additional kit payment`,
