@@ -13,13 +13,17 @@ function write(file, source) {
 
 function ensureImport(source, anchor, importLine, label) {
   if (source.includes(importLine)) return source;
-  if (!source.includes(anchor)) throw new Error(`Expected ${label} import anchor was not found.`);
+  if (!source.includes(anchor)) {
+    throw new Error(`Expected ${label} import anchor was not found.`);
+  }
   return source.replace(anchor, `${anchor}\n${importLine}`);
 }
 
 function replaceRequired(source, before, after, label) {
   if (source.includes(after)) return source;
-  if (!source.includes(before)) throw new Error(`Expected ${label} source was not found.`);
+  if (!source.includes(before)) {
+    throw new Error(`Expected ${label} source was not found.`);
+  }
   return source.replace(before, after);
 }
 
@@ -60,13 +64,23 @@ function replaceRequired(source, before, after, label) {
   if (!source.includes("Reserved for SIXFL kits only.")) {
     const paymentHistoryCard = `        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">\n          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">\n            Payment history`;
     const kitFundCard = `        <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">\n          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">\n            Kit fund\n          </p>\n          <p className="mt-3 text-3xl font-semibold text-white">\n            {formatMoney(Math.max(kitFundLedger.balancePence, 0))}\n          </p>\n          <p className="mt-2 text-sm text-sky-100/75">\n            Reserved for SIXFL kits only.\n          </p>\n        </div>\n\n${paymentHistoryCard}`;
-    source = replaceRequired(source, paymentHistoryCard, kitFundCard, "kit fund summary card");
+    source = replaceRequired(
+      source,
+      paymentHistoryCard,
+      kitFundCard,
+      "kit fund summary card",
+    );
   }
 
   if (!source.includes("<TeamKitFundTransferPanel")) {
     const creditLedgerMarker = "      {creditLedger.entries.length > 0 ? (";
     const panel = `      <TeamKitFundTransferPanel\n        teamId={team.id}\n        teamCreditPence={Math.max(creditLedger.balancePence, 0)}\n        kitFundBalancePence={Math.max(kitFundLedger.balancePence, 0)}\n        entries={kitFundLedger.entries.slice(0, 8).map((entry) => ({\n          id: entry.id,\n          entryType: entry.entryType,\n          amountPence: entry.amountPence,\n          description: entry.description,\n          createdAtIso: entry.createdAt.toISOString(),\n        }))}\n      />\n\n${creditLedgerMarker}`;
-    source = replaceRequired(source, creditLedgerMarker, panel, "kit fund transfer panel");
+    source = replaceRequired(
+      source,
+      creditLedgerMarker,
+      panel,
+      "kit fund transfer panel",
+    );
   }
 
   write(file, source);
@@ -94,14 +108,14 @@ function replaceRequired(source, before, after, label) {
   if (!source.includes("const kitFundPaidPence = charge.transactions")) {
     source = replaceRequired(
       source,
-      `    const outstandingPence = Math.max(charge.amountPence - paidPence, 0);`,
+      "    const outstandingPence = Math.max(charge.amountPence - paidPence, 0);",
       `    const outstandingPence = Math.max(charge.amountPence - paidPence, 0);\n    const kitFundPaidPence = charge.transactions\n      .filter((transaction) => transaction.reference === "KIT_FUND")\n      .reduce((sum, transaction) => sum + transaction.amountPence, 0);`,
       "kit fund payment breakdown",
     );
     source = replaceRequired(
       source,
-      `      outstandingPence,\n      status:`,
-      `      outstandingPence,\n      kitFundPaidPence,\n      status:`,
+      "      outstandingPence,\n      status:",
+      "      outstandingPence,\n      kitFundPaidPence,\n      status:",
       "kit fund request response",
     );
   }
@@ -117,14 +131,24 @@ function replaceRequired(source, before, after, label) {
 
   if (!source.includes("const kitFundApplication = await applyKitFundToCharges")) {
     const emailsMarker = "\n\n  let emailsQueued = 0;";
-    const application = `\n\n  const kitFundApplication = await applyKitFundToCharges({\n    teamId: team.id,\n    batchReference,\n    charges: charges.map((charge) => ({ id: charge.id, amountPence: charge.amountPence })),\n    createdByUserId: access.user?.id ?? null,\n  });\n  const kitFundChargeState = new Map(\n    kitFundApplication.charges.map((charge) => [charge.id, charge]),\n  );${emailsMarker}`;
-    source = replaceRequired(source, emailsMarker, application, "kit fund application before emails");
+    const application = `\n\n  const kitFundApplication = await applyKitFundToCharges({\n    teamId: team.id,\n    batchReference,\n    charges: charges.map((charge) => ({\n      id: charge.id,\n      amountPence: charge.amountPence,\n    })),\n    createdByUserId: access.user?.id ?? null,\n  });\n  const kitFundChargeState = new Map(\n    kitFundApplication.charges.map((charge) => [charge.id, charge]),\n  );${emailsMarker}`;
+    source = replaceRequired(
+      source,
+      emailsMarker,
+      application,
+      "kit fund application before emails",
+    );
   }
 
-  if (!source.includes("const outstandingPence = kitFundChargeState.get(charge.id)")) {
+  if (!source.includes("const outstandingPence =\n      kitFundChargeState.get(charge.id)")) {
     const oldGuard = `    if (!member || !charge?.paymentToken || !email) {\n      emailsFailed += 1;\n      continue;\n    }`;
     const newGuard = `    if (!member || !charge) {\n      emailsFailed += 1;\n      continue;\n    }\n\n    const outstandingPence =\n      kitFundChargeState.get(charge.id)?.outstandingPence ?? charge.amountPence;\n    if (outstandingPence <= 0) {\n      continue;\n    }\n\n    if (!charge.paymentToken || !email) {\n      emailsFailed += 1;\n      continue;\n    }`;
-    source = replaceRequired(source, oldGuard, newGuard, "skip fully kit-funded emails");
+    source = replaceRequired(
+      source,
+      oldGuard,
+      newGuard,
+      "skip fully kit-funded emails",
+    );
   }
 
   source = source.replace(
@@ -135,8 +159,8 @@ function replaceRequired(source, before, after, label) {
   if (!source.includes("kitFundUsedPence: kitFundApplication.amountUsedPence")) {
     source = replaceRequired(
       source,
-      `      success: true,\n      totalPence,`,
-      `      success: true,\n      totalPence,\n      kitFundUsedPence: kitFundApplication.amountUsedPence,\n      remainingKitFundPence: kitFundApplication.remainingKitFundPence,\n      amountStillToCollectPence: Math.max(\n        totalPence - kitFundApplication.amountUsedPence,\n        0,\n      ),`,
+      "      success: true,\n      totalPence,",
+      `      success: true,\n      totalPence,\n      kitFundUsedPence: kitFundApplication.amountUsedPence,\n      remainingKitFundPence: kitFundApplication.remainingKitFundPence,\n      kitFundBalancePence: kitFundApplication.remainingKitFundPence,\n      amountStillToCollectPence: Math.max(\n        totalPence - kitFundApplication.amountUsedPence,\n        0,\n      ),`,
       "kit fund POST response",
     );
   }
@@ -145,7 +169,7 @@ function replaceRequired(source, before, after, label) {
 }
 
 // ---------------------------------------------------------------------------
-// Included-kit payment panel: explain the fund before creating payment links.
+// Included-kit payment panel: explain fund usage before creating payment links.
 // ---------------------------------------------------------------------------
 {
   const file = "src/components/captain/IncludedKitPaymentPanel.tsx";
@@ -155,8 +179,8 @@ function replaceRequired(source, before, after, label) {
     source = replaceRequired(
       source,
       "  extraKitPricePence?: number;",
-      "  extraKitPricePence?: number;\n  kitFundBalancePence?: number;\n  kitFundUsedPence?: number;\n  remainingKitFundPence?: number;\n  amountStillToCollectPence?: number;",
-      "kit fund response fields",
+      `  extraKitPricePence?: number;\n  kitFundBalancePence?: number;\n  kitFundUsedPence?: number;\n  remainingKitFundPence?: number;\n  amountStillToCollectPence?: number;`,
+      "included-panel kit fund response fields",
     );
   }
   if (!source.includes("kitFundPaidPence: number;")) {
@@ -164,7 +188,7 @@ function replaceRequired(source, before, after, label) {
       source,
       "  outstandingPence: number;",
       "  outstandingPence: number;\n  kitFundPaidPence: number;",
-      "kit fund request field",
+      "included-panel kit fund request field",
     );
   }
 
@@ -173,25 +197,35 @@ function replaceRequired(source, before, after, label) {
       source,
       "  const totalPence = quantity * extraKitPricePence;",
       `  const totalPence = quantity * extraKitPricePence;\n  const kitFundBalancePence = data?.kitFundBalancePence ?? 0;\n  const kitFundForOrderPence = Math.min(kitFundBalancePence, totalPence);\n  const amountStillToCollectPence = Math.max(\n    totalPence - kitFundForOrderPence,\n    0,\n  );`,
-      "kit fund order estimate",
+      "included-panel kit fund order estimate",
     );
   }
 
   if (!source.includes("Your team has {formatMoney(kitFundBalancePence)} in its kit fund")) {
     const description = `            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">\n              Choose only the number of extra kits needed beyond the {displayedIncludedQuantity} already included. Select one team member to pay the full amount, or select several members to split the total equally.\n            </p>`;
-    const notice = `${description}\n\n            {kitFundBalancePence > 0 ? (\n              <div className="mt-4 rounded-2xl border border-sky-300/25 bg-sky-400/10 p-4 text-sm text-sky-50/85">\n                <div className="font-semibold text-white">\n                  Your team has {formatMoney(kitFundBalancePence)} in its kit fund.\n                </div>\n                <p className="mt-1 leading-6">\n                  SIXFL will use {formatMoney(kitFundForOrderPence)} from the kit fund first. {amountStillToCollectPence > 0 ? `${formatMoney(amountStillToCollectPence)} will remain to collect from the selected team member${selectedMembers.length === 1 ? "" : "s"}.` : "This order is fully covered, so no card payment will be requested."}\n                </p>\n              </div>\n            ) : null}`;
-    source = replaceRequired(source, description, notice, "kit fund order notice");
+    const notice = `${description}\n\n            {kitFundBalancePence > 0 ? (\n              <div className="mt-4 rounded-2xl border border-sky-300/25 bg-sky-400/10 p-4 text-sm text-sky-50/85">\n                <div className="font-semibold text-white">\n                  Your team has {formatMoney(kitFundBalancePence)} in its kit fund.\n                </div>\n                <p className="mt-1 leading-6">\n                  SIXFL will use {formatMoney(kitFundForOrderPence)} from the kit fund first.\n                  {amountStillToCollectPence > 0 ? (\n                    <> {formatMoney(amountStillToCollectPence)} will remain to collect after the kit fund is applied.</>\n                  ) : (\n                    <> This order is fully covered, so no card payment will be requested.</>\n                  )}\n                </p>\n              </div>\n            ) : null}`;
+    source = replaceRequired(
+      source,
+      description,
+      notice,
+      "included-panel kit fund order notice",
+    );
   }
 
   source = source.replace(
-    `                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Payment required: {formatMoney(totalPence)}`,
-    `                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Kit fund used: {formatMoney(kitFundForOrderPence)} · Remaining payment: {formatMoney(amountStillToCollectPence)}`,
+    "                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Payment required: {formatMoney(totalPence)}",
+    "                    {displayedIncludedQuantity} included + {quantity} extra = {requestedTotalKitQuantity} kits in total · Kit fund used: {formatMoney(kitFundForOrderPence)} · Remaining payment: {formatMoney(amountStillToCollectPence)}",
   );
 
   if (!source.includes("payload.kitFundUsedPence")) {
     const oldMessage = `      setMessage(\n        payload.emailsFailed\n          ? \`Payment links created. \${payload.emailsQueued ?? 0} email\${payload.emailsQueued === 1 ? "" : "s"} queued; \${payload.emailsFailed} could not be emailed, so use the payment links shown below.\`\n          : \`Payment link\${(payload.emailsQueued ?? 0) === 1 ? "" : "s"} created and emailed successfully.\`,\n      );`;
     const newMessage = `      if ((payload.kitFundUsedPence ?? 0) > 0) {\n        const remaining = payload.amountStillToCollectPence ?? 0;\n        setMessage(\n          remaining <= 0\n            ? \`\${formatMoney(payload.kitFundUsedPence ?? 0)} from the kit fund covered this kit order in full. No player payment is required.\`\n            : \`\${formatMoney(payload.kitFundUsedPence ?? 0)} from the kit fund was applied first. \${formatMoney(remaining)} remains to collect.\`,\n        );\n      } else {\n        setMessage(\n          payload.emailsFailed\n            ? \`Payment links created. \${payload.emailsQueued ?? 0} email\${payload.emailsQueued === 1 ? "" : "s"} queued; \${payload.emailsFailed} could not be emailed, so use the payment links shown below.\`\n            : \`Payment link\${(payload.emailsQueued ?? 0) === 1 ? "" : "s"} created and emailed successfully.\`,\n        );\n      }`;
-    source = replaceRequired(source, oldMessage, newMessage, "kit fund success message");
+    source = replaceRequired(
+      source,
+      oldMessage,
+      newMessage,
+      "included-panel kit fund success message",
+    );
   }
 
   if (!source.includes("Kit fund {formatMoney(request.kitFundPaidPence)}")) {
@@ -199,7 +233,86 @@ function replaceRequired(source, before, after, label) {
       source,
       `                        <div className="mt-1 text-xs text-white/45">\n                          {formatMoney(request.amountPence)} requested\n                        </div>`,
       `                        <div className="mt-1 text-xs text-white/45">\n                          {formatMoney(request.amountPence)} requested\n                        </div>\n                        {request.kitFundPaidPence > 0 ? (\n                          <div className="mt-1 text-xs font-semibold text-sky-100/75">\n                            Kit fund {formatMoney(request.kitFundPaidPence)}\n                          </div>\n                        ) : null}`,
-      "kit fund payment request row",
+      "included-panel kit fund payment row",
+    );
+  }
+
+  write(file, source);
+}
+
+// ---------------------------------------------------------------------------
+// Standard-team £20-per-player panel: the same kit fund rules and explanation.
+// ---------------------------------------------------------------------------
+{
+  const file = "src/components/captain/StandardKitPaymentPanel.tsx";
+  let source = read(file);
+
+  if (!source.includes("kitFundPaidPence: number;")) {
+    source = replaceRequired(
+      source,
+      "  outstandingPence: number;",
+      "  outstandingPence: number;\n  kitFundPaidPence: number;",
+      "standard-panel kit fund request field",
+    );
+  }
+  if (!source.includes("kitFundBalancePence?: number;")) {
+    source = replaceRequired(
+      source,
+      "  emailsFailed?: number;",
+      `  emailsFailed?: number;\n  kitFundBalancePence?: number;\n  kitFundUsedPence?: number;\n  remainingKitFundPence?: number;\n  amountStillToCollectPence?: number;`,
+      "standard-panel kit fund response fields",
+    );
+  }
+
+  if (!source.includes("const selectedKitTotalPence = selectedMemberIds.length * 2000")) {
+    const memoEnd = `  const selectedMembers = useMemo(\n    () =>\n      (data?.members ?? []).filter((member) =>\n        selectedMemberIds.includes(member.id),\n      ),\n    [data?.members, selectedMemberIds],\n  );`;
+    const values = `${memoEnd}\n  const selectedKitTotalPence = selectedMemberIds.length * 2000;\n  const kitFundBalancePence = data?.kitFundBalancePence ?? 0;\n  const kitFundForSelectionPence = Math.min(\n    kitFundBalancePence,\n    selectedKitTotalPence,\n  );\n  const remainingSelectionPence = Math.max(\n    selectedKitTotalPence - kitFundForSelectionPence,\n    0,\n  );`;
+    source = replaceRequired(
+      source,
+      memoEnd,
+      values,
+      "standard-panel kit fund selection values",
+    );
+  }
+
+  if (!source.includes("Your team has {formatMoney(kitFundBalancePence)} in its kit fund")) {
+    const description = `          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">\n            Choose every squad member who wants a kit. Each selected player receives their own £20 payment link. When their payment is complete, a kit personalisation box becomes available below.\n          </p>`;
+    const notice = `${description}\n\n          {kitFundBalancePence > 0 ? (\n            <div className="mt-4 rounded-2xl border border-sky-300/25 bg-sky-400/10 p-4 text-sm text-sky-50/85">\n              <div className="font-semibold text-white">\n                Your team has {formatMoney(kitFundBalancePence)} in its kit fund.\n              </div>\n              <p className="mt-1 leading-6">\n                Select the players who need kits. SIXFL uses the kit fund first, then only asks for the remaining amount. A kit that is fully covered by the fund does not get a card-payment email.\n              </p>\n            </div>\n          ) : null}`;
+    source = replaceRequired(
+      source,
+      description,
+      notice,
+      "standard-panel kit fund notice",
+    );
+  }
+
+  if (!source.includes("payload.kitFundUsedPence")) {
+    const oldMessage = `      setMessage(\n        payload.emailsFailed\n          ? \`\${payload.emailsQueued ?? 0} payment email\${payload.emailsQueued === 1 ? "" : "s"} queued. \${payload.emailsFailed} could not be emailed, so use the payment links shown below.\`\n          : \`\${payload.emailsQueued ?? selectedMembers.length} £20 kit payment link\${(payload.emailsQueued ?? selectedMembers.length) === 1 ? "" : "s"} created and emailed.\`,\n      );`;
+    const newMessage = `      if ((payload.kitFundUsedPence ?? 0) > 0) {\n        const remaining = payload.amountStillToCollectPence ?? 0;\n        setMessage(\n          remaining <= 0\n            ? \`\${formatMoney(payload.kitFundUsedPence ?? 0)} from the kit fund covered the selected kit order in full. No payment emails were needed.\`\n            : \`\${formatMoney(payload.kitFundUsedPence ?? 0)} from the kit fund was used first. Only \${formatMoney(remaining)} remains to collect.\`,\n        );\n      } else {\n        setMessage(\n          payload.emailsFailed\n            ? \`\${payload.emailsQueued ?? 0} payment email\${payload.emailsQueued === 1 ? "" : "s"} queued. \${payload.emailsFailed} could not be emailed, so use the payment links shown below.\`\n            : \`\${payload.emailsQueued ?? selectedMembers.length} £20 kit payment link\${(payload.emailsQueued ?? selectedMembers.length) === 1 ? "" : "s"} created and emailed.\`,\n        );\n      }`;
+    source = replaceRequired(
+      source,
+      oldMessage,
+      newMessage,
+      "standard-panel kit fund success message",
+    );
+  }
+
+  source = source.replace(
+    `                  {submitting\n                    ? "Creating payment links…"\n                    : \`Create \${selectedMemberIds.length || ""} £20 payment link\${selectedMemberIds.length === 1 ? "" : "s"}\`.replace("Create  £", "Create £")}`,
+    `                  {submitting\n                    ? "Creating kit order…"\n                    : selectedMemberIds.length > 0 && remainingSelectionPence <= 0\n                      ? \`Use kit fund for \${selectedMemberIds.length} kit\${selectedMemberIds.length === 1 ? "" : "s"}\`\n                      : \`Create payment for \${formatMoney(remainingSelectionPence)} remaining\`}`,
+  );
+
+  source = source.replace(
+    `                  {selectedMemberIds.length > 0\n                    ? \`\${selectedMemberIds.length} kit\${selectedMemberIds.length === 1 ? "" : "s"} · \${formatMoney(selectedMemberIds.length * 2000)} total\`\n                    : "Select the players who want one kit each."}`,
+    `                  {selectedMemberIds.length > 0 ? (\n                    <>\n                      {selectedMemberIds.length} kit{selectedMemberIds.length === 1 ? "" : "s"} · {formatMoney(selectedKitTotalPence)} total · {formatMoney(kitFundForSelectionPence)} kit fund · {formatMoney(remainingSelectionPence)} remaining\n                    </>\n                  ) : (\n                    "Select the players who want one kit each."\n                  )}`,
+  );
+
+  if (!source.includes("Kit fund {formatMoney(request.kitFundPaidPence)}")) {
+    source = replaceRequired(
+      source,
+      `                      <div className="mt-1 text-xs text-white/45">\n                        {formatMoney(request.amountPence)} for one complete kit\n                      </div>`,
+      `                      <div className="mt-1 text-xs text-white/45">\n                        {formatMoney(request.amountPence)} for one complete kit\n                      </div>\n                      {request.kitFundPaidPence > 0 ? (\n                        <div className="mt-1 text-xs font-semibold text-sky-100/75">\n                          Kit fund {formatMoney(request.kitFundPaidPence)} · {formatMoney(request.outstandingPence)} remaining\n                        </div>\n                      ) : null}`,
+      "standard-panel kit fund request row",
     );
   }
 
@@ -207,14 +320,31 @@ function replaceRequired(source, before, after, label) {
 }
 
 for (const [file, markers] of [
-  ["src/app/captain/team/[teamid]/payments/page.tsx", ["TeamKitFundTransferPanel", "kitFundLedger.balancePence"]],
-  ["src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts", ["applyKitFundToCharges", "kitFundUsedPence"]],
-  ["src/components/captain/IncludedKitPaymentPanel.tsx", ["kitFundBalancePence", "Remaining payment"]],
+  [
+    "src/app/captain/team/[teamid]/payments/page.tsx",
+    ["TeamKitFundTransferPanel", "kitFundLedger.balancePence"],
+  ],
+  [
+    "src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts",
+    ["applyKitFundToCharges", "kitFundUsedPence", "kitFundPaidPence"],
+  ],
+  [
+    "src/components/captain/IncludedKitPaymentPanel.tsx",
+    ["kitFundBalancePence", "Remaining payment"],
+  ],
+  [
+    "src/components/captain/StandardKitPaymentPanel.tsx",
+    ["kitFundBalancePence", "kitFundForSelectionPence"],
+  ],
 ]) {
   const source = read(file);
   for (const marker of markers) {
-    if (!source.includes(marker)) throw new Error(`Kit fund marker ${marker} missing from ${file}`);
+    if (!source.includes(marker)) {
+      throw new Error(`Kit fund marker ${marker} missing from ${file}`);
+    }
   }
 }
 
-console.log("Kit fund transfer, audit and automatic kit-payment use are wired into captain payments and kit orders.");
+console.log(
+  "Kit fund transfer, audit and automatic kit-payment use are wired into captain payments and both kit-order flows.",
+);
