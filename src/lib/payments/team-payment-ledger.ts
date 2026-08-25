@@ -2,6 +2,7 @@
 // File: src/lib/payments/team-payment-ledger.ts
 // ========================================
 
+import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -93,6 +94,10 @@ export function formatPaymentFixtureDate(value: Date | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function createPaymentToken() {
+  return randomBytes(24).toString("hex");
 }
 
 function playerFeeKey(teamId: string, fixtureId: string) {
@@ -245,6 +250,23 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       },
     }),
   ]);
+
+  // Older/manual charge rows can legitimately exist without a checkout token.
+  // Captains used to always have a direct Pay now route for an active unpaid charge,
+  // so repair that missing token lazily when the ledger is opened instead of leaving
+  // "Use team credit" as the only visible action.
+  await Promise.all(
+    charges.map(async (charge) => {
+      if (charge.paymentToken || charge.status === "PAID") return;
+
+      const paymentToken = createPaymentToken();
+      await prisma.paymentCharge.update({
+        where: { id: charge.id },
+        data: { paymentToken },
+      });
+      charge.paymentToken = paymentToken;
+    }),
+  );
 
   const coverageByTeamFixture = buildPlayerFeeCoverageByTeamFixture(coveredPlayerFees);
   const openByTeamFixture = buildPlayerFeeTotalsByTeamFixture(openPlayerFees);
