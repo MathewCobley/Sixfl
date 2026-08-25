@@ -199,6 +199,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     prisma.paymentCharge.findMany({
       where: {
         teamId: { in: relatedTeamIds },
+        status: { not: "VOID" },
       },
       orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
       include: {
