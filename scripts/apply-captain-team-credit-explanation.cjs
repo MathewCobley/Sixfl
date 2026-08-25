@@ -41,6 +41,32 @@ if (!source.includes("const creditAvailableForChargePence =")) {
   replaceRequired(oldActionValues, newActionValues, "per-charge credit calculation");
 }
 
+// Show the difference between credit already applied and credit merely available
+// so the £0/£40 situations make sense before the captain presses anything.
+if (!source.includes("Available team credit")) {
+  const usedCreditRow = `                          <div className=\"flex items-center justify-between gap-4\">\n                            <span>Team credit used</span>\n                            <span className=\"font-semibold text-white\">\n                              {formatMoney(teamCreditUsedPence)}\n                            </span>\n                          </div>`;
+
+  const usedAndAvailableCreditRows = `${usedCreditRow}\n                          {creditAvailableForChargePence > 0 ? (\n                            <div className=\"flex items-center justify-between gap-4 text-emerald-100\">\n                              <span>Available team credit</span>\n                              <span className=\"font-semibold\">\n                                {formatMoney(creditAvailableForChargePence)}\n                              </span>\n                            </div>\n                          ) : null}`;
+
+  replaceRequired(
+    usedCreditRow,
+    usedAndAvailableCreditRows,
+    "available credit breakdown row",
+  );
+}
+
+if (!source.includes("Remaining after available credit")) {
+  const outstandingRow = `                          <div className=\"mt-2 flex items-center justify-between gap-4 text-sm\">\n                            <span className=\"text-white/60\">Outstanding</span>\n                            <span\n                              className={\n                                entry.outstandingPence > 0\n                                  ? \"font-semibold text-amber-100\"\n                                  : \"font-semibold text-emerald-100\"\n                              }\n                            >\n                              {formatMoney(entry.outstandingPence)}\n                            </span>\n                          </div>`;
+
+  const outstandingWithCreditRow = `${outstandingRow}\n                          {creditAvailableForChargePence > 0 ? (\n                            <div className=\"mt-2 flex items-center justify-between gap-4 border-t border-emerald-400/10 pt-2 text-sm\">\n                              <span className=\"font-semibold text-emerald-100\">\n                                Remaining after available credit\n                              </span>\n                              <span className=\"font-semibold text-emerald-100\">\n                                {formatMoney(payableAfterCreditPence)}\n                              </span>\n                            </div>\n                          ) : null}`;
+
+  replaceRequired(
+    outstandingRow,
+    outstandingWithCreditRow,
+    "remaining balance after available credit row",
+  );
+}
+
 // Explain the numbers immediately beside the action buttons so a captain never
 // has to infer why Pay now has changed or disappeared.
 if (!source.includes("Your available team credit covers this fee in full.")) {
@@ -75,6 +101,8 @@ if (
   !source.includes("Your team has {formatMoney(creditBalancePence)} available credit") ||
   !source.includes("const creditAvailableForChargePence =") ||
   !source.includes("const payableAfterCreditPence =") ||
+  !source.includes("Available team credit") ||
+  !source.includes("Remaining after available credit") ||
   !source.includes("Your available team credit covers this fee in full.") ||
   !source.includes("Use {formatMoney(creditAvailableForChargePence)} credit") ||
   !source.includes("Pay ${formatMoney(payableAfterCreditPence)} after credit") ||
