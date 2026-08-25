@@ -35,8 +35,16 @@ function fixtureLabel(fixture: CancelledFixtureNotification) {
   return `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`;
 }
 
+function pitchLabel(pitch: string | null) {
+  const value = pitch?.trim();
+  if (!value) return null;
+
+  const cleaned = value.replace(/^(?:pitch\s+)+/i, "");
+  return cleaned ? `Pitch ${cleaned}` : "Pitch";
+}
+
 function locationLabel(fixture: CancelledFixtureNotification) {
-  return [fixture.venueName, fixture.pitch ? `Pitch ${fixture.pitch}` : null]
+  return [fixture.venueName, pitchLabel(fixture.pitch)]
     .filter(Boolean)
     .join(" · ");
 }
