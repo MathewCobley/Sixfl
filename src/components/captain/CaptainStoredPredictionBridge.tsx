@@ -33,20 +33,27 @@ function outcome(forScore: number, againstScore: number) {
   return "DRAW";
 }
 
-function latestScoresSection() {
-  return Array.from(document.querySelectorAll<HTMLElement>("h1, h2, h3"))
-    .find((heading) => heading.textContent?.trim() === "Latest scores")
-    ?.closest<HTMLElement>("section") ?? null;
+function latestScoresCard() {
+  const heading = Array.from(document.querySelectorAll<HTMLElement>("h1, h2, h3")).find(
+    (item) => item.textContent?.trim() === "Latest scores",
+  );
+  if (!heading) return null;
+
+  const header = heading.parentElement?.parentElement;
+  const card = header?.parentElement;
+  return card instanceof HTMLElement ? card : null;
 }
 
-function resultRows(section: HTMLElement) {
-  const rows = Array.from(section.querySelectorAll<HTMLElement>("div"));
-  return rows.filter((row) => {
-    const directText = Array.from(row.children)
-      .map((child) => child.textContent?.replace(/\s+/g, " ").trim() ?? "")
-      .join(" ");
-    return /\b\d+\s*-\s*\d+\b/.test(directText) && row.querySelectorAll("div").length >= 2;
-  });
+function resultRows(card: HTMLElement) {
+  const list = Array.from(card.children).find(
+    (child) => child instanceof HTMLElement && child.classList.contains("divide-y"),
+  );
+  if (!(list instanceof HTMLElement)) return [];
+
+  return Array.from(list.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && /\b\d+\s*-\s*\d+\b/.test(child.textContent ?? ""),
+  );
 }
 
 function addPrediction(
@@ -72,7 +79,7 @@ function addPrediction(
 
   const details = document.createElement("div");
   details.dataset.sixflStoredPrediction = fixture.id;
-  details.className = "mt-2 flex flex-wrap items-center gap-2";
+  details.className = "mt-3 flex flex-wrap items-center gap-2";
 
   const predictionBadge = document.createElement("span");
   predictionBadge.className =
@@ -88,24 +95,35 @@ function addPrediction(
   resultBadge.textContent = exact ? "Exact score 🎯" : correctResult ? "Correct result" : "Prediction missed";
 
   details.append(predictionBadge, resultBadge);
-  const textColumn = Array.from(row.children).find((child) =>
-    child.textContent?.includes(isHome ? fixture.awayTeam.name : fixture.homeTeam.name),
-  ) as HTMLElement | undefined;
-  (textColumn ?? row).appendChild(details);
+
+  const layout = row.firstElementChild as HTMLElement | null;
+  const textColumn = layout?.firstElementChild as HTMLElement | null;
+  const scoreColumn = layout?.lastElementChild as HTMLElement | null;
+
+  if (layout && textColumn && scoreColumn && textColumn !== scoreColumn) {
+    layout.classList.remove("items-center");
+    layout.classList.add("items-start");
+    textColumn.classList.add("min-w-0", "flex-1");
+    scoreColumn.classList.add("shrink-0");
+    textColumn.appendChild(details);
+    return;
+  }
+
+  row.appendChild(details);
 }
 
 function applyPredictions(payload: PredictionPayload) {
-  const section = latestScoresSection();
-  if (!section) return false;
+  const card = latestScoresCard();
+  if (!card) return false;
   const relatedTeamIds = new Set(payload.relatedTeamIds ?? []);
   const fixtures = (payload.fixtures ?? []).filter((fixture) => fixture.storedPrediction);
   if (fixtures.length === 0) return true;
 
-  const rows = resultRows(section);
+  const rows = resultRows(card);
   for (const row of rows) {
     const normalised = row.textContent?.replace(/\s+/g, " ").trim() ?? "";
     const fixture = fixtures.find((candidate) => {
-      if (section.querySelector(`[data-sixfl-stored-prediction="${candidate.id}"]`)) return false;
+      if (card.querySelector(`[data-sixfl-stored-prediction="${candidate.id}"]`)) return false;
       const isHome = relatedTeamIds.has(candidate.homeTeamId);
       const opponent = isHome ? candidate.awayTeam.name : candidate.homeTeam.name;
       return normalised.includes(opponent);
