@@ -45,7 +45,7 @@ function ensureImport(source, anchor, importLine, label) {
 
   source = replaceRequired(
     source,
-    `  if (input.status === "PAID" && input.note?.includes(PLAYER_FEE_CAP_NOTE)) {\n    return Math.max(\n      getCaptainAssignedPlayerFeePence(input) - input.amountPence,\n      0,\n    );\n  }`,
+    `  if (\n    input.status === "PAID" &&\n    Boolean(input.note?.includes(PLAYER_FEE_CAP_NOTE))\n  ) {\n    return Math.max(\n      getCaptainAssignedPlayerFeePence(input) - input.amountPence,\n      0,\n    );\n  }`,
     `  if (input.status === "PAID") {\n    return Math.max(\n      getCaptainAssignedPlayerFeePence(input) - input.amountPence,\n      0,\n    );\n  }`,
     "paid capped share coverage",
   );
