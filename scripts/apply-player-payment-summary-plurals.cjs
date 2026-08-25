@@ -39,3 +39,7 @@ require("./apply-native-team-payment-copy.cjs");
 // Captains must also be able to close unpaid player payment links before the
 // fixture charge itself has been settled.
 require("./apply-captain-cancel-unpaid-player-links.cjs");
+
+// Make the team-credit rule and the amount still payable completely explicit
+// on Team payments, including when credit covers the whole fixture fee.
+require("./apply-captain-team-credit-explanation.cjs");
