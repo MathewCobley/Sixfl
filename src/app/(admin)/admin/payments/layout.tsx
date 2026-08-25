@@ -25,6 +25,12 @@ export default function AdminPaymentsLayout({
           Team credits
         </Link>
         <Link
+          href="/admin/payments/kit-funds"
+          className="inline-flex items-center rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15"
+        >
+          Kit funds
+        </Link>
+        <Link
           href="/admin/payments/player-credits"
           className="inline-flex items-center rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15"
         >
