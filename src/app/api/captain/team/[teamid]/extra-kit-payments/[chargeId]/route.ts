@@ -1,6 +1,7 @@
 import { NotificationDispatchStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
+import { restoreKitFundForCancelledCharge } from "@/lib/kits/kit-fund";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -15,7 +16,7 @@ export async function DELETE(
   },
 ) {
   const { teamid, chargeId } = await params;
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
 
   const charge = await prisma.paymentCharge.findFirst({
     where: {
@@ -26,7 +27,7 @@ export async function DELETE(
     select: {
       id: true,
       status: true,
-      transactions: { select: { amountPence: true } },
+      transactions: { select: { amountPence: true, reference: true } },
     },
   });
 
@@ -41,27 +42,39 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   }
 
-  const paidPence = charge.transactions.reduce(
-    (sum, transaction) => sum + transaction.amountPence,
-    0,
-  );
+  const externalPaidPence = charge.transactions
+    .filter((transaction) => transaction.reference !== "KIT_FUND")
+    .reduce((sum, transaction) => sum + transaction.amountPence, 0);
+  const kitFundPaidPence = charge.transactions
+    .filter((transaction) => transaction.reference === "KIT_FUND")
+    .reduce((sum, transaction) => sum + transaction.amountPence, 0);
 
-  if (paidPence > 0 || charge.status === "PAID") {
+  if (externalPaidPence > 0) {
     return NextResponse.json(
       {
         error:
-          "This request has received payment and cannot be cancelled here. SIXFL admin must review it.",
+          "This request has received a card/cash payment and cannot be cancelled here. SIXFL admin must review it.",
       },
       { status: 409 },
     );
   }
 
-  await prisma.$transaction([
-    prisma.paymentCharge.update({
+  await prisma.$transaction(async (tx) => {
+    if (kitFundPaidPence > 0) {
+      await restoreKitFundForCancelledCharge({
+        teamId: teamid,
+        chargeId: charge.id,
+        createdByUserId: access.user?.id ?? null,
+        db: tx,
+      });
+    }
+
+    await tx.paymentCharge.update({
       where: { id: charge.id },
       data: { status: "VOID" },
-    }),
-    prisma.notificationDispatch.updateMany({
+    });
+
+    await tx.notificationDispatch.updateMany({
       where: {
         sourceType: "EXTRA_TEAM_KIT_PAYMENT",
         sourceId: charge.id,
@@ -76,8 +89,8 @@ export async function DELETE(
         status: NotificationDispatchStatus.CANCELLED,
         failureReason: "Kit payment request cancelled by the captain.",
       },
-    }),
-  ]);
+    });
+  });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, restoredKitFundPence: kitFundPaidPence });
 }
