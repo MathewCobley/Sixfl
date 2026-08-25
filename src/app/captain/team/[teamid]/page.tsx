@@ -236,6 +236,22 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
     .slice(0, 3);
   const hasUrgentWarnings = overdueConfirmationFixtures.length > 0 || veryLateCharges.length > 0;
 
+  const outstandingEntries = ledger.entries.filter(
+    (entry) =>
+      entry.displayStatus !== "PAID" &&
+      entry.displayStatus !== "VOID" &&
+      entry.outstandingPence > 0,
+  );
+  const dueNowEntries = outstandingEntries.filter((entry) => entry.isPayableNow);
+  const nextUpcomingCharge = outstandingEntries.find((entry) => !entry.isPayableNow) ?? null;
+  const paymentFocusEntry = dueNowEntries[0] ?? nextUpcomingCharge;
+  const paymentDueNowPence = dueNowEntries.reduce(
+    (sum, entry) => sum + entry.outstandingPence,
+    0,
+  );
+  const paymentFocusDueDate = paymentFocusEntry ? getChargeDueDate(paymentFocusEntry) : null;
+  const paymentFocusIsDueNow = dueNowEntries.length > 0;
+
   const needsCompletionCount = completionResults.filter((fixture) => {
     if (!fixture.result) return false;
     const isHome = relatedTeamIds.includes(fixture.homeTeamId);
@@ -273,6 +289,53 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
         </section>
       ) : null}
 
+      {paymentFocusEntry ? (
+        <section
+          className={`rounded-3xl border p-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] ${
+            paymentFocusIsDueNow
+              ? "border-amber-400/30 bg-amber-500/12"
+              : "border-emerald-400/25 bg-emerald-500/10"
+          }`}
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p
+                className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${
+                  paymentFocusIsDueNow ? "text-amber-100/70" : "text-emerald-100/70"
+                }`}
+              >
+                Team payment
+              </p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
+                {paymentFocusIsDueNow
+                  ? `${formatMoney(paymentDueNowPence)} due now`
+                  : `${formatMoney(paymentFocusEntry.outstandingPence)} next team fee`}
+              </h2>
+              <p
+                className={`mt-2 max-w-4xl text-sm leading-6 ${
+                  paymentFocusIsDueNow ? "text-amber-50/75" : "text-emerald-50/75"
+                }`}
+              >
+                {paymentFocusIsDueNow
+                  ? `${dueNowEntries.length} team charge${dueNowEntries.length === 1 ? " is" : "s are"} currently due. ${paymentFocusEntry.fixtureLabel}.`
+                  : `${paymentFocusEntry.fixtureLabel}${paymentFocusDueDate ? ` · due ${formatDateTime(paymentFocusDueDate)}` : ""}. The payment link is already available if you want to pay early.`}
+              </p>
+            </div>
+
+            <Link
+              href={`/captain/team/${teamid}/payments`}
+              className={`inline-flex shrink-0 items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition ${
+                paymentFocusIsDueNow
+                  ? "border-amber-300/30 bg-amber-300/15 text-amber-50 hover:bg-amber-300/20"
+                  : "border-emerald-300/30 bg-emerald-300/15 text-emerald-50 hover:bg-emerald-300/20"
+              }`}
+            >
+              {paymentFocusIsDueNow ? "Pay / view fees" : "View / pay early"}
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 lg:py-8">
           <div>
@@ -288,7 +351,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className={`rounded-full border px-3 py-1 text-xs font-medium ${getToneClasses(nextFixtureStatus.tone)}`}>{nextFixtureStatus.label}</span>
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">{getFixtureCountdownLabel(nextFixture.kickoffAt)}</span>
-                {currentTeamPosition >= 0 ? <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">Position {formatOrdinal(currentTeamPosition + 1)}</span> : null}
+                {currentTeamPosition >= 0 ? <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Position {formatOrdinal(currentTeamPosition + 1)}</span> : null}
               </div>
             ) : null}
 
@@ -315,9 +378,21 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
             </div>
 
             <Link href={`/captain/team/${teamid}/payments`} className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 transition hover:bg-emerald-500/15">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Outstanding balance</p>
-              <p className="mt-3 text-3xl font-semibold text-white">{formatMoney(ledger.outstandingPence)}</p>
-              <p className="mt-2 text-sm text-emerald-100/75">{ledger.openChargeCount} open charge{ledger.openChargeCount === 1 ? "" : "s"}.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                {paymentFocusIsDueNow ? "Due now" : paymentFocusEntry ? "Next team fee" : "Team payments"}
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-white">
+                {formatMoney(paymentFocusIsDueNow ? paymentDueNowPence : paymentFocusEntry?.outstandingPence ?? 0)}
+              </p>
+              <p className="mt-2 text-sm text-emerald-100/75">
+                {paymentFocusIsDueNow
+                  ? `${dueNowEntries.length} charge${dueNowEntries.length === 1 ? "" : "s"} due for payment.`
+                  : paymentFocusEntry
+                    ? paymentFocusDueDate
+                      ? `Due ${formatDateTime(paymentFocusDueDate)}.`
+                      : "Upcoming team fee."
+                    : "No team fee currently outstanding."}
+              </p>
             </Link>
           </div>
         </div>
