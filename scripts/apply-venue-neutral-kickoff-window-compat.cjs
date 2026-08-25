@@ -11,10 +11,10 @@ const neutralFunction = `function isKickoffAllowed(kickoffAt: Date, team1: TeamS
   const team2Latest = parseTimeToMinutes(team2.latestKickoffTime);
 
   if (team1Latest !== null && kickoffMinutes > team1Latest) {
-    return { allowed: false, reason: \`${team1.name} cannot kick off later than ${team1.latestKickoffTime}.\` };
+    return { allowed: false, reason: \`\${team1.name} cannot kick off later than \${team1.latestKickoffTime}.\` };
   }
   if (team2Latest !== null && kickoffMinutes > team2Latest) {
-    return { allowed: false, reason: \`${team2.name} cannot kick off later than ${team2.latestKickoffTime}.\` };
+    return { allowed: false, reason: \`\${team2.name} cannot kick off later than \${team2.latestKickoffTime}.\` };
   }
   return { allowed: true, reason: null };
 }`;
@@ -25,10 +25,10 @@ const compatibleFunction = `function isKickoffAllowed(kickoffAt: Date, homeTeam:
   const awayLatest = parseTimeToMinutes(awayTeam.latestKickoffTime);
 
   if (homeLatest !== null && kickoffMinutes > homeLatest) {
-    return { allowed: false, reason: \`${homeTeam.name} cannot kick off later than ${homeTeam.latestKickoffTime}.\` };
+    return { allowed: false, reason: \`\${homeTeam.name} cannot kick off later than \${homeTeam.latestKickoffTime}.\` };
   }
   if (awayLatest !== null && kickoffMinutes > awayLatest) {
-    return { allowed: false, reason: \`${awayTeam.name} cannot kick off later than ${awayTeam.latestKickoffTime}.\` };
+    return { allowed: false, reason: \`\${awayTeam.name} cannot kick off later than \${awayTeam.latestKickoffTime}.\` };
   }
   return { allowed: true, reason: null };
 }`;
