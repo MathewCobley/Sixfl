@@ -175,4 +175,28 @@ patchFile(
   "public team central standings",
 );
 
+// Keep the legacy team-specific fee prebuild compatible with venue-neutral
+// fixture scheduling. These local names only describe the two technical storage
+// slots; pairing/repeat logic remains directionless.
+patchFile(
+  path.join(root, "src", "app", "(admin)", "admin", "fixtures", "generate", "division-actions.ts"),
+  (source) => {
+    source = source.replace(
+      `function getStandardFixtureFee(team1: TeamSchedulingRule, team2: TeamSchedulingRule) {\n  const team1Fee = team1.standardMatchFeePence ?? 0;\n  const team2Fee = team2.standardMatchFeePence ?? 0;\n  const highestFee = Math.max(team1Fee, team2Fee);\n  return highestFee > 0 ? highestFee : null;\n}`,
+      `function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  const homeFee = homeTeam.standardMatchFeePence ?? 0;\n  const awayFee = awayTeam.standardMatchFeePence ?? 0;\n  const highestFee = Math.max(homeFee, awayFee);\n  return highestFee > 0 ? highestFee : null;\n}`,
+    );
+
+    source = source
+      .replace("const team1 = teamMap.get(pair.team1Id);", "const homeTeam = teamMap.get(pair.team1Id);")
+      .replace("const team2 = teamMap.get(pair.team2Id);", "const awayTeam = teamMap.get(pair.team2Id);")
+      .replace("if (!team1 || !team2) throw new Error(\"Fixture generation failed because a team was missing.\");", "if (!homeTeam || !awayTeam) throw new Error(\"Fixture generation failed because a team was missing.\");")
+      .replace("const allowed = isKickoffAllowed(kickoffAt, team1, team2);", "const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);")
+      .replace("${team1.name} vs ${team2.name}", "${homeTeam.name} vs ${awayTeam.name}")
+      .replace("matchFeePence: getStandardFixtureFee(team1, team2),", "matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),");
+
+    return source;
+  },
+  "venue-neutral fixture fee compatibility",
+);
+
 require("./apply-player-current-league-context.cjs");
