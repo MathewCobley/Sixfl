@@ -6,9 +6,13 @@ import { getRelatedTeamIdsForPaymentLedger } from "@/lib/payments/team-payment-l
 import { prisma } from "@/lib/prisma";
 
 type LedgerDb = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
-type ChargeDb = LedgerDb & Pick<typeof prisma, "paymentCharge" | "paymentTransaction">;
+type ChargeDb = LedgerDb &
+  Pick<typeof prisma, "paymentCharge" | "paymentTransaction">;
 
-export type KitFundLedgerEntryType = "FUND_ADDED" | "FUND_USED" | "FUND_RESTORED";
+export type KitFundLedgerEntryType =
+  | "FUND_ADDED"
+  | "FUND_USED"
+  | "FUND_RESTORED";
 
 export type KitFundLedgerEntry = {
   id: string;
@@ -32,7 +36,9 @@ function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
-function signedAmount(entry: Pick<KitFundLedgerEntry, "entryType" | "amountPence">) {
+function signedAmount(
+  entry: Pick<KitFundLedgerEntry, "entryType" | "amountPence">,
+) {
   return entry.entryType === "FUND_USED" ? -entry.amountPence : entry.amountPence;
 }
 
@@ -47,7 +53,9 @@ export async function getKitFundLedgerForTeamIds(
   db: LedgerDb = prisma,
 ): Promise<KitFundLedger> {
   const teamIds = uniqueIds(teamIdsInput);
-  if (teamIds.length === 0) return { teamIds: [], balancePence: 0, entries: [] };
+  if (teamIds.length === 0) {
+    return { teamIds: [], balancePence: 0, entries: [] };
+  }
 
   const entries = await db.$queryRaw<KitFundLedgerEntry[]>(Prisma.sql`
     SELECT
@@ -68,7 +76,10 @@ export async function getKitFundLedgerForTeamIds(
 
   return {
     teamIds,
-    balancePence: entries.reduce((sum, entry) => sum + signedAmount(entry), 0),
+    balancePence: entries.reduce(
+      (sum, entry) => sum + signedAmount(entry),
+      0,
+    ),
     entries,
   };
 }
@@ -102,19 +113,25 @@ export async function moveTeamCreditToKitFund(input: {
 
     const creditLedger = await getTeamCreditLedger(identity.relatedTeamIds, tx);
     if (creditLedger.balancePence < amountPence) {
-      throw new Error("There is not enough team credit to move that amount to the kit fund.");
+      throw new Error(
+        "There is not enough team credit to move that amount to the kit fund.",
+      );
     }
 
     const ledgerTeamId = creditLedger.teamIds.includes(input.teamId)
       ? input.teamId
       : creditLedger.teamIds[0];
     if (!ledgerTeamId) {
-      throw new Error("Only standard teams can move team credit to the kit fund.");
+      throw new Error(
+        "Only standard teams can move team credit to the kit fund.",
+      );
     }
 
     const transferId = `kitfund_transfer_${randomUUID()}`;
     const teamCreditEntryId = `tcred_${randomUUID()}`;
-    const description = `Moved £${(amountPence / 100).toFixed(2)} from team credit to the kit fund. Transfer ${transferId}.`;
+    const description = `Moved £${(amountPence / 100).toFixed(
+      2,
+    )} from team credit to the kit fund. Transfer ${transferId}.`;
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "TeamCreditLedgerEntry" (
@@ -171,6 +188,105 @@ export async function moveTeamCreditToKitFund(input: {
   });
 }
 
+export async function moveKitFundBackToTeamCreditByAdmin(input: {
+  teamId: string;
+  amountPence: number;
+  createdByUserId: string;
+  reason?: string | null;
+}) {
+  const amountPence = Math.round(input.amountPence);
+  if (!input.teamId || !Number.isInteger(amountPence) || amountPence <= 0) {
+    throw new Error("Choose an amount greater than £0.00.");
+  }
+  if (!input.createdByUserId) {
+    throw new Error("An admin user is required to correct a kit fund transfer.");
+  }
+
+  const identity = await getRelatedTeamIdsForPaymentLedger(input.teamId);
+  if (!identity) throw new Error("Team not found.");
+
+  return prisma.$transaction(async (tx) => {
+    await lockKitFund(identity.team.id, tx);
+
+    const [kitFund, creditLedger] = await Promise.all([
+      getKitFundLedgerForTeamIds(identity.relatedTeamIds, tx),
+      getTeamCreditLedger(identity.relatedTeamIds, tx),
+    ]);
+
+    if (kitFund.balancePence < amountPence) {
+      throw new Error(
+        "There is not enough money in the kit fund to move that amount back.",
+      );
+    }
+
+    const ledgerTeamId = creditLedger.teamIds.includes(input.teamId)
+      ? input.teamId
+      : creditLedger.teamIds[0];
+    if (!ledgerTeamId) {
+      throw new Error("The active standard-team credit identity could not be found.");
+    }
+
+    const correctionId = `kitfund_admin_return_${randomUUID()}`;
+    const reason = input.reason?.trim() || "Admin correction";
+    const description = `Admin moved £${(amountPence / 100).toFixed(
+      2,
+    )} from the kit fund back to team credit. ${reason}. Correction ${correctionId}.`;
+
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "KitFundLedgerEntry" (
+        "id",
+        "teamId",
+        "entryType",
+        "amountPence",
+        "sourceType",
+        "sourceId",
+        "description",
+        "createdByUserId"
+      )
+      VALUES (
+        ${`kfund_${randomUUID()}`},
+        ${ledgerTeamId},
+        'FUND_USED'::"KitFundLedgerEntryType",
+        ${amountPence},
+        'ADMIN_RETURN_TO_TEAM_CREDIT',
+        ${correctionId},
+        ${description},
+        ${input.createdByUserId}
+      )
+    `);
+
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "TeamCreditLedgerEntry" (
+        "id",
+        "teamId",
+        "entryType",
+        "amountPence",
+        "description",
+        "createdByUserId"
+      )
+      VALUES (
+        ${`tcred_${randomUUID()}`},
+        ${ledgerTeamId},
+        'CREDIT_ADDED'::"TeamCreditLedgerEntryType",
+        ${amountPence},
+        ${description},
+        ${input.createdByUserId}
+      )
+    `);
+
+    const [remainingFund, updatedCredit] = await Promise.all([
+      getKitFundLedgerForTeamIds(identity.relatedTeamIds, tx),
+      getTeamCreditLedger(identity.relatedTeamIds, tx),
+    ]);
+
+    return {
+      amountMovedPence: amountPence,
+      kitFundBalancePence: Math.max(remainingFund.balancePence, 0),
+      teamCreditBalancePence: Math.max(updatedCredit.balancePence, 0),
+    };
+  });
+}
+
 export async function applyKitFundToCharges(input: {
   teamId: string;
   batchReference: string;
@@ -178,7 +294,15 @@ export async function applyKitFundToCharges(input: {
   createdByUserId?: string | null;
 }) {
   if (input.charges.length === 0) {
-    return { amountUsedPence: 0, remainingKitFundPence: await getKitFundBalancePence(input.teamId), charges: [] as Array<{ id: string; kitFundAppliedPence: number; outstandingPence: number }> };
+    return {
+      amountUsedPence: 0,
+      remainingKitFundPence: await getKitFundBalancePence(input.teamId),
+      charges: [] as Array<{
+        id: string;
+        kitFundAppliedPence: number;
+        outstandingPence: number;
+      }>,
+    };
   }
 
   const identity = await getRelatedTeamIdsForPaymentLedger(input.teamId);
@@ -189,7 +313,10 @@ export async function applyKitFundToCharges(input: {
     const fund = await getKitFundLedgerForTeamIds(identity.relatedTeamIds, tx);
     let remainingToApply = Math.min(
       Math.max(fund.balancePence, 0),
-      input.charges.reduce((sum, charge) => sum + Math.max(charge.amountPence, 0), 0),
+      input.charges.reduce(
+        (sum, charge) => sum + Math.max(charge.amountPence, 0),
+        0,
+      ),
     );
 
     if (remainingToApply <= 0) {
@@ -230,7 +357,11 @@ export async function applyKitFundToCharges(input: {
       )
     `);
 
-    const result: Array<{ id: string; kitFundAppliedPence: number; outstandingPence: number }> = [];
+    const result: Array<{
+      id: string;
+      kitFundAppliedPence: number;
+      outstandingPence: number;
+    }> = [];
 
     for (const charge of input.charges) {
       const appliedPence = Math.min(remainingToApply, charge.amountPence);
@@ -261,7 +392,11 @@ export async function applyKitFundToCharges(input: {
       }
 
       remainingToApply -= appliedPence;
-      result.push({ id: charge.id, kitFundAppliedPence: appliedPence, outstandingPence });
+      result.push({
+        id: charge.id,
+        kitFundAppliedPence: appliedPence,
+        outstandingPence,
+      });
     }
 
     return {
@@ -283,7 +418,10 @@ export async function restoreKitFundForCancelledCharge(input: {
     where: { chargeId: input.chargeId, reference: "KIT_FUND" },
     select: { id: true, amountPence: true },
   });
-  const amountPence = transactions.reduce((sum, transaction) => sum + transaction.amountPence, 0);
+  const amountPence = transactions.reduce(
+    (sum, transaction) => sum + transaction.amountPence,
+    0,
+  );
   if (amountPence <= 0) return { restoredPence: 0 };
 
   await db.$executeRaw(Prisma.sql`
