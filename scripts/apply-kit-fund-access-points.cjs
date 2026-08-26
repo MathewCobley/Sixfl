@@ -63,6 +63,8 @@ function replaceRequired(source, before, after, label) {
 }
 
 // Team kit page: surface the same compact fund control where captains actually order kits.
+// Earlier kit prebuild steps expand the allDesigns/order Promise, so attach the
+// finance snapshot at the stable selected-design boundary instead of rewriting it.
 {
   const file = "src/app/captain/team/[teamid]/kit/page.tsx";
   let source = read(file);
@@ -92,12 +94,11 @@ function replaceRequired(source, before, after, label) {
     "kit page related teams",
   );
 
-  source = replaceRequired(
-    source,
-    '  const [allDesigns, order] = await Promise.all([\n    listKitDesigns({ includeInactive: true }),\n    getTeamKitOrder(teamid),\n  ]);',
-    '  const paymentIdentity = await getRelatedTeamIdsForPaymentLedger(teamid);\n  const relatedTeamIds = paymentIdentity?.relatedTeamIds ?? [teamid];\n\n  const [allDesigns, order, creditLedger, kitFundLedger] = await Promise.all([\n    listKitDesigns({ includeInactive: true }),\n    getTeamKitOrder(teamid),\n    getTeamCreditLedger(relatedTeamIds),\n    getKitFundLedger(teamid),\n  ]);',
-    "kit page financial snapshot",
-  );
+  if (!source.includes("const paymentIdentity = await getRelatedTeamIdsForPaymentLedger(teamid);")) {
+    const marker = '  const selectedDesignId = order?.kitDesignId ?? null;';
+    const finance = `  const paymentIdentity = await getRelatedTeamIdsForPaymentLedger(teamid);\n  const relatedTeamIds = paymentIdentity?.relatedTeamIds ?? [teamid];\n  const [creditLedger, kitFundLedger] = await Promise.all([\n    getTeamCreditLedger(relatedTeamIds),\n    getKitFundLedger(teamid),\n  ]);\n\n${marker}`;
+    source = replaceRequired(source, marker, finance, "kit page finance insertion");
+  }
 
   if (!source.includes("kitFundLedger.entries.slice(0, 8)")) {
     const marker = '      {sp.saved === "1" ? (';
