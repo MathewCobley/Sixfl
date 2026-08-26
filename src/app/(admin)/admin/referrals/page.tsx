@@ -4,7 +4,6 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamReferrals, referralStatus } from "@/lib/team-referrals";
 import {
   attachExistingLeadReferralAction,
-  markReferralPaidAction,
   retryReferralRecordedEmailAction,
 } from "./actions";
 
@@ -46,6 +45,7 @@ type ReferralEmailDeliveryRow = {
 };
 
 const RECOVERABLE_MISSING_EMAIL_REASON = "Recipient has no email address.";
+const RECOVERABLE_CHANNEL_DISABLED_REASON = "Recipient email notifications are disabled.";
 
 function money(pence: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
@@ -99,7 +99,7 @@ function emailNotice(value?: string) {
     case "blocked":
       return {
         tone: "warning" as const,
-        message: "SIXFL did not retry that email because the player is currently blocked, suppressed, or has email notifications disabled.",
+        message: "SIXFL did not retry that email because the recipient is suppressed or has explicitly disabled transactional email.",
       };
     case "no_email":
       return {
@@ -168,7 +168,11 @@ function emailStatusClass(status: string | null) {
 function canRetryReferralEmail(delivery?: ReferralEmailDeliveryRow) {
   if (!delivery?.dispatchId) return true;
   if (delivery.status === "FAILED") return true;
-  return delivery.status === "SKIPPED" && delivery.failureReason === RECOVERABLE_MISSING_EMAIL_REASON;
+  return (
+    delivery.status === "SKIPPED" &&
+    (delivery.failureReason === RECOVERABLE_MISSING_EMAIL_REASON ||
+      delivery.failureReason === RECOVERABLE_CHANNEL_DISABLED_REASON)
+  );
 }
 
 export default async function AdminReferralsPage({ searchParams }: { searchParams?: SearchParams }) {
@@ -408,17 +412,22 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                   <div>
                     <p className="text-sm font-black text-slate-900">{Math.min(row.completedMatches, row.requiredMatches)} of {row.requiredMatches} matches</p>
                     <p className="mt-1 text-xs text-slate-500">Reward: {money(row.rewardPence)}</p>
+                    {status === "READY" ? (
+                      <p className={`mt-1 text-xs font-bold ${row.payoutDetailsSubmittedAt ? "text-emerald-700" : "text-amber-700"}`}>
+                        {row.payoutDetailsSubmittedAt ? "Payment details received" : "Awaiting payment details"}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="min-w-36 text-left lg:text-right">
                     {status === "PAID" ? (
                       <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">Paid</span>
                     ) : status === "READY" ? (
-                      <form action={markReferralPaidAction}>
-                        <input type="hidden" name="referralId" value={row.id} />
-                        <button className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-500">
-                          Mark £75 paid
-                        </button>
-                      </form>
+                      <Link
+                        href={`/admin/referrals/payout/${encodeURIComponent(row.id)}`}
+                        className={`inline-flex rounded-xl px-4 py-2 text-sm font-black ${row.payoutDetailsSubmittedAt ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-amber-100 text-amber-900 hover:bg-amber-200"}`}
+                      >
+                        {row.payoutDetailsSubmittedAt ? "View bank details" : "Awaiting bank details"}
+                      </Link>
                     ) : (
                       <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">In progress</span>
                     )}

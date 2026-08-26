@@ -103,6 +103,7 @@ export type TeamReferralRow = {
   rewardPence: number;
   requiredMatches: number;
   completedMatches: number;
+  payoutDetailsSubmittedAt: Date | null;
   paidAt: Date | null;
   createdAt: Date;
 };
@@ -123,6 +124,7 @@ export async function getTeamReferrals(referrerUserId?: string) {
       r."rewardPence",
       r."requiredMatches",
       COUNT(DISTINCT f."id")::int AS "completedMatches",
+      r."payoutDetailsSubmittedAt",
       r."paidAt",
       r."createdAt"
     FROM "TeamReferral" r
@@ -133,11 +135,16 @@ export async function getTeamReferrals(referrerUserId?: string) {
     LEFT JOIN "Fixture" f
       ON (f."homeTeamId" = t."id" OR f."awayTeamId" = t."id")
       AND f."status" = 'COMPLETED'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "FixtureAbandonment" abandonment
+        WHERE abandonment."fixtureId" = f."id"
+      )
     WHERE (${referrerUserId ?? null}::text IS NULL OR r."referrerUserId" = ${referrerUserId ?? null})
     GROUP BY
       r."id", r."referrerUserId", u."name", u."email", l."contactName", l."email",
       l."teamName", t."id", t."name", lg."name", r."rewardPence",
-      r."requiredMatches", r."paidAt", r."createdAt"
+      r."requiredMatches", r."payoutDetailsSubmittedAt", r."paidAt", r."createdAt"
     ORDER BY r."createdAt" DESC
   `;
 }
