@@ -31,6 +31,14 @@ const AdminPaymentsPageBridge = dynamic(
   () => import("@/components/admin/payments/AdminPaymentsPageBridge"),
   { ssr: false },
 );
+const AdminRefereeControlsLabelBridge = dynamic(
+  () => import("@/components/admin/referee-nights/AdminRefereeControlsLabelBridge"),
+  { ssr: false },
+);
+const RefereeNightCleanupBridge = dynamic(
+  () => import("@/components/admin/referee-nights/RefereeNightCleanupBridge"),
+  { ssr: false },
+);
 const CaptainAdditionalCaptainBridge = dynamic(
   () => import("@/components/captain/CaptainAdditionalCaptainBridge"),
   { ssr: false },
@@ -88,11 +96,13 @@ export default function RouteScopedBridges() {
   if (isCaptainTeamRoot) return null;
   if (isPlayerTeamRoot) return <TemporaryPlayerPassLauncher />;
 
+  const isAdmin = pathname.startsWith("/admin");
   const isCaptain = pathname.startsWith("/captain/");
   const isPlayer = pathname.startsWith("/player/");
   const isCaptainMatchFees = /^\/captain\/team\/[^/]+\/match-fees\/?$/.test(pathname);
   const isAdminLeagues = pathname.startsWith("/admin/leagues/");
   const isAdminTeam = /^\/admin\/teams\/[^/]+\/?$/.test(pathname);
+  const isAdminRefereeNightsRoot = pathname === "/admin/referee-nights";
   const isPublicLeague = pathname.startsWith("/leagues/");
   const isNightBoard = pathname.startsWith("/admin/night-board");
   const isAdminPayments = pathname.startsWith("/admin/payments");
@@ -101,6 +111,9 @@ export default function RouteScopedBridges() {
 
   return (
     <>
+      {isAdmin ? <AdminRefereeControlsLabelBridge /> : null}
+      {isAdminRefereeNightsRoot ? <RefereeNightCleanupBridge /> : null}
+
       {(isAdminLeagues || isCaptain || isPublicLeague) ? <LeagueFreeKitOfferBridge /> : null}
       {isAdminTeam ? <TeamFreeKitOfferOverrideBridge /> : null}
 
