@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { clearTeamReferralPayoutSecrets } from "@/lib/team-referral-payout";
 import { queueReferralRecordedEmail } from "@/lib/team-referral-notifications";
 import {
   attachReferralToLead,
@@ -141,7 +142,12 @@ export async function markReferralPaidAction(formData: FormData) {
   const referrals = await getTeamReferrals();
   const referral = referrals.find((item) => item.id === referralId);
 
-  if (!referral || referral.paidAt || referral.completedMatches < referral.requiredMatches) {
+  if (
+    !referral ||
+    referral.paidAt ||
+    referral.completedMatches < referral.requiredMatches ||
+    !referral.payoutDetailsSubmittedAt
+  ) {
     return;
   }
 
@@ -153,8 +159,15 @@ export async function markReferralPaidAction(formData: FormData) {
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${referralId}
       AND "paidAt" IS NULL
+      AND "payoutDetailsSubmittedAt" IS NOT NULL
   `;
 
+  // Keep the audit timestamps, but remove the bank account number, sort code and
+  // encryption material once SIXFL records the reward as paid.
+  await clearTeamReferralPayoutSecrets(referralId);
+
   revalidatePath("/admin/referrals");
+  revalidatePath(`/admin/referrals/payout/${encodeURIComponent(referralId)}`);
   revalidatePath("/player/referrals");
+  revalidatePath(`/player/referrals/payout/${encodeURIComponent(referralId)}`);
 }

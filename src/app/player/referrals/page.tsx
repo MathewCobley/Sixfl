@@ -97,9 +97,19 @@ export default async function PlayerReferralsPage() {
                       {status === "PAID"
                         ? `Your ${money(row.rewardPence)} reward has been marked as paid.`
                         : status === "READY"
-                          ? `The team has completed three matches. Your ${money(row.rewardPence)} reward is now due.`
+                          ? row.payoutDetailsSubmittedAt
+                            ? `Your payment details have been received. SIXFL can now arrange your ${money(row.rewardPence)} reward.`
+                            : `The team has completed three matches. Your ${money(row.rewardPence)} reward is now due.`
                           : `${row.requiredMatches - progress} more completed ${row.requiredMatches - progress === 1 ? "match" : "matches"} until your ${money(row.rewardPence)} reward.`}
                     </p>
+                    {status === "READY" ? (
+                      <Link
+                        href={`/player/referrals/payout/${encodeURIComponent(row.id)}`}
+                        className="mt-4 inline-flex rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-emerald-300"
+                      >
+                        {row.payoutDetailsSubmittedAt ? "Review payment details" : "Provide payment details"}
+                      </Link>
+                    ) : null}
                   </div>
                 );
               })}
