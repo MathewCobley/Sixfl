@@ -17,7 +17,6 @@ function replaceRequired(source, before, after, label) {
   return source.replace(before, after);
 }
 
-// Make the compact kit-fund control directly linkable from other captain pages.
 {
   const file = "src/components/captain/TeamKitFundTransferPanel.tsx";
   let source = read(file);
@@ -28,7 +27,6 @@ function replaceRequired(source, before, after, label) {
   write(file, source);
 }
 
-// Team credit ledger: put the same compact kit-fund control beside the credit audit.
 {
   const file = "src/app/captain/team/[teamid]/payments/credit-ledger/page.tsx";
   let source = read(file);
@@ -62,57 +60,9 @@ function replaceRequired(source, before, after, label) {
   write(file, source);
 }
 
-// Team kit page: surface the same compact fund control where captains actually order kits.
-// Earlier kit prebuild steps expand the allDesigns/order Promise, so attach the
-// finance snapshot at the stable selected-design boundary instead of rewriting it.
-{
-  const file = "src/app/captain/team/[teamid]/kit/page.tsx";
-  let source = read(file);
-
-  source = ensureImport(
-    source,
-    'import TeamKitOrderForm from "@/components/captain/TeamKitOrderForm";',
-    'import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";',
-    "kit page fund component",
-  );
-  source = ensureImport(
-    source,
-    'import { getTeamKitOrder, listKitDesigns } from "@/lib/kits/db";',
-    'import { getKitFundLedger } from "@/lib/kits/kit-fund";',
-    "kit page fund ledger",
-  );
-  source = ensureImport(
-    source,
-    'import { getKitFundLedger } from "@/lib/kits/kit-fund";',
-    'import { getTeamCreditLedger } from "@/lib/payments/team-credits";',
-    "kit page team credit",
-  );
-  source = ensureImport(
-    source,
-    'import { getTeamCreditLedger } from "@/lib/payments/team-credits";',
-    'import { getRelatedTeamIdsForPaymentLedger } from "@/lib/payments/team-payment-ledger";',
-    "kit page related teams",
-  );
-
-  if (!source.includes("const paymentIdentity = await getRelatedTeamIdsForPaymentLedger(teamid);")) {
-    const marker = '  const selectedDesignId = order?.kitDesignId ?? null;';
-    const finance = `  const paymentIdentity = await getRelatedTeamIdsForPaymentLedger(teamid);\n  const relatedTeamIds = paymentIdentity?.relatedTeamIds ?? [teamid];\n  const [creditLedger, kitFundLedger] = await Promise.all([\n    getTeamCreditLedger(relatedTeamIds),\n    getKitFundLedger(teamid),\n  ]);\n\n${marker}`;
-    source = replaceRequired(source, marker, finance, "kit page finance insertion");
-  }
-
-  if (!source.includes("kitFundLedger.entries.slice(0, 8)")) {
-    const marker = '      {sp.saved === "1" ? (';
-    const panel = `      <TeamKitFundTransferPanel\n        teamId={team.id}\n        teamCreditPence={Math.max(creditLedger.balancePence, 0)}\n        kitFundBalancePence={Math.max(kitFundLedger.balancePence, 0)}\n        entries={kitFundLedger.entries.slice(0, 8).map((entry) => ({\n          id: entry.id,\n          entryType: entry.entryType,\n          amountPence: entry.amountPence,\n          description: entry.description,\n          createdAtIso: entry.createdAt.toISOString(),\n        }))}\n      />\n\n${marker}`;
-    source = replaceRequired(source, marker, panel, "kit page fund panel");
-  }
-
-  write(file, source);
-}
-
 for (const [file, markers] of [
   ["src/components/captain/TeamKitFundTransferPanel.tsx", ['id="kit-fund"']],
   ["src/app/captain/team/[teamid]/payments/credit-ledger/page.tsx", ["TeamKitFundTransferPanel", "getKitFundLedger(teamid)"]],
-  ["src/app/captain/team/[teamid]/kit/page.tsx", ["TeamKitFundTransferPanel", "getTeamCreditLedger(relatedTeamIds)", "getKitFundLedger(teamid)"]],
 ]) {
   const source = read(file);
   for (const marker of markers) {
@@ -120,4 +70,4 @@ for (const [file, markers] of [
   }
 }
 
-console.log("Kit fund is now available from Team payments, Team credit ledger and Team kit.");
+console.log("Kit fund is now available from Team payments and Team credit ledger.");
