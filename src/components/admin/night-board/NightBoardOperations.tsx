@@ -8,6 +8,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -451,7 +452,41 @@ export function NightBoardPotentialIssuesPanel({
   baseWarnings: BaseWarning[];
 }) {
   const { potentialIssues } = useNightBoardOperations();
-  const hasWarnings = baseWarnings.length > 0 || potentialIssues.length > 0;
+  const [refereeConfirmationWarnings, setRefereeConfirmationWarnings] = useState<
+    BaseWarning[]
+  >([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = window.location.search;
+
+    void fetch(
+      `/api/admin/night-board/referee-confirmation-warnings${query}`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json().catch(() => null)) as {
+          warnings?: BaseWarning[];
+        } | null;
+      })
+      .then((payload) => {
+        if (!payload) return;
+        setRefereeConfirmationWarnings(payload.warnings ?? []);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          console.error("Referee confirmation warning check failed", error);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const hasWarnings =
+    refereeConfirmationWarnings.length > 0 ||
+    baseWarnings.length > 0 ||
+    potentialIssues.length > 0;
 
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
@@ -461,9 +496,21 @@ export function NightBoardPotentialIssuesPanel({
       <div className="mt-4 space-y-3">
         {!hasWarnings ? (
           <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            No obvious pitch, referee, venue, clash, repeated-team or latest kick-off preference warnings.
+            No obvious pitch, referee, referee-confirmation, venue, clash, repeated-team or latest kick-off preference warnings.
           </div>
         ) : null}
+        {refereeConfirmationWarnings.map((warning, index) => (
+          <div
+            key={`ref-confirm-${warning.message}-${index}`}
+            className={`rounded-2xl border px-4 py-3 text-sm font-medium ${
+              warning.level === "red"
+                ? "border-red-400/35 bg-red-500/15 text-red-100"
+                : "border-amber-400/30 bg-amber-500/12 text-amber-100"
+            }`}
+          >
+            {warning.message}
+          </div>
+        ))}
         {baseWarnings.map((warning, index) => (
           <div
             key={`${warning.message}-${index}`}
@@ -486,7 +533,7 @@ export function NightBoardPotentialIssuesPanel({
         ))}
       </div>
       <p className="mt-4 text-xs leading-5 text-white/45">
-        Latest kick-off preferences and teams appearing more than once are shown as potential issues. These warnings do not stop a match being saved.
+        Referee confirmations, latest kick-off preferences and teams appearing more than once are shown as potential issues. A pending referee becomes a red warning within 24 hours of the first kick-off. These warnings do not stop a match being saved.
       </p>
     </section>
   );
