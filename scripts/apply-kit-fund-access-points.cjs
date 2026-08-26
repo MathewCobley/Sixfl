@@ -17,6 +17,7 @@ function replaceRequired(source, before, after, label) {
   return source.replace(before, after);
 }
 
+// Make the shared compact kit-fund control directly linkable.
 {
   const file = "src/components/captain/TeamKitFundTransferPanel.tsx";
   let source = read(file);
@@ -27,6 +28,8 @@ function replaceRequired(source, before, after, label) {
   write(file, source);
 }
 
+// Team credit ledger: the full compact fund control belongs next to the credit audit,
+// because this is where a captain can see exactly how much credit is available to move.
 {
   const file = "src/app/captain/team/[teamid]/payments/credit-ledger/page.tsx";
   let source = read(file);
@@ -60,9 +63,25 @@ function replaceRequired(source, before, after, label) {
   write(file, source);
 }
 
+// Team kit: keep this screen light. Give captains a clear route to the same fund
+// rather than duplicating a second full finance panel in an already busy kit flow.
+{
+  const file = "src/app/captain/team/[teamid]/kit/page.tsx";
+  let source = read(file);
+
+  if (!source.includes("Manage kit fund")) {
+    const marker = '      {sp.saved === "1" ? (';
+    const access = `      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-400/20 bg-sky-500/[0.07] px-4 py-3 sm:px-5">\n        <div>\n          <div className="text-sm font-semibold text-white">Kit fund</div>\n          <div className="mt-0.5 text-xs text-white/45">\n            Set team credit aside for future SIXFL kits.\n          </div>\n        </div>\n        <Link\n          href={\`/captain/team/\${teamid}/payments#kit-fund\`}\n          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-400/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-400/15"\n        >\n          Manage kit fund\n        </Link>\n      </div>\n\n${marker}`;
+    source = replaceRequired(source, marker, access, "kit page kit fund access");
+  }
+
+  write(file, source);
+}
+
 for (const [file, markers] of [
   ["src/components/captain/TeamKitFundTransferPanel.tsx", ['id="kit-fund"']],
   ["src/app/captain/team/[teamid]/payments/credit-ledger/page.tsx", ["TeamKitFundTransferPanel", "getKitFundLedger(teamid)"]],
+  ["src/app/captain/team/[teamid]/kit/page.tsx", ["Manage kit fund", "payments#kit-fund"]],
 ]) {
   const source = read(file);
   for (const marker of markers) {
@@ -70,4 +89,4 @@ for (const [file, markers] of [
   }
 }
 
-console.log("Kit fund is now available from Team payments and Team credit ledger.");
+console.log("Kit fund is now accessible from Team payments, Team credit ledger and Team kit.");
