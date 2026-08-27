@@ -76,8 +76,13 @@ export function getDisplayChargeStatus(input: {
   amountPence: number;
   paidPence: number;
 }) {
-  if (input.storedStatus === "VOID" || input.storedStatus === "PAID") {
-    return input.storedStatus;
+  // VOID is an explicit accounting decision and remains authoritative. PAID is
+  // different: the charge total can legitimately increase afterwards (for example
+  // when a £10 late-payment admin fee is applied). In that case the financial
+  // coverage must reopen the charge instead of a stale PAID flag hiding the new
+  // balance.
+  if (input.storedStatus === "VOID") {
+    return "VOID";
   }
 
   if (input.paidPence >= input.amountPence) {
@@ -88,7 +93,7 @@ export function getDisplayChargeStatus(input: {
     return "PART_PAID";
   }
 
-  return input.storedStatus;
+  return "OPEN";
 }
 
 export function getDisplayChargeOutstandingPence(input: {
