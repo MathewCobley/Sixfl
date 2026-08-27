@@ -90,6 +90,17 @@ async function cancelQueuedAvailabilityChasesForUnavailablePlayer(input: {
   });
 }
 
+async function runInactiveCleanupSafely(
+  label: string,
+  task: () => Promise<unknown>,
+) {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`Inactive squad cleanup failed: ${label}`, error);
+  }
+}
+
 async function clearFutureActivityForInactivePlayer(input: {
   membershipId: string;
   teamId: string;
@@ -253,16 +264,20 @@ export async function setTeamMemberSquadStatus(input: {
 
   if (didUpdate && input.status === "INACTIVE") {
     await Promise.all([
-      cancelQueuedAvailabilityChasesForUnavailablePlayer({
-        membershipId: input.membershipId,
-        db,
-        reason: "Player marked inactive; future availability chase cancelled.",
-      }),
-      clearFutureActivityForInactivePlayer({
-        membershipId: input.membershipId,
-        teamId: input.teamId,
-        db,
-      }),
+      runInactiveCleanupSafely("availability chases", () =>
+        cancelQueuedAvailabilityChasesForUnavailablePlayer({
+          membershipId: input.membershipId,
+          db,
+          reason: "Player marked inactive; future availability chase cancelled.",
+        }),
+      ),
+      runInactiveCleanupSafely("future squad activity", () =>
+        clearFutureActivityForInactivePlayer({
+          membershipId: input.membershipId,
+          teamId: input.teamId,
+          db,
+        }),
+      ),
     ]);
   }
 
