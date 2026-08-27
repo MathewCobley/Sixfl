@@ -5,6 +5,11 @@
 -- captainAssignedAmountPence field existed the capped £5.00 amount became the
 -- only surviving value. Do not change the real amount charged/paid: only
 -- restore the captain-facing allocation used for display and fixture coverage.
+--
+-- This deliberately targets the exact historical team/fixture/date and the
+-- two £5 rows visible in that ledger. It does not depend on TeamMemberProfile,
+-- so the migration remains replayable on a clean database where no legacy rows
+-- exist.
 WITH target_fees AS (
   SELECT pmf."id"
   FROM "PlayerMatchFee" pmf
@@ -12,7 +17,6 @@ WITH target_fees AS (
   JOIN "Team" fee_team ON fee_team."id" = pmf."teamId"
   JOIN "Team" home_team ON home_team."id" = f."homeTeamId"
   JOIN "Team" away_team ON away_team."id" = f."awayTeamId"
-  JOIN "TeamMemberProfile" profile ON profile."teamMemberId" = pmf."teamMemberId"
   WHERE fee_team."name" = 'Dynamo Kebab'
     AND home_team."name" = 'Dynamo Kebab'
     AND away_team."name" = 'Wenlock Warriors'
@@ -20,7 +24,6 @@ WITH target_fees AS (
     AND f."kickoffAt" < TIMESTAMP '2026-08-26 00:00:00'
     AND pmf."amountPence" = 500
     AND pmf."captainAssignedAmountPence" = 500
-    AND profile."playerMatchFeeCapPence" = 500
     AND pmf."status"::text IN ('OPEN', 'PAID')
 )
 UPDATE "PlayerMatchFee" pmf
