@@ -27,8 +27,13 @@ UPDATE "PlayerMatchFee" pmf
 SET
   "captainAssignedAmountPence" = 800,
   "note" = CASE
-    WHEN COALESCE(pmf."note", '') ~* 'Player fee cap applied: captain share £8([.]00)?; player charged £5([.]00)?[.]'
-      THEN pmf."note"
+    WHEN COALESCE(pmf."note", '') ~* 'Player fee cap applied:'
+      THEN REGEXP_REPLACE(
+        pmf."note",
+        'Player fee cap applied:[^\r\n]*',
+        'Player fee cap applied: captain share £8.00; player charged £5.00.',
+        'i'
+      )
     WHEN NULLIF(BTRIM(COALESCE(pmf."note", '')), '') IS NULL
       THEN 'Player fee cap applied: captain share £8.00; player charged £5.00.'
     ELSE pmf."note" || E'\nPlayer fee cap applied: captain share £8.00; player charged £5.00.'
