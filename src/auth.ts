@@ -16,6 +16,12 @@ import {
   getCaptainLoginContext,
   getPendingCaptainContext,
 } from "@/lib/auth/pendingCaptain";
+import {
+  markLatestSignInLinkUsed,
+  markSignInLinkFailed,
+  markSignInLinkSent,
+  startSignInLinkActivity,
+} from "@/lib/auth/sign-in-link-activity";
 
 const LOGIN_CTA_LABEL = "Sign in to SIXFL";
 const CTA_PLACEHOLDER = "{{cta}}";
@@ -114,6 +120,57 @@ async function getPendingSquadActivationContext(email: string) {
   };
 }
 
+function buildSignInLinkActivityContext(input: {
+  existingUser: {
+    id: string;
+    name: string | null;
+    role: string;
+    teamMembers: Array<{
+      role: string;
+      team: { id: string; name: string };
+    }>;
+  } | null;
+  pendingCaptain: Awaited<ReturnType<typeof getPendingCaptainContext>>;
+  captainLoginContext: Awaited<ReturnType<typeof getCaptainLoginContext>>;
+  pendingSquadActivation: Awaited<ReturnType<typeof getPendingSquadActivationContext>>;
+}) {
+  const membership = input.existingUser?.teamMembers[0] ?? null;
+  const team = membership?.team
+    ? membership.team
+    : input.pendingCaptain
+      ? { id: input.pendingCaptain.teamId, name: input.pendingCaptain.teamName }
+      : input.captainLoginContext
+        ? {
+            id: input.captainLoginContext.teamId,
+            name: input.captainLoginContext.teamName,
+          }
+        : input.pendingSquadActivation
+          ? {
+              id: input.pendingSquadActivation.teamId,
+              name: input.pendingSquadActivation.teamName,
+            }
+          : null;
+
+  const accountType =
+    input.existingUser?.role === "ADMIN" || input.existingUser?.role === "REFEREE"
+      ? input.existingUser.role
+      : membership?.role
+        ? membership.role
+        : input.pendingCaptain || input.captainLoginContext
+          ? "CAPTAIN"
+          : input.pendingSquadActivation
+            ? "INVITED_PLAYER"
+            : "USER";
+
+  return {
+    userId: input.existingUser?.id ?? input.captainLoginContext?.captainUserId ?? null,
+    userName: input.existingUser?.name ?? input.pendingSquadActivation?.firstName ?? null,
+    accountType,
+    teamId: team?.id ?? null,
+    teamName: team?.name ?? null,
+  };
+}
+
 async function buildLoginMagicLinkEmail(input: {
   email: string;
   url: string;
@@ -194,6 +251,19 @@ export const authOptions: NextAuthOptions = {
         ] = await Promise.all([
           prisma.user.findUnique({
             where: { email },
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              teamMembers: {
+                orderBy: { createdAt: "asc" },
+                take: 1,
+                select: {
+                  role: true,
+                  team: { select: { id: true, name: true } },
+                },
+              },
+            },
           }),
           getPendingCaptainContext(email),
           getCaptainLoginContext(email),
@@ -212,14 +282,39 @@ export const authOptions: NextAuthOptions = {
           url,
           pendingCaptain,
         });
-
-        await resend.emails.send({
-          from,
-          to,
-          subject: emailContent.subject,
-          text: emailContent.text,
-          html: emailContent.html,
+        const activityContext = buildSignInLinkActivityContext({
+          existingUser,
+          pendingCaptain,
+          captainLoginContext,
+          pendingSquadActivation,
         });
+        const activityId = await startSignInLinkActivity({
+          email,
+          magicLinkUrl: url,
+          ...activityContext,
+        });
+
+        try {
+          const result = await resend.emails.send({
+            from,
+            to,
+            subject: emailContent.subject,
+            text: emailContent.text,
+            html: emailContent.html,
+          });
+
+          if (result.error) {
+            throw new Error(result.error.message || "Resend rejected the sign-in email.");
+          }
+
+          await markSignInLinkSent({
+            activityId,
+            providerMessageId: result.data?.id ?? null,
+          });
+        } catch (error) {
+          await markSignInLinkFailed({ activityId, error });
+          throw error;
+        }
       },
       from: process.env.EMAIL_FROM!,
     }),
@@ -235,10 +330,16 @@ export const authOptions: NextAuthOptions = {
 
   events: {
     async signIn({ user }) {
-      await recordSuccessfulLogin({
-        userId: user.id,
-        email: user.email,
-      });
+      await Promise.all([
+        recordSuccessfulLogin({
+          userId: user.id,
+          email: user.email,
+        }),
+        markLatestSignInLinkUsed({
+          userId: user.id,
+          email: user.email,
+        }),
+      ]);
     },
   },
 
