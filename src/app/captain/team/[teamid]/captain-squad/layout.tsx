@@ -3,7 +3,6 @@
 // ========================================
 
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
 
 import PlayerDashboardLoginEmailButtons from "@/components/captain/PlayerDashboardLoginEmailButtons";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -18,13 +17,9 @@ export default async function CaptainSquadLayout({
   const { teamid } = await params;
   const access = await requireCaptain(teamid);
 
-  if (access.isAdmin) {
-    redirect(`/admin/teams/${teamid}/captain-preview`);
-  }
-
   return (
     <>
-      <PlayerDashboardLoginEmailButtons />
+      {!access.isAdmin ? <PlayerDashboardLoginEmailButtons /> : null}
       {children}
     </>
   );
