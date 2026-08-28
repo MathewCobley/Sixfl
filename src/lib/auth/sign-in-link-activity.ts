@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 
 let ensureTablePromise: Promise<void> | null = null;
 
+const SENSITIVE_CALLBACK_PARAMETER =
+  /(?:^|_)(?:token|code|secret|key|signature|password|credential)(?:$|_)/i;
+
 function normaliseEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -23,6 +26,24 @@ function describeError(error: unknown) {
   }
 }
 
+function sanitiseCallbackUrl(value: string | null) {
+  if (!value?.trim()) return null;
+
+  try {
+    const parsed = new URL(value, "https://sixfl.invalid");
+
+    for (const parameter of Array.from(parsed.searchParams.keys())) {
+      if (SENSITIVE_CALLBACK_PARAMETER.test(parameter)) {
+        parsed.searchParams.set(parameter, "[redacted]");
+      }
+    }
+
+    return trimOptional(`${parsed.pathname}${parsed.search}${parsed.hash}`, 2_000);
+  } catch {
+    return null;
+  }
+}
+
 function readMagicLinkContext(magicLinkUrl: string) {
   try {
     const parsed = new URL(magicLinkUrl);
@@ -30,7 +51,7 @@ function readMagicLinkContext(magicLinkUrl: string) {
 
     return {
       linkHost: trimOptional(parsed.host, 255),
-      callbackUrl: trimOptional(callbackUrl, 2_000),
+      callbackUrl: sanitiseCallbackUrl(callbackUrl),
     };
   } catch {
     return { linkHost: null, callbackUrl: null };
