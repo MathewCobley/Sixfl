@@ -84,7 +84,15 @@ When a critical feature currently depends on a preparation script, its final beh
 - the lead can explicitly choose to confirm the team name later and return to the same link without losing the reserved place;
 - once the lead has been converted into an actual team, the public confirmation page must not allow the lead team name to be changed.
 
-These assertions live in `scripts/check-critical-feature-contracts.mjs` and dedicated executable contract scripts such as `scripts/check-team-confirmation-contract.mjs`; the critical-feature workflow runs them after the complete production source-preparation chain.
+### Referee and Night Board operations
+
+- saving a Night Board fixture must immediately pass the updated fixture through the central referee-night assignment synchroniser;
+- the fixture must be linked to the correct referee night before the save response is returned;
+- old and newly affected referee nights must both be recalculated and revalidated;
+- the Night Board confirmation warning check must repair legacy or direct assignments before reporting that a referee-night link is missing;
+- if automatic repair fails, the operational warning must remain visible rather than being silently suppressed.
+
+These assertions live in `scripts/check-critical-feature-contracts.mjs` and dedicated executable contract scripts such as `scripts/check-team-confirmation-contract.mjs` and `scripts/check-night-board-referee-night-sync.mjs`; the critical-feature workflow runs them after the complete production source-preparation chain.
 
 ## Areas to add next
 
@@ -95,7 +103,7 @@ The contract framework should continue to expand when these areas are changed:
 - fixture publication and availability;
 - result entry, disputes and correction workflows;
 - captain/player/admin preview boundaries;
-- referee and night-board operations;
+- additional referee and night-board operations;
 - notification delivery and template ownership.
 
 Do not create a large fragile snapshot of whole pages. Protect the business rules and user-visible controls that must survive future work.
