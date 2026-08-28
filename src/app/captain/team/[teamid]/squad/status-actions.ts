@@ -46,14 +46,24 @@ function getCaptainEditErrorRedirect(teamId: string, membershipId: string, messa
 }
 
 function revalidateSquadStatusPaths(teamId: string) {
-  revalidatePath(`/captain/team/${teamId}`);
-  revalidatePath(`/captain/team/${teamId}/squad`);
-  revalidatePath(`/captain/team/${teamId}/captain-squad`);
-  revalidatePath(`/captain/team/${teamId}/availability`);
-  revalidatePath(`/captain/team/${teamId}/fixtures`);
-  revalidatePath(`/captain/team/${teamId}/player-payments`);
-  revalidatePath(`/admin/teams/${teamId}`);
-  revalidatePath(`/admin/teams/${teamId}/squad`);
+  const paths = [
+    `/captain/team/${teamId}`,
+    `/captain/team/${teamId}/squad`,
+    `/captain/team/${teamId}/captain-squad`,
+    `/captain/team/${teamId}/availability`,
+    `/captain/team/${teamId}/fixtures`,
+    `/captain/team/${teamId}/player-payments`,
+    `/admin/teams/${teamId}`,
+    `/admin/teams/${teamId}/squad`,
+  ];
+
+  for (const path of paths) {
+    try {
+      revalidatePath(path);
+    } catch (error) {
+      console.error(`Squad-status revalidation failed for ${path}`, error);
+    }
+  }
 }
 
 export async function updateManagedSquadMemberStatusAction(formData: FormData) {
@@ -69,12 +79,23 @@ export async function updateManagedSquadMemberStatusAction(formData: FormData) {
     redirect(getErrorRedirect(teamid, "Only SIXFL admins can change managed squad injury status."));
   }
 
-  const updated = await setTeamMemberSquadStatus({
-    teamId: teamid,
-    membershipId,
-    status,
-    note,
-  });
+  let updated = false;
+  try {
+    updated = await setTeamMemberSquadStatus({
+      teamId: teamid,
+      membershipId,
+      status,
+      note,
+    });
+  } catch (error) {
+    console.error("Managed squad status save failed", {
+      teamid,
+      membershipId,
+      status,
+      error,
+    });
+    redirect(getErrorRedirect(teamid, "We could not save that player status. Please try again."));
+  }
 
   if (!updated) {
     redirect(getErrorRedirect(teamid, "Squad member not found."));
@@ -99,8 +120,25 @@ export async function updateCaptainSquadMemberActivityAction(formData: FormData)
   if (!teamid || !membershipId) redirect("/captain");
 
   const access = await requireCaptain(teamid);
-  const statusMap = await getTeamMemberSquadStatusMap(teamid);
-  const currentStatus = statusMap.get(membershipId)?.squadStatus;
+
+  let currentStatus: TeamMemberSquadStatus | undefined;
+  try {
+    const statusMap = await getTeamMemberSquadStatusMap(teamid);
+    currentStatus = statusMap.get(membershipId)?.squadStatus;
+  } catch (error) {
+    console.error("Captain squad status read failed", {
+      teamid,
+      membershipId,
+      error,
+    });
+    redirect(
+      getCaptainEditErrorRedirect(
+        teamid,
+        membershipId,
+        "We could not read this player's current status. Please try again.",
+      ),
+    );
+  }
 
   if (!currentStatus) {
     redirect(getCaptainEditErrorRedirect(teamid, membershipId, "Squad member not found."));
@@ -121,12 +159,29 @@ export async function updateCaptainSquadMemberActivityAction(formData: FormData)
       ? "Historic/former player marked inactive by team captain."
       : null;
 
-  const updated = await setTeamMemberSquadStatus({
-    teamId: teamid,
-    membershipId,
-    status,
-    note,
-  });
+  let updated = false;
+  try {
+    updated = await setTeamMemberSquadStatus({
+      teamId: teamid,
+      membershipId,
+      status,
+      note,
+    });
+  } catch (error) {
+    console.error("Captain squad status save failed", {
+      teamid,
+      membershipId,
+      status,
+      error,
+    });
+    redirect(
+      getCaptainEditErrorRedirect(
+        teamid,
+        membershipId,
+        "We could not save that player status. Please try again.",
+      ),
+    );
+  }
 
   if (!updated) {
     redirect(getCaptainEditErrorRedirect(teamid, membershipId, "Squad member not found."));
