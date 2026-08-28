@@ -324,6 +324,12 @@ const navigationGroups = [
         description: "Missing emails",
       },
       {
+        name: "Sign-in activity",
+        href: "/admin/sign-in-activity",
+        icon: ShieldCheckIcon,
+        description: "Magic-link use",
+      },
+      {
         name: "Player data health",
         href: "/admin/players/data-health",
         icon: WrenchScrewdriverIcon,
