@@ -6,6 +6,9 @@ import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { ensureRefereeNightConfirmationColumns } from "@/lib/referee-night-confirmations";
+import {
+  syncPublishedFixtureRefereeNightAssignmentsAndRecalculate,
+} from "@/lib/referee-night-assignment-sync";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -67,7 +70,7 @@ function warningLevel(firstKickoff: Date) {
 }
 
 export async function GET(request: NextRequest) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   await ensureRefereeNightConfirmationColumns();
 
   const leagueId = request.nextUrl.searchParams.get("leagueId")?.trim() ?? "";
@@ -135,6 +138,19 @@ export async function GET(request: NextRequest) {
   }
 
   const fixtureIds = assignedFixtures.map((fixture) => fixture.id);
+
+  // Repair fixtures created or edited through older/direct assignment paths before
+  // deciding whether the referee night is missing. Keep the warning available as a
+  // fallback if repair cannot complete, rather than hiding the operational problem.
+  try {
+    await syncPublishedFixtureRefereeNightAssignmentsAndRecalculate({
+      fixtureIds,
+      createdByUserId: user?.id ?? null,
+    });
+  } catch (error) {
+    console.error("Night Board referee-night synchronisation failed", error);
+  }
+
   const rows = await prisma.$queryRaw<ConfirmationRow[]>(Prisma.sql`
     SELECT
       rnf."fixtureId",
