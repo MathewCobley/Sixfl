@@ -13,6 +13,9 @@ import {
   syncFixtureMatchFeeCharges,
 } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
+import {
+  syncPublishedFixtureRefereeNightAssignmentAndRecalculate,
+} from "@/lib/referee-night-assignment-sync";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { recalculateRefereeNightCashup } from "@/lib/referee-nights";
 
@@ -205,7 +208,7 @@ async function resyncMatchFeeMessages(input: {
 }
 
 export async function POST(request: Request) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const formData = await request.formData();
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
@@ -276,6 +279,15 @@ export async function POST(request: Request) {
     },
   });
 
+  const syncedRefereeNightIds =
+    await syncPublishedFixtureRefereeNightAssignmentAndRecalculate({
+      fixtureId: fixture.id,
+      createdByUserId: user?.id ?? null,
+    });
+  const affectedRefereeNightIds = Array.from(
+    new Set([...changedRefereeNightIds, ...syncedRefereeNightIds]),
+  );
+
   const homeMatchFeePence = getExistingTeamFee({
     fixtureMatchFeePence: fixture.matchFeePence,
     teamId: fixture.homeTeam.id,
@@ -306,7 +318,7 @@ export async function POST(request: Request) {
   revalidatePath(`/admin/leagues/${fixture.leagueId}/fixtures`);
   revalidatePath(`/admin/leagues/${fixture.leagueId}`);
 
-  for (const refereeNightId of changedRefereeNightIds) {
+  for (const refereeNightId of affectedRefereeNightIds) {
     revalidatePath(`/admin/referee-nights/${refereeNightId}`);
   }
 
@@ -315,5 +327,11 @@ export async function POST(request: Request) {
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
 
-  return NextResponse.json({ ok: true, returnTo, staleRefereeNightMessagesCleared: changedRefereeNightIds.length, ...sync });
+  return NextResponse.json({
+    ok: true,
+    returnTo,
+    staleRefereeNightMessagesCleared: changedRefereeNightIds.length,
+    refereeNightsSynced: syncedRefereeNightIds.length,
+    ...sync,
+  });
 }
