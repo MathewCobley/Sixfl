@@ -40,6 +40,9 @@ jobs:
       - name: Check last-minute replacement resolution
         run: node scripts/check-last-minute-replacement-resolution.mjs
 
+      - name: Check sign-in link activity
+        run: node scripts/check-sign-in-link-activity-contract.mjs
+
       - name: Check AI prediction matchup integrity
         run: node scripts/check-ai-prediction-matchup-integrity.mjs
 
@@ -110,6 +113,7 @@ jobs:
           node scripts/check-team-confirmation-contract.mjs
           node scripts/check-standard-team-player-payment-links.mjs
           node scripts/check-last-minute-replacement-resolution.mjs
+          node scripts/check-sign-in-link-activity-contract.mjs
           node scripts/check-ai-prediction-matchup-integrity.mjs
           node scripts/check-ai-prediction-text-team-integrity.mjs
           npx tsx scripts/check-ai-predictor-opponent-adjusted.ts
