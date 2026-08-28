@@ -13,8 +13,12 @@ function read(relativePath) {
   return fs.readFileSync(absolutePath, "utf8");
 }
 
+function assert(condition, message) {
+  if (!condition) failures.push(message);
+}
+
 function expect(source, marker, message) {
-  if (!source.includes(marker)) failures.push(message);
+  assert(source.includes(marker), message);
 }
 
 function expectOrder(source, markers, message) {
@@ -68,9 +72,9 @@ expect(
   "markLatestSignInLinkUsed",
   "Successful sign-ins must mark the latest outstanding link as used.",
 );
-expect(
-  activityService.includes('"callbackUrl"') && !activityService.includes('"token" TEXT'),
-  true,
+assert(
+  activityService.includes('"callbackUrl"') &&
+    !activityService.includes('"token" TEXT'),
   "The tracking table must not store the magic-link security token.",
 );
 
