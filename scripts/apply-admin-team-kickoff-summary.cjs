@@ -60,6 +60,7 @@ if (changed) {
   console.log("Admin Teams earliest kick-off summary already applied.");
 }
 
-// Run this last so it extends the fully prepared Admin Leads source, including
-// the existing include/exclude filters, without being overwritten later.
+// Run these last so they extend the fully prepared native admin source without
+// being overwritten by an earlier compatibility step.
 require("./apply-admin-lead-prospective-league-filter.cjs");
+require("./apply-night-board-confirmation-reset-hardening.cjs");
