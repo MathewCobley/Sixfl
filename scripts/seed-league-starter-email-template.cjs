@@ -51,14 +51,14 @@ You can still get your team started while you organise the rest of your squad.
 
 🚀 HOW GETTING STARTED WORKS
 
-1️⃣ Start your team
-Complete the short team registration and tell us your team name and captain details.
+1️⃣ Confirm you want to enter
+We already have your contact details from your enquiry, so there is no need to fill them in again.
 
-2️⃣ Set up your squad
-Once your team is created, you can invite your players and get your squad organised online.
+2️⃣ Tell us your team name
+If you have decided it, add it now. If not, you can confirm it later.
 
 3️⃣ We get the league ready
-As teams join, we confirm the league, venue, start date and match-night details.
+As teams commit, we confirm the league, venue, start date and match-night details.
 
 4️⃣ Start playing
 Once the league launches, your fixtures, results and league table are all managed through SIXFL.
@@ -67,7 +67,7 @@ Once the league launches, your fixtures, results and league table are all manage
 
 The standard match fee is {{costPerTeamPerMatch}} per team for each weekly fixture.
 
-Simply registering your interest does not mean you are suddenly being charged match fees.
+Simply confirming you want to enter does not mean you are suddenly being charged match fees.
 
 There’s no long-term contract tying your team in. You pay for your football as you play.
 
@@ -93,7 +93,7 @@ Maybe you:
 
 That’s completely fine.
 
-Get your team started and we can help you with the rest.
+When you are ready to move forward, use the button below. We already have your details — it is simply your way of telling us you want to enter a team.
 
 {{cta}}
 
@@ -109,21 +109,25 @@ SIXFL
 
 6-a-side football. Done properly.`;
 
+const templateData = {
+  name: 'League starter guide',
+  description: 'Friendly starter email for existing team leads. The CTA uses their secure lead record so they confirm intent without re-entering contact details.',
+  audience: 'LEAD',
+  interestType: 'TEAM',
+  subject: 'Everything you need to know about joining SIXFL ⚽',
+  body,
+  ctaLabel: 'YES — I WANT TO ENTER A TEAM',
+  ctaUrlKey: 'teamConfirmationUrl',
+  isActive: true,
+};
+
 async function main() {
   await prisma.emailTemplate.upsert({
     where: { key: 'league-starter-guide' },
-    update: {},
+    update: templateData,
     create: {
       key: 'league-starter-guide',
-      name: 'League starter guide',
-      description: 'Friendly starter email for team leads explaining the league, price, squad size, no long-term contract and advance fixture availability.',
-      audience: 'LEAD',
-      interestType: 'TEAM',
-      subject: 'Everything you need to know about joining SIXFL ⚽',
-      body,
-      ctaLabel: 'START MY SIXFL TEAM',
-      ctaUrlKey: 'signupUrl',
-      isActive: true,
+      ...templateData,
     },
   });
 
