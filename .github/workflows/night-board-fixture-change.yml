@@ -7,7 +7,10 @@ on:
       - "src/lib/fixtures/night-board-change-notifications.ts"
       - "src/components/admin/night-board/NightBoardSaveNotice.tsx"
       - "src/app/(admin)/admin/layout.tsx"
+      - "scripts/apply-admin-team-kickoff-summary.cjs"
+      - "scripts/apply-night-board-confirmation-reset-hardening.cjs"
       - "scripts/check-night-board-fixture-notifications.mjs"
+      - "prisma/migrations/20260829214500_reset_stale_units_microwave_confirmations/migration.sql"
       - ".github/workflows/night-board-fixture-change.yml"
   workflow_dispatch:
 
