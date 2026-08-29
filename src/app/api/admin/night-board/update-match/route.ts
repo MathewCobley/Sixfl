@@ -4,9 +4,18 @@
 
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { FixtureStatus, NotificationDispatchStatus, Prisma, UserRole } from "@prisma/client";
+import {
+  FixtureStatus,
+  NotificationDispatchStatus,
+  Prisma,
+  UserRole,
+} from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
+import {
+  queueNightBoardFixtureChangeNotifications,
+  type NightBoardFixtureNotificationSummary,
+} from "@/lib/fixtures/night-board-change-notifications";
 import {
   cancelQueuedMatchFeeNotificationDispatches,
   queueFixtureMatchFeeEmails,
@@ -37,7 +46,10 @@ function parseFixtureStatus(value: string) {
     : FixtureStatus.SCHEDULED;
 }
 
-function parseOperationalKickoff(input: { currentKickoffAt: Date; timeInput: string }) {
+function parseOperationalKickoff(input: {
+  currentKickoffAt: Date;
+  timeInput: string;
+}) {
   const time = input.timeInput.trim();
   if (!/^\d{2}:\d{2}$/.test(time)) return input.currentKickoffAt;
   return parseLondonDateTime(toLondonDateInputValue(input.currentKickoffAt), time);
@@ -45,7 +57,9 @@ function parseOperationalKickoff(input: { currentKickoffAt: Date; timeInput: str
 
 function getSafeReturnTo(value: FormDataEntryValue | null) {
   const returnTo = String(value ?? "").trim();
-  return returnTo.startsWith("/admin/night-board") ? returnTo : "/admin/night-board";
+  return returnTo.startsWith("/admin/night-board")
+    ? returnTo
+    : "/admin/night-board";
 }
 
 function getExistingTeamFee(input: {
@@ -60,6 +74,78 @@ function getExistingTeamFee(input: {
   return existing?.amountPence ?? input.fixtureMatchFeePence ?? null;
 }
 
+function emptyNotificationSummary(
+  reason: string,
+): NightBoardFixtureNotificationSummary {
+  const emptyCounts = () => ({
+    emailQueued: 0,
+    emailSkipped: 0,
+    emailExisting: 0,
+    emailFailed: 0,
+    smsQueued: 0,
+    smsSkipped: 0,
+    smsExisting: 0,
+    smsFailed: 0,
+  });
+
+  return {
+    kind: "none",
+    reason,
+    teamChangeLines: [],
+    refereeChangeLines: [],
+    team: emptyCounts(),
+    referee: emptyCounts(),
+    remindersQueued: 0,
+    remindersSkipped: 0,
+  };
+}
+
+function buildReturnToWithSaveNotice(input: {
+  returnTo: string;
+  notifications: NightBoardFixtureNotificationSummary;
+  notificationError: boolean;
+}) {
+  const url = new URL(input.returnTo, "https://night-board.invalid");
+  const { team, referee } = input.notifications;
+
+  url.searchParams.set("matchSaved", "1");
+  url.searchParams.set("notificationKind", input.notifications.kind);
+  if (input.notifications.reason) {
+    url.searchParams.set("notificationReason", input.notifications.reason);
+  }
+
+  const counts = {
+    teamEmailQueued: team.emailQueued,
+    teamEmailSkipped: team.emailSkipped,
+    teamEmailExisting: team.emailExisting,
+    teamEmailFailed: team.emailFailed,
+    teamSmsQueued: team.smsQueued,
+    teamSmsSkipped: team.smsSkipped,
+    teamSmsExisting: team.smsExisting,
+    teamSmsFailed: team.smsFailed,
+    refereeEmailQueued: referee.emailQueued,
+    refereeEmailSkipped: referee.emailSkipped,
+    refereeEmailExisting: referee.emailExisting,
+    refereeEmailFailed: referee.emailFailed,
+    refereeSmsQueued: referee.smsQueued,
+    refereeSmsSkipped: referee.smsSkipped,
+    refereeSmsExisting: referee.smsExisting,
+    refereeSmsFailed: referee.smsFailed,
+    fixtureRemindersQueued: input.notifications.remindersQueued,
+    fixtureRemindersSkipped: input.notifications.remindersSkipped,
+  };
+
+  for (const [key, value] of Object.entries(counts)) {
+    if (value > 0) url.searchParams.set(key, String(value));
+  }
+
+  if (input.notificationError) {
+    url.searchParams.set("notificationError", "1");
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 async function clearStaleRefereeNightAssignment(input: {
   fixtureId: string;
   nextRefereeId: string | null;
@@ -72,7 +158,9 @@ async function clearStaleRefereeNightAssignment(input: {
   `);
 
   const staleNightIds = rows
-    .filter((row) => !input.nextRefereeId || row.refereeId !== input.nextRefereeId)
+    .filter(
+      (row) => !input.nextRefereeId || row.refereeId !== input.nextRefereeId,
+    )
     .map((row) => row.refereeNightId);
 
   if (staleNightIds.length === 0) return [] as string[];
@@ -108,7 +196,9 @@ async function clearStaleRefereeNightAssignment(input: {
     `),
   ]);
 
-  await Promise.all(staleNightIds.map((nightId) => recalculateRefereeNightCashup(nightId)));
+  await Promise.all(
+    staleNightIds.map((nightId) => recalculateRefereeNightCashup(nightId)),
+  );
   return staleNightIds;
 }
 
@@ -141,7 +231,10 @@ async function resyncMatchFeeMessages(input: {
     select: { id: true },
   });
 
-  if (input.status === FixtureStatus.POSTPONED || input.status === FixtureStatus.CANCELLED) {
+  if (
+    input.status === FixtureStatus.POSTPONED ||
+    input.status === FixtureStatus.CANCELLED
+  ) {
     await cancelQueuedMatchFeeNotificationDispatches(
       allCharges.map((charge) => charge.id),
       prisma,
@@ -201,18 +294,24 @@ async function resyncMatchFeeMessages(input: {
     mode: shouldRequeueInitialRequest ? "all" : "reminders_only",
   });
 
-  return { queued: queued.queued, activeChargeCount: chargeSync.activeCharges.length };
+  return {
+    queued: queued.queued,
+    activeChargeCount: chargeSync.activeCharges.length,
+  };
 }
 
 export async function POST(request: Request) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const formData = await request.formData();
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
   const returnTo = getSafeReturnTo(formData.get("returnTo"));
 
   if (!fixtureId) {
-    return NextResponse.json({ ok: false, error: "Missing fixture id.", returnTo }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing fixture id.", returnTo },
+      { status: 400 },
+    );
   }
 
   const fixture = await prisma.fixture.findUnique({
@@ -224,15 +323,44 @@ export async function POST(request: Request) {
       status: true,
       matchFeePence: true,
       refereeId: true,
-      league: { select: { name: true, season: true, slug: true } },
+      publishedAt: true,
+      pitch: true,
+      venueId: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+          slug: true,
+          venueName: true,
+        },
+      },
+      venue: { select: { id: true, name: true } },
+      referee: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdFromLeadId: true,
+        },
+      },
       homeTeam: { select: { id: true, name: true, logoUrl: true } },
       awayTeam: { select: { id: true, name: true, logoUrl: true } },
-      paymentCharges: { select: { id: true, teamId: true, amountPence: true, status: true } },
+      paymentCharges: {
+        select: {
+          id: true,
+          teamId: true,
+          amountPence: true,
+          status: true,
+        },
+      },
     },
   });
 
   if (!fixture) {
-    return NextResponse.json({ ok: false, error: "Fixture not found.", returnTo }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: "Fixture not found.", returnTo },
+      { status: 404 },
+    );
   }
 
   if (fixture.status === FixtureStatus.COMPLETED) {
@@ -250,20 +378,59 @@ export async function POST(request: Request) {
   const refereeId = String(formData.get("refereeId") ?? "").trim() || null;
   const venueId = String(formData.get("venueId") ?? "").trim() || null;
   const kickoffTime = String(formData.get("kickoffTime") ?? "").trim();
-  const status = parseFixtureStatus(String(formData.get("status") ?? "").trim());
-  const kickoffAt = parseOperationalKickoff({ currentKickoffAt: fixture.kickoffAt, timeInput: kickoffTime });
+  const status = parseFixtureStatus(
+    String(formData.get("status") ?? "").trim(),
+  );
+  const kickoffAt = parseOperationalKickoff({
+    currentKickoffAt: fixture.kickoffAt,
+    timeInput: kickoffTime,
+  });
 
-  const referee = refereeId
-    ? await prisma.user.findFirst({
-        where: { id: refereeId, role: { in: [UserRole.REFEREE, UserRole.ADMIN] } },
-        select: { id: true },
-      })
-    : null;
+  const [referee, venue] = await Promise.all([
+    refereeId
+      ? prisma.user.findFirst({
+          where: {
+            id: refereeId,
+            role: { in: [UserRole.REFEREE, UserRole.ADMIN] },
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            createdFromLeadId: true,
+          },
+        })
+      : Promise.resolve(null),
+    venueId
+      ? prisma.venue.findUnique({
+          where: { id: venueId },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (refereeId && !referee) {
+    return NextResponse.json(
+      { ok: false, error: "Selected referee was not found.", returnTo },
+      { status: 400 },
+    );
+  }
+
+  if (venueId && !venue) {
+    return NextResponse.json(
+      { ok: false, error: "Selected venue was not found.", returnTo },
+      { status: 400 },
+    );
+  }
 
   const nextRefereeId = referee?.id ?? null;
-  const changedRefereeNightIds = fixture.refereeId !== nextRefereeId
-    ? await clearStaleRefereeNightAssignment({ fixtureId: fixture.id, nextRefereeId })
-    : [];
+  const changedRefereeNightIds =
+    fixture.refereeId !== nextRefereeId
+      ? await clearStaleRefereeNightAssignment({
+          fixtureId: fixture.id,
+          nextRefereeId,
+        })
+      : [];
 
   await prisma.fixture.update({
     where: { id: fixture.id },
@@ -300,6 +467,48 @@ export async function POST(request: Request) {
     awayMatchFeePence,
   });
 
+  let notificationError = false;
+  let notifications: NightBoardFixtureNotificationSummary;
+
+  try {
+    notifications = await queueNightBoardFixtureChangeNotifications({
+      fixtureId: fixture.id,
+      leagueId: fixture.leagueId,
+      leagueName: fixture.league.name,
+      leagueSeason: fixture.league.season,
+      leagueSlug: fixture.league.slug,
+      publishedAt: fixture.publishedAt,
+      homeTeam: fixture.homeTeam,
+      awayTeam: fixture.awayTeam,
+      before: {
+        kickoffAt: fixture.kickoffAt,
+        venueId: fixture.venueId,
+        venueName: fixture.venue?.name ?? fixture.league.venueName ?? null,
+        pitch: fixture.pitch,
+        status: fixture.status,
+        referee: fixture.referee,
+      },
+      after: {
+        kickoffAt,
+        venueId,
+        venueName: venue?.name ?? fixture.league.venueName ?? null,
+        pitch: pitch || null,
+        status,
+        referee,
+      },
+      createdByUserId: user?.id ?? null,
+    });
+  } catch (error) {
+    notificationError = true;
+    notifications = emptyNotificationSummary(
+      "The match was saved, but SIXFL could not finish checking the fixture-change notifications.",
+    );
+    console.error("Night Board match saved but notification sync failed", {
+      fixtureId: fixture.id,
+      error,
+    });
+  }
+
   revalidatePath("/admin/night-board");
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/referee-nights");
@@ -315,5 +524,17 @@ export async function POST(request: Request) {
     revalidatePath(`/leagues/${fixture.league.slug}/fixtures`);
   }
 
-  return NextResponse.json({ ok: true, returnTo, staleRefereeNightMessagesCleared: changedRefereeNightIds.length, ...sync });
+  const noticeReturnTo = buildReturnToWithSaveNotice({
+    returnTo,
+    notifications,
+    notificationError,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    returnTo: noticeReturnTo,
+    staleRefereeNightMessagesCleared: changedRefereeNightIds.length,
+    notifications,
+    ...sync,
+  });
 }
