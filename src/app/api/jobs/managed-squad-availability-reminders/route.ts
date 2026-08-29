@@ -18,6 +18,11 @@ import { backfillTeamMemberProfilesFromProspects } from "@/lib/teamMemberProfile
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type UnavailableMemberRow = {
+  id: string;
+  squadStatus: "INJURED" | "INACTIVE";
+};
+
 function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
@@ -113,16 +118,22 @@ async function runManagedSquadAvailabilityReminderJob() {
     : [];
 
   const memberIds = members.map((member) => member.id);
-  const injuredRows = memberIds.length
-    ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-        SELECT "id"
+  const unavailableRows = memberIds.length
+    ? await prisma.$queryRaw<UnavailableMemberRow[]>(Prisma.sql`
+        SELECT "id", "squadStatus"
         FROM "TeamMember"
         WHERE "id" IN (${Prisma.join(memberIds)})
-          AND "squadStatus" = 'INJURED'
+          AND "squadStatus" IN ('INJURED', 'INACTIVE')
       `)
     : [];
-  const injuredMemberIds = new Set(injuredRows.map((row) => row.id));
-  const activeMembers = members.filter((member) => !injuredMemberIds.has(member.id));
+  const unavailableMemberIds = new Set(unavailableRows.map((row) => row.id));
+  const activeMembers = members.filter((member) => !unavailableMemberIds.has(member.id));
+  const skippedInjuredMembers = unavailableRows.filter(
+    (row) => row.squadStatus === "INJURED",
+  ).length;
+  const skippedInactiveMembers = unavailableRows.filter(
+    (row) => row.squadStatus === "INACTIVE",
+  ).length;
 
   const membersByTeamId = new Map<string, typeof activeMembers>();
 
@@ -136,7 +147,8 @@ async function runManagedSquadAvailabilityReminderJob() {
   const summary = {
     scannedFixtures: fixtures.length,
     scannedMembers: members.length,
-    skippedInjuredMembers: injuredMemberIds.size,
+    skippedInjuredMembers,
+    skippedInactiveMembers,
     queuedDispatches: 0,
     alreadySent: 0,
     skipped: 0,
