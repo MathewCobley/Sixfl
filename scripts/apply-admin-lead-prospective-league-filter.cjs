@@ -46,8 +46,8 @@ function patchPage() {
   }
 
   replace(
-    `import LeadConfirmationQuickSendButton from "@/components/admin/leads/LeadConfirmationQuickSendButton";\nimport { prisma } from "@/lib/prisma";`,
-    `import LeadConfirmationQuickSendButton from "@/components/admin/leads/LeadConfirmationQuickSendButton";\nimport { getCurrentLeagueOptions } from "@/lib/current-leagues";\nimport { formatProspectiveLeagueLabel } from "@/lib/leads/prospectiveLeague";\nimport { prisma } from "@/lib/prisma";`,
+    `import { prisma } from "@/lib/prisma";`,
+    `import { getCurrentLeagueOptions } from "@/lib/current-leagues";\nimport { formatProspectiveLeagueLabel } from "@/lib/leads/prospectiveLeague";\nimport { prisma } from "@/lib/prisma";`,
     "Admin Leads helper imports",
   );
 
