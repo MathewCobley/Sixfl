@@ -41,11 +41,15 @@ export default function LeadConfirmationQuickSendButton({
       const emailStatus = result.status ?? "UNKNOWN";
       const smsStatus = result.smsStatus ?? "UNKNOWN";
       const smsFailureReason = result.smsFailureReason ?? null;
+      const emailVersion =
+        result.leagueMode === "LIVE"
+          ? "Live-league reassurance email"
+          : "New-league reassurance email";
 
       const emailMessage =
         emailStatus === "QUEUED"
-          ? "Reassurance email queued."
-          : `The reassurance email was ${emailStatus.toLowerCase()}.`;
+          ? `${emailVersion} queued.`
+          : `The ${emailVersion.toLowerCase()} was ${emailStatus.toLowerCase()}.`;
 
       const smsMessage =
         smsStatus === "QUEUED"
@@ -96,7 +100,7 @@ export default function LeadConfirmationQuickSendButton({
         disabled={!canSend || pending}
         title={
           canSend
-            ? "Send the league reassurance email and automatic inbox-check SMS"
+            ? "Send the correct new-league or live-league reassurance email, plus the automatic inbox-check SMS"
             : "Set an email and prospective league before sending"
         }
         className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-center text-xs font-bold leading-4 tracking-[0.08em] text-violet-100 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
