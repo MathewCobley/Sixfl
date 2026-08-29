@@ -6,6 +6,14 @@ const CAMPAIGN_TEMPLATE_KEY = 'league-starter-guide';
 const SYSTEM_TEMPLATE_KEY = 'team-lead-reassurance-email';
 const DEFAULT_SUBJECT = 'Everything you need to know about joining SIXFL ⚽';
 const DEFAULT_CTA_LABEL = 'YES — I WANT TO ENTER A TEAM';
+const OLD_BENEFIT_LINE = '✅ A properly structured local competition';
+const NEW_BENEFIT_LINE = '✅ Games recorded and displayed on YouTube';
+
+function updateYouTubeBenefit(value) {
+  const body = value?.trim();
+  if (!body) return null;
+  return body.replaceAll(OLD_BENEFIT_LINE, NEW_BENEFIT_LINE);
+}
 
 const DEFAULT_BODY = `Hi {{firstName}},
 
@@ -34,7 +42,7 @@ SIXFL is designed to feel like a proper football league rather than just turning
 ✅ Your own team and player accounts
 ✅ Team statistics and match information
 ✅ SIXFL AI match predictions
-✅ A properly structured local competition
+✅ Games recorded and displayed on YouTube
 
 6-a-side football. Done properly.
 
@@ -139,6 +147,10 @@ async function main() {
   ]);
 
   const sourceTemplate = campaignTemplate || systemTemplate;
+  const updatedBody =
+    updateYouTubeBenefit(campaignTemplate?.body) ||
+    updateYouTubeBenefit(systemTemplate?.body) ||
+    DEFAULT_BODY;
 
   await prisma.notificationTemplate.upsert({
     where: { key: SYSTEM_TEMPLATE_KEY },
@@ -152,9 +164,10 @@ async function main() {
               campaignTemplate.description?.trim() ||
               'Friendly league starter information for an existing team lead, including costs, squad size, no long-term contract and advance fixture availability.',
             subject: campaignTemplate.subject.trim() || DEFAULT_SUBJECT,
-            body: campaignTemplate.body.trim() || DEFAULT_BODY,
           }
         : {}),
+      // Preserve all other admin edits while applying this requested copy change.
+      body: updatedBody,
       // On later starts, preserve wording changed in System Templates. Only keep
       // the operational classification and secure lead-link destination fixed.
       kind: 'TRANSACTIONAL',
@@ -177,7 +190,7 @@ async function main() {
       channel: 'EMAIL',
       audience: 'LEAD',
       subject: sourceTemplate?.subject?.trim() || DEFAULT_SUBJECT,
-      body: sourceTemplate?.body?.trim() || DEFAULT_BODY,
+      body: updatedBody,
       ctaLabel: sourceTemplate?.ctaLabel?.trim() || DEFAULT_CTA_LABEL,
       // The reassurance sender supplies the secure team-decision URL through
       // this supported CTA variable.
