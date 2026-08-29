@@ -51,6 +51,14 @@ function getInterestType(value: FormDataEntryValue | null) {
   return allowed.includes(parsed as InterestType) ? (parsed as InterestType) : "TEAM";
 }
 
+function formatCalledAt(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/London",
+  }).format(value);
+}
+
 function Field({
   label,
   name,
@@ -73,6 +81,29 @@ function Field({
       />
     </label>
   );
+}
+
+async function markLeadCalledAction(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+
+  const leadId = String(formData.get("leadId") ?? "").trim();
+  if (!leadId) redirect("/admin/leads?error=missing_lead");
+
+  const calledAt = new Date();
+  await prisma.interestLead.update({
+    where: { id: leadId },
+    data: {
+      status: "CONTACTED",
+      contactedAt: calledAt,
+    },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${leadId}`);
+  revalidatePath(`/admin/leads/${leadId}/edit`);
+  redirect(`/admin/leads/${leadId}/edit?called=1`);
 }
 
 async function updateLeadDetailsAction(formData: FormData) {
@@ -156,7 +187,7 @@ export default async function EditLeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; called?: string }>;
 }) {
   await requireAdmin();
 
@@ -176,6 +207,7 @@ export default async function EditLeadPage({
       status: true,
       interestType: true,
       leagueId: true,
+      contactedAt: true,
     },
   });
 
@@ -200,7 +232,7 @@ export default async function EditLeadPage({
         <div>
           <p className="text-sm text-white/55">Admin • Edit lead</p>
           <h1 className="mt-2 text-3xl font-black text-white">{lead.contactName}</h1>
-          <p className="mt-2 text-sm text-white/60">Update the lead type and contact details before emailing, texting or converting the lead.</p>
+          <p className="mt-2 text-sm text-white/60">Update the lead, record phone calls and keep notes on what they have told you.</p>
         </div>
 
         <Link
@@ -214,6 +246,33 @@ export default async function EditLeadPage({
       {errorMessage ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">{errorMessage}</div>
       ) : null}
+
+      {sp.called === "1" ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Call recorded. This lead now shows as Contacted.
+        </div>
+      ) : null}
+
+      <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-200/70">Phone contact</p>
+            <h2 className="mt-2 text-xl font-bold text-white">{lead.contactedAt ? "This lead has been called" : "Have you called this lead?"}</h2>
+            <p className="mt-2 text-sm text-white/60">
+              {lead.contactedAt ? `Last recorded call/contact: ${formatCalledAt(lead.contactedAt)}` : "Click once after you make the call. It records the time and changes the lead to Contacted."}
+            </p>
+          </div>
+          <form action={markLeadCalledAction}>
+            <input type="hidden" name="leadId" value={lead.id} />
+            <button
+              type="submit"
+              className="inline-flex h-12 shrink-0 items-center justify-center rounded-xl border border-sky-300/30 bg-sky-400/15 px-5 text-sm font-bold text-sky-50 transition hover:bg-sky-400/25"
+            >
+              ✓ Mark as called
+            </button>
+          </form>
+        </div>
+      </section>
 
       <form action={updateLeadDetailsAction} className="rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.12),transparent_42%),rgba(255,255,255,0.04)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
         <input type="hidden" name="leadId" value={lead.id} />
@@ -257,13 +316,15 @@ export default async function EditLeadPage({
         </div>
 
         <label className="mt-4 block space-y-2">
-          <span className="text-sm font-medium text-white/60">Message / notes</span>
+          <span className="text-sm font-medium text-white/60">Conversation / lead notes</span>
           <textarea
             name="message"
-            rows={6}
+            rows={7}
             defaultValue={lead.message ?? ""}
+            placeholder="Example: Spoke to James. Has 7 players, interested in Wednesday league, checking with the rest of the team and asked me to call again next week."
             className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/35 focus:border-emerald-500/60"
           />
+          <span className="block text-xs leading-5 text-white/40">Use this for the useful details from calls so you can see what was discussed when you come back to the lead.</span>
         </label>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -271,7 +332,7 @@ export default async function EditLeadPage({
             type="submit"
             className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/30"
           >
-            Save lead details
+            Save lead details & notes
           </button>
 
           <Link
