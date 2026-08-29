@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  LeadStatus,
   NotificationAudience,
   NotificationChannel,
   NotificationDispatchStatus,
@@ -26,15 +27,17 @@ const CHASE_COOLDOWN_MS = 60 * 60 * 1000;
 const TEAM_CONFIRMATION_CHASE_BODY = [
   "Hi {{firstName}},",
   "",
-  "Just a quick reminder to complete the short SIXFL team form we sent you for {{leagueName}}.",
+  "Just a quick reminder about your SIXFL {{leagueName}} enquiry.",
   "",
-  "We’re now putting the league together and your response helps us confirm which teams are still looking to play.",
+  "We already have your contact details. We now only need a clear yes or no on whether you want to enter a team.",
   "",
-  "It only takes a minute. Please use the button below to confirm your team’s place and details.",
+  "If the answer is yes, the short page also lets you add your team name if you have chosen one and tell us roughly how many players you have.",
+  "",
+  "There is no payment due now and there is no long-term contract tying your team in.",
   "",
   "{{cta}}",
   "",
-  "If you’re still interested but need a little more time, completing the form lets us know to keep your team in our planning. If you’re no longer looking to join, just reply to this email and we’ll update our list.",
+  "If you are not entering a team, please choose the no option on the same page so we can update our list and stop chasing you.",
   "",
   "Thanks,",
   "SIXFL",
@@ -48,29 +51,29 @@ async function ensureChaseTemplate() {
   return prisma.notificationTemplate.upsert({
     where: { key: TEAM_CONFIRMATION_CHASE_TEMPLATE_KEY },
     update: {
-      name: "Team place confirmation chase",
+      name: "Team commitment reminder",
       description:
-        "Friendly reminder asking a pending team lead to complete the team place confirmation form.",
+        "Reminder asking an existing team lead for a clear yes/no decision without repeating their contact details.",
       kind: NotificationTemplateKind.TRANSACTIONAL,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.LEAD,
-      subject: "Quick reminder — complete your SIXFL team form",
+      subject: "SIXFL {{leagueName}} — are you entering a team?",
       body: TEAM_CONFIRMATION_CHASE_BODY,
-      ctaLabel: "Complete team form",
+      ctaLabel: "YES — I WANT TO ENTER A TEAM",
       ctaUrlKey: "teamConfirmationUrl",
       isActive: true,
     },
     create: {
       key: TEAM_CONFIRMATION_CHASE_TEMPLATE_KEY,
-      name: "Team place confirmation chase",
+      name: "Team commitment reminder",
       description:
-        "Friendly reminder asking a pending team lead to complete the team place confirmation form.",
+        "Reminder asking an existing team lead for a clear yes/no decision without repeating their contact details.",
       kind: NotificationTemplateKind.TRANSACTIONAL,
       channel: NotificationChannel.EMAIL,
       audience: NotificationAudience.LEAD,
-      subject: "Quick reminder — complete your SIXFL team form",
+      subject: "SIXFL {{leagueName}} — are you entering a team?",
       body: TEAM_CONFIRMATION_CHASE_BODY,
-      ctaLabel: "Complete team form",
+      ctaLabel: "YES — I WANT TO ENTER A TEAM",
       ctaUrlKey: "teamConfirmationUrl",
       isActive: true,
     },
@@ -81,9 +84,7 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
   const { user } = await requireAdmin();
   const leadId = String(formData.get("leadId") ?? "").trim();
 
-  if (!leadId) {
-    return { ok: false, error: "Missing lead id." };
-  }
+  if (!leadId) return { ok: false, error: "Missing lead id." };
 
   const [lead, confirmation] = await Promise.all([
     prisma.interestLead.findUnique({
@@ -91,6 +92,8 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
       select: {
         id: true,
         interestType: true,
+        status: true,
+        convertedTeamId: true,
         contactName: true,
         teamName: true,
         email: true,
@@ -104,11 +107,7 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
             competition: {
               select: {
                 currentLeague: {
-                  select: {
-                    id: true,
-                    name: true,
-                    season: true,
-                  },
+                  select: { id: true, name: true, season: true },
                 },
               },
             },
@@ -119,30 +118,35 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
     getTeamPlaceConfirmationStatus(leadId),
   ]);
 
-  if (!lead) {
-    return { ok: false, error: "Lead not found." };
-  }
-
+  if (!lead) return { ok: false, error: "Lead not found." };
   if (lead.interestType !== "TEAM") {
-    return { ok: false, error: "Only team leads can receive this chase email." };
+    return { ok: false, error: "Only team leads can receive this reminder." };
   }
-
+  if (lead.convertedTeamId) {
+    return { ok: false, error: "This lead has already been converted into a SIXFL team." };
+  }
+  if (lead.status === LeadStatus.CLOSED) {
+    return { ok: false, error: "This lead is closed and should not be chased." };
+  }
+  if (confirmation?.status === "CONFIRMED") {
+    return { ok: false, error: "This lead has already confirmed that they want to enter a team." };
+  }
+  if (confirmation?.status === "DECLINED") {
+    return { ok: false, error: "This lead has already said they are not entering a team." };
+  }
   if (!confirmation?.sentAt || confirmation.status !== "PENDING") {
     return {
       ok: false,
-      error: "This team is not waiting on a confirmation form, so it does not need chasing.",
+      error: "Send the decision link first. There is not yet a pending response to chase.",
     };
   }
 
   const email = lead.email?.trim().toLowerCase();
-  if (!email) {
-    return { ok: false, error: "This lead does not have an email address." };
-  }
-
+  if (!email) return { ok: false, error: "This lead does not have an email address." };
   if (!lead.leagueId || !lead.league) {
     return {
       ok: false,
-      error: "Set a prospective league on this lead before sending a chase.",
+      error: "Set a prospective league on this lead before sending a reminder.",
     };
   }
 
@@ -166,18 +170,15 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
   if (recentChase) {
     return {
       ok: false,
-      error: "A chase has already been sent for this team within the last hour.",
+      error: "A reminder has already been sent for this team within the last hour.",
     };
   }
 
   await ensureChaseTemplate();
 
   const effectiveLeague = lead.league.competition?.currentLeague ?? lead.league;
-  const leagueName = `${effectiveLeague.name}${
-    effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""
-  }`;
-  const displayName =
-    lead.contactName?.trim() || lead.teamName?.trim() || email;
+  const leagueName = `${effectiveLeague.name}${effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""}`;
+  const displayName = lead.contactName?.trim() || lead.teamName?.trim() || email;
   const confirmationUrl = getTeamPlaceConfirmationUrl(lead.id);
 
   const recipient = await upsertNotificationRecipient({
@@ -196,7 +197,7 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
       leagueName,
       teamName: lead.teamName,
       contactName: lead.contactName,
-      entityType: "TEAM_LEAD_CONFIRMATION_CHASE",
+      entityType: "TEAM_LEAD_COMMITMENT_REMINDER",
     },
   });
 
@@ -215,8 +216,8 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
       sourceType: TEAM_CONFIRMATION_CHASE_SOURCE_TYPE,
       sourceId: lead.id,
       metadata: {
-        origin: "lead_team_confirmation_chase",
-        originLabel: "Team place confirmation chase",
+        origin: "lead_team_commitment_reminder",
+        originLabel: "Team commitment reminder",
         leadId: lead.id,
         leagueId: effectiveLeague.id,
         originalLeadLeagueId: lead.leagueId,
@@ -228,11 +229,10 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
     });
 
     await logNotificationDispatchToThread({ dispatch, recipient });
-
     await prisma.interestLeadEmail.create({
       data: {
         interestLeadId: lead.id,
-        subject: dispatch.subject ?? "Quick reminder — complete your SIXFL team form",
+        subject: dispatch.subject ?? `SIXFL ${leagueName} — are you entering a team?`,
         body: dispatch.bodyText,
         sentTo: email,
       },
@@ -247,10 +247,7 @@ export async function sendTeamPlaceConfirmationChaseAction(formData: FormData) {
     console.error("sendTeamPlaceConfirmationChaseAction error", error);
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "The chase email could not be queued.",
+      error: error instanceof Error ? error.message : "The reminder email could not be queued.",
     };
   }
 }
