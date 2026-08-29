@@ -11,6 +11,8 @@ jobs:
   inactive-player-status:
     name: Preserve inactive historic player status
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl_contract
 
     steps:
       - name: Check out repository
