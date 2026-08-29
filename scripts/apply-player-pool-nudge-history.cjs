@@ -27,6 +27,32 @@ replaceOnce(
 );
 
 replaceOnce(
+  'import { formatDateTimeInLondon } from "@/lib/datetime/london";',
+  [
+    'import { formatDateTimeInLondon } from "@/lib/datetime/london";',
+    'import { ensurePlayerPoolProfileReminderTemplate } from "@/lib/player-pool/profile-reminders";',
+  ].join("\n"),
+  "profile reminder template import",
+);
+
+replaceOnce(
+  [
+    "  await requireAdmin();",
+    "  await ensurePlayerPoolTables();",
+    "",
+    "  const params = (await searchParams) ?? {};",
+  ].join("\n"),
+  [
+    "  await requireAdmin();",
+    "  await ensurePlayerPoolTables();",
+    "  await ensurePlayerPoolProfileReminderTemplate();",
+    "",
+    "  const params = (await searchParams) ?? {};",
+  ].join("\n"),
+  "profile reminder template initialisation",
+);
+
+replaceOnce(
   [
     "  invitedAt: Date | null;",
     "  profileSubmittedAt: Date | null;",
@@ -167,6 +193,7 @@ if (fs.existsSync(bridgePath)) {
 if (
   !source.includes("PlayerPoolNudgeButton") ||
   !source.includes("BulkPlayerPoolProfileReminderButton") ||
+  !source.includes("ensurePlayerPoolProfileReminderTemplate") ||
   !source.includes("awaitingCount={counts.awaiting}") ||
   !source.includes('dispatch."sourceType" = \'PLAYER_POOL_PROFILE_NUDGE\'') ||
   !source.includes("initialNudgeCount={profile.nudgeCount}")
@@ -175,5 +202,5 @@ if (
 }
 
 console.log(
-  "PlayerPool reminders now include a bulk awaiting-profile email, plus persistent per-player time, delivery status and sender history.",
+  "PlayerPool reminders now include a bulk awaiting-profile email, an editable system template, and persistent per-player time, delivery status and sender history.",
 );
