@@ -59,3 +59,7 @@ if (changed) {
 } else {
   console.log("Admin Teams earliest kick-off summary already applied.");
 }
+
+// Run this last so it extends the fully prepared Admin Leads source, including
+// the existing include/exclude filters, without being overwritten later.
+require("./apply-admin-lead-prospective-league-filter.cjs");
