@@ -1,0 +1,41 @@
+name: Inactive player status contract
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  inactive-player-status:
+    name: Preserve inactive historic player status
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply production source preparation
+        run: npm run prebuild
+
+      - name: Check inactive player status storage
+        run: node scripts/check-inactive-player-status-storage.mjs
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema and migrations
+        run: npx prisma validate
+
+      - name: Type-check application source
+        run: npx tsc --noEmit
