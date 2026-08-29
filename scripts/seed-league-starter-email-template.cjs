@@ -2,7 +2,12 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-const body = `Hi {{firstName}},
+const CAMPAIGN_TEMPLATE_KEY = 'league-starter-guide';
+const SYSTEM_TEMPLATE_KEY = 'team-lead-reassurance-email';
+const DEFAULT_SUBJECT = 'Everything you need to know about joining SIXFL ⚽';
+const DEFAULT_CTA_LABEL = 'YES — I WANT TO ENTER A TEAM';
+
+const DEFAULT_BODY = `Hi {{firstName}},
 
 Thanks for your interest in joining SIXFL {{leagueName}} ⚽
 
@@ -109,41 +114,78 @@ SIXFL
 
 6-a-side football. Done properly.`;
 
-const templateData = {
-  name: 'League starter guide',
-  description: 'Friendly starter email for existing team leads. The CTA uses their secure lead record so they confirm intent without re-entering contact details.',
-  audience: 'LEAD',
-  interestType: 'TEAM',
-  subject: 'Everything you need to know about joining SIXFL ⚽',
-  body,
-  ctaLabel: 'YES — I WANT TO ENTER A TEAM',
-  ctaUrlKey: 'teamConfirmationUrl',
-  isActive: true,
-};
-
 async function main() {
-  await prisma.emailTemplate.upsert({
-    where: { key: 'league-starter-guide' },
+  const [campaignTemplate, systemTemplate] = await Promise.all([
+    prisma.emailTemplate.findUnique({
+      where: { key: CAMPAIGN_TEMPLATE_KEY },
+      select: {
+        name: true,
+        description: true,
+        subject: true,
+        body: true,
+        ctaLabel: true,
+      },
+    }),
+    prisma.notificationTemplate.findUnique({
+      where: { key: SYSTEM_TEMPLATE_KEY },
+      select: {
+        name: true,
+        description: true,
+        subject: true,
+        body: true,
+        ctaLabel: true,
+      },
+    }),
+  ]);
+
+  const sourceTemplate = systemTemplate || campaignTemplate;
+
+  await prisma.notificationTemplate.upsert({
+    where: { key: SYSTEM_TEMPLATE_KEY },
     update: {
-      // Keep the subject and body editable in Admin Templates. Only enforce the
-      // secure destination that prevents existing leads being sent through a
-      // duplicate registration form.
-      ctaLabel: 'YES — I WANT TO ENTER A TEAM',
-      ctaUrlKey: 'teamConfirmationUrl',
+      // Preserve any wording changed in the System Templates editor. Only keep
+      // the operational classification and secure lead-link destination fixed.
+      kind: 'TRANSACTIONAL',
+      channel: 'EMAIL',
+      audience: 'LEAD',
+      ctaLabel:
+        systemTemplate?.ctaLabel?.trim() ||
+        campaignTemplate?.ctaLabel?.trim() ||
+        DEFAULT_CTA_LABEL,
+      ctaUrlKey: 'signupUrl',
       isActive: true,
     },
     create: {
-      key: 'league-starter-guide',
-      ...templateData,
+      key: SYSTEM_TEMPLATE_KEY,
+      name: 'Team lead reassurance email',
+      description:
+        sourceTemplate?.description?.trim() ||
+        'Friendly league starter information for an existing team lead, including costs, squad size, no long-term contract and advance fixture availability.',
+      kind: 'TRANSACTIONAL',
+      channel: 'EMAIL',
+      audience: 'LEAD',
+      subject: sourceTemplate?.subject?.trim() || DEFAULT_SUBJECT,
+      body: sourceTemplate?.body?.trim() || DEFAULT_BODY,
+      ctaLabel: sourceTemplate?.ctaLabel?.trim() || DEFAULT_CTA_LABEL,
+      // The reassurance sender supplies the secure team-decision URL through
+      // this supported CTA variable.
+      ctaUrlKey: 'signupUrl',
+      isActive: true,
     },
   });
 
-  console.log('League starter guide email template is available.');
+  // The template now belongs to the operational system flow and should not
+  // appear as a separate campaign template as well.
+  await prisma.emailTemplate.deleteMany({
+    where: { key: CAMPAIGN_TEMPLATE_KEY },
+  });
+
+  console.log('Team lead reassurance email is available in System Templates.');
 }
 
 main()
   .catch((error) => {
-    console.error('league starter template seed failed', error);
+    console.error('team lead reassurance template migration failed', error);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
