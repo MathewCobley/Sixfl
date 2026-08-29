@@ -1,0 +1,89 @@
+name: Temporary reassurance server-action source fix
+
+on:
+  push:
+    branches:
+      - fix/player-pool-reminder-deployment-build
+
+permissions:
+  contents: write
+
+jobs:
+  patch-source:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/player-pool-reminder-deployment-build
+
+      - name: Make server-action exports Next.js-safe
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          action_path = Path("src/app/(admin)/admin/leads/reassurance-email-actions.ts")
+          source = action_path.read_text(encoding="utf-8")
+
+          replacements = {
+              'export const TEAM_REASSURANCE_TEMPLATE_KEY = "team-lead-reassurance-email";':
+                  'const TEAM_REASSURANCE_TEMPLATE_KEY = "team-lead-reassurance-email";',
+              'export const TEAM_REASSURANCE_SOURCE_TYPE = "LEAD_REASSURANCE_EMAIL";':
+                  'const TEAM_REASSURANCE_SOURCE_TYPE = "LEAD_REASSURANCE_EMAIL";',
+              'export const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms";':
+                  'const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms";',
+              'export const TEAM_REASSURANCE_SMS_SOURCE_TYPE = "LEAD_REASSURANCE_SMS";':
+                  'const TEAM_REASSURANCE_SMS_SOURCE_TYPE = "LEAD_REASSURANCE_SMS";',
+          }
+
+          for before, after in replacements.items():
+              if before not in source and after not in source:
+                  raise SystemExit(f"Missing reassurance constant anchor: {before}")
+              source = source.replace(before, after)
+
+          if "export const TEAM_REASSURANCE" in source:
+              raise SystemExit("A non-function export remains in the server-action module.")
+          if "export async function sendLeadReassuranceEmailAction" not in source:
+              raise SystemExit("The reassurance server action export is missing.")
+
+          action_path.write_text(source, encoding="utf-8")
+
+          contract_path = Path("scripts/check-team-confirmation-contract.mjs")
+          contract = contract_path.read_text(encoding="utf-8")
+          contract = contract.replace(
+              "'export const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = \"team-lead-reassurance-sms\"'",
+              "'const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = \"team-lead-reassurance-sms\"'",
+          )
+
+          contract_anchor = '''expect(
+            reassuranceAction.includes(
+              'const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms"',
+            ) && reassuranceAction.includes("DEFAULT_SMS_BODY"),
+            "the reassurance flow must define a dedicated editable system SMS template",
+          );'''
+          if contract_anchor not in contract:
+              raise SystemExit("The reassurance contract anchor was not updated.")
+
+          safety_check = '''expect(
+            !reassuranceAction.includes("export const TEAM_REASSURANCE"),
+            "the reassurance server-action module must export only async actions",
+          );
+          '''
+          if safety_check not in contract:
+              contract = contract.replace(contract_anchor + "\n", contract_anchor + "\n" + safety_check)
+
+          contract_path.write_text(contract, encoding="utf-8")
+          PY
+
+      - name: Commit repair to branch
+        run: |
+          if git diff --quiet; then
+            echo "Source already repaired."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/'(admin)'/admin/leads/reassurance-email-actions.ts scripts/check-team-confirmation-contract.mjs
+          git commit -m "Fix reassurance server-action exports"
+          git push origin HEAD:fix/player-pool-reminder-deployment-build
