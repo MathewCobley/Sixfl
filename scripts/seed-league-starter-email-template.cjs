@@ -138,19 +138,31 @@ async function main() {
     }),
   ]);
 
-  const sourceTemplate = systemTemplate || campaignTemplate;
+  const sourceTemplate = campaignTemplate || systemTemplate;
 
   await prisma.notificationTemplate.upsert({
     where: { key: SYSTEM_TEMPLATE_KEY },
     update: {
-      // Preserve any wording changed in the System Templates editor. Only keep
+      // If the old campaign version still exists, this is the one-time move:
+      // carry across the wording the admin has already edited before removing it.
+      ...(campaignTemplate
+        ? {
+            name: 'Team lead reassurance email',
+            description:
+              campaignTemplate.description?.trim() ||
+              'Friendly league starter information for an existing team lead, including costs, squad size, no long-term contract and advance fixture availability.',
+            subject: campaignTemplate.subject.trim() || DEFAULT_SUBJECT,
+            body: campaignTemplate.body.trim() || DEFAULT_BODY,
+          }
+        : {}),
+      // On later starts, preserve wording changed in System Templates. Only keep
       // the operational classification and secure lead-link destination fixed.
       kind: 'TRANSACTIONAL',
       channel: 'EMAIL',
       audience: 'LEAD',
       ctaLabel:
-        systemTemplate?.ctaLabel?.trim() ||
         campaignTemplate?.ctaLabel?.trim() ||
+        systemTemplate?.ctaLabel?.trim() ||
         DEFAULT_CTA_LABEL,
       ctaUrlKey: 'signupUrl',
       isActive: true,
