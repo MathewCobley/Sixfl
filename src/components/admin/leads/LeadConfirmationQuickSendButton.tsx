@@ -6,7 +6,9 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+
 import { sendTeamCommitmentEmailAction } from "@/app/(admin)/admin/leads/team-commitment-email-actions";
+import { sendLeadReassuranceEmailAction } from "@/app/(admin)/admin/leads/reassurance-email-actions";
 
 export default function LeadConfirmationQuickSendButton({
   leadId,
@@ -18,12 +20,35 @@ export default function LeadConfirmationQuickSendButton({
   alreadySent?: boolean;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [sendingReassurance, startReassuranceTransition] = useTransition();
+  const [sendingDecision, startDecisionTransition] = useTransition();
+  const pending = sendingReassurance || sendingDecision;
 
-  function handleClick() {
+  function handleReassuranceClick() {
     if (!canSend || pending) return;
 
-    startTransition(async () => {
+    startReassuranceTransition(async () => {
+      const formData = new FormData();
+      formData.append("leadId", leadId);
+
+      const result = await sendLeadReassuranceEmailAction(formData);
+
+      if (!result?.ok) {
+        alert(result?.error || "Failed to send the reassurance email.");
+        return;
+      }
+
+      alert(
+        "Reassurance email sent. It explains the league, costs, squad size, no long-term contract and fixture flexibility, and includes the secure team decision link.",
+      );
+      router.refresh();
+    });
+  }
+
+  function handleDecisionClick() {
+    if (!canSend || pending) return;
+
+    startDecisionTransition(async () => {
       const formData = new FormData();
       formData.append("leadId", leadId);
 
@@ -44,18 +69,38 @@ export default function LeadConfirmationQuickSendButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={!canSend || pending}
-      title={
-        canSend
-          ? "Send the secure team commitment link"
-          : "Set an email and prospective league before sending"
-      }
-      className="inline-flex h-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 text-xs font-bold tracking-[0.12em] text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
-    >
-      {pending ? "Sending…" : alreadySent ? "Resend decision link" : "Send decision link"}
-    </button>
+    <div className="flex flex-col items-end gap-2">
+      <button
+        type="button"
+        onClick={handleReassuranceClick}
+        disabled={!canSend || pending}
+        title={
+          canSend
+            ? "Send the friendly SIXFL league starter and reassurance email"
+            : "Set an email and prospective league before sending"
+        }
+        className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-center text-xs font-bold leading-4 tracking-[0.08em] text-violet-100 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
+      >
+        {sendingReassurance ? "Sending…" : "Reassurance email"}
+      </button>
+
+      <button
+        type="button"
+        onClick={handleDecisionClick}
+        disabled={!canSend || pending}
+        title={
+          canSend
+            ? "Send the secure team commitment link"
+            : "Set an email and prospective league before sending"
+        }
+        className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-center text-xs font-bold leading-4 tracking-[0.12em] text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
+      >
+        {sendingDecision
+          ? "Sending…"
+          : alreadySent
+            ? "Resend decision link"
+            : "Send decision link"}
+      </button>
+    </div>
   );
 }
