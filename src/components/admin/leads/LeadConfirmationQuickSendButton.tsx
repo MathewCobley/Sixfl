@@ -38,23 +38,27 @@ export default function LeadConfirmationQuickSendButton({
         return;
       }
 
+      const emailStatus = result.status ?? "UNKNOWN";
+      const smsStatus = result.smsStatus ?? "UNKNOWN";
+      const smsFailureReason = result.smsFailureReason ?? null;
+
       const emailMessage =
-        result.status === "QUEUED"
+        emailStatus === "QUEUED"
           ? "Reassurance email queued."
-          : `The reassurance email was ${result.status.toLowerCase()}.`;
+          : `The reassurance email was ${emailStatus.toLowerCase()}.`;
 
       const smsMessage =
-        result.smsStatus === "QUEUED"
+        smsStatus === "QUEUED"
           ? "The inbox-check SMS was also queued automatically."
-          : result.smsStatus === "NO_PHONE"
+          : smsStatus === "NO_PHONE"
             ? "No SMS was sent because this lead has no phone number."
-            : result.smsStatus === "EMAIL_NOT_QUEUED"
+            : smsStatus === "EMAIL_NOT_QUEUED"
               ? "The SMS was not sent because the email was not queued."
-              : result.smsStatus === "FAILED_TO_QUEUE"
+              : smsStatus === "FAILED_TO_QUEUE"
                 ? "The email was queued, but the automatic SMS could not be queued."
-                : result.smsStatus === "SKIPPED"
-                  ? `The email was queued, but the SMS was skipped${result.smsFailureReason ? `: ${result.smsFailureReason}` : "."}`
-                  : `SMS status: ${result.smsStatus.toLowerCase()}.`;
+                : smsStatus === "SKIPPED"
+                  ? `The email was queued, but the SMS was skipped${smsFailureReason ? `: ${smsFailureReason}` : "."}`
+                  : `SMS status: ${smsStatus.toLowerCase()}.`;
 
       alert(`${emailMessage} ${smsMessage}`);
       router.refresh();
