@@ -1,0 +1,37 @@
+name: Live league reassurance verification
+
+on:
+  push:
+    branches:
+      - feature/live-league-reassurance-email
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply production source preparation
+        run: npm run prebuild
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Check team confirmation and reassurance contracts
+        run: node scripts/check-team-confirmation-contract.mjs
+
+      - name: Type-check application
+        run: npx tsc --noEmit
