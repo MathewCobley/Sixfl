@@ -64,4 +64,3 @@ if (changed) {
 // being overwritten by an earlier compatibility step.
 require("./apply-admin-lead-prospective-league-filter.cjs");
 require("./apply-night-board-confirmation-reset-hardening.cjs");
-require("./apply-live-league-reassurance-email.cjs");
