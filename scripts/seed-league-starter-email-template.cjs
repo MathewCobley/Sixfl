@@ -10,15 +10,14 @@ If you’re thinking about entering a team, here’s everything you need to know
 
 ⚽ YOUR SIXFL LEAGUE
 
-📍 Venue: {{venue}}
-📅 Match night: {{matchNight}}
-🕐 Kick-offs: {{kickoffTimes}}
-🏁 Planned start: {{plannedStartDate}}
-💷 Cost: £40 per team, per match
+📍 Venue: {{venueName}}
+🕐 Kick-offs: {{kickoffInfo}}
+🏁 Planned start: {{proposedStartDate}}
+💷 Cost: {{costPerTeamPerMatch}} per team, per match
 
 That’s the team price, not per player.
 
-For example, with 8 players, that works out at just £5 each for the match.
+For example, at £40 with 8 players, that works out at just £5 each for the match.
 
 🏆 WHAT DO YOU GET?
 
@@ -66,7 +65,7 @@ Once the league launches, your fixtures, results and league table are all manage
 
 💷 WHAT DO I PAY — AND AM I TIED IN?
 
-The standard match fee is £40 per team for each weekly fixture.
+The standard match fee is {{costPerTeamPerMatch}} per team for each weekly fixture.
 
 Simply registering your interest does not mean you are suddenly being charged match fees.
 
@@ -127,6 +126,13 @@ async function main() {
       isActive: true,
     },
   });
+
+  console.log('League starter guide email template is available.');
 }
 
-main().finally(() => prisma.$disconnect());
+main()
+  .catch((error) => {
+    console.error('league starter template seed failed', error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
