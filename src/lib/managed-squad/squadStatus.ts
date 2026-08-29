@@ -43,26 +43,14 @@ const FUTURE_FIXTURE_STATUSES = [
   FixtureStatus.POSTPONED,
 ];
 
-export async function ensureTeamMemberSquadStatusColumns(db: DbClient = prisma) {
-  await db.$executeRaw(Prisma.sql`
-    ALTER TABLE "TeamMember"
-      ADD COLUMN IF NOT EXISTS "squadStatus" TEXT NOT NULL DEFAULT 'ACTIVE'
-  `);
-
-  await db.$executeRaw(Prisma.sql`
-    ALTER TABLE "TeamMember"
-      ADD COLUMN IF NOT EXISTS "squadStatusUpdatedAt" TIMESTAMP(3)
-  `);
-
-  await db.$executeRaw(Prisma.sql`
-    ALTER TABLE "TeamMember"
-      ADD COLUMN IF NOT EXISTS "squadStatusNote" TEXT
-  `);
-
-  await db.$executeRaw(Prisma.sql`
-    CREATE INDEX IF NOT EXISTS "TeamMember_teamId_squadStatus_idx"
-      ON "TeamMember"("teamId", "squadStatus")
-  `);
+/**
+ * Compatibility entry point retained for callers that pre-date the real schema
+ * migration. The TeamMember squad-status columns, constraint and index are now
+ * owned by Prisma migrations; request handling must never run ALTER TABLE.
+ */
+export function ensureTeamMemberSquadStatusColumns(db: DbClient = prisma) {
+  void db;
+  return Promise.resolve();
 }
 
 async function cancelQueuedAvailabilityChasesForUnavailablePlayer(input: {
