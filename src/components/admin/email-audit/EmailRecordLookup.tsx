@@ -24,6 +24,24 @@ type LookupResponse = {
   error?: string;
 };
 
+type ResolvedSource = {
+  kind: "player-match-fee" | "team-prospect" | "fixture-selection" | "historic-reference";
+  title: string;
+  detail: string;
+  effect: string;
+  href: string | null;
+  recordId: string;
+};
+
+type SourceResponse = {
+  ok: boolean;
+  notificationCount?: number;
+  sourceCount?: number;
+  resolvedCount?: number;
+  resolved?: ResolvedSource[];
+  error?: string;
+};
+
 function toneClasses(tone: LookupMatch["tone"]) {
   if (tone === "amber") return "border-amber-400/25 bg-amber-500/[0.08]";
   if (tone === "emerald") return "border-emerald-400/25 bg-emerald-500/[0.08]";
@@ -38,13 +56,28 @@ function queryTypeLabel(type: LookupResponse["queryType"]) {
   return "Identity match";
 }
 
+function resolvedSourceLabel(kind: ResolvedSource["kind"]) {
+  if (kind === "player-match-fee") return "Resolved player match fee";
+  if (kind === "team-prospect") return "Resolved team prospect";
+  if (kind === "fixture-selection") return "Resolved fixture selection";
+  return "Historic player reference";
+}
+
 export default function EmailRecordLookup() {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LookupResponse | null>(null);
+  const [sourceResult, setSourceResult] = useState<SourceResponse | null>(null);
 
   const matches = useMemo(() => result?.matches ?? [], [result]);
+  const meaningfulMatches = useMemo(
+    () => matches.filter((match) => match.source !== "Notification recipient"),
+    [matches],
+  );
+  const notificationMetadataCount = matches.length - meaningfulMatches.length;
+  const resolvedSources = sourceResult?.resolved ?? [];
+  const meaningfulCount = meaningfulMatches.length + resolvedSources.length;
 
   if (pathname !== "/admin/email-audit") return null;
 
@@ -55,13 +88,20 @@ export default function EmailRecordLookup() {
 
     setLoading(true);
     setResult(null);
+    setSourceResult(null);
     try {
-      const response = await fetch(
-        `/api/admin/email-lookup?q=${encodeURIComponent(value)}`,
-        { cache: "no-store" },
-      );
-      const payload = (await response.json()) as LookupResponse;
-      setResult(payload);
+      const [identityResponse, sourceResponse] = await Promise.all([
+        fetch(`/api/admin/email-lookup?q=${encodeURIComponent(value)}`, { cache: "no-store" }),
+        fetch(`/api/admin/identity-source-resolve?q=${encodeURIComponent(value)}`, { cache: "no-store" }),
+      ]);
+
+      const [identityPayload, sourcePayload] = (await Promise.all([
+        identityResponse.json(),
+        sourceResponse.json(),
+      ])) as [LookupResponse, SourceResponse];
+
+      setResult(identityPayload);
+      setSourceResult(sourcePayload);
     } catch (error) {
       console.error("Identity record lookup failed", error);
       setResult({ ok: false, error: "Could not complete the lookup. Please try again." });
@@ -79,7 +119,7 @@ export default function EmailRecordLookup() {
           </p>
           <h2 className="mt-2 text-2xl font-semibold text-white">Identity lookup</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            Search by email address, mobile number or full player name. This checks squad memberships, Users, prospects, PlayerPool, leads, team contacts and recent blocked player-creation attempts.
+            Search by email address, mobile number or full player name. This checks current identities and also follows historic notification sources back to match fees, fixture selections and team prospects.
           </p>
         </div>
 
@@ -120,7 +160,7 @@ export default function EmailRecordLookup() {
       ) : null}
 
       {result?.ok ? (
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -130,32 +170,62 @@ export default function EmailRecordLookup() {
                 </span>
               </div>
               <p className="mt-1 text-xs text-white/45">
-                {result.matchCount === 1 ? "1 matching record" : `${result.matchCount ?? 0} matching records`}
+                {meaningfulCount === 1 ? "1 useful identity/source result" : `${meaningfulCount} useful identity/source results`}
               </p>
             </div>
             <p className="max-w-2xl text-xs leading-5 text-white/40 sm:text-right">
-              Lead and notification records are shown for completeness. They do not by themselves block player creation. Name matches are clues only until the contact details agree.
+              Raw notification-recipient rows are collapsed below because they are communication metadata. Their source IDs are resolved into the real player-related records wherever possible.
             </p>
           </div>
 
-          {matches.length ? (
+          {resolvedSources.length ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-amber-300/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-50/90">
+                <span className="font-bold">Historic player trail found.</span> These records are the important part of the notification history and may reveal where the player previously existed.
+              </div>
+              <div className="grid gap-3 xl:grid-cols-2">
+                {resolvedSources.map((source) => (
+                  <article key={`${source.kind}-${source.recordId}`} className="rounded-2xl border border-amber-400/25 bg-amber-500/[0.08] p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-amber-100/45">
+                          {resolvedSourceLabel(source.kind)}
+                        </p>
+                        <h3 className="mt-2 break-words text-base font-semibold text-white">{source.title}</h3>
+                        <p className="mt-1 break-words text-sm leading-6 text-white/65">{source.detail}</p>
+                      </div>
+                      {source.href ? (
+                        <Link
+                          href={source.href}
+                          className="shrink-0 rounded-xl border border-amber-200/20 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-50 transition hover:bg-amber-400/20"
+                        >
+                          Open source
+                        </Link>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/60">
+                      {source.effect}
+                    </div>
+                    <p className="mt-2 break-all text-[10px] text-white/25">Record: {source.recordId}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {meaningfulMatches.length ? (
             <div className="grid gap-3 xl:grid-cols-2">
-              {matches.map((match, index) => (
+              {meaningfulMatches.map((match, index) => (
                 <article
                   key={`${match.source}-${match.recordId ?? index}-${index}`}
                   className={`rounded-2xl border p-4 ${toneClasses(match.tone)}`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-white/40">
-                        {match.source}
-                      </p>
-                      <h3 className="mt-2 break-words text-base font-semibold text-white">
-                        {match.title}
-                      </h3>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-white/40">{match.source}</p>
+                      <h3 className="mt-2 break-words text-base font-semibold text-white">{match.title}</h3>
                       <p className="mt-1 break-words text-sm leading-6 text-white/60">{match.detail}</p>
                     </div>
-
                     {match.href ? (
                       <Link
                         href={match.href}
@@ -165,22 +235,24 @@ export default function EmailRecordLookup() {
                       </Link>
                     ) : null}
                   </div>
-
-                  <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/55">
-                    {match.effect}
-                  </div>
-
-                  {match.recordId ? (
-                    <p className="mt-2 break-all text-[10px] text-white/25">Record: {match.recordId}</p>
-                  ) : null}
+                  <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-white/55">{match.effect}</div>
+                  {match.recordId ? <p className="mt-2 break-all text-[10px] text-white/25">Record: {match.recordId}</p> : null}
                 </article>
               ))}
             </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-white/50">
-              No current SIXFL record was found for this exact identity search.
+          ) : null}
+
+          {notificationMetadataCount > 0 || (sourceResult?.notificationCount ?? 0) > 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/45">
+              Collapsed {Math.max(notificationMetadataCount, sourceResult?.notificationCount ?? 0)} raw notification-recipient record{Math.max(notificationMetadataCount, sourceResult?.notificationCount ?? 0) === 1 ? "" : "s"}. They do not block player creation; the resolved player sources above are what matter.
             </div>
-          )}
+          ) : null}
+
+          {meaningfulCount === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-white/50">
+              No current or resolvable historic SIXFL player record was found for this exact identity search.
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
