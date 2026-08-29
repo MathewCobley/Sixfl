@@ -2,55 +2,24 @@
 // File: src/app/api/admin/player-pool/[profileId]/nudge/route.ts
 // ========================================
 
-import {
-  NotificationAudience,
-  NotificationRecipientSourceType,
-} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import {
-  PLAYER_POOL_PROFILE_STATUSES,
-  ensurePlayerPoolTables,
-  getPlayerPoolBaseUrl,
-  normalizePlayerPoolEmail,
-} from "@/lib/player-pool/storage";
+  queuePlayerPoolProfileReminder,
+  type PlayerPoolProfileReminderTarget,
+} from "@/lib/player-pool/profile-reminders";
+import { ensurePlayerPoolTables } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY =
-  "player-pool-profile-invite-email";
-
-type NudgeProfileRow = {
-  id: string;
-  prospectId: string;
-  profileToken: string;
-  publicCode: string;
-  status: string;
-  profileSubmittedAt: Date | null;
-  area: string | null;
-  leagueId: string | null;
-  firstName: string;
-  lastName: string | null;
-  email: string | null;
-  phone: string | null;
-  leagueName: string | null;
-};
-
-function fullName(firstName: string, lastName: string | null) {
-  return [firstName, lastName].filter(Boolean).join(" ").trim();
-}
-
 function routeError(error: unknown) {
   return error instanceof Error && error.message.trim()
     ? error.message
-    : "The PlayerPool nudge could not be sent.";
+    : "The PlayerPool profile reminder could not be sent.";
 }
 
 export async function POST(
@@ -63,7 +32,7 @@ export async function POST(
     const { user } = await requireAdmin();
     await ensurePlayerPoolTables();
 
-    const rows = await prisma.$queryRaw<NudgeProfileRow[]>`
+    const rows = await prisma.$queryRaw<PlayerPoolProfileReminderTarget[]>`
       SELECT
         profile."id",
         profile."prospectId",
@@ -96,87 +65,19 @@ export async function POST(
       );
     }
 
-    if (
-      profile.status !== PLAYER_POOL_PROFILE_STATUSES.INVITED ||
-      profile.profileSubmittedAt
-    ) {
-      return NextResponse.json(
-        { error: "Only players still awaiting their profile can be nudged." },
-        { status: 409 },
-      );
-    }
-
-    if (!profile.email?.trim()) {
-      return NextResponse.json(
-        { error: "Add an email address before nudging this player." },
-        { status: 400 },
-      );
-    }
-
-    const email = normalizePlayerPoolEmail(profile.email);
-    const displayName =
-      fullName(profile.firstName, profile.lastName) || email;
-    const profileUrl = `${getPlayerPoolBaseUrl()}/player-pool/profile/${profile.profileToken}`;
-
-    const recipient = await upsertNotificationRecipient({
-      sourceType: NotificationRecipientSourceType.GENERAL,
-      sourceId: `player-pool-profile:${profile.id}`,
-      audience: NotificationAudience.PLAYER,
-      displayName,
-      email,
-      phone: profile.phone,
-      transactionalEmailOptIn: true,
-      transactionalSmsOptIn: true,
-      marketingEmailOptIn: false,
-      marketingSmsOptIn: false,
-      metadata: {
-        entityType: "PLAYER_POOL_PROFILE",
-        profileId: profile.id,
-        prospectId: profile.prospectId,
-        publicCode: profile.publicCode,
-        leagueId: profile.leagueId,
-      },
-    });
-
-    const dispatch = await queueNotificationFromTemplate({
-      templateKey: PLAYER_POOL_PROFILE_INVITE_TEMPLATE_KEY,
-      recipientId: recipient.id,
-      variables: {
-        firstName: profile.firstName.trim() || "there",
-        fullName: displayName,
-        profileUrl,
-        publicCode: profile.publicCode,
-        area: profile.area || "",
-        leagueName: profile.leagueName || "SIXFL PlayerPool",
-      },
-      sourceType: "PLAYER_POOL_PROFILE_NUDGE",
-      sourceId: profile.id,
-      metadata: {
-        origin: "player_pool_profile_nudge",
-        originLabel: "PlayerPool profile reminder sent from admin",
-        profileId: profile.id,
-        prospectId: profile.prospectId,
-        publicCode: profile.publicCode,
-        leagueId: profile.leagueId,
-        ctaUrl: profileUrl,
-      },
+    const result = await queuePlayerPoolProfileReminder({
+      profile,
       createdByUserId: user?.id ?? null,
+      origin: "player_pool_profile_nudge",
+      originLabel: "PlayerPool profile reminder sent from admin",
     });
 
-    await logNotificationDispatchToThread({ dispatch, recipient });
-
-    const contactedAt = new Date();
-    await prisma.$transaction([
-      prisma.$executeRaw`
-        UPDATE "PlayerPoolProfile"
-        SET "updatedAt" = ${contactedAt}
-        WHERE "id" = ${profile.id}
-      `,
-      prisma.teamPlayerProspect.update({
-        where: { id: profile.prospectId },
-        data: { lastContactedAt: contactedAt },
-      }),
-    ]);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.message },
+        { status: result.reason === "missing_email" ? 400 : 409 },
+      );
+    }
 
     revalidatePath("/admin/player-pool");
     revalidatePath("/admin/messaging");
@@ -184,13 +85,13 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      message: `Nudge sent to ${displayName}.`,
-      nudgedAt: contactedAt.toISOString(),
-      dispatchStatus: String(dispatch.status ?? "QUEUED"),
+      message: `Profile reminder queued for ${result.displayName}.`,
+      nudgedAt: result.recordedAt.toISOString(),
+      dispatchStatus: result.dispatchStatus,
       nudgedBy: user?.name ?? user?.email ?? "SIXFL admin",
     });
   } catch (error) {
-    console.error("PlayerPool nudge failed", error);
+    console.error("PlayerPool profile reminder failed", error);
     return NextResponse.json({ error: routeError(error) }, { status: 500 });
   }
 }
