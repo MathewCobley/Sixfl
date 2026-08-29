@@ -181,6 +181,13 @@ function patchAdminPanel() {
 
   source = replaceRequired(
     source,
+    '  if (code === "deleted") return "Goal of the Week entry deleted.";',
+    '  if (code === "edited") return "Goal of the Week changes saved.";\n  if (code === "deleted") return "Goal of the Week entry deleted.";',
+    filePath,
+  );
+
+  source = replaceRequired(
+    source,
     '              Paste the YouTube clip, choose the scoring team and publish it. The homepage will embed the video and show the team, week and any scorer or opponent details you add.',
     '              Paste the YouTube clip and choose the scoring team. Saving adds the winner to the Goal of the Week archive; featuring it on the homepage is optional.',
     filePath,
@@ -208,6 +215,30 @@ function patchAdminPanel() {
     filePath,
   );
 
+  const editButton = [
+    '                        <a',
+    '                          href={`/admin/sixfl-tv/goal-of-week/${goal.id}/edit`}',
+    '                          className="inline-flex rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-400/15"',
+    '                        >',
+    '                          Edit',
+    '                        </a>',
+  ].join("\n");
+  if (!source.includes('href={`/admin/sixfl-tv/goal-of-week/${goal.id}/edit`}')) {
+    source = replaceRequired(
+      source,
+      '                      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">\n                        <a\n                          href={goal.videoUrl}',
+      `                      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">\n${editButton}\n\n                        <a\n                          href={goal.videoUrl}`,
+      filePath,
+    );
+  }
+
+  source = replaceRequired(
+    source,
+    '            <p className="mt-1 text-sm text-white/45">Feature an older goal again or remove an incorrect entry.</p>',
+    '            <p className="mt-1 text-sm text-white/45">Edit an existing winner, feature an older goal again or remove an incorrect entry.</p>',
+    filePath,
+  );
+
   write(filePath, source);
 }
 
@@ -216,4 +247,4 @@ function patchAdminPanel() {
 patchAdminPage();
 patchAdminPanel();
 
-console.log("Applied Goal of the Week admin integration, archive publishing and save safeguards.");
+console.log("Applied Goal of the Week admin integration, archive publishing, editing and save safeguards.");
