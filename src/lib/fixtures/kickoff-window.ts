@@ -113,6 +113,33 @@ export function getFixtureKickoffWindowViolations(
     .filter((violation): violation is TeamKickoffWindowViolation => Boolean(violation));
 }
 
+/**
+ * Server-side convenience helper for routes that only have fixture team IDs.
+ * The shared rule calculator above remains independent of Prisma.
+ */
+export async function getFixtureTeamKickoffWindowViolations(input: {
+  homeTeamId: string;
+  awayTeamId: string;
+  kickoffAt: Date;
+}) {
+  const { prisma } = await import("@/lib/prisma");
+  const teams = await prisma.team.findMany({
+    where: {
+      id: {
+        in: [input.homeTeamId, input.awayTeamId],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      earliestKickoffTime: true,
+      latestKickoffTime: true,
+    },
+  });
+
+  return getFixtureKickoffWindowViolations(input.kickoffAt, teams);
+}
+
 export function assertFixtureKickoffWindow(
   kickoffAt: Date,
   teams: TeamKickoffWindow[],
