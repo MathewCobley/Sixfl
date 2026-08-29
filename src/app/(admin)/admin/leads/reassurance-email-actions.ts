@@ -18,10 +18,10 @@ import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-export const TEAM_REASSURANCE_TEMPLATE_KEY = "team-lead-reassurance-email";
-export const TEAM_REASSURANCE_SOURCE_TYPE = "LEAD_REASSURANCE_EMAIL";
-export const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms";
-export const TEAM_REASSURANCE_SMS_SOURCE_TYPE = "LEAD_REASSURANCE_SMS";
+const TEAM_REASSURANCE_TEMPLATE_KEY = "team-lead-reassurance-email";
+const TEAM_REASSURANCE_SOURCE_TYPE = "LEAD_REASSURANCE_EMAIL";
+const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms";
+const TEAM_REASSURANCE_SMS_SOURCE_TYPE = "LEAD_REASSURANCE_SMS";
 
 const DEFAULT_SUBJECT = "Everything you need to know about joining SIXFL ⚽";
 const DEFAULT_CTA_LABEL = "YES — I WANT TO ENTER A TEAM";

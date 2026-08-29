@@ -79,9 +79,13 @@ expect(
 
 expect(
   reassuranceAction.includes(
-    'export const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms"',
+    'const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms"',
   ) && reassuranceAction.includes("DEFAULT_SMS_BODY"),
   "the reassurance flow must define a dedicated editable system SMS template",
+);
+expect(
+  !reassuranceAction.includes("export const TEAM_REASSURANCE"),
+  "the reassurance server-action module must export only async actions",
 );
 expect(
   reassuranceAction.includes(
