@@ -16,7 +16,9 @@ type LookupMatch = {
 
 type LookupResponse = {
   ok: boolean;
-  email?: string;
+  query?: string;
+  queryType?: "email" | "phone" | "name";
+  normalisedQuery?: string;
   matchCount?: number;
   matches?: LookupMatch[];
   error?: string;
@@ -29,9 +31,16 @@ function toneClasses(tone: LookupMatch["tone"]) {
   return "border-white/10 bg-white/[0.04]";
 }
 
+function queryTypeLabel(type: LookupResponse["queryType"]) {
+  if (type === "email") return "Email match";
+  if (type === "phone") return "Mobile-number match";
+  if (type === "name") return "Exact-name match";
+  return "Identity match";
+}
+
 export default function EmailRecordLookup() {
   const pathname = usePathname();
-  const [email, setEmail] = useState("");
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LookupResponse | null>(null);
 
@@ -41,20 +50,20 @@ export default function EmailRecordLookup() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const query = email.trim();
-    if (!query) return;
+    const value = query.trim();
+    if (!value) return;
 
     setLoading(true);
     setResult(null);
     try {
       const response = await fetch(
-        `/api/admin/email-lookup?email=${encodeURIComponent(query)}`,
+        `/api/admin/email-lookup?q=${encodeURIComponent(value)}`,
         { cache: "no-store" },
       );
       const payload = (await response.json()) as LookupResponse;
       setResult(payload);
     } catch (error) {
-      console.error("Email record lookup failed", error);
+      console.error("Identity record lookup failed", error);
       setResult({ ok: false, error: "Could not complete the lookup. Please try again." });
     } finally {
       setLoading(false);
@@ -66,30 +75,42 @@ export default function EmailRecordLookup() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/75">
-            Find the actual record
+            Find the actual person record
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Exact email lookup</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Identity lookup</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            Paste an email address to see every current SIXFL identity that uses it, plus any recent blocked player-creation attempts and the exact reason they were stopped.
+            Search by email address, mobile number or full player name. This checks squad memberships, Users, prospects, PlayerPool, leads, team contacts and recent blocked player-creation attempts.
           </p>
         </div>
 
         <form onSubmit={submit} className="flex w-full max-w-2xl flex-col gap-3 sm:flex-row">
           <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="player@example.com"
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Email, mobile number or full player name"
             className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-amber-400/50"
           />
           <button
             type="submit"
-            disabled={loading || !email.trim()}
+            disabled={loading || !query.trim()}
             className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-500/15 px-5 text-sm font-bold text-amber-50 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Searching…" : "Find records"}
+            {loading ? "Searching…" : "Find identity"}
           </button>
         </form>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-xs text-white/45 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <span className="font-semibold text-white/70">Email:</span> exact, case-insensitive match
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <span className="font-semibold text-white/70">Mobile:</span> normalised UK number match
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <span className="font-semibold text-white/70">Name:</span> exact full-name match; verify contact details
+        </div>
       </div>
 
       {result?.ok === false ? (
@@ -100,15 +121,20 @@ export default function EmailRecordLookup() {
 
       {result?.ok ? (
         <div className="mt-6 space-y-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-white">{result.email}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-white">{result.query}</p>
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">
+                  {queryTypeLabel(result.queryType)}
+                </span>
+              </div>
               <p className="mt-1 text-xs text-white/45">
                 {result.matchCount === 1 ? "1 matching record" : `${result.matchCount ?? 0} matching records`}
               </p>
             </div>
-            <p className="text-xs text-white/40">
-              Lead records are shown for completeness, but a lead by itself does not block player creation.
+            <p className="max-w-2xl text-xs leading-5 text-white/40 sm:text-right">
+              Lead and notification records are shown for completeness. They do not by themselves block player creation. Name matches are clues only until the contact details agree.
             </p>
           </div>
 
@@ -127,7 +153,7 @@ export default function EmailRecordLookup() {
                       <h3 className="mt-2 break-words text-base font-semibold text-white">
                         {match.title}
                       </h3>
-                      <p className="mt-1 text-sm leading-6 text-white/60">{match.detail}</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-white/60">{match.detail}</p>
                     </div>
 
                     {match.href ? (
@@ -152,7 +178,7 @@ export default function EmailRecordLookup() {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-white/50">
-              No current SIXFL record was found for this exact email address.
+              No current SIXFL record was found for this exact identity search.
             </div>
           )}
         </div>
