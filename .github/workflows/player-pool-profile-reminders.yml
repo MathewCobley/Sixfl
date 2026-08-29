@@ -15,6 +15,11 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl
       NEXTAUTH_SECRET: player-pool-reminder-ci-secret
       NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_player_pool_reminder_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@sixfl.test>
+      EMAIL_REPLY_DOMAIN: replies.sixfl.test
+      CRON_SECRET: player-pool-reminder-ci-cron-secret
 
     steps:
       - name: Check out repository
