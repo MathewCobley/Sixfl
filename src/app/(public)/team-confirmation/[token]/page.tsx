@@ -2,7 +2,7 @@
 // File: src/app/(public)/team-confirmation/[token]/page.tsx
 // ========================================
 
-import { Prisma } from "@prisma/client";
+import { LeadStatus, Prisma } from "@prisma/client";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Confirm Team Place | SIXFL",
+  title: "Confirm Your Team | SIXFL",
 };
 
 type PageProps = {
@@ -27,9 +27,10 @@ type PageProps = {
   searchParams?: Promise<{
     confirmed?: string;
     declined?: string;
+    commitmentSaved?: string;
     teamNameSaved?: string;
-    teamNameLater?: string;
     teamNameError?: string;
+    squadError?: string;
   }>;
 };
 
@@ -39,12 +40,34 @@ type LeagueConfirmationDetails = {
   costPerTeamPerMatchPence: number | null;
 };
 
+const SQUAD_SIZE_LABELS = {
+  "6": "6 players",
+  "7": "7 players",
+  "8": "8 players",
+  "9+": "9 or more players",
+  building: "still putting the squad together",
+} as const;
+
+type SquadSizeValue = keyof typeof SQUAD_SIZE_LABELS;
+
 function formatLongDate(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/London",
     weekday: "long",
     day: "numeric",
     month: "long",
+  }).format(value);
+}
+
+function formatNoteDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).format(value);
 }
 
@@ -69,10 +92,22 @@ function formatVenue(value: string | null | undefined) {
   return venue;
 }
 
+function parseTeamName(value: FormDataEntryValue | null) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function isSquadSizeValue(value: string): value is SquadSizeValue {
+  return Object.prototype.hasOwnProperty.call(SQUAD_SIZE_LABELS, value);
+}
+
+function confirmationPath(token: string, query: string) {
+  return `/team-confirmation/${encodeURIComponent(token)}?${query}`;
+}
+
 async function getLeagueConfirmationDetails(leagueId: string | null | undefined) {
   if (!leagueId) return null;
 
-  const rows = await prisma.$queryRaw<Array<LeagueConfirmationDetails>>(Prisma.sql`
+  const rows = await prisma.$queryRaw<LeagueConfirmationDetails[]>(Prisma.sql`
     SELECT
       "proposedStartDate" AS "proposedStartDate",
       "minutesPerGame"::int AS "minutesPerGame",
@@ -85,55 +120,22 @@ async function getLeagueConfirmationDetails(leagueId: string | null | undefined)
   return rows[0] ?? null;
 }
 
-async function confirmTeamPlaceAction(formData: FormData) {
+async function confirmTeamCommitmentAction(formData: FormData) {
   "use server";
 
   const token = String(formData.get("token") ?? "").trim();
   const leadId = verifyTeamPlaceConfirmationToken(token);
+  if (!leadId) throw new Error("This confirmation link is not valid.");
 
-  if (!leadId) {
-    throw new Error("This confirmation link is not valid.");
+  const teamNameInput = parseTeamName(formData.get("teamName"));
+  const squadSizeInput = String(formData.get("squadSize") ?? "").trim();
+
+  if (teamNameInput && (teamNameInput.length < 2 || teamNameInput.length > 80)) {
+    redirect(confirmationPath(token, "teamNameError=invalid"));
   }
 
-  await confirmTeamPlaceFromLead(leadId);
-  revalidatePath("/admin/leads");
-  revalidatePath(`/admin/leads/${leadId}`);
-  redirect(`/team-confirmation/${encodeURIComponent(token)}?confirmed=1`);
-}
-
-async function declineTeamPlaceAction(formData: FormData) {
-  "use server";
-
-  const token = String(formData.get("token") ?? "").trim();
-  const leadId = verifyTeamPlaceConfirmationToken(token);
-
-  if (!leadId) {
-    throw new Error("This confirmation link is not valid.");
-  }
-
-  await declineTeamPlaceFromLead(leadId);
-  revalidatePath("/admin/leads");
-  revalidatePath(`/admin/leads/${leadId}`);
-  redirect(`/team-confirmation/${encodeURIComponent(token)}?declined=1`);
-}
-
-async function saveTeamNameAction(formData: FormData) {
-  "use server";
-
-  const token = String(formData.get("token") ?? "").trim();
-  const leadId = verifyTeamPlaceConfirmationToken(token);
-  const teamName = String(formData.get("teamName") ?? "")
-    .trim()
-    .replace(/\s+/g, " ");
-
-  if (!leadId) {
-    throw new Error("This confirmation link is not valid.");
-  }
-
-  if (teamName.length < 2 || teamName.length > 80) {
-    redirect(
-      `/team-confirmation/${encodeURIComponent(token)}?confirmed=1&teamNameError=invalid`,
-    );
+  if (!isSquadSizeValue(squadSizeInput)) {
+    redirect(confirmationPath(token, "squadError=invalid"));
   }
 
   const [lead, confirmation] = await Promise.all([
@@ -141,27 +143,111 @@ async function saveTeamNameAction(formData: FormData) {
       where: { id: leadId },
       select: {
         id: true,
+        interestType: true,
         status: true,
         convertedTeamId: true,
+        teamName: true,
+        message: true,
       },
     }),
     getTeamPlaceConfirmationStatus(leadId),
   ]);
 
-  if (!lead) {
-    throw new Error("Lead not found.");
+  if (!lead) throw new Error("Lead not found.");
+  if (lead.interestType !== "TEAM") {
+    throw new Error("This link is not for a team enquiry.");
   }
-
   if (lead.convertedTeamId) {
-    redirect(
-      `/team-confirmation/${encodeURIComponent(token)}?confirmed=1&teamNameError=team-created`,
-    );
+    redirect(confirmationPath(token, "confirmed=1"));
+  }
+  if (lead.status === LeadStatus.CLOSED || confirmation?.status === "DECLINED") {
+    redirect(confirmationPath(token, "declined=1"));
   }
 
-  const placeConfirmed = confirmation?.status === "CONFIRMED" || lead.status === "QUALIFIED";
-  if (!placeConfirmed) {
-    throw new Error("Confirm the team place before saving a team name.");
+  const wasAlreadyConfirmed =
+    confirmation?.status === "CONFIRMED" || lead.status === LeadStatus.QUALIFIED;
+
+  if (!wasAlreadyConfirmed) {
+    await confirmTeamPlaceFromLead(lead.id);
   }
+
+  const effectiveTeamName = teamNameInput || lead.teamName?.trim() || "not decided yet";
+  const commitmentNote = [
+    `Team commitment confirmed via secure link (${formatNoteDate(new Date())}).`,
+    `Team name: ${effectiveTeamName}.`,
+    `Approximate squad: ${SQUAD_SIZE_LABELS[squadSizeInput]}.`,
+  ].join(" ");
+
+  await prisma.interestLead.update({
+    where: { id: lead.id },
+    data: {
+      ...(teamNameInput ? { teamName: teamNameInput } : {}),
+      ...(!wasAlreadyConfirmed
+        ? {
+            message: lead.message?.trim()
+              ? `${lead.message.trim()}\n\n${commitmentNote}`
+              : commitmentNote,
+          }
+        : {}),
+    },
+  });
+
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${lead.id}`);
+  revalidatePath(`/team-confirmation/${encodeURIComponent(token)}`);
+  redirect(confirmationPath(token, "confirmed=1&commitmentSaved=1"));
+}
+
+async function declineTeamAction(formData: FormData) {
+  "use server";
+
+  const token = String(formData.get("token") ?? "").trim();
+  const leadId = verifyTeamPlaceConfirmationToken(token);
+  if (!leadId) throw new Error("This confirmation link is not valid.");
+
+  const lead = await prisma.interestLead.findUnique({
+    where: { id: leadId },
+    select: { id: true, interestType: true, convertedTeamId: true },
+  });
+
+  if (!lead) throw new Error("Lead not found.");
+  if (lead.interestType !== "TEAM") throw new Error("This link is not for a team enquiry.");
+  if (lead.convertedTeamId) redirect(confirmationPath(token, "confirmed=1"));
+
+  await declineTeamPlaceFromLead(lead.id);
+  revalidatePath("/admin/leads");
+  revalidatePath(`/admin/leads/${lead.id}`);
+  revalidatePath(`/team-confirmation/${encodeURIComponent(token)}`);
+  redirect(confirmationPath(token, "declined=1"));
+}
+
+async function saveTeamNameAction(formData: FormData) {
+  "use server";
+
+  const token = String(formData.get("token") ?? "").trim();
+  const leadId = verifyTeamPlaceConfirmationToken(token);
+  const teamName = parseTeamName(formData.get("teamName"));
+
+  if (!leadId) throw new Error("This confirmation link is not valid.");
+  if (teamName.length < 2 || teamName.length > 80) {
+    redirect(confirmationPath(token, "confirmed=1&teamNameError=invalid"));
+  }
+
+  const [lead, confirmation] = await Promise.all([
+    prisma.interestLead.findUnique({
+      where: { id: leadId },
+      select: { id: true, interestType: true, convertedTeamId: true, status: true },
+    }),
+    getTeamPlaceConfirmationStatus(leadId),
+  ]);
+
+  if (!lead) throw new Error("Lead not found.");
+  if (lead.interestType !== "TEAM") throw new Error("This link is not for a team enquiry.");
+  if (lead.convertedTeamId) redirect(confirmationPath(token, "confirmed=1"));
+
+  const isConfirmed =
+    confirmation?.status === "CONFIRMED" || lead.status === LeadStatus.QUALIFIED;
+  if (!isConfirmed) throw new Error("Confirm that you want to enter a team first.");
 
   await prisma.interestLead.update({
     where: { id: lead.id },
@@ -171,9 +257,7 @@ async function saveTeamNameAction(formData: FormData) {
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${lead.id}`);
   revalidatePath(`/team-confirmation/${encodeURIComponent(token)}`);
-  redirect(
-    `/team-confirmation/${encodeURIComponent(token)}?confirmed=1&teamNameSaved=1`,
-  );
+  redirect(confirmationPath(token, "confirmed=1&teamNameSaved=1"));
 }
 
 function InvalidLinkCard() {
@@ -181,11 +265,11 @@ function InvalidLinkCard() {
     <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
       <section className="mx-auto max-w-2xl rounded-3xl border border-red-400/20 bg-red-500/10 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-200/80">
-          Team place confirmation
+          SIXFL team decision
         </p>
-        <h1 className="mt-3 text-2xl font-semibold">This confirmation link is not valid</h1>
+        <h1 className="mt-3 text-2xl font-semibold">This link is not valid</h1>
         <p className="mt-3 text-sm leading-6 text-red-100/80">
-          Please reply to SIXFL and we’ll send you a fresh confirmation link.
+          Please reply to SIXFL and we’ll send you a fresh link.
         </p>
       </section>
     </main>
@@ -196,7 +280,6 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
   const { token } = await params;
   const sp = (await searchParams) ?? {};
   const leadId = verifyTeamPlaceConfirmationToken(token);
-
   if (!leadId) return <InvalidLinkCard />;
 
   const [lead, confirmation] = await Promise.all([
@@ -204,10 +287,10 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
       where: { id: leadId },
       select: {
         id: true,
+        interestType: true,
         contactName: true,
         teamName: true,
         area: true,
-        leagueType: true,
         status: true,
         convertedTeamId: true,
         league: {
@@ -241,7 +324,7 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
     getTeamPlaceConfirmationStatus(leadId),
   ]);
 
-  if (!lead) return <InvalidLinkCard />;
+  if (!lead || lead.interestType !== "TEAM") return <InvalidLinkCard />;
 
   const effectiveLeague = lead.league?.competition?.currentLeague ?? lead.league;
   const leagueDetails = await getLeagueConfirmationDetails(effectiveLeague?.id);
@@ -249,80 +332,68 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
     ? `${effectiveLeague.name}${effectiveLeague.season ? ` · ${effectiveLeague.season}` : ""}`
     : lead.area
       ? `${lead.area} SIXFL league`
-      : "the SIXFL league";
-  const startDateLabel = leagueDetails?.proposedStartDate
-    ? formatLongDate(leagueDetails.proposedStartDate)
-    : null;
-  const matchNightLabel = formatPreferredNight(effectiveLeague?.dayOfWeek);
-  const matchLengthLabel = leagueDetails?.minutesPerGame
-    ? `${leagueDetails.minutesPerGame} minute matches`
-    : null;
-  const fee = formatCurrencyPence(leagueDetails?.costPerTeamPerMatchPence ?? null);
-  const feeLabel = fee ? `${fee} per team per match` : null;
-  const locationLabel =
-    formatVenue(effectiveLeague?.venueName) ||
-    effectiveLeague?.area?.trim() ||
-    lead.area?.trim() ||
-    null;
-  const kickoffLabel = effectiveLeague?.kickoffInfo?.trim() || null;
+      : "your SIXFL league";
 
   const isConfirmed =
     sp.confirmed === "1" ||
     confirmation?.status === "CONFIRMED" ||
-    lead.status === "QUALIFIED";
+    lead.status === LeadStatus.QUALIFIED;
   const isDeclined =
     sp.declined === "1" ||
     confirmation?.status === "DECLINED" ||
-    lead.status === "CLOSED";
+    lead.status === LeadStatus.CLOSED;
   const savedTeamName = lead.teamName?.trim() || "";
-  const leadTitle = savedTeamName || "your team";
-  const leadCardTitle = savedTeamName || "Your team";
-  const confirmationPrompt = startDateLabel
-    ? `Please confirm whether ${leadTitle} would like a place in ${leagueName}, planned to start ${startDateLabel}.`
-    : `Please confirm whether ${leadTitle} would like a place in ${leagueName}.`;
-  const detailPills = [
-    startDateLabel ? `${startDateLabel} start` : matchNightLabel ? `${matchNightLabel} nights` : null,
-    matchLengthLabel,
-    feeLabel,
-    locationLabel,
-    kickoffLabel,
+  const firstName = lead.contactName?.trim().split(/\s+/)[0] || "there";
+  const fee = formatCurrencyPence(leagueDetails?.costPerTeamPerMatchPence ?? null);
+  const details = [
+    formatPreferredNight(effectiveLeague?.dayOfWeek)
+      ? `${formatPreferredNight(effectiveLeague?.dayOfWeek)} evenings`
+      : null,
+    formatVenue(effectiveLeague?.venueName) || effectiveLeague?.area?.trim() || lead.area?.trim(),
+    effectiveLeague?.kickoffInfo?.trim() || null,
+    leagueDetails?.proposedStartDate
+      ? `Planned start ${formatLongDate(leagueDetails.proposedStartDate)}`
+      : null,
+    leagueDetails?.minutesPerGame ? `${leagueDetails.minutesPerGame} minute matches` : null,
+    fee ? `${fee} per team per match` : null,
   ].filter((value): value is string => Boolean(value));
+
   const teamNameError =
     sp.teamNameError === "invalid"
-      ? "Please enter a team name between 2 and 80 characters."
-      : sp.teamNameError === "team-created"
-        ? "This team has already been created in SIXFL, so the lead name can no longer be changed here."
-        : null;
+      ? "Enter a team name between 2 and 80 characters, or leave it blank if it is not decided yet."
+      : null;
+  const squadError =
+    sp.squadError === "invalid" ? "Please choose the option that best describes your squad." : null;
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
       <div className="mx-auto max-w-3xl space-y-6">
-        <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            SIXFL team confirmation
+            SIXFL team decision
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
             {isConfirmed
               ? lead.convertedTeamId
                 ? "Your SIXFL team is set up"
-                : "Your place is reserved"
+                : "Your team commitment is recorded"
               : isDeclined
-                ? "Your place has been released"
-                : "Confirm your team place"}
+                ? "Thanks for letting us know"
+                : `Hi ${firstName} — are you entering a team?`}
           </h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
             {isConfirmed
               ? lead.convertedTeamId
-                ? `${leadCardTitle} has now been set up for ${leagueName}.`
-                : `Thanks — we’ve reserved a place for ${leadTitle} in ${leagueName}. No team or fixtures have been created automatically.`
+                ? `${savedTeamName || "Your team"} has already been set up for ${leagueName}.`
+                : `SIXFL has recorded that you want to enter a team in ${leagueName}.`
               : isDeclined
-                ? "Thanks for letting us know. We’ll release the space for another team."
-                : confirmationPrompt}
+                ? `We’ve recorded that you are not entering a team in ${leagueName}.`
+                : `We already have your contact details from your enquiry. We only need your decision and a couple of useful team details.`}
           </p>
 
-          {detailPills.length ? (
+          {details.length ? (
             <div className="mt-5 flex flex-wrap gap-2">
-              {detailPills.map((detail) => (
+              {details.map((detail) => (
                 <span
                   key={detail}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75"
@@ -334,129 +405,158 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
           ) : null}
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
           {isConfirmed ? (
-            lead.convertedTeamId ? (
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100/85">
-                Your team has been set up by SIXFL. We’ll use the captain details already provided for the next steps.
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100/85">
-                  Your place is reserved. SIXFL will review the lead and create the team manually when the details are ready.
+            <div className="space-y-5">
+              {sp.commitmentSaved === "1" ? (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
+                  Thank you — your positive team decision has been sent to SIXFL. We have not asked you to repeat any contact details.
                 </div>
+              ) : null}
 
-                {sp.teamNameSaved === "1" && savedTeamName ? (
-                  <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/90">
-                    Team name saved as <strong>{savedTeamName}</strong>. This has updated your SIXFL enquiry but has not created a team yet.
-                  </div>
-                ) : null}
+              {sp.teamNameSaved === "1" ? (
+                <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100">
+                  Team name updated successfully.
+                </div>
+              ) : null}
 
-                {sp.teamNameLater === "1" ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-                    <h2 className="text-lg font-semibold text-white">Team name not decided yet?</h2>
-                    <p className="mt-2 text-sm leading-6 text-white/65">
-                      No problem. Your place remains reserved. Keep this confirmation link and come back when you have decided your team name.
-                    </p>
-                    <Link
-                      href={`/team-confirmation/${encodeURIComponent(token)}?confirmed=1`}
-                      className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/85 transition hover:bg-white/[0.09]"
+              {lead.convertedTeamId ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm leading-6 text-white/70">
+                  SIXFL already has the details needed for this team. We’ll contact you with the next steps.
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                  <h2 className="text-lg font-semibold text-white">
+                    {savedTeamName ? "Need to correct the team name?" : "Team name not decided yet?"}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-white/60">
+                    {savedTeamName
+                      ? `We currently have “${savedTeamName}”. You can correct it below before SIXFL creates the team.`
+                      : "That’s fine. Your commitment is already recorded and you can add the team name here when it is decided."}
+                  </p>
+
+                  {teamNameError ? (
+                    <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                      {teamNameError}
+                    </div>
+                  ) : null}
+
+                  <form action={saveTeamNameAction} className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <input type="hidden" name="token" value={token} />
+                    <input
+                      name="teamName"
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={80}
+                      defaultValue={savedTeamName}
+                      placeholder="e.g. Richmond Rovers"
+                      className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
                     >
-                      Add team name now
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                    <h2 className="text-lg font-semibold text-white">
-                      {savedTeamName ? "Confirm or update your team name" : "Confirm your team name"}
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-white/60">
-                      {savedTeamName
-                        ? "Check the name below. You can update it here while SIXFL is still preparing your team."
-                        : "If you already know the team name, add it now. If not, you can come back to this same link and confirm it later."}
-                    </p>
-
-                    {teamNameError ? (
-                      <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                        {teamNameError}
-                      </div>
-                    ) : null}
-
-                    <form action={saveTeamNameAction} className="mt-5 space-y-4">
-                      <input type="hidden" name="token" value={token} />
-                      <label className="block">
-                        <span className="text-sm font-semibold text-white/80">Team name</span>
-                        <input
-                          name="teamName"
-                          type="text"
-                          required
-                          minLength={2}
-                          maxLength={80}
-                          defaultValue={savedTeamName}
-                          placeholder="e.g. Richmond Rovers"
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50"
-                        />
-                      </label>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="submit"
-                          className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(16,185,129,0.2)] transition hover:bg-emerald-500"
-                        >
-                          {savedTeamName ? "Update team name" : "Save team name"}
-                        </button>
-                        <Link
-                          href={`/team-confirmation/${encodeURIComponent(token)}?confirmed=1&teamNameLater=1`}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.08]"
-                        >
-                          I’ll confirm the team name later
-                        </Link>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-            )
+                      {savedTeamName ? "Update team name" : "Save team name"}
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
           ) : isDeclined ? (
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100/85">
-              No problem. Your team will not be included in fixture planning unless you contact SIXFL again.
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100/90">
+                Your enquiry has been updated and SIXFL will not continue chasing you for a team decision.
+              </div>
+              <p className="text-sm leading-6 text-white/60">
+                Changed your mind? Reply to the SIXFL email and we can reopen the enquiry.
+              </p>
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-lg font-semibold text-white">{leadCardTitle}</h2>
+                <h2 className="text-xl font-semibold text-white">What we need from you</h2>
                 <p className="mt-2 text-sm leading-6 text-white/60">
-                  Confirming reserves a place only. SIXFL will create the actual team manually once the team details are ready.
+                  A clear yes or no, your team name if it is decided, and a rough idea of how many players you have. We do not need your name, email, phone number or area again.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 text-sm leading-6 text-white/70">
-                By reserving a place, you’re simply letting us know you’d like us to hold a place for your team while we finalise the league. There’s no payment due and you’re not committing to take part at this stage.
-              </div>
+              {(teamNameError || squadError) ? (
+                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
+                  {teamNameError || squadError}
+                </div>
+              ) : null}
 
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <form action={confirmTeamPlaceAction}>
+              <form action={confirmTeamCommitmentAction} className="space-y-5 rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.05] p-5">
+                <input type="hidden" name="token" value={token} />
+
+                <label className="block">
+                  <span className="text-sm font-semibold text-white/85">Team name</span>
+                  <span className="mt-1 block text-xs leading-5 text-white/45">
+                    Leave this blank if you have not decided it yet.
+                  </span>
+                  <input
+                    name="teamName"
+                    type="text"
+                    minLength={2}
+                    maxLength={80}
+                    defaultValue={savedTeamName}
+                    placeholder="e.g. Richmond Rovers"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/50"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-semibold text-white/85">Roughly how many players do you have?</span>
+                  <span className="mt-1 block text-xs leading-5 text-white/45">
+                    This helps us understand how close your squad is. It does not limit the final squad size.
+                  </span>
+                  <select
+                    name="squadSize"
+                    defaultValue="building"
+                    required
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b1713] px-4 py-3 text-white outline-none transition focus:border-emerald-400/50"
+                  >
+                    <option value="building">Still putting the squad together</option>
+                    <option value="6">6 players</option>
+                    <option value="7">7 players</option>
+                    <option value="8">8 players</option>
+                    <option value="9+">9 or more players</option>
+                  </select>
+                </label>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-white/55">
+                  Clicking yes tells SIXFL you intend to enter a team. There is no payment due now and there is no long-term contract tying your team in.
+                </div>
+
+                <button
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-[0_16px_40px_rgba(16,185,129,0.24)] transition hover:bg-emerald-500"
+                >
+                  YES — I WANT TO ENTER A TEAM
+                </button>
+              </form>
+
+              <div className="border-t border-white/10 pt-5">
+                <form action={declineTeamAction}>
                   <input type="hidden" name="token" value={token} />
                   <button
                     type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(16,185,129,0.24)] transition hover:bg-emerald-500 sm:w-auto"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/[0.08]"
                   >
-                    Yes, reserve our team place
-                  </button>
-                </form>
-
-                <form action={declineTeamPlaceAction}>
-                  <input type="hidden" name="token" value={token} />
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/[0.08] sm:w-auto"
-                  >
-                    No, release our place
+                    No — I’m not entering a team
                   </button>
                 </form>
               </div>
             </div>
           )}
         </section>
+
+        <div className="text-center text-xs text-white/40">
+          <Link href="https://www.sixfl.co.uk" className="transition hover:text-white/70">
+            SIXFL · 6-a-side football. Done properly.
+          </Link>
+        </div>
       </div>
     </main>
   );

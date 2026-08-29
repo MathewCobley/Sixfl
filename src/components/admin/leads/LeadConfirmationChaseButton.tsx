@@ -25,11 +25,13 @@ export default function LeadConfirmationChaseButton({
       const result = await sendTeamPlaceConfirmationChaseAction(formData);
 
       if (!result?.ok) {
-        alert(result?.error || "Failed to send chase email.");
+        alert(result?.error || "Failed to send the decision reminder.");
         return;
       }
 
-      alert("Chase email sent. It includes a fresh link to complete the team form.");
+      alert(
+        "Decision reminder sent. It uses the same secure link and asks only whether they are entering, their team name and approximate squad size.",
+      );
       router.refresh();
     });
   }
@@ -39,10 +41,10 @@ export default function LeadConfirmationChaseButton({
       type="button"
       onClick={handleClick}
       disabled={!canChase || pending}
-      title="Send a friendly reminder to complete the team confirmation form"
+      title="Remind this lead to give SIXFL a clear team decision"
       className="inline-flex h-9 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 text-xs font-bold tracking-[0.1em] text-amber-100 transition hover:border-amber-300/50 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
     >
-      {pending ? "Sending chase…" : "Chase form"}
+      {pending ? "Sending reminder…" : "Send reminder"}
     </button>
   );
 }

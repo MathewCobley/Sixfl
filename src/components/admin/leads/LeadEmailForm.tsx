@@ -4,27 +4,17 @@
 
 "use client";
 
-// ========================================
-// Imports
-// ========================================
-
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import TemplateSelect from "@/components/admin/leads/TemplateSelect";
-import {
-  sendLeadEmailWithResponseLinksAction,
-  sendTeamPlaceConfirmationSystemEmailAction,
-} from "@/app/(admin)/admin/leads/[id]/response-email-actions";
+import { sendLeadEmailWithResponseLinksAction } from "@/app/(admin)/admin/leads/[id]/response-email-actions";
+import { sendTeamCommitmentEmailAction } from "@/app/(admin)/admin/leads/team-commitment-email-actions";
 import {
   buildBaseEmailTemplateContext,
   mergeEmailTemplateContext,
   resolveTemplateText,
 } from "@/lib/email/template-context";
 import type { InterestType } from "@prisma/client";
-
-// ========================================
-// Types
-// ========================================
 
 type LeadEmailTemplateOption = {
   id: string;
@@ -102,10 +92,6 @@ function restoreServerResolvedTokens(value: string) {
   );
 }
 
-// ========================================
-// Component
-// ========================================
-
 export default function LeadEmailForm({
   leadId,
   email,
@@ -118,7 +104,6 @@ export default function LeadEmailForm({
   showTeamConfirmationShortcut = false,
 }: Props) {
   const router = useRouter();
-
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [targetTeamId, setTargetTeamId] = useState("");
   const [subject, setSubject] = useState("");
@@ -126,11 +111,7 @@ export default function LeadEmailForm({
   const [sending, setSending] = useState(false);
 
   const templateOptions = useMemo(
-    () =>
-      templates.map((template) => ({
-        value: template.id,
-        label: template.name,
-      })),
+    () => templates.map((template) => ({ value: template.id, label: template.name })),
     [templates],
   );
 
@@ -143,7 +124,6 @@ export default function LeadEmailForm({
 
   const templateContext = useMemo(() => {
     const derivedFullName = fullName?.trim() || firstName?.trim() || "";
-
     return mergeEmailTemplateContext(
       buildBaseEmailTemplateContext({
         firstName,
@@ -159,7 +139,6 @@ export default function LeadEmailForm({
       setTargetTeamId("");
       return;
     }
-
     if (!targetTeamId && managedTeamOptions.length > 0) {
       setTargetTeamId(managedTeamOptions[0].value);
     }
@@ -178,37 +157,32 @@ export default function LeadEmailForm({
 
   function handleTemplateChange(value: string) {
     setSelectedTemplateId(value);
-
     const template = templates.find((item) => item.id === value) ?? null;
-
     if (!template) {
       setSubject("");
       setBody("");
       return;
     }
-
     setSubject(resolveTemplateForLead(template.subject));
     setBody(resolveTemplateForLead(template.body));
   }
 
   async function handleQuickConfirmationSend() {
     setSending(true);
-
     try {
       const formData = new FormData();
       formData.append("leadId", leadId);
-
-      const result = await sendTeamPlaceConfirmationSystemEmailAction(formData);
-
+      const result = await sendTeamCommitmentEmailAction(formData);
       if (!result?.ok) {
-        alert(result?.error || "Failed to send confirmation email.");
+        alert(result?.error || "Failed to send the team decision email.");
         return;
       }
-
-      alert("Team place confirmation email sent successfully.");
+      alert(
+        "Team decision email sent. The lead will only be asked for their decision, team name and approximate squad size.",
+      );
       router.refresh();
     } catch {
-      alert("Something went wrong while sending the confirmation email.");
+      alert("Something went wrong while sending the team decision email.");
     } finally {
       setSending(false);
     }
@@ -217,7 +191,6 @@ export default function LeadEmailForm({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSending(true);
-
     try {
       const formData = new FormData();
       formData.append("leadId", leadId);
@@ -230,12 +203,10 @@ export default function LeadEmailForm({
       formData.append("targetTeamId", targetTeamId);
 
       const result = await sendLeadEmailWithResponseLinksAction(formData);
-
       if (!result?.ok) {
         alert(result?.error || "Failed to send email.");
         return;
       }
-
       alert("Email sent successfully.");
       router.refresh();
     } catch {
@@ -251,7 +222,6 @@ export default function LeadEmailForm({
       setBody("");
       return;
     }
-
     setSubject(resolveTemplateForLead(selectedTemplate.subject));
     setBody(resolveTemplateForLead(selectedTemplate.body));
   }
@@ -260,11 +230,9 @@ export default function LeadEmailForm({
     <div className="space-y-4">
       {showTeamConfirmationShortcut ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-          <div className="text-sm font-semibold text-emerald-50">
-            Team place confirmation
-          </div>
+          <div className="text-sm font-semibold text-emerald-50">Team decision link</div>
           <p className="mt-1 text-sm leading-6 text-emerald-100/75">
-            Send the system confirmation email with the Yes, confirm our team place button.
+            Send a secure link that recognises the existing lead. It asks only whether they want to enter, their team name and approximate squad size.
           </p>
           <button
             type="button"
@@ -272,7 +240,7 @@ export default function LeadEmailForm({
             disabled={sending || !email}
             className="mt-3 inline-flex rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {sending ? "Sending..." : "Send confirmation email"}
+            {sending ? "Sending..." : "Send team decision email"}
           </button>
         </div>
       ) : null}
@@ -283,33 +251,22 @@ export default function LeadEmailForm({
       >
         <div>
           <label className="mb-1 block text-sm text-white/70">Email template</label>
-
           <TemplateSelect
             label=""
             value={selectedTemplateId}
             options={templateOptions}
             onChange={handleTemplateChange}
             disabled={sending}
-            placeholder={
-              templates.length > 0
-                ? "Select email template"
-                : "No matching templates available"
-            }
+            placeholder={templates.length > 0 ? "Select email template" : "No matching templates available"}
           />
-
           {selectedTemplate?.description ? (
-            <p className="mt-2 text-xs text-white/45">
-              {selectedTemplate.description}
-            </p>
+            <p className="mt-2 text-xs text-white/45">{selectedTemplate.description}</p>
           ) : null}
         </div>
 
         {requiresManagedTeam ? (
           <div>
-            <label className="mb-1 block text-sm text-white/70">
-              Managed team link
-            </label>
-
+            <label className="mb-1 block text-sm text-white/70">Managed team link</label>
             <TemplateSelect
               label=""
               value={targetTeamId}
@@ -352,7 +309,6 @@ export default function LeadEmailForm({
             <label className="block text-sm text-white/70">Message</label>
             <span className="text-xs text-white/40">Plain text email</span>
           </div>
-
           <div className="mt-2 rounded-xl border border-white/10 bg-black/30 transition focus-within:border-emerald-400">
             <textarea
               rows={14}
@@ -363,10 +319,7 @@ export default function LeadEmailForm({
               placeholder={`Hi ${firstName || "there"},\n\nThanks for your interest in SIXFL...\n\nWe’ll be in touch shortly.`}
             />
           </div>
-
-          <div className="mt-2 text-xs text-white/40">
-            This email will be sent directly to the lead.
-          </div>
+          <div className="mt-2 text-xs text-white/40">This email will be sent directly to the lead.</div>
         </div>
 
         <div className="flex gap-3">
@@ -377,7 +330,6 @@ export default function LeadEmailForm({
           >
             {sending ? "Sending..." : "Send email"}
           </button>
-
           <button
             type="button"
             onClick={resetTemplate}
