@@ -3,6 +3,10 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
+const AdminLeadCallStatusBridge = dynamic(
+  () => import("@/components/admin/leads/AdminLeadCallStatusBridge"),
+  { ssr: false },
+);
 const LeagueFreeKitOfferBridge = dynamic(
   () => import("@/components/admin/leagues/LeagueFreeKitOfferBridge"),
   { ssr: false },
@@ -97,6 +101,7 @@ export default function RouteScopedBridges() {
   if (isPlayerTeamRoot) return <TemporaryPlayerPassLauncher />;
 
   const isAdmin = pathname.startsWith("/admin");
+  const isAdminLeadsRoot = pathname === "/admin/leads";
   const isCaptain = pathname.startsWith("/captain/");
   const isPlayer = pathname.startsWith("/player/");
   const isCaptainMatchFees = /^\/captain\/team\/[^/]+\/match-fees\/?$/.test(pathname);
@@ -112,6 +117,7 @@ export default function RouteScopedBridges() {
   return (
     <>
       {isAdmin ? <AdminRefereeControlsLabelBridge /> : null}
+      {isAdminLeadsRoot ? <AdminLeadCallStatusBridge /> : null}
       {isAdminRefereeNightsRoot ? <RefereeNightCleanupBridge /> : null}
 
       {(isAdminLeagues || isCaptain || isPublicLeague) ? <LeagueFreeKitOfferBridge /> : null}
