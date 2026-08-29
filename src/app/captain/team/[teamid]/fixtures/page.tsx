@@ -623,9 +623,18 @@ export default async function CaptainFixturesPage({
                 </div>
               ) : selectedResponseLocked ? (
                 <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-5 text-amber-50">
-                  <p className="text-base font-semibold">You can still confirm your team can play</p>
+                  <p className="text-base font-semibold">Please confirm your team can play</p>
                   <p className="mt-2 text-sm leading-6 text-amber-100/80">
-                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. A positive confirmation is still useful and can be submitted below. If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
+                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. You will continue to receive reminders until you confirm that your team can play.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    It is essential to the smooth running of the league that every team confirms its availability.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
 
                   <form action={confirmFixtureAction} className="mt-4">
