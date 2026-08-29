@@ -21,6 +21,9 @@ const layout = read("src/app/(admin)/admin/layout.tsx");
 const notice = read(
   "src/components/admin/night-board/NightBoardSaveNotice.tsx",
 );
+const repairMigration = read(
+  "prisma/migrations/20260829214500_reset_stale_units_microwave_confirmations/migration.sql",
+);
 
 requireText(
   route,
@@ -33,17 +36,52 @@ requireText(
   "Night Board save route must queue fixture-change notifications.",
 );
 
-const updatePosition = route.indexOf("await prisma.fixture.update({");
+for (const expected of [
+  "await prisma.$transaction(async (tx) => {",
+  "await tx.fixture.update({",
+  "await tx.fixtureCaptainConfirmation.updateMany({",
+  "const teamFacingDetailsChanged =",
+  "const shouldResetTeamResponses =",
+  "Boolean(fixture.publishedAt)",
+  "status !== FixtureStatus.COMPLETED",
+  "FixtureCaptainConfirmationStatus.PENDING",
+  "FixtureCaptainConfirmationStatus.CONFIRMED",
+  "FixtureCaptainConfirmationStatus.ISSUE_RAISED",
+  "confirmedAt: null",
+  "issueRaisedAt: null",
+  "lastChasedAt: null",
+  "confirmedByUserId: null",
+  "note: getConfirmationResetNote(status)",
+]) {
+  requireText(
+    route,
+    expected,
+    `Night Board save route is missing confirmation invalidation safeguard: ${expected}`,
+  );
+}
+
+const transactionPosition = route.indexOf(
+  "await prisma.$transaction(async (tx) => {",
+);
+const updatePosition = route.indexOf("await tx.fixture.update({");
+const confirmationResetPosition = route.indexOf(
+  "await tx.fixtureCaptainConfirmation.updateMany({",
+);
+const paymentSyncPosition = route.indexOf(
+  "const sync = await resyncMatchFeeMessages({",
+);
 const notificationPosition = route.indexOf(
   "await queueNightBoardFixtureChangeNotifications({",
 );
 if (
-  updatePosition < 0 ||
-  notificationPosition < 0 ||
-  notificationPosition <= updatePosition
+  transactionPosition < 0 ||
+  updatePosition <= transactionPosition ||
+  confirmationResetPosition <= updatePosition ||
+  paymentSyncPosition <= confirmationResetPosition ||
+  notificationPosition <= paymentSyncPosition
 ) {
   throw new Error(
-    "Night Board fixture-change notifications must be queued only after the fixture update succeeds.",
+    "Night Board team responses must be invalidated in the same transaction as the fixture update, before payment or notification follow-up work can fail.",
   );
 }
 
@@ -53,6 +91,11 @@ for (const expected of [
   "NotificationChannel.EMAIL",
   "NotificationChannel.SMS",
   "FixtureCaptainConfirmationStatus.PENDING",
+  "FixtureCaptainConfirmationStatus.CONFIRMED",
+  "FixtureCaptainConfirmationStatus.ISSUE_RAISED",
+  "async function resetTeamResponses(input: {",
+  "issueRaisedAt: null",
+  "lastChasedAt: null",
   '"FIXTURE_REMINDER"',
   "queueNotificationFromTemplate({",
 ]) {
@@ -94,6 +137,26 @@ requireText(
   "Night Board save notice must clearly report skipped or failed notifications.",
 );
 
+for (const expected of [
+  "northallerton wednesday mens",
+  "the units",
+  "microwave afc",
+  "2026-09-02",
+  "'CONFIRMED'",
+  "'ISSUE_RAISED'",
+  '"status" = \'PENDING\'',
+  '"confirmedAt" = NULL',
+  '"issueRaisedAt" = NULL',
+  '"lastChasedAt" = NULL',
+  '"confirmedByUserId" = NULL',
+]) {
+  requireText(
+    repairMigration,
+    expected,
+    `The targeted stale-response repair is missing required safeguard: ${expected}`,
+  );
+}
+
 console.log(
-  "Night Board fixture-change notification contract passed: team and referee email/SMS notifications are native to Save match, stale reminders are replaced, and the admin sees delivery counts.",
+  "Night Board fixture-change contract passed: changed published fixtures invalidate confirmed and issue-raised team responses atomically, stale timestamps are cleared, the affected Northallerton fixture is repaired, team/referee notifications remain native, and the admin sees delivery counts.",
 );
