@@ -4,8 +4,11 @@ const prisma = new PrismaClient();
 
 const CAMPAIGN_TEMPLATE_KEY = 'league-starter-guide';
 const SYSTEM_TEMPLATE_KEY = 'team-lead-reassurance-email';
+const SYSTEM_SMS_TEMPLATE_KEY = 'team-lead-reassurance-sms';
 const DEFAULT_SUBJECT = 'Everything you need to know about joining SIXFL ⚽';
 const DEFAULT_CTA_LABEL = 'YES — I WANT TO ENTER A TEAM';
+const DEFAULT_SMS_BODY =
+  'Hi {{firstName}}, it’s SIXFL. We’ve just emailed you the full details for {{leagueName}}, including the costs and a short team confirmation link. Please check your junk or spam folder if you can’t see it. Thanks, SIXFL';
 const OLD_BENEFIT_LINE = '✅ A properly structured local competition';
 const NEW_BENEFIT_LINE = '✅ Games recorded and displayed on YouTube';
 
@@ -199,13 +202,42 @@ async function main() {
     },
   });
 
-  // The template now belongs to the operational system flow and should not
-  // appear as a separate campaign template as well.
+  await prisma.notificationTemplate.upsert({
+    where: { key: SYSTEM_SMS_TEMPLATE_KEY },
+    update: {
+      // Keep SMS wording editable in System Templates. Only enforce the
+      // operational classification used by the automatic reassurance flow.
+      kind: 'TRANSACTIONAL',
+      channel: 'SMS',
+      audience: 'LEAD',
+      subject: null,
+      ctaLabel: null,
+      ctaUrlKey: null,
+      isActive: true,
+    },
+    create: {
+      key: SYSTEM_SMS_TEMPLATE_KEY,
+      name: 'Team lead reassurance SMS',
+      description:
+        'Automatic SMS sent with the team lead reassurance email, prompting the lead to check their inbox and junk folder.',
+      kind: 'TRANSACTIONAL',
+      channel: 'SMS',
+      audience: 'LEAD',
+      subject: null,
+      body: DEFAULT_SMS_BODY,
+      ctaLabel: null,
+      ctaUrlKey: null,
+      isActive: true,
+    },
+  });
+
+  // The email template now belongs to the operational system flow and should
+  // not appear as a separate campaign template as well.
   await prisma.emailTemplate.deleteMany({
     where: { key: CAMPAIGN_TEMPLATE_KEY },
   });
 
-  console.log('Team lead reassurance email is available in System Templates.');
+  console.log('Team lead reassurance email and SMS are available in System Templates.');
 }
 
 main()
