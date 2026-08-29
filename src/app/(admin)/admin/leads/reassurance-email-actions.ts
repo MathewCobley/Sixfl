@@ -4,6 +4,7 @@ import {
   LeadStatus,
   NotificationAudience,
   NotificationChannel,
+  NotificationDispatchStatus,
   NotificationRecipientSourceType,
   NotificationTemplateKind,
   Prisma,
@@ -19,9 +20,13 @@ import { requireAdmin } from "@/lib/requireAdmin";
 
 export const TEAM_REASSURANCE_TEMPLATE_KEY = "team-lead-reassurance-email";
 export const TEAM_REASSURANCE_SOURCE_TYPE = "LEAD_REASSURANCE_EMAIL";
+export const TEAM_REASSURANCE_SMS_TEMPLATE_KEY = "team-lead-reassurance-sms";
+export const TEAM_REASSURANCE_SMS_SOURCE_TYPE = "LEAD_REASSURANCE_SMS";
 
 const DEFAULT_SUBJECT = "Everything you need to know about joining SIXFL ⚽";
 const DEFAULT_CTA_LABEL = "YES — I WANT TO ENTER A TEAM";
+const DEFAULT_SMS_BODY =
+  "Hi {{firstName}}, it’s SIXFL. We’ve just emailed you the full details for {{leagueName}}, including the costs and a short team confirmation link. Please check your junk or spam folder if you can’t see it. Thanks, SIXFL";
 
 const DEFAULT_BODY = `Hi {{firstName}},
 
@@ -50,7 +55,7 @@ SIXFL is designed to feel like a proper football league rather than just turning
 ✅ Your own team and player accounts
 ✅ Team statistics and match information
 ✅ SIXFL AI match predictions
-✅ A properly structured local competition
+✅ Games recorded and displayed on YouTube
 
 6-a-side football. Done properly.
 
@@ -137,6 +142,12 @@ type LeagueDetailsRow = {
   targetTeamCount: number | null;
 };
 
+type ReassuranceSmsStatus =
+  | NotificationDispatchStatus
+  | "NO_PHONE"
+  | "EMAIL_NOT_QUEUED"
+  | "FAILED_TO_QUEUE";
+
 function getFirstName(value: string | null | undefined) {
   return value?.trim().split(/\s+/)[0] || "there";
 }
@@ -166,39 +177,67 @@ function formatVenueName(value: string | null | undefined) {
   return venueName;
 }
 
-async function ensureReassuranceTemplate() {
-  const existing = await prisma.notificationTemplate.findUnique({
+async function ensureReassuranceTemplates() {
+  const existingEmail = await prisma.notificationTemplate.findUnique({
     where: { key: TEAM_REASSURANCE_TEMPLATE_KEY },
     select: { ctaLabel: true },
   });
 
-  return prisma.notificationTemplate.upsert({
-    where: { key: TEAM_REASSURANCE_TEMPLATE_KEY },
-    update: {
-      kind: NotificationTemplateKind.TRANSACTIONAL,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.LEAD,
-      ctaLabel: existing?.ctaLabel?.trim() || DEFAULT_CTA_LABEL,
-      // The system mailer supplies the lead-specific decision URL through this
-      // supported variable. The recipient is never sent to a blank lead form.
-      ctaUrlKey: "signupUrl",
-      isActive: true,
-    },
-    create: {
-      key: TEAM_REASSURANCE_TEMPLATE_KEY,
-      name: "Team lead reassurance email",
-      description:
-        "Friendly league starter information for an existing team lead, including costs, squad size, no long-term contract and advance fixture availability.",
-      kind: NotificationTemplateKind.TRANSACTIONAL,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.LEAD,
-      subject: DEFAULT_SUBJECT,
-      body: DEFAULT_BODY,
-      ctaLabel: DEFAULT_CTA_LABEL,
-      ctaUrlKey: "signupUrl",
-      isActive: true,
-    },
-  });
+  await Promise.all([
+    prisma.notificationTemplate.upsert({
+      where: { key: TEAM_REASSURANCE_TEMPLATE_KEY },
+      update: {
+        kind: NotificationTemplateKind.TRANSACTIONAL,
+        channel: NotificationChannel.EMAIL,
+        audience: NotificationAudience.LEAD,
+        ctaLabel: existingEmail?.ctaLabel?.trim() || DEFAULT_CTA_LABEL,
+        // The system mailer supplies the lead-specific decision URL through this
+        // supported variable. The recipient is never sent to a blank lead form.
+        ctaUrlKey: "signupUrl",
+        isActive: true,
+      },
+      create: {
+        key: TEAM_REASSURANCE_TEMPLATE_KEY,
+        name: "Team lead reassurance email",
+        description:
+          "Friendly league starter information for an existing team lead, including costs, squad size, no long-term contract and advance fixture availability.",
+        kind: NotificationTemplateKind.TRANSACTIONAL,
+        channel: NotificationChannel.EMAIL,
+        audience: NotificationAudience.LEAD,
+        subject: DEFAULT_SUBJECT,
+        body: DEFAULT_BODY,
+        ctaLabel: DEFAULT_CTA_LABEL,
+        ctaUrlKey: "signupUrl",
+        isActive: true,
+      },
+    }),
+    prisma.notificationTemplate.upsert({
+      where: { key: TEAM_REASSURANCE_SMS_TEMPLATE_KEY },
+      update: {
+        kind: NotificationTemplateKind.TRANSACTIONAL,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
+        subject: null,
+        ctaLabel: null,
+        ctaUrlKey: null,
+        isActive: true,
+      },
+      create: {
+        key: TEAM_REASSURANCE_SMS_TEMPLATE_KEY,
+        name: "Team lead reassurance SMS",
+        description:
+          "Automatic SMS sent with the team lead reassurance email, prompting the lead to check their inbox and junk folder.",
+        kind: NotificationTemplateKind.TRANSACTIONAL,
+        channel: NotificationChannel.SMS,
+        audience: NotificationAudience.LEAD,
+        subject: null,
+        body: DEFAULT_SMS_BODY,
+        ctaLabel: null,
+        ctaUrlKey: null,
+        isActive: true,
+      },
+    }),
+  ]);
 }
 
 export async function sendLeadReassuranceEmailAction(formData: FormData) {
@@ -292,7 +331,7 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
   );
   const secureLink = await ensureTeamPlaceConfirmationRecord(lead.id);
 
-  await ensureReassuranceTemplate();
+  await ensureReassuranceTemplates();
 
   const displayName = lead.contactName?.trim() || lead.teamName?.trim() || email;
   const recipient = await upsertNotificationRecipient({
@@ -303,6 +342,7 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
     email,
     phone: lead.phone,
     transactionalEmailOptIn: true,
+    transactionalSmsOptIn: true,
     marketingEmailOptIn: true,
     metadata: {
       leadId: lead.id,
@@ -330,35 +370,38 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
     .filter(Boolean)
     .join("\n");
 
+  const firstName = getFirstName(lead.contactName);
+  const templateVariables = {
+    firstName,
+    fullName: lead.contactName?.trim() || "",
+    contactName: lead.contactName?.trim() || "",
+    teamName: lead.teamName?.trim() || "",
+    area: lead.area?.trim() || "",
+    leagueName,
+    venueName,
+    kickoffInfo,
+    proposedStartDate,
+    minutesPerGame: details?.minutesPerGame
+      ? String(details.minutesPerGame)
+      : "To be confirmed",
+    costPerTeamPerMatch,
+    targetTeamCount: details?.targetTeamCount
+      ? String(details.targetTeamCount)
+      : "",
+    format: effectiveLeague.format?.trim() || "Weekly 6-a-side fixtures",
+    leagueDetails: leagueDetailsBlock,
+    leagueDetailsBlock,
+    // The system template uses signupUrl as its supported CTA destination,
+    // but the value is the secure decision page for this existing lead.
+    signupUrl: secureLink.url,
+    teamConfirmationUrl: secureLink.url,
+  };
+
   try {
-    const dispatch = await queueNotificationFromTemplate({
+    const emailDispatch = await queueNotificationFromTemplate({
       templateKey: TEAM_REASSURANCE_TEMPLATE_KEY,
       recipientId: recipient.id,
-      variables: {
-        firstName: getFirstName(lead.contactName),
-        fullName: lead.contactName?.trim() || "",
-        contactName: lead.contactName?.trim() || "",
-        teamName: lead.teamName?.trim() || "",
-        area: lead.area?.trim() || "",
-        leagueName,
-        venueName,
-        kickoffInfo,
-        proposedStartDate,
-        minutesPerGame: details?.minutesPerGame
-          ? String(details.minutesPerGame)
-          : "To be confirmed",
-        costPerTeamPerMatch,
-        targetTeamCount: details?.targetTeamCount
-          ? String(details.targetTeamCount)
-          : "",
-        format: effectiveLeague.format?.trim() || "Weekly 6-a-side fixtures",
-        leagueDetails: leagueDetailsBlock,
-        leagueDetailsBlock,
-        // The system template uses signupUrl as its supported CTA destination,
-        // but the value is the secure decision page for this existing lead.
-        signupUrl: secureLink.url,
-        teamConfirmationUrl: secureLink.url,
-      },
+      variables: templateVariables,
       sourceType: TEAM_REASSURANCE_SOURCE_TYPE,
       sourceId: lead.id,
       metadata: {
@@ -374,15 +417,68 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
       createdByUserId: user?.id ?? null,
     });
 
-    await logNotificationDispatchToThread({ dispatch, recipient });
+    await logNotificationDispatchToThread({ dispatch: emailDispatch, recipient });
     await prisma.interestLeadEmail.create({
       data: {
         interestLeadId: lead.id,
-        subject: dispatch.subject ?? DEFAULT_SUBJECT,
-        body: dispatch.bodyText,
+        subject: emailDispatch.subject ?? DEFAULT_SUBJECT,
+        body: emailDispatch.bodyText,
         sentTo: email,
       },
     });
+
+    let smsDispatchId: string | null = null;
+    let smsStatus: ReassuranceSmsStatus = "EMAIL_NOT_QUEUED";
+    let smsFailureReason: string | null = null;
+
+    if (emailDispatch.status === NotificationDispatchStatus.QUEUED) {
+      if (!lead.phone?.trim()) {
+        smsStatus = "NO_PHONE";
+        smsFailureReason = "This lead does not have a phone number.";
+      } else {
+        try {
+          const smsDispatch = await queueNotificationFromTemplate({
+            templateKey: TEAM_REASSURANCE_SMS_TEMPLATE_KEY,
+            recipientId: recipient.id,
+            variables: {
+              firstName,
+              leagueName,
+            },
+            sourceType: TEAM_REASSURANCE_SMS_SOURCE_TYPE,
+            sourceId: lead.id,
+            metadata: {
+              origin: "lead_reassurance_email_follow_up_sms",
+              originLabel: "Team lead reassurance SMS",
+              leadId: lead.id,
+              leagueId: effectiveLeague.id,
+              originalLeadLeagueId: lead.leagueId,
+              leagueName,
+              pairedEmailDispatchId: emailDispatch.id,
+            },
+            createdByUserId: user?.id ?? null,
+          });
+
+          await logNotificationDispatchToThread({ dispatch: smsDispatch, recipient });
+          smsDispatchId = smsDispatch.id;
+          smsStatus = smsDispatch.status;
+          smsFailureReason = smsDispatch.failureReason ?? null;
+        } catch (error) {
+          console.error("Reassurance email was queued but its automatic SMS could not be queued", {
+            leadId: lead.id,
+            error,
+          });
+          smsStatus = "FAILED_TO_QUEUE";
+          smsFailureReason =
+            error instanceof Error
+              ? error.message
+              : "The automatic follow-up SMS could not be queued.";
+        }
+      }
+    } else {
+      smsFailureReason =
+        emailDispatch.failureReason ||
+        "The reassurance email was not queued, so the accompanying SMS was not sent.";
+    }
 
     if (lead.status === LeadStatus.NEW) {
       await prisma.interestLead.update({
@@ -396,7 +492,14 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
     revalidatePath("/admin/templates");
     revalidatePath("/admin/messaging");
 
-    return { ok: true, dispatchId: dispatch.id, status: dispatch.status };
+    return {
+      ok: true,
+      dispatchId: emailDispatch.id,
+      status: emailDispatch.status,
+      smsDispatchId,
+      smsStatus,
+      smsFailureReason,
+    };
   } catch (error) {
     console.error("sendLeadReassuranceEmailAction error", error);
     return {
