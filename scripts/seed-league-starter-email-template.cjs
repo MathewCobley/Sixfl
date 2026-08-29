@@ -124,7 +124,14 @@ const templateData = {
 async function main() {
   await prisma.emailTemplate.upsert({
     where: { key: 'league-starter-guide' },
-    update: templateData,
+    update: {
+      // Keep the subject and body editable in Admin Templates. Only enforce the
+      // secure destination that prevents existing leads being sent through a
+      // duplicate registration form.
+      ctaLabel: 'YES — I WANT TO ENTER A TEAM',
+      ctaUrlKey: 'teamConfirmationUrl',
+      isActive: true,
+    },
     create: {
       key: 'league-starter-guide',
       ...templateData,
