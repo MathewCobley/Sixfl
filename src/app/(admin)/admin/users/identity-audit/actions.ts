@@ -31,30 +31,31 @@ export async function applySharedEmailRepairAction(formData: FormData) {
     redirect(`/admin/users/identity-audit?${params.toString()}`);
   }
 
+  let result;
   try {
-    const result = await applySharedEmailRepair({
+    result = await applySharedEmailRepair({
       repair: { sharedEmail, separateName, newEmail, newPhone },
       actorUserId: user?.id ?? null,
       actorEmail: user?.email ?? session?.user?.email ?? null,
     });
-
-    revalidatePath("/admin/users/identity-audit");
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/email-audit");
-    revalidatePath("/admin/leads");
-    revalidatePath("/admin/player-pool");
-    revalidatePath("/admin/messaging");
-
-    params.set("repairDone", "1");
-    params.set("usersUpdated", String(result.usersUpdated));
-    params.set("leadsUpdated", String(result.leadsUpdated));
-    params.set("prospectsUpdated", String(result.prospectsUpdated));
-    params.set("recipientsResynced", String(result.playerSourceRecipientsResynced));
-    params.set("unresolvedRecipients", String(result.unresolvedRecipientsLeft));
-    redirect(`/admin/users/identity-audit?${params.toString()}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The shared-email repair failed safely.";
     params.set("repairError", message);
     redirect(`/admin/users/identity-audit?${params.toString()}`);
   }
+
+  revalidatePath("/admin/users/identity-audit");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/email-audit");
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/player-pool");
+  revalidatePath("/admin/messaging");
+
+  params.set("repairDone", "1");
+  params.set("usersUpdated", String(result.usersUpdated));
+  params.set("leadsUpdated", String(result.leadsUpdated));
+  params.set("prospectsUpdated", String(result.prospectsUpdated));
+  params.set("recipientsResynced", String(result.playerSourceRecipientsResynced));
+  params.set("unresolvedRecipients", String(result.unresolvedRecipientsLeft));
+  redirect(`/admin/users/identity-audit?${params.toString()}`);
 }
