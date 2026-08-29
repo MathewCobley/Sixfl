@@ -1,10 +1,7 @@
-import "server-only";
-
 import {
   formatTimeInLondon,
   getLondonMinutesSinceMidnight,
 } from "@/lib/datetime/london";
-import { prisma } from "@/lib/prisma";
 
 export type TeamKickoffWindow = {
   name: string;
@@ -121,6 +118,7 @@ export async function getFixtureTeamKickoffWindowViolations(input: {
   awayTeamId: string;
   kickoffAt: Date;
 }) {
+  const { prisma } = await import("@/lib/prisma");
   const teams = await prisma.team.findMany({
     where: {
       id: {
