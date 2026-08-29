@@ -15,6 +15,9 @@ export type TeamWeekUnavailability = {
   leagueId: string | null;
   weekStart: Date;
   note: string | null;
+  restrictionType: "UNAVAILABLE" | "TIME_RESTRICTION";
+  earliestKickoff: string | null;
+  latestKickoff: string | null;
   submittedByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -41,11 +44,26 @@ export async function ensureTeamWeekUnavailabilityTable() {
           "leagueId" TEXT REFERENCES "League"("id") ON DELETE SET NULL,
           "weekStart" TIMESTAMP(3) NOT NULL,
           "note" TEXT,
+          "restrictionType" TEXT NOT NULL DEFAULT 'UNAVAILABLE',
+          "earliestKickoff" TEXT,
+          "latestKickoff" TEXT,
           "submittedByUserId" TEXT REFERENCES "User"("id") ON DELETE SET NULL,
           "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT "TeamWeekUnavailability_teamId_weekStart_key" UNIQUE ("teamId", "weekStart")
         )
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "TeamWeekUnavailability"
+        ADD COLUMN IF NOT EXISTS "restrictionType" TEXT NOT NULL DEFAULT 'UNAVAILABLE'
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "TeamWeekUnavailability"
+        ADD COLUMN IF NOT EXISTS "earliestKickoff" TEXT
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "TeamWeekUnavailability"
+        ADD COLUMN IF NOT EXISTS "latestKickoff" TEXT
       `);
       await prisma.$executeRawUnsafe(`
         CREATE INDEX IF NOT EXISTS "TeamWeekUnavailability_weekStart_idx"
@@ -142,6 +160,9 @@ export async function listTeamWeekUnavailability(input: {
       "leagueId",
       "weekStart",
       "note",
+      CASE WHEN "restrictionType" = 'TIME_RESTRICTION' THEN 'TIME_RESTRICTION' ELSE 'UNAVAILABLE' END AS "restrictionType",
+      "earliestKickoff",
+      "latestKickoff",
       "submittedByUserId",
       "createdAt",
       "updatedAt"
@@ -172,6 +193,9 @@ export async function listUpcomingTeamWeekUnavailability(input: {
       u."leagueId",
       u."weekStart",
       u."note",
+      CASE WHEN u."restrictionType" = 'TIME_RESTRICTION' THEN 'TIME_RESTRICTION' ELSE 'UNAVAILABLE' END AS "restrictionType",
+      u."earliestKickoff",
+      u."latestKickoff",
       u."submittedByUserId",
       u."createdAt",
       u."updatedAt",
@@ -198,10 +222,16 @@ export async function upsertTeamWeekUnavailability(input: {
   leagueId: string | null;
   weekStart: Date;
   note: string | null;
+  restrictionType?: "UNAVAILABLE" | "TIME_RESTRICTION";
+  earliestKickoff?: string | null;
+  latestKickoff?: string | null;
   submittedByUserId: string | null;
 }) {
   await ensureTeamWeekUnavailabilityTable();
   const id = randomUUID();
+  const restrictionType = input.restrictionType === "TIME_RESTRICTION" ? "TIME_RESTRICTION" : "UNAVAILABLE";
+  const earliestKickoff = restrictionType === "TIME_RESTRICTION" ? input.earliestKickoff ?? null : null;
+  const latestKickoff = restrictionType === "TIME_RESTRICTION" ? input.latestKickoff ?? null : null;
 
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "TeamWeekUnavailability" (
@@ -210,6 +240,9 @@ export async function upsertTeamWeekUnavailability(input: {
       "leagueId",
       "weekStart",
       "note",
+      "restrictionType",
+      "earliestKickoff",
+      "latestKickoff",
       "submittedByUserId",
       "createdAt",
       "updatedAt"
@@ -219,6 +252,9 @@ export async function upsertTeamWeekUnavailability(input: {
       ${input.leagueId},
       ${input.weekStart},
       ${input.note},
+      ${restrictionType},
+      ${earliestKickoff},
+      ${latestKickoff},
       ${input.submittedByUserId},
       NOW(),
       NOW()
@@ -227,6 +263,9 @@ export async function upsertTeamWeekUnavailability(input: {
     DO UPDATE SET
       "leagueId" = EXCLUDED."leagueId",
       "note" = EXCLUDED."note",
+      "restrictionType" = EXCLUDED."restrictionType",
+      "earliestKickoff" = EXCLUDED."earliestKickoff",
+      "latestKickoff" = EXCLUDED."latestKickoff",
       "submittedByUserId" = EXCLUDED."submittedByUserId",
       "updatedAt" = NOW()
   `);
