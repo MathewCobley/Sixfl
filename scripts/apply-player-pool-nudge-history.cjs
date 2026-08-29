@@ -20,9 +20,36 @@ replaceOnce(
   'import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";',
   [
     'import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";',
+    'import BulkPlayerPoolProfileReminderButton from "@/components/admin/player-pool/BulkPlayerPoolProfileReminderButton";',
     'import PlayerPoolNudgeButton from "@/components/admin/player-pool/PlayerPoolNudgeButton";',
   ].join("\n"),
-  "native nudge control import",
+  "native profile reminder controls import",
+);
+
+replaceOnce(
+  'import { formatDateTimeInLondon } from "@/lib/datetime/london";',
+  [
+    'import { formatDateTimeInLondon } from "@/lib/datetime/london";',
+    'import { ensurePlayerPoolProfileReminderTemplate } from "@/lib/player-pool/profile-reminders";',
+  ].join("\n"),
+  "profile reminder template import",
+);
+
+replaceOnce(
+  [
+    "  await requireAdmin();",
+    "  await ensurePlayerPoolTables();",
+    "",
+    "  const params = (await searchParams) ?? {};",
+  ].join("\n"),
+  [
+    "  await requireAdmin();",
+    "  await ensurePlayerPoolTables();",
+    "  await ensurePlayerPoolProfileReminderTemplate();",
+    "",
+    "  const params = (await searchParams) ?? {};",
+  ].join("\n"),
+  "profile reminder template initialisation",
 );
 
 replaceOnce(
@@ -91,6 +118,26 @@ replaceOnce(
 
 replaceOnce(
   [
+    "          </nav>",
+    "        </div>",
+    "",
+    '        <div className="grid gap-4 p-4 sm:p-6 xl:grid-cols-2">',
+  ].join("\n"),
+  [
+    "          </nav>",
+    "        </div>",
+    "",
+    '        {selectedView === "awaiting" ? (',
+    "          <BulkPlayerPoolProfileReminderButton awaitingCount={counts.awaiting} />",
+    "        ) : null}",
+    "",
+    '        <div className="grid gap-4 p-4 sm:p-6 xl:grid-cols-2">',
+  ].join("\n"),
+  "bulk awaiting-profile reminder panel",
+);
+
+replaceOnce(
+  [
     '                <div className="mt-4 flex justify-end border-t border-white/10 pt-4">',
     '                  <DeletePlayerPoolProfileButton',
     '                    profileId={profile.id}',
@@ -133,7 +180,7 @@ if (fs.existsSync(bridgePath)) {
       '"use client";',
       "",
       "// Retained temporarily because the admin layout still imports this component.",
-      "// The PlayerPool page now renders its nudge control and history natively.",
+      "// The PlayerPool page now renders individual and bulk reminder controls natively.",
       "export default function PlayerPoolNudgeBridge() {",
       "  return null;",
       "}",
@@ -145,12 +192,15 @@ if (fs.existsSync(bridgePath)) {
 
 if (
   !source.includes("PlayerPoolNudgeButton") ||
+  !source.includes("BulkPlayerPoolProfileReminderButton") ||
+  !source.includes("ensurePlayerPoolProfileReminderTemplate") ||
+  !source.includes("awaitingCount={counts.awaiting}") ||
   !source.includes('dispatch."sourceType" = \'PLAYER_POOL_PROFILE_NUDGE\'') ||
   !source.includes("initialNudgeCount={profile.nudgeCount}")
 ) {
-  throw new Error("PlayerPool nudge history was not applied correctly.");
+  throw new Error("PlayerPool profile reminder controls were not applied correctly.");
 }
 
 console.log(
-  "PlayerPool nudges are now rendered natively with persistent count, time, delivery status and sender history.",
+  "PlayerPool reminders now include a bulk awaiting-profile email, an editable system template, and persistent per-player time, delivery status and sender history.",
 );

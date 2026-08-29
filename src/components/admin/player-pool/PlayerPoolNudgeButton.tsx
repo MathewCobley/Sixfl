@@ -71,7 +71,7 @@ export default function PlayerPoolNudgeButton({
 
   async function sendNudge() {
     const confirmed = window.confirm(
-      `Nudge ${playerName}?\n\nThis will resend their SIXFL PlayerPool profile form email.`,
+      `Send a PlayerPool profile reminder to ${playerName}?\n\nThis sends the full PlayerPool explanation and their secure profile form link.`,
     );
     if (!confirmed) return;
 
@@ -86,7 +86,7 @@ export default function PlayerPoolNudgeButton({
       const payload = (await response.json().catch(() => null)) as NudgeResponse | null;
 
       if (!response.ok || !payload?.ok || !payload.nudgedAt) {
-        throw new Error(payload?.error || "The nudge could not be sent.");
+        throw new Error(payload?.error || "The profile reminder could not be sent.");
       }
 
       setNudgeCount((value) => value + 1);
@@ -96,7 +96,11 @@ export default function PlayerPoolNudgeButton({
       setSent(true);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The nudge could not be sent.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The profile reminder could not be sent.",
+      );
     } finally {
       setPending(false);
     }
@@ -110,18 +114,18 @@ export default function PlayerPoolNudgeButton({
         {nudgeCount > 0 && formattedLastNudge ? (
           <>
             <span className="font-semibold text-white/70">
-              Last nudge: {formattedLastNudge}
+              Last profile email: {formattedLastNudge}
             </span>
             <span className={`ml-2 font-semibold ${statusClasses(lastNudgeStatus)}`}>
               {formatStatus(lastNudgeStatus)}
             </span>
             {lastNudgeBy ? <span className="ml-2">by {lastNudgeBy}</span> : null}
             <span className="ml-2">
-              · {nudgeCount} nudge{nudgeCount === 1 ? "" : "s"} recorded
+              · {nudgeCount} reminder{nudgeCount === 1 ? "" : "s"} recorded
             </span>
           </>
         ) : (
-          <span>No nudges sent yet.</span>
+          <span>No profile reminder email sent yet.</span>
         )}
       </div>
 
@@ -143,7 +147,11 @@ export default function PlayerPoolNudgeButton({
               : "border-amber-400/30 bg-amber-500/10 text-amber-100 hover:border-amber-400/45 hover:bg-amber-500/15",
           ].join(" ")}
         >
-          {pending ? "Sending…" : sent ? "Nudged ✓" : "Nudge"}
+          {pending
+            ? "Queueing…"
+            : sent
+              ? "Reminder queued ✓"
+              : "Send profile reminder"}
         </button>
       ) : null}
     </div>
