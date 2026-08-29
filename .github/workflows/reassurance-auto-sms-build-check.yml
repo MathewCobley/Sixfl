@@ -30,4 +30,23 @@ jobs:
         run: npx prisma generate
 
       - name: Type-check application
-        run: npx tsc --noEmit
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit 2>&1 | tee tsc-output.txt
+          STATUS=${PIPESTATUS[0]}
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload type-check output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reassurance-auto-sms-typecheck-${{ github.sha }}
+          path: tsc-output.txt
+          retention-days: 1
+
+      - name: Fail if type-check failed
+        if: steps.typecheck.outputs.status != '0'
+        run: exit 1
