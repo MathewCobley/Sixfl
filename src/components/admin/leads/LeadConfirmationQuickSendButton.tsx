@@ -29,7 +29,7 @@ export default function LeadConfirmationQuickSendButton({
 
     startReassuranceTransition(async () => {
       const formData = new FormData();
-      formData.append("leadId", leadId);
+      formData.set("leadId", leadId);
 
       const result = await sendLeadReassuranceEmailAction(formData);
 
@@ -38,9 +38,25 @@ export default function LeadConfirmationQuickSendButton({
         return;
       }
 
-      alert(
-        "Reassurance email sent. It explains the league, costs, squad size, no long-term contract and fixture flexibility, and includes the secure team decision link.",
-      );
+      const emailMessage =
+        result.status === "QUEUED"
+          ? "Reassurance email queued."
+          : `The reassurance email was ${result.status.toLowerCase()}.`;
+
+      const smsMessage =
+        result.smsStatus === "QUEUED"
+          ? "The inbox-check SMS was also queued automatically."
+          : result.smsStatus === "NO_PHONE"
+            ? "No SMS was sent because this lead has no phone number."
+            : result.smsStatus === "EMAIL_NOT_QUEUED"
+              ? "The SMS was not sent because the email was not queued."
+              : result.smsStatus === "FAILED_TO_QUEUE"
+                ? "The email was queued, but the automatic SMS could not be queued."
+                : result.smsStatus === "SKIPPED"
+                  ? `The email was queued, but the SMS was skipped${result.smsFailureReason ? `: ${result.smsFailureReason}` : "."}`
+                  : `SMS status: ${result.smsStatus.toLowerCase()}.`;
+
+      alert(`${emailMessage} ${smsMessage}`);
       router.refresh();
     });
   }
@@ -50,7 +66,7 @@ export default function LeadConfirmationQuickSendButton({
 
     startDecisionTransition(async () => {
       const formData = new FormData();
-      formData.append("leadId", leadId);
+      formData.set("leadId", leadId);
 
       const result = await sendTeamCommitmentEmailAction(formData);
 
@@ -76,7 +92,7 @@ export default function LeadConfirmationQuickSendButton({
         disabled={!canSend || pending}
         title={
           canSend
-            ? "Send the friendly SIXFL league starter and reassurance email"
+            ? "Send the league reassurance email and automatic inbox-check SMS"
             : "Set an email and prospective league before sending"
         }
         className="inline-flex min-h-9 max-w-[150px] items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-center text-xs font-bold leading-4 tracking-[0.08em] text-violet-100 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/30"
