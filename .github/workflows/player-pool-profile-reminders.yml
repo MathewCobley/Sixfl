@@ -11,6 +11,8 @@ jobs:
   profile-reminders:
     name: Preserve PlayerPool profile reminder workflow
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl
 
     steps:
       - name: Check out repository
