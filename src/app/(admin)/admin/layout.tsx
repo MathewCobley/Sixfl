@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
 import ProspectCommunicationCtaBridge from "@/components/admin/communications/ProspectCommunicationCtaBridge";
+import EmailRecordLookup from "@/components/admin/email-audit/EmailRecordLookup";
 import EmailBrandOptionBridge from "@/components/admin/email-templates/EmailBrandOptionBridge";
 import EmailTemplateListControlsBridge from "@/components/admin/email-templates/EmailTemplateListControlsBridge";
 import PlayerPoolTemplateCtaBridge from "@/components/admin/email-templates/PlayerPoolTemplateCtaBridge";
@@ -114,7 +115,10 @@ export default async function AdminLayout({
           />
         </aside>
 
-        <main className="w-full min-w-0 flex-1">{children}</main>
+        <main className="w-full min-w-0 flex-1">
+          <EmailRecordLookup />
+          {children}
+        </main>
       </div>
     </div>
   );
