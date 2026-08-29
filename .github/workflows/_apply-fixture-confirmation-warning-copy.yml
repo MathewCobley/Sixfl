@@ -1,0 +1,64 @@
+name: Apply fixture confirmation warning copy
+
+on:
+  push:
+    branches:
+      - fix/fixture-confirmation-warning-copy
+
+permissions:
+  contents: write
+
+jobs:
+  apply-copy:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/fixture-confirmation-warning-copy
+          fetch-depth: 0
+
+      - name: Update the captain fixture confirmation wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/captain/team/[teamid]/fixtures/page.tsx")
+          text = path.read_text(encoding="utf-8")
+          old = '''                  <p className="text-base font-semibold">You can still confirm your team can play</p>
+                  <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. A positive confirmation is still useful and can be submitted below. If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
+                  </p>'''
+          new = '''                  <p className="text-base font-semibold">Please confirm your team can play</p>
+                  <p className="mt-2 text-sm leading-6 text-amber-100/80">
+                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. You will continue to receive reminders until you confirm that your team can play.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    It is essential to the smooth running of the league that every team confirms its availability.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                    If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
+                  </p>'''
+
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"Expected exactly one fixture warning block, found {count}")
+
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+          rm .github/workflows/_apply-fixture-confirmation-warning-copy.yml
+
+      - name: Commit the source change and remove this temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "src/app/captain/team/[teamid]/fixtures/page.tsx" .github/workflows/_apply-fixture-confirmation-warning-copy.yml
+          git commit -m "Strengthen late fixture confirmation warning"
+          git push origin HEAD:fix/fixture-confirmation-warning-copy
