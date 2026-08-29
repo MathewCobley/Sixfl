@@ -1,0 +1,10 @@
+CREATE TABLE "LeadPhoneCall" (
+  "leadId" TEXT NOT NULL,
+  "calledAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LeadPhoneCall_pkey" PRIMARY KEY ("leadId")
+);
+
+ALTER TABLE "LeadPhoneCall"
+ADD CONSTRAINT "LeadPhoneCall_leadId_fkey"
+FOREIGN KEY ("leadId") REFERENCES "InterestLead"("id")
+ON DELETE CASCADE ON UPDATE CASCADE;
