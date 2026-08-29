@@ -27,29 +27,37 @@ jobs:
 
           path = Path("src/app/captain/team/[teamid]/fixtures/page.tsx")
           text = path.read_text(encoding="utf-8")
-          old = '''                  <p className="text-base font-semibold">You can still confirm your team can play</p>
-                  <p className="mt-2 text-sm leading-6 text-amber-100/80">
-                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. A positive confirmation is still useful and can be submitted below. If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
-                  </p>'''
-          new = '''                  <p className="text-base font-semibold">Please confirm your team can play</p>
-                  <p className="mt-2 text-sm leading-6 text-amber-100/80">
-                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. You will continue to receive reminders until you confirm that your team can play.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                    It is essential to the smooth running of the league that every team confirms its availability.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                    If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                    If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
-                  </p>'''
+          newline = "\r\n" if "\r\n" in text else "\n"
 
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f"Expected exactly one fixture warning block, found {count}")
+          old_heading = '<p className="text-base font-semibold">You can still confirm your team can play</p>'
+          new_heading = '<p className="text-base font-semibold">Please confirm your team can play</p>'
+          old_copy = (
+              "The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. "
+              "A positive confirmation is still useful and can be submitted below. "
+              "If your team cannot play, you need to change a previous response, or there is another issue, "
+              "email SIXFL directly now."
+          )
+          new_copy = newline.join([
+              "The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. You will continue to receive reminders until you confirm that your team can play.",
+              '                  </p>',
+              '                  <p className="mt-3 text-sm leading-6 text-amber-100/80">',
+              "                    It is essential to the smooth running of the league that every team confirms its availability.",
+              '                  </p>',
+              '                  <p className="mt-3 text-sm leading-6 text-amber-100/80">',
+              "                    If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.",
+              '                  </p>',
+              '                  <p className="mt-3 text-sm leading-6 text-amber-100/80">',
+              "                    If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.",
+          ])
 
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          if text.count(old_heading) != 1:
+              raise SystemExit(f"Expected one old heading, found {text.count(old_heading)}")
+          if text.count(old_copy) != 1:
+              raise SystemExit(f"Expected one old warning sentence, found {text.count(old_copy)}")
+
+          text = text.replace(old_heading, new_heading, 1)
+          text = text.replace(old_copy, new_copy, 1)
+          path.write_text(text, encoding="utf-8", newline="")
           PY
 
           rm .github/workflows/_apply-fixture-confirmation-warning-copy.yml
