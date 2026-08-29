@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-type CallStatus = { id: string; contactedAt: string | null };
+type CallStatus = { id: string; calledAt: string | null };
 
 type StatusResponse = { leads?: CallStatus[] };
 
@@ -25,13 +25,13 @@ function getLeadId(row: HTMLTableRowElement) {
   return /^\/admin\/leads\/([^/?#]+)/.exec(href)?.[1] ?? null;
 }
 
-function buildCell(leadId: string, contactedAt: string | null) {
+function buildCell(leadId: string, calledAt: string | null) {
   const cell = document.createElement("td");
   cell.dataset.leadCalledCell = leadId;
   cell.className = "px-4 py-3";
 
-  if (contactedAt) {
-    cell.innerHTML = `<div class="inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-sky-200">✓ Called</div><div class="mt-1 whitespace-nowrap text-[11px] text-white/40">${formatCalledAt(contactedAt)}</div>`;
+  if (calledAt) {
+    cell.innerHTML = `<div class="inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-sky-200">✓ Called</div><div class="mt-1 whitespace-nowrap text-[11px] text-white/40">${formatCalledAt(calledAt)}</div>`;
     return cell;
   }
 
@@ -71,7 +71,7 @@ export default function AdminLeadCallStatusBridge() {
       const response = await fetch("/api/admin/leads/call-status", { cache: "no-store" });
       if (!response.ok || disposed) return;
       const payload = (await response.json()) as StatusResponse;
-      const statuses = new Map((payload.leads ?? []).map((lead) => [lead.id, lead.contactedAt]));
+      const statuses = new Map((payload.leads ?? []).map((lead) => [lead.id, lead.calledAt]));
 
       const headerRow = table.querySelector<HTMLTableRowElement>("thead tr");
       const actionHeader = headerRow?.lastElementChild;
