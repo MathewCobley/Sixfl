@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Weeks unavailable | SIXFL",
+  title: "Fixture planning | SIXFL",
 };
 
 type SearchParams = {
@@ -36,6 +36,21 @@ function decodeMessage(value?: string) {
 
 function weekKey(value: Date) {
   return value.toISOString().slice(0, 10);
+}
+
+function restrictionSummary(input: {
+  type: "UNAVAILABLE" | "TIME_RESTRICTION" | "AVAILABLE";
+  earliestKickoff?: string | null;
+  latestKickoff?: string | null;
+}) {
+  if (input.type === "UNAVAILABLE") return "Team unavailable";
+  if (input.type !== "TIME_RESTRICTION") return "Assumed available";
+  if (input.earliestKickoff && input.latestKickoff) {
+    return `Can only play ${input.earliestKickoff}–${input.latestKickoff}`;
+  }
+  if (input.earliestKickoff) return `Can only play from ${input.earliestKickoff}`;
+  if (input.latestKickoff) return `Can only play up to ${input.latestKickoff}`;
+  return "Temporary time restriction";
 }
 
 export default async function TeamWeeksUnavailablePage({
@@ -100,17 +115,17 @@ export default async function TeamWeeksUnavailablePage({
               Advance fixture planning
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Tell us when your team cannot play
+              Tell us about a week you cannot play normally
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-              Your team is assumed available every week. Only tick a week when you already know you will not be able to field a team. No action is needed when you are available.
+              Your team is assumed available every week. Use this page only when you already know a specific future week will be different — either you cannot field a team, or you need a temporary kick-off restriction such as “after 8pm”.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/75">
                 {context.currentLeague?.name ?? context.team.league?.name ?? "No league assigned"}
               </span>
               <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100">
-                {noticeCount} future unavailable week{noticeCount === 1 ? "" : "s"}
+                {noticeCount} future notice{noticeCount === 1 ? "" : "s"}
               </span>
             </div>
           </div>
@@ -135,9 +150,12 @@ export default async function TeamWeeksUnavailablePage({
       ) : null}
 
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.07] p-5 sm:p-6">
-        <h2 className="text-xl font-semibold text-white">How this works</h2>
+        <h2 className="text-xl font-semibold text-white">Please tell us as early as you can</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-amber-50/75">
-          SIXFL will see your notice while preparing draft fixtures. You can change it until fixtures for that league week are published. Once published, contact SIXFL rather than using this page as a late cancellation tool.
+          The earlier SIXFL knows about a week off or a one-off time restriction, the easier it is to build fixtures around it. These restrictions are for specific weeks only. If your team needs a permanent kick-off restriction every week, contact SIXFL and we can record that separately.
+        </p>
+        <p className="mt-3 max-w-4xl text-xs leading-5 text-amber-50/55">
+          You can change a notice until fixtures for that league week are published. Once published, contact SIXFL rather than using this page as a late cancellation or fixture-change tool.
         </p>
       </section>
 
@@ -146,80 +164,135 @@ export default async function TeamWeeksUnavailablePage({
           const key = weekKey(weekStart);
           const notice = noticeByWeek.get(key) ?? null;
           const locked = publishedWeekKeys.has(key);
+          const currentType = notice?.restrictionType ?? "AVAILABLE";
 
           return (
             <form
               key={key}
               action={saveTeamWeekUnavailabilityAction}
               className={`rounded-3xl border p-5 sm:p-6 ${
-                notice
+                currentType === "UNAVAILABLE"
                   ? "border-red-400/25 bg-red-500/[0.08]"
-                  : locked
-                    ? "border-white/10 bg-white/[0.025]"
-                    : "border-white/10 bg-white/[0.04]"
+                  : currentType === "TIME_RESTRICTION"
+                    ? "border-amber-400/25 bg-amber-500/[0.07]"
+                    : locked
+                      ? "border-white/10 bg-white/[0.025]"
+                      : "border-white/10 bg-white/[0.04]"
               }`}
             >
               <input type="hidden" name="teamId" value={teamid} />
               <input type="hidden" name="weekStart" value={key} />
 
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.65fr)_auto] lg:items-center">
-                <label className={`flex items-start gap-4 ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                  <input
-                    type="checkbox"
-                    name="unavailable"
-                    defaultChecked={Boolean(notice)}
-                    disabled={locked}
-                    className="mt-1 h-5 w-5 rounded border-white/20 bg-black/30 text-emerald-400 accent-emerald-400"
-                  />
-                  <span>
-                    <span className="block text-base font-semibold text-white">
-                      Week commencing {key.split("-").reverse().join("/")}
-                    </span>
-                    <span className="mt-1 block text-sm text-white/55">
-                      {formatWeekLabel(weekStart)}
-                    </span>
-                    <span className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                      notice
-                        ? "border-red-400/25 bg-red-500/10 text-red-100"
+              <div className="grid gap-5 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.35fr)_auto] xl:items-start">
+                <div>
+                  <div className="text-base font-semibold text-white">
+                    Week commencing {key.split("-").reverse().join("/")}
+                  </div>
+                  <div className="mt-1 text-sm text-white/55">{formatWeekLabel(weekStart)}</div>
+                  <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                    currentType === "UNAVAILABLE"
+                      ? "border-red-400/25 bg-red-500/10 text-red-100"
+                      : currentType === "TIME_RESTRICTION"
+                        ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
                         : locked
                           ? "border-white/10 bg-white/5 text-white/50"
                           : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
-                    }`}>
-                      {notice
-                        ? "Team marked unavailable"
-                        : locked
-                          ? "Fixtures published - locked"
-                          : "Assumed available"}
-                    </span>
+                  }`}>
+                    {locked
+                      ? "Fixtures published - locked"
+                      : restrictionSummary({
+                          type: currentType,
+                          earliestKickoff: notice?.earliestKickoff,
+                          latestKickoff: notice?.latestKickoff,
+                        })}
                   </span>
-                </label>
-
-                <div>
-                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                    Optional note
-                  </label>
-                  <input
-                    name="note"
-                    defaultValue={notice?.note ?? ""}
-                    disabled={locked}
-                    maxLength={500}
-                    placeholder="Example: several players away"
-                    className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
                 </div>
 
                 {locked ? (
-                  <div className="max-w-xs text-sm leading-6 text-white/45 lg:text-right">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/50">
                     Fixtures for this week have already been published. Contact SIXFL if circumstances have changed.
                   </div>
                 ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <label className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.05] p-4 text-sm text-white/75">
+                        <input
+                          type="radio"
+                          name="restrictionType"
+                          value="AVAILABLE"
+                          defaultChecked={currentType === "AVAILABLE"}
+                          className="mr-2 accent-emerald-400"
+                        />
+                        Normal availability
+                      </label>
+                      <label className="rounded-2xl border border-red-400/20 bg-red-500/[0.05] p-4 text-sm text-white/75">
+                        <input
+                          type="radio"
+                          name="restrictionType"
+                          value="UNAVAILABLE"
+                          defaultChecked={currentType === "UNAVAILABLE"}
+                          className="mr-2 accent-red-400"
+                        />
+                        Cannot play that week
+                      </label>
+                      <label className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.05] p-4 text-sm text-white/75">
+                        <input
+                          type="radio"
+                          name="restrictionType"
+                          value="TIME_RESTRICTION"
+                          defaultChecked={currentType === "TIME_RESTRICTION"}
+                          className="mr-2 accent-amber-400"
+                        />
+                        Temporary time restriction
+                      </label>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="text-sm font-medium text-white/65">
+                        <span className="mb-2 block">Earliest kick-off</span>
+                        <input
+                          type="time"
+                          name="earliestKickoff"
+                          defaultValue={notice?.earliestKickoff ?? ""}
+                          className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none focus:border-amber-400/40"
+                        />
+                        <span className="mt-2 block text-xs font-normal text-white/40">Example: 20:00 means “we can only play from 8pm”.</span>
+                      </label>
+                      <label className="text-sm font-medium text-white/65">
+                        <span className="mb-2 block">Latest kick-off</span>
+                        <input
+                          type="time"
+                          name="latestKickoff"
+                          defaultValue={notice?.latestKickoff ?? ""}
+                          className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none focus:border-amber-400/40"
+                        />
+                        <span className="mt-2 block text-xs font-normal text-white/40">Leave blank if you only have an earliest-time restriction.</span>
+                      </label>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                        Optional note
+                      </span>
+                      <input
+                        name="note"
+                        defaultValue={notice?.note ?? ""}
+                        maxLength={500}
+                        placeholder="Example: work commitments — after 8pm only"
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {!locked ? (
                   <button
                     type="submit"
                     className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300"
                   >
                     Save this week
                   </button>
-                )}
+                ) : null}
               </div>
             </form>
           );
