@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
+import { getFixtureTeamKickoffWindowViolations } from "@/lib/fixtures/kickoff-window";
 import {
   queueNightBoardFixtureChangeNotifications,
   type NightBoardFixtureNotificationSummary,
@@ -385,6 +386,29 @@ export async function POST(request: Request) {
     currentKickoffAt: fixture.kickoffAt,
     timeInput: kickoffTime,
   });
+
+  const changedKickoffViolations =
+    kickoffAt.getTime() === fixture.kickoffAt.getTime()
+      ? []
+      : await getFixtureTeamKickoffWindowViolations({
+          homeTeamId: fixture.homeTeam.id,
+          awayTeamId: fixture.awayTeam.id,
+          kickoffAt,
+        });
+
+  if (changedKickoffViolations.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          changedKickoffViolations[0]?.message ??
+          "This kick-off is outside the team availability window.",
+        kickoffWindowViolations: changedKickoffViolations,
+        returnTo,
+      },
+      { status: 409 },
+    );
+  }
 
   const [referee, venue] = await Promise.all([
     refereeId
