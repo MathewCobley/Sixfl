@@ -123,6 +123,39 @@ expect(
   "the reassurance email fallback must advertise recorded games on YouTube",
 );
 
+expect(
+  reassuranceAction.includes(
+    'const LIVE_LEAGUE_REASSURANCE_TEMPLATE_KEY =\n  "team-lead-reassurance-live-email"',
+  ) &&
+    reassuranceAction.includes("DEFAULT_LIVE_BODY") &&
+    reassuranceSeed.includes("team-lead-reassurance-live-email"),
+  "a separate editable live-league reassurance email must exist in System Templates",
+);
+expect(
+  reassuranceAction.includes('{ status: "COMPLETED" }') &&
+    reassuranceAction.includes("publishedAt: { not: null }, kickoffAt: { lte: now }") &&
+    reassuranceAction.includes("effectiveLeague.isActive && startedFixture"),
+  "a live league must be identified by an active current league with a completed fixture or a published fixture whose kick-off has passed",
+);
+expect(
+  reassuranceAction.includes("pricedFixture?.matchFeePence") &&
+    reassuranceAction.includes("pricedTeam?.standardMatchFeePence") &&
+    reassuranceAction.includes("This is a live league, but SIXFL could not find its match fee"),
+  "live-league emails must resolve an actual match fee or stop instead of displaying To be confirmed",
+);
+expect(
+  reassuranceAction.includes("League status: Already underway") &&
+    reassuranceAction.includes("We agree your starting week") &&
+    reassuranceAction.includes("YES — I WANT TO JOIN THIS LEAGUE"),
+  "the live-league email must explain that the league is underway and that SIXFL will agree the team's first playing week",
+);
+expect(
+  reassuranceAction.includes("const templateKey = isLiveLeague") &&
+    reassuranceAction.includes("leagueMode,") &&
+    reassuranceAction.includes("liveLeagueDetection"),
+  "the reassurance sender must automatically choose and record the correct league version",
+);
+
 const confirmStart = confirmation.indexOf("export async function confirmTeamPlaceFromLead");
 const declineStart = confirmation.indexOf("export async function declineTeamPlaceFromLead");
 const confirmSource =
