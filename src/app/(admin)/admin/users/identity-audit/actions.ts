@@ -4,27 +4,37 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { applySharedEmailRepair } from "@/lib/players/shared-email-repair";
+import { quarantineUnresolvedSharedEmailPlayerRecipients } from "@/lib/players/shared-email-unresolved";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-export async function applySharedEmailRepairAction(formData: FormData) {
-  const { session, user } = await requireAdmin();
-
+function buildParams(formData: FormData) {
   const sharedEmail = text(formData, "sharedEmail");
   const separateName = text(formData, "separateName");
   const newEmail = text(formData, "newEmail");
   const newPhone = text(formData, "newPhone") || null;
-  const confirmed = text(formData, "confirmed") === "on";
 
-  const params = new URLSearchParams({
+  return {
     sharedEmail,
     separateName,
     newEmail,
-    ...(newPhone ? { newPhone } : {}),
-  });
+    newPhone,
+    params: new URLSearchParams({
+      sharedEmail,
+      separateName,
+      ...(newEmail ? { newEmail } : {}),
+      ...(newPhone ? { newPhone } : {}),
+    }),
+  };
+}
+
+export async function applySharedEmailRepairAction(formData: FormData) {
+  const { session, user } = await requireAdmin();
+  const { sharedEmail, separateName, newEmail, newPhone, params } = buildParams(formData);
+  const confirmed = text(formData, "confirmed") === "on";
 
   if (!confirmed) {
     params.set("repairError", "Tick the confirmation box before applying the repair.");
@@ -58,4 +68,36 @@ export async function applySharedEmailRepairAction(formData: FormData) {
   params.set("recipientsResynced", String(result.playerSourceRecipientsResynced));
   params.set("unresolvedRecipients", String(result.unresolvedRecipientsLeft));
   redirect(`/admin/users/identity-audit?${params.toString()}`);
+}
+
+export async function quarantineUnresolvedSharedEmailAction(formData: FormData) {
+  const { session, user } = await requireAdmin();
+  const { sharedEmail, separateName, params } = buildParams(formData);
+  const confirmed = text(formData, "quarantineConfirmed") === "on";
+
+  if (!confirmed) {
+    params.set("cleanupError", "Tick the confirmation box before quarantining the stale metadata.");
+    redirect(`/admin/users/identity-audit?${params.toString()}`);
+  }
+
+  try {
+    const result = await quarantineUnresolvedSharedEmailPlayerRecipients({
+      sharedEmail,
+      separateName,
+      actorUserId: user?.id ?? null,
+      actorEmail: user?.email ?? session?.user?.email ?? null,
+    });
+
+    revalidatePath("/admin/users/identity-audit");
+    revalidatePath("/admin/email-audit");
+    revalidatePath("/admin/messaging");
+
+    params.set("cleanupDone", "1");
+    params.set("quarantined", String(result.quarantined));
+    redirect(`/admin/users/identity-audit?${params.toString()}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The stale metadata cleanup failed safely.";
+    params.set("cleanupError", message);
+    redirect(`/admin/users/identity-audit?${params.toString()}`);
+  }
 }
