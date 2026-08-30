@@ -110,8 +110,33 @@ expect(
 );
 expect(
   report,
+  'INTERVAL \'90 days\'',
+  "The report must calculate a 90-day view for occasional repeat sign-ins.",
+);
+expect(
+  report,
   "FREQUENT_LINK_THRESHOLD = 3",
   "Frequent sign-in link users must be flagged consistently.",
+);
+expect(
+  report,
+  "REPEAT_SUCCESSFUL_USE_THRESHOLD = 2",
+  "Two successful magic-link sign-ins in 90 days must trigger the repeat-login diagnosis.",
+);
+expect(
+  report,
+  'AS "used90"',
+  "The report must count successful magic-link uses over 90 days.",
+);
+expect(
+  report,
+  "view=repeat",
+  "Admins must be able to filter specifically to repeat 90-day sign-ins.",
+);
+expect(
+  report,
+  "Repeat sign-ins · 90 days",
+  "The slow recurring session-loss signal must be visible in the report.",
 );
 expect(
   report,

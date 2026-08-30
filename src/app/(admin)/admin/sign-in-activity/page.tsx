@@ -12,6 +12,7 @@ export const metadata = {
 };
 
 const FREQUENT_LINK_THRESHOLD = 3;
+const REPEAT_SUCCESSFUL_USE_THRESHOLD = 2;
 
 type SearchParams = {
   q?: string;
@@ -29,6 +30,7 @@ type SignInSummaryRow = {
   links90: number;
   linksTotal: number;
   used30: number;
+  used90: number;
   usedTotal: number;
   unused30: number;
   failed30: number;
@@ -90,6 +92,7 @@ function normaliseSummary(row: SignInSummaryRow): SignInSummaryRow {
     links90: Number(row.links90 ?? 0),
     linksTotal: Number(row.linksTotal ?? 0),
     used30: Number(row.used30 ?? 0),
+    used90: Number(row.used90 ?? 0),
     usedTotal: Number(row.usedTotal ?? 0),
     unused30: Number(row.unused30 ?? 0),
     failed30: Number(row.failed30 ?? 0),
@@ -161,6 +164,10 @@ async function loadSignInSummaries() {
           WHERE "usedAt" IS NOT NULL
             AND "requestedAt" >= NOW() - INTERVAL '30 days'
         ))::int AS "used30",
+        (COUNT(*) FILTER (
+          WHERE "usedAt" IS NOT NULL
+            AND "usedAt" >= NOW() - INTERVAL '90 days'
+        ))::int AS "used90",
         (COUNT(*) FILTER (WHERE "usedAt" IS NOT NULL))::int AS "usedTotal",
         (COUNT(*) FILTER (
           WHERE "sentAt" IS NOT NULL
@@ -220,6 +227,7 @@ async function loadSignInSummaries() {
       activity."links90" AS "links90",
       activity."linksTotal" AS "linksTotal",
       activity."used30" AS "used30",
+      activity."used90" AS "used90",
       activity."usedTotal" AS "usedTotal",
       activity."unused30" AS "unused30",
       activity."failed30" AS "failed30",
@@ -312,7 +320,9 @@ export default async function AdminSignInActivityPage({
 
   const params = (await searchParams) ?? {};
   const query = (params.q ?? "").trim().toLowerCase();
-  const frequentOnly = params.view === "frequent";
+  const view = params.view ?? "all";
+  const frequentOnly = view === "frequent";
+  const repeatOnly = view === "repeat";
 
   const [summaries, recentEvents] = await Promise.all([
     loadSignInSummaries(),
@@ -327,6 +337,7 @@ export default async function AdminSignInActivityPage({
 
   const visibleSummaries = summaries.filter((row) => {
     if (frequentOnly && row.links30 < FREQUENT_LINK_THRESHOLD) return false;
+    if (repeatOnly && row.used90 < REPEAT_SUCCESSFUL_USE_THRESHOLD) return false;
     return matchesQuery(row.email, row.userName, row.teams);
   });
   const visibleEvents = recentEvents.filter((row) =>
@@ -335,6 +346,9 @@ export default async function AdminSignInActivityPage({
 
   const frequentUsers = summaries.filter(
     (row) => row.links30 >= FREQUENT_LINK_THRESHOLD,
+  ).length;
+  const repeatUsers90 = summaries.filter(
+    (row) => row.used90 >= REPEAT_SUCCESSFUL_USE_THRESHOLD,
   ).length;
   const linksSent30 = summaries.reduce((total, row) => total + row.links30, 0);
   const linksUsed30 = summaries.reduce((total, row) => total + row.used30, 0);
@@ -353,8 +367,8 @@ export default async function AdminSignInActivityPage({
         </h1>
         <p className="mt-3 max-w-4xl text-sm leading-7 text-white/65 sm:text-base">
           Records every SIXFL magic-link email accepted for sending and whether that link
-          was then used successfully. Use the frequent-user list to identify people who
-          may be losing their saved session or opening links in a different browser.
+          was then used successfully. Frequent use catches obvious session problems, while
+          repeat successful sign-ins over 90 days catches slower recurring session loss.
         </p>
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/45">
           <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
@@ -369,7 +383,7 @@ export default async function AdminSignInActivityPage({
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard
           label="People tracked"
           value={summaries.length}
@@ -394,6 +408,12 @@ export default async function AdminSignInActivityPage({
           tone="amber"
         />
         <StatCard
+          label="Repeat sign-ins · 90 days"
+          value={repeatUsers90}
+          helper={`People who successfully used ${REPEAT_SUCCESSFUL_USE_THRESHOLD} or more magic links in 90 days.`}
+          tone="sky"
+        />
+        <StatCard
           label="Unused / failed · 30 days"
           value={unusedLinks30 + failedLinks30}
           helper="Unused links older than 24 hours, plus emails that failed to send."
@@ -411,17 +431,18 @@ export default async function AdminSignInActivityPage({
               Who is repeatedly requesting sign-in emails?
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-              Three or more links in 30 days is flagged for review. A high link count with
-              successful uses usually suggests the browser is not retaining the session.
+              Three or more links in 30 days is the fast warning. Two or more successful
+              magic-link sign-ins in 90 days is the slower repeat-login warning for users
+              who may only visit SIXFL occasionally but still lose their saved session.
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-3 lg:max-w-3xl sm:flex-row">
-            <div className="flex rounded-2xl border border-white/10 bg-black/20 p-1">
+          <div className="flex w-full flex-col gap-3 lg:max-w-4xl sm:flex-row">
+            <div className="flex flex-wrap rounded-2xl border border-white/10 bg-black/20 p-1">
               <Link
                 href={`/admin/sign-in-activity${query ? `?q=${encodeURIComponent(query)}` : ""}`}
                 className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                  !frequentOnly
+                  view === "all"
                     ? "bg-emerald-500 text-black"
                     : "text-white/55 hover:text-white"
                 }`}
@@ -436,12 +457,22 @@ export default async function AdminSignInActivityPage({
                     : "text-white/55 hover:text-white"
                 }`}
               >
-                Frequent only
+                Frequent · 30d
+              </Link>
+              <Link
+                href={`/admin/sign-in-activity?view=repeat${query ? `&q=${encodeURIComponent(query)}` : ""}`}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  repeatOnly
+                    ? "bg-sky-400 text-black"
+                    : "text-white/55 hover:text-white"
+                }`}
+              >
+                Repeat sign-ins · 90d
               </Link>
             </div>
 
             <form action="/admin/sign-in-activity" className="flex flex-1 gap-2">
-              {frequentOnly ? <input type="hidden" name="view" value="frequent" /> : null}
+              {view !== "all" ? <input type="hidden" name="view" value={view} /> : null}
               <input
                 name="q"
                 defaultValue={params.q ?? ""}
@@ -459,7 +490,7 @@ export default async function AdminSignInActivityPage({
         </div>
 
         <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
-          <table className="min-w-[1450px] divide-y divide-white/10 text-left text-sm">
+          <table className="min-w-[1550px] divide-y divide-white/10 text-left text-sm">
             <thead className="bg-black/25 text-white/45">
               <tr>
                 <th className="px-4 py-3 font-semibold">User</th>
@@ -468,6 +499,7 @@ export default async function AdminSignInActivityPage({
                 <th className="px-4 py-3 text-right font-semibold">30 days</th>
                 <th className="px-4 py-3 text-right font-semibold">90 days</th>
                 <th className="px-4 py-3 text-right font-semibold">Used · 30d</th>
+                <th className="px-4 py-3 text-right font-semibold">Used · 90d</th>
                 <th className="px-4 py-3 text-right font-semibold">Unused · 30d</th>
                 <th className="px-4 py-3 text-right font-semibold">Sessions</th>
                 <th className="px-4 py-3 font-semibold">Last link</th>
@@ -477,7 +509,7 @@ export default async function AdminSignInActivityPage({
             <tbody className="divide-y divide-white/10">
               {visibleSummaries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-white/45">
+                  <td colSpan={11} className="px-4 py-10 text-center text-white/45">
                     No sign-in activity matches this view yet.
                   </td>
                 </tr>
@@ -485,6 +517,7 @@ export default async function AdminSignInActivityPage({
 
               {visibleSummaries.map((row) => {
                 const frequent = row.links30 >= FREQUENT_LINK_THRESHOLD;
+                const repeatSuccessful = row.used90 >= REPEAT_SUCCESSFUL_USE_THRESHOLD;
 
                 return (
                   <tr key={row.email} className="align-top text-white/70">
@@ -493,11 +526,18 @@ export default async function AdminSignInActivityPage({
                         {row.userName || "Unnamed user"}
                       </div>
                       <div className="mt-1 text-xs text-white/45">{row.email}</div>
-                      {frequent ? (
-                        <span className="mt-2 inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100">
-                          Frequent sign-in links
-                        </span>
-                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {frequent ? (
+                          <span className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100">
+                            Frequent links · 30d
+                          </span>
+                        ) : null}
+                        {repeatSuccessful ? (
+                          <span className="inline-flex rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-100">
+                            Repeat sign-ins · 90d
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="mt-2">
                         <Link
                           href={`/admin/users?q=${encodeURIComponent(row.email)}`}
@@ -527,7 +567,10 @@ export default async function AdminSignInActivityPage({
                     <td className="px-4 py-4 text-right">{formatNumber(row.links90)}</td>
                     <td className="px-4 py-4 text-right text-emerald-200">
                       {formatNumber(row.used30)}
-                      <div className="mt-1 text-[10px] text-white/35">
+                    </td>
+                    <td className={`px-4 py-4 text-right font-semibold ${repeatSuccessful ? "text-sky-200" : "text-white/65"}`}>
+                      {formatNumber(row.used90)}
+                      <div className="mt-1 text-[10px] font-normal text-white/35">
                         {formatNumber(row.usedTotal)} total
                       </div>
                     </td>
@@ -651,7 +694,11 @@ export default async function AdminSignInActivityPage({
 
       <section className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.06] p-5 sm:p-6">
         <h2 className="text-xl font-semibold text-white">How to interpret the report</h2>
-        <div className="mt-3 grid gap-4 text-sm leading-7 text-white/60 lg:grid-cols-3">
+        <div className="mt-3 grid gap-4 text-sm leading-7 text-white/60 lg:grid-cols-4">
+          <p>
+            <strong className="text-white">Repeat successful links over 90 days:</strong>{" "}
+            the person can sign in, but has needed a fresh magic link at least twice. For an occasional user, this is a useful possible-session-loss signal even if their 30-day count stays low.
+          </p>
           <p>
             <strong className="text-white">Many links and many successful uses:</strong>{" "}
             the person can sign in, but their browser or in-app browser may not be keeping the session.
