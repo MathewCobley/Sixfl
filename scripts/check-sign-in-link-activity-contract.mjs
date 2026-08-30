@@ -35,10 +35,19 @@ function expectOrder(source, markers, message) {
 
 const auth = read("src/auth.ts");
 const activityService = read("src/lib/auth/sign-in-link-activity.ts");
+const returnService = read("src/lib/auth/authenticated-return-visits.ts");
+const returnTracker = read("src/components/auth/AuthenticatedReturnVisitTracker.tsx");
+const providers = read("src/app/providers.tsx");
+const returnRoute = read("src/app/api/auth/return-visit/route.ts");
 const report = read("src/app/(admin)/admin/sign-in-activity/page.tsx");
+const diagnosis = read("src/app/(admin)/admin/sign-in-activity/returning/page.tsx");
+const signInLayout = read("src/app/(admin)/admin/sign-in-activity/layout.tsx");
 const sidebar = read("src/components/admin/AdminSidebar.tsx");
 const migration = read(
   "prisma/migrations/20260828233000_add_sign_in_link_activity/migration.sql",
+);
+const returnMigration = read(
+  "prisma/migrations/20260830154000_add_authenticated_return_visits/migration.sql",
 );
 
 expect(
@@ -142,6 +151,57 @@ expect(
   report,
   'FROM "Session"',
   "The report must show currently valid sessions for diagnosis.",
+);
+
+expect(
+  returnMigration,
+  'CREATE TABLE IF NOT EXISTS "AuthenticatedReturnVisit"',
+  "Authenticated returning visits must have durable storage.",
+);
+expect(
+  returnService,
+  "INTERVAL '20 minutes'",
+  "A fresh magic-link login must not be misclassified as a returning session visit.",
+);
+expect(
+  returnService,
+  "INTERVAL '12 hours'",
+  "Returning-session activity must be throttled to avoid recording page churn as separate visits.",
+);
+expect(
+  returnTracker,
+  'fetch("/api/auth/return-visit"',
+  "The browser must report a restored authenticated session.",
+);
+expect(
+  providers,
+  "<AuthenticatedReturnVisitTracker />",
+  "The global SessionProvider must activate returning-session tracking.",
+);
+expect(
+  returnRoute,
+  "recordAuthenticatedReturnVisit",
+  "The return-visit endpoint must resolve the authenticated user server-side before recording.",
+);
+expect(
+  diagnosis,
+  "Session return diagnosis",
+  "Admin must have a dedicated session-return diagnosis report.",
+);
+expect(
+  diagnosis,
+  'FROM "AuthenticatedReturnVisit"',
+  "The diagnosis must compare actual existing-session returns with magic-link usage.",
+);
+expect(
+  diagnosis,
+  "Needs watching",
+  "Repeat magic-link users without return-session evidence must be surfaced for review.",
+);
+expect(
+  signInLayout,
+  'href="/admin/sign-in-activity/returning"',
+  "The session-return diagnosis must be discoverable from the sign-in activity report.",
 );
 expect(
   sidebar,
