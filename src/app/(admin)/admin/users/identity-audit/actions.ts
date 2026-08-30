@@ -74,10 +74,11 @@ export async function quarantineUnresolvedSharedEmailAction(formData: FormData) 
   const { session, user } = await requireAdmin();
   const { sharedEmail, separateName, params } = buildParams(formData);
   const confirmed = text(formData, "quarantineConfirmed") === "on";
+  const target = "/admin/users/identity-audit/unresolved";
 
   if (!confirmed) {
     params.set("cleanupError", "Tick the confirmation box before quarantining the stale metadata.");
-    redirect(`/admin/users/identity-audit?${params.toString()}`);
+    redirect(`${target}?${params.toString()}`);
   }
 
   try {
@@ -89,15 +90,16 @@ export async function quarantineUnresolvedSharedEmailAction(formData: FormData) 
     });
 
     revalidatePath("/admin/users/identity-audit");
+    revalidatePath("/admin/users/identity-audit/unresolved");
     revalidatePath("/admin/email-audit");
     revalidatePath("/admin/messaging");
 
     params.set("cleanupDone", "1");
     params.set("quarantined", String(result.quarantined));
-    redirect(`/admin/users/identity-audit?${params.toString()}`);
+    redirect(`${target}?${params.toString()}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The stale metadata cleanup failed safely.";
     params.set("cleanupError", message);
-    redirect(`/admin/users/identity-audit?${params.toString()}`);
+    redirect(`${target}?${params.toString()}`);
   }
 }
