@@ -7,6 +7,7 @@ import { ResultDisputeStatus } from "@prisma/client";
 
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
+import { getNextNightBoardIssueSummary } from "@/lib/night-board/next-night-issues";
 import { prisma } from "@/lib/prisma";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminTeamContactPhoneFallbackBridge from "@/components/admin/communications/AdminTeamContactPhoneFallbackBridge";
@@ -44,7 +45,12 @@ export default async function AdminLayout({
 }: {
   children: ReactNode;
 }) {
-  const [{ session, user }, inboxSummary, openDisputeCount] = await Promise.all([
+  const [
+    { session, user },
+    inboxSummary,
+    openDisputeCount,
+    nextNightBoardIssues,
+  ] = await Promise.all([
     requireAdmin(),
     getAdminInboxSummary(),
     prisma.resultDispute.count({
@@ -54,6 +60,7 @@ export default async function AdminLayout({
         },
       },
     }),
+    getNextNightBoardIssueSummary(),
   ]);
 
   const email = user?.email ?? session?.user?.email ?? "Admin";
@@ -111,6 +118,9 @@ export default async function AdminLayout({
             email={email}
             unreadMessagingCount={inboxSummary.unreadThreads}
             openDisputeCount={openDisputeCount}
+            nightBoardIssueCount={nextNightBoardIssues.count}
+            nightBoardIssueLevel={nextNightBoardIssues.level}
+            nightBoardIssueDate={nextNightBoardIssues.dateLabel}
           />
         </aside>
 

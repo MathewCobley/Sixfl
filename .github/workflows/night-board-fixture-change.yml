@@ -5,11 +5,14 @@ on:
     paths:
       - "src/app/api/admin/night-board/update-match/route.ts"
       - "src/lib/fixtures/night-board-change-notifications.ts"
+      - "src/lib/night-board/next-night-issues.ts"
+      - "src/components/admin/AdminSidebar.tsx"
       - "src/components/admin/night-board/NightBoardSaveNotice.tsx"
       - "src/app/(admin)/admin/layout.tsx"
       - "scripts/apply-admin-team-kickoff-summary.cjs"
       - "scripts/apply-night-board-confirmation-reset-hardening.cjs"
       - "scripts/check-night-board-fixture-notifications.mjs"
+      - "scripts/check-night-board-sidebar-alert.mjs"
       - "prisma/migrations/20260829214500_reset_stale_units_microwave_confirmations/migration.sql"
       - ".github/workflows/night-board-fixture-change.yml"
   workflow_dispatch:
@@ -40,6 +43,9 @@ jobs:
 
       - name: Check Night Board notification contract
         run: node scripts/check-night-board-fixture-notifications.mjs
+
+      - name: Check Night Board sidebar alert contract
+        run: node scripts/check-night-board-sidebar-alert.mjs
 
       - name: Type-check application
         run: npx tsc --noEmit --pretty false

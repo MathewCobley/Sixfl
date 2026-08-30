@@ -27,6 +27,9 @@ type AdminSidebarProps = {
   email?: string | null;
   unreadMessagingCount?: number;
   openDisputeCount?: number;
+  nightBoardIssueCount?: number;
+  nightBoardIssueLevel?: "amber" | "red" | null;
+  nightBoardIssueDate?: string | null;
 };
 
 const navigationGroups = [
@@ -439,9 +442,22 @@ export default function AdminSidebar({
   email,
   unreadMessagingCount = 0,
   openDisputeCount = 0,
+  nightBoardIssueCount = 0,
+  nightBoardIssueLevel = null,
+  nightBoardIssueDate = null,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const activeHref = getActiveHref(pathname);
+  const nightBoardIssueLabel =
+    nightBoardIssueCount > 0
+      ? `${nightBoardIssueCount} Night Board issue${
+          nightBoardIssueCount === 1 ? "" : "s"
+        }${
+          nightBoardIssueDate
+            ? ` for ${nightBoardIssueDate}`
+            : " on the next fixture night"
+        }`
+      : "";
 
   return (
     <aside className="fixed bottom-2 top-20 w-[34rem] 2xl:w-[38rem]">
@@ -482,6 +498,9 @@ export default function AdminSidebar({
                         const showMessageBadge =
                           item.href === "/admin/messaging" &&
                           unreadMessagingCount > 0;
+                        const showNightBoardAlert =
+                          item.href === "/admin/night-board" &&
+                          nightBoardIssueCount > 0;
                         const showDisputeAlert =
                           item.href === "/admin/results" &&
                           openDisputeCount > 0;
@@ -516,6 +535,19 @@ export default function AdminSidebar({
                                   ? "99+"
                                   : unreadMessagingCount}
                               </span>
+                            ) : null}
+                            {showNightBoardAlert ? (
+                              <span
+                                role="status"
+                                aria-label={nightBoardIssueLabel}
+                                title={nightBoardIssueLabel}
+                                className={[
+                                  "ml-auto h-2.5 w-2.5 shrink-0 rounded-full border border-black/60",
+                                  nightBoardIssueLevel === "red"
+                                    ? "bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.9)]"
+                                    : "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.9)]",
+                                ].join(" ")}
+                              />
                             ) : null}
                             {showDisputeAlert ? (
                               <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.85)]" />
