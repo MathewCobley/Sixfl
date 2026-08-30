@@ -3,6 +3,13 @@
 
 import { SessionProvider } from "next-auth/react";
 
+import AuthenticatedReturnVisitTracker from "@/components/auth/AuthenticatedReturnVisitTracker";
+
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <AuthenticatedReturnVisitTracker />
+      {children}
+    </SessionProvider>
+  );
 }
