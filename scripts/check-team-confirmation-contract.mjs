@@ -24,12 +24,30 @@ const commitmentEmailActionPath =
 const reassuranceActionPath =
   "src/app/(admin)/admin/leads/reassurance-email-actions.ts";
 const reassuranceSeedPath = "scripts/seed-league-starter-email-template.cjs";
+const captainFixturePagePath =
+  "src/app/captain/team/[teamid]/fixtures/page.tsx";
+const fixtureConfirmationEmailPath =
+  "src/lib/fixtures/confirmation-emails.ts";
+const fixtureConfirmationReminderPath =
+  "src/lib/fixtures/confirmation-reminders.ts";
+const teamUnavailablePreparationPath =
+  "scripts/apply-team-unavailability-response-copy.cjs";
+const sourcePreparationPath =
+  "scripts/apply-issue-raised-confirmation-chase-fix.cjs";
+const teamUnavailableMigrationPath =
+  "prisma/migrations/20260830125000_clarify_team_unavailable_online_response/migration.sql";
 
 const page = read(pagePath);
 const confirmation = read(confirmationPath);
 const commitmentEmailAction = read(commitmentEmailActionPath);
 const reassuranceAction = read(reassuranceActionPath);
 const reassuranceSeed = read(reassuranceSeedPath);
+const captainFixturePage = read(captainFixturePagePath);
+const fixtureConfirmationEmail = read(fixtureConfirmationEmailPath);
+const fixtureConfirmationReminder = read(fixtureConfirmationReminderPath);
+const teamUnavailablePreparation = read(teamUnavailablePreparationPath);
+const sourcePreparation = read(sourcePreparationPath);
+const teamUnavailableMigration = read(teamUnavailableMigrationPath);
 
 expect(
   page.includes("getLeagueConfirmationDetails") && page.includes("const effectiveLeague ="),
@@ -154,6 +172,67 @@ expect(
     reassuranceAction.includes("leagueMode,") &&
     reassuranceAction.includes("liveLeagueDetection"),
   "the reassurance sender must automatically choose and record the correct league version",
+);
+
+expect(
+  sourcePreparation.includes(
+    'require("./apply-team-unavailability-response-copy.cjs")',
+  ) && teamUnavailablePreparation.includes(captainFixturePagePath),
+  "the complete development and production source-preparation chain must apply the team-unavailability correction",
+);
+expect(
+  captainFixturePage.includes('name="unavailableReason"') &&
+    captainFixturePage.includes("required") &&
+    captainFixturePage.includes("minLength={5}") &&
+    captainFixturePage.includes("maxLength={500}"),
+  "captains must provide a brief reason when saying the whole team cannot play",
+);
+expect(
+  captainFixturePage.includes("TEAM_UNAVAILABLE_NOTE_PREFIX") &&
+    captainFixturePage.includes("Reason given:") &&
+    captainFixturePage.includes("the captain selected “No — our team cannot play”"),
+  "stored team-unavailable notes must identify an online selection and retain the captain's reason",
+);
+expect(
+  !captainFixturePage.includes(
+    "captain has told SIXFL they cannot fulfil this fixture",
+  ),
+  "the captain fixture page must not falsely imply that the captain contacted SIXFL directly",
+);
+expect(
+  captainFixturePage.includes(
+    "Only use this when the whole team cannot fulfil the fixture",
+  ) &&
+    captainFixturePage.includes("SIXFL will be alerted immediately") &&
+    captainFixturePage.includes("Send — our team cannot play"),
+  "the No action must clearly explain what it means before the captain submits it",
+);
+expect(
+  fixtureConfirmationEmail.includes(
+    "Choose No only if the whole team cannot fulfil the fixture",
+  ) &&
+    fixtureConfirmationEmail.includes(
+      "You will be asked for a brief reason and SIXFL will be alerted immediately",
+    ),
+  "fixture confirmation emails must explain that No is a whole-team issue report",
+);
+expect(
+  fixtureConfirmationReminder.includes(
+    "Use No only if the whole team cannot play",
+  ) &&
+    fixtureConfirmationReminder.includes(
+      "PREVIOUS_CLEAR_CONFIRMATION_SMS_BODY",
+    ),
+  "fixture confirmation SMS reminders must explain the No action and upgrade the previous default wording",
+);
+expect(
+  teamUnavailableMigration.includes(
+    "Team unavailable: captain has told SIXFL they cannot fulfil this fixture.",
+  ) &&
+    teamUnavailableMigration.includes(
+      "This was an online response; the previous form did not collect a reason.",
+    ),
+  "the existing misleading stored notes must be corrected during deployment",
 );
 
 const confirmStart = confirmation.indexOf("export async function confirmTeamPlaceFromLead");
