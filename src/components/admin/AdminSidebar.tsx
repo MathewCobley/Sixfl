@@ -33,6 +33,7 @@ const navigationGroups = [
   {
     title: "Start",
     tint: "emerald",
+    column: 1,
     items: [
       {
         name: "Overview",
@@ -52,30 +53,19 @@ const navigationGroups = [
   {
     title: "League setup",
     tint: "sky",
+    column: 2,
     items: [
-      {
-        name: "Teams",
-        href: "/admin/teams",
-        icon: UserGroupIcon,
-        description: "Squads",
-      },
-      {
-        name: "Kits",
-        href: "/admin/kits",
-        icon: PhotoIcon,
-        description: "Orders",
-      },
-      {
-        name: "Users",
-        href: "/admin/users",
-        icon: UsersIcon,
-        description: "Accounts",
-      },
       {
         name: "Leagues",
         href: "/admin/leagues",
         icon: TrophyIcon,
         description: "Setup",
+      },
+      {
+        name: "Teams",
+        href: "/admin/teams",
+        icon: UserGroupIcon,
+        description: "Squads",
       },
       {
         name: "Tables",
@@ -89,11 +79,18 @@ const navigationGroups = [
         icon: MapPinIcon,
         description: "Locations",
       },
+      {
+        name: "Kits",
+        href: "/admin/kits",
+        icon: PhotoIcon,
+        description: "Orders",
+      },
     ],
   },
   {
-    title: "Comms & marketing",
+    title: "Comms & media",
     tint: "cyan",
+    column: 3,
     items: [
       {
         name: "Comms",
@@ -114,6 +111,12 @@ const navigationGroups = [
         description: "Captains",
       },
       {
+        name: "Social posts",
+        href: "/admin/social",
+        icon: PhotoIcon,
+        description: "Cards",
+      },
+      {
         name: "SIXFL TV",
         href: "/admin/sixfl-tv",
         icon: PhotoIcon,
@@ -126,16 +129,17 @@ const navigationGroups = [
         description: "Nominations/votes",
       },
       {
-        name: "Social posts",
-        href: "/admin/social",
-        icon: PhotoIcon,
-        description: "Cards",
+        name: "Polls",
+        href: "/admin/polls",
+        icon: DocumentTextIcon,
+        description: "Votes",
       },
     ],
   },
   {
-    title: "Fixtures",
+    title: "Matchday",
     tint: "amber",
+    column: 1,
     items: [
       {
         name: "Night board",
@@ -156,6 +160,19 @@ const navigationGroups = [
         description: "Availability",
       },
       {
+        name: "Disputes",
+        href: "/admin/results",
+        icon: ExclamationTriangleIcon,
+        description: "Results/issues",
+      },
+    ],
+  },
+  {
+    title: "Fixture tools",
+    tint: "amber",
+    column: 2,
+    items: [
+      {
         name: "Generate fixtures",
         href: "/admin/fixtures/generate",
         icon: CalendarDaysIcon,
@@ -168,34 +185,29 @@ const navigationGroups = [
         description: "Draft removal",
       },
       {
-        name: "Carry fees",
-        href: "/admin/fixtures/carry-forward-payments",
-        icon: CreditCardIcon,
-        description: "Postponed",
-      },
-      {
         name: "Replace team",
         href: "/admin/fixtures/replace-team",
         icon: UserGroupIcon,
         description: "Swap",
       },
       {
-        name: "Late fees",
-        href: "/admin/fixtures/late-fees",
-        icon: ExclamationTriangleIcon,
-        description: "72h",
+        name: "Carry fees",
+        href: "/admin/fixtures/carry-forward-payments",
+        icon: CreditCardIcon,
+        description: "Postponed",
       },
       {
-        name: "Disputes",
-        href: "/admin/results",
-        icon: ExclamationTriangleIcon,
-        description: "Issues",
+        name: "Backfill",
+        href: "/admin/fixtures/backfill",
+        icon: WrenchScrewdriverIcon,
+        description: "Fees/refs",
       },
     ],
   },
   {
     title: "Referees",
     tint: "violet",
+    column: 3,
     items: [
       {
         name: "Referees",
@@ -204,10 +216,10 @@ const navigationGroups = [
         description: "Officials",
       },
       {
-        name: "Ref nights",
+        name: "Referee controls",
         href: "/admin/referee-nights",
         icon: CalendarDaysIcon,
-        description: "Night fees",
+        description: "Nights/fees",
       },
       {
         name: "Availability",
@@ -218,38 +230,9 @@ const navigationGroups = [
     ],
   },
   {
-    title: "Payments",
-    tint: "rose",
-    items: [
-      {
-        name: "Payments",
-        href: "/admin/payments",
-        icon: DocumentTextIcon,
-        description: "Charges",
-      },
-      {
-        name: "Late fees",
-        href: "/admin/fixtures/late-fees",
-        icon: ExclamationTriangleIcon,
-        description: "Overdue review",
-      },
-      {
-        name: "Team credits",
-        href: "/admin/payments/team-credits",
-        icon: CreditCardIcon,
-        description: "Credit",
-      },
-      {
-        name: "Saved cards",
-        href: "/admin/payments/subscriptions",
-        icon: CreditCardIcon,
-        description: "Matchday",
-      },
-    ],
-  },
-  {
     title: "Recruitment",
     tint: "lime",
+    column: 1,
     items: [
       {
         name: "Expansion",
@@ -287,35 +270,18 @@ const navigationGroups = [
         icon: UserGroupIcon,
         description: "Teams",
       },
-      {
-        name: "Polls",
-        href: "/admin/polls",
-        icon: DocumentTextIcon,
-        description: "Votes",
-      },
     ],
   },
   {
-    title: "Back end functions",
-    tint: "emerald",
+    title: "People & access",
+    tint: "teal",
+    column: 1,
     items: [
       {
-        name: "AI predictor",
-        href: "/admin/ai-predictor",
-        icon: TrophyIcon,
-        description: "Weekly accuracy",
-      },
-      {
-        name: "Predictor backtest",
-        href: "/admin/ai-predictor/backtest",
-        icon: TrophyIcon,
-        description: "Historical test",
-      },
-      {
-        name: "Stripe audit",
-        href: "/admin/payments/stripe-reconciliation",
-        icon: CreditCardIcon,
-        description: "Verify payments",
+        name: "Users",
+        href: "/admin/users",
+        icon: UsersIcon,
+        description: "Accounts",
       },
       {
         name: "Identity audit",
@@ -334,6 +300,25 @@ const navigationGroups = [
         href: "/admin/players/data-health",
         icon: WrenchScrewdriverIcon,
         description: "Player cleanup",
+      },
+    ],
+  },
+  {
+    title: "System tools",
+    tint: "slate",
+    column: 2,
+    items: [
+      {
+        name: "AI predictor",
+        href: "/admin/ai-predictor",
+        icon: TrophyIcon,
+        description: "Weekly accuracy",
+      },
+      {
+        name: "Predictor backtest",
+        href: "/admin/ai-predictor/backtest",
+        icon: TrophyIcon,
+        description: "Historical test",
       },
       {
         name: "League audit",
@@ -359,15 +344,50 @@ const navigationGroups = [
         icon: ExclamationTriangleIcon,
         description: "Bounces",
       },
+    ],
+  },
+  {
+    title: "Payments",
+    tint: "rose",
+    column: 3,
+    items: [
       {
-        name: "Backfill",
-        href: "/admin/fixtures/backfill",
-        icon: WrenchScrewdriverIcon,
-        description: "Fees/refs",
+        name: "Payments",
+        href: "/admin/payments",
+        icon: DocumentTextIcon,
+        description: "Charges",
+      },
+      {
+        name: "Late fees",
+        href: "/admin/fixtures/late-fees",
+        icon: ExclamationTriangleIcon,
+        description: "Overdue review",
+      },
+      {
+        name: "Team credits",
+        href: "/admin/payments/team-credits",
+        icon: CreditCardIcon,
+        description: "Credit",
+      },
+      {
+        name: "Saved cards",
+        href: "/admin/payments/subscriptions",
+        icon: CreditCardIcon,
+        description: "Matchday",
+      },
+      {
+        name: "Stripe audit",
+        href: "/admin/payments/stripe-reconciliation",
+        icon: CreditCardIcon,
+        description: "Verify payments",
       },
     ],
   },
 ];
+
+const navigationColumns = [1, 2, 3].map((column) =>
+  navigationGroups.filter((group) => group.column === column),
+);
 
 const navigation = navigationGroups.flatMap((group) => group.items);
 
@@ -396,6 +416,10 @@ function groupTintClasses(tint: string) {
       return "border-lime-400/15 bg-lime-400/[0.035]";
     case "cyan":
       return "border-cyan-400/15 bg-cyan-400/[0.035]";
+    case "teal":
+      return "border-teal-400/15 bg-teal-400/[0.035]";
+    case "slate":
+      return "border-slate-400/15 bg-slate-400/[0.035]";
     default:
       return "border-emerald-400/15 bg-emerald-400/[0.035]";
   }
@@ -403,7 +427,7 @@ function groupTintClasses(tint: string) {
 
 function navItemClasses(active: boolean) {
   return [
-    "group flex min-w-0 items-center gap-1.5 rounded-lg border px-1.5 py-1 transition",
+    "group flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 transition",
     active
       ? "border-emerald-400/30 bg-emerald-400/12 text-white shadow-[0_0_18px_rgba(16,185,129,0.12)]"
       : "border-white/8 bg-black/18 text-white/65 hover:border-white/18 hover:bg-white/[0.045] hover:text-white",
@@ -423,60 +447,85 @@ export default function AdminSidebar({
     <aside className="fixed bottom-2 top-20 w-[34rem] 2xl:w-[38rem]">
       <div className="h-full overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
         <div className="border-b border-white/10 px-2 py-2">
-          <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-2">
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5">
             <div className="min-w-0">
-              <div className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-300/90">SIXFL</div>
-              <div className="mt-0.5 truncate text-xs font-semibold text-white">Admin Console</div>
-              <div className="truncate text-[9px] text-white/45">{name || email || "Signed in"}</div>
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300/90">
+                SIXFL
+              </div>
+              <div className="mt-0.5 truncate text-sm font-semibold text-white">
+                Admin Console
+              </div>
+              <div className="truncate text-[9px] text-white/45">
+                {name || email || "Signed in"}
+              </div>
             </div>
             <Cog6ToothIcon className="h-4 w-4 shrink-0 text-emerald-300/70" />
           </div>
         </div>
 
-        <nav className="h-[calc(100%-4.85rem)] overflow-hidden px-1.5 py-1.5">
-          <div className="grid grid-cols-3 gap-1.5">
-            {navigationGroups.map((group) => (
-              <div key={group.title} className={`rounded-xl border p-1.5 ${groupTintClasses(group.tint)}`}>
-                <div className="mb-1 px-0.5 text-[7px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  {group.title}
-                </div>
-                <div className="grid gap-0.5">
-                  {group.items.map((item) => {
-                    const active = activeHref === item.href;
-                    const Icon = item.icon;
-                    const showMessageBadge =
-                      item.href === "/admin/messaging" && unreadMessagingCount > 0;
-                    const showDisputeAlert =
-                      item.href === "/admin/results" && openDisputeCount > 0;
+        <nav className="h-[calc(100%-5.35rem)] overflow-y-auto px-2 py-2">
+          <div className="grid grid-cols-3 items-start gap-2">
+            {navigationColumns.map((groups, columnIndex) => (
+              <div key={columnIndex} className="grid content-start gap-2">
+                {groups.map((group) => (
+                  <div
+                    key={group.title}
+                    className={`rounded-xl border p-2 ${groupTintClasses(group.tint)}`}
+                  >
+                    <div className="mb-1.5 px-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-white/50">
+                      {group.title}
+                    </div>
+                    <div className="grid gap-1">
+                      {group.items.map((item) => {
+                        const active = activeHref === item.href;
+                        const Icon = item.icon;
+                        const showMessageBadge =
+                          item.href === "/admin/messaging" &&
+                          unreadMessagingCount > 0;
+                        const showDisputeAlert =
+                          item.href === "/admin/results" &&
+                          openDisputeCount > 0;
 
-                    return (
-                      <Link key={item.href} href={item.href} className={navItemClasses(Boolean(active))}>
-                        <span
-                          className={[
-                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
-                            active
-                              ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
-                              : "border-white/10 bg-black/25 text-white/45 group-hover:text-white/75",
-                          ].join(" ")}
-                        >
-                          <Icon className="h-3 w-3" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[9px] font-semibold">{item.name}</span>
-                          <span className="block truncate text-[7px] text-white/35">{item.description}</span>
-                        </span>
-                        {showMessageBadge ? (
-                          <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[7px] font-black text-black">
-                            {unreadMessagingCount > 99 ? "99+" : unreadMessagingCount}
-                          </span>
-                        ) : null}
-                        {showDisputeAlert ? (
-                          <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.85)]" />
-                        ) : null}
-                      </Link>
-                    );
-                  })}
-                </div>
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={navItemClasses(Boolean(active))}
+                          >
+                            <span
+                              className={[
+                                "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition",
+                                active
+                                  ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                                  : "border-white/10 bg-black/25 text-white/45 group-hover:text-white/75",
+                              ].join(" ")}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[10px] font-semibold">
+                                {item.name}
+                              </span>
+                              <span className="block truncate text-[8px] text-white/40">
+                                {item.description}
+                              </span>
+                            </span>
+                            {showMessageBadge ? (
+                              <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[7px] font-black text-black">
+                                {unreadMessagingCount > 99
+                                  ? "99+"
+                                  : unreadMessagingCount}
+                              </span>
+                            ) : null}
+                            {showDisputeAlert ? (
+                              <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.85)]" />
+                            ) : null}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
