@@ -291,7 +291,9 @@ async function addRefereeConfirmationIssues(
         firstKickoffAt: fixture.kickoffAt,
         fixtureIds: new Set<string>(),
       };
-      if (fixture.kickoffAt < existing.firstKickoffAt) {
+      if (
+        fixture.kickoffAt.getTime() < existing.firstKickoffAt.getTime()
+      ) {
         existing.firstKickoffAt = fixture.kickoffAt;
       }
       existing.fixtureIds.add(fixture.id);
