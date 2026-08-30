@@ -75,4 +75,6 @@ replaceOnce(
   '            {inboundOnly\n              ? "No inbound messages have been logged for this team yet."\n              : "No communications have been logged for this team yet."}',
 );
 
+require("./apply-team-unavailability-response-copy.cjs");
+
 console.log("Applied fixture confirmation chase and inbound communications filter.");
