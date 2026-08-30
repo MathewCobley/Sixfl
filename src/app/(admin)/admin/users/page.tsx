@@ -134,7 +134,14 @@ export default async function AdminUsersPage({
           </p>
         </div>
 
-        <div className="flex w-full max-w-3xl flex-col gap-3 sm:flex-row">
+        <div className="flex w-full max-w-4xl flex-col gap-3 sm:flex-row">
+          <Link
+            href="/admin/users/identity-audit"
+            className="inline-flex items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15"
+          >
+            Identity audit / Shared email repair
+          </Link>
+
           <Link
             href="/admin/users/link-prospect"
             className="inline-flex items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
