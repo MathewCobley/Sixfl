@@ -38,7 +38,8 @@
             "name: \"Kits\"",
             "href: \"/admin/kits\"",
             "description: \"Orders\"",
-            "className=\"grid grid-cols-3 gap-1.5\""
+            "const navigationColumns = [1, 2, 3]",
+            "className=\"grid grid-cols-3 items-start gap-2\""
           ]
         },
         {
