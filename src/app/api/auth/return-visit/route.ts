@@ -6,7 +6,8 @@ import { recordAuthenticatedReturnVisit } from "@/lib/auth/authenticated-return-
 
 export async function POST() {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as (typeof session.user & { id?: string }) | undefined)?.id?.trim();
+  const sessionUser = session?.user as ({ id?: string; email?: string | null } | undefined);
+  const userId = sessionUser?.id?.trim();
 
   if (!userId) {
     return NextResponse.json({ ok: false }, { status: 401 });
@@ -14,7 +15,7 @@ export async function POST() {
 
   const result = await recordAuthenticatedReturnVisit({
     userId,
-    email: session?.user?.email ?? null,
+    email: sessionUser?.email ?? null,
   });
 
   return NextResponse.json({ ok: true, recorded: result.recorded, reason: result.reason });
