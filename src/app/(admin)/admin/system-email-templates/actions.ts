@@ -10,7 +10,6 @@ import {
   NotificationTemplateKind,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -20,6 +19,7 @@ type SystemEmailTemplateActionState = {
   message?: string;
   error?: string;
   errors?: Record<string, string[]>;
+  redirectTo?: string;
 };
 
 const ALLOWED_CTA_URL_KEYS = [
@@ -201,7 +201,13 @@ export async function createSystemEmailTemplateAction(
   });
 
   revalidateTemplatePaths(created.id);
-  redirect(`/admin/templates/${created.id}`);
+
+  return {
+    ok: true,
+    success: true,
+    message: "System email template created successfully. Opening it now...",
+    redirectTo: `/admin/templates/${created.id}`,
+  };
 }
 
 export async function updateSystemEmailTemplateAction(
