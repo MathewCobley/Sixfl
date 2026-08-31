@@ -58,7 +58,7 @@ function applyPatch() {
       );
     }
 
-    const helper = String.raw`
+    const helper = `
 async function queueRemovedTeamNotice(input: {
   fixtureId: string;
   teamId: string;
