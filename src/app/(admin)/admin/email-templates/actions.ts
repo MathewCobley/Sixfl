@@ -9,7 +9,6 @@
 // ========================================
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { InterestType, TemplateAudience } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -24,6 +23,7 @@ type EmailTemplateActionState = {
   message?: string;
   error?: string;
   errors?: Record<string, string[]>;
+  redirectTo?: string;
 };
 
 // ========================================
@@ -247,7 +247,12 @@ export async function createEmailTemplateAction(
 
   revalidateTemplatePaths(created.id);
 
-  redirect(`/admin/templates/${created.id}`);
+  return {
+    ok: true,
+    success: true,
+    message: "Template created successfully. Opening it now...",
+    redirectTo: `/admin/templates/${created.id}`,
+  };
 }
 
 export async function updateEmailTemplateAction(

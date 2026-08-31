@@ -1,0 +1,53 @@
+name: Email template create completion
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  template-create:
+    name: Complete email template creation
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sixfl
+      NEXTAUTH_SECRET: email-template-create-ci-secret
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_email_template_create_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@sixfl.test>
+      EMAIL_REPLY_DOMAIN: replies.sixfl.test
+      CRON_SECRET: email-template-create-ci-cron-secret
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply production source preparation
+        run: npm run prebuild
+
+      - name: Check email template create completion
+        run: node scripts/check-email-template-create-completion.mjs
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Type-check application source
+        run: npx tsc --noEmit
+
+      - name: Build the production application
+        run: npx next build

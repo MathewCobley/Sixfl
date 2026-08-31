@@ -22,6 +22,7 @@ type FormState = {
   message?: string;
   error?: string;
   errors?: Record<string, string[]>;
+  redirectTo?: string;
 };
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
@@ -205,22 +206,32 @@ const CTA_OPTIONS: Array<{
   },
 ];
 
-function SubmitButton({ mode }: { mode: "create" | "edit" }) {
+function SubmitButton({
+  mode,
+  redirecting,
+}: {
+  mode: "create" | "edit";
+  redirecting: boolean;
+}) {
   const { pending } = useFormStatus();
+  const busy = pending || redirecting;
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={busy}
+      aria-disabled={busy}
       className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {pending
-        ? mode === "create"
-          ? "Creating template..."
-          : "Saving changes..."
-        : mode === "create"
-          ? "Create template"
-          : "Save changes"}
+      {redirecting
+        ? "Opening template..."
+        : pending
+          ? mode === "create"
+            ? "Creating template..."
+            : "Saving changes..."
+          : mode === "create"
+            ? "Create template"
+            : "Save changes"}
     </button>
   );
 }
@@ -348,6 +359,7 @@ export default function EmailTemplateForm({
   );
   const [isActive, setIsActive] = useState(initialValues?.isActive ?? true);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const redirectStartedRef = useRef(false);
 
   useEffect(() => {
     if (mode === "create" && !key.trim() && name.trim()) {
@@ -360,6 +372,15 @@ export default function EmailTemplateForm({
       setInterestType("");
     }
   }, [audience, interestType]);
+
+  useEffect(() => {
+    const redirectTo = state?.redirectTo?.trim();
+
+    if (!redirectTo || redirectStartedRef.current) return;
+
+    redirectStartedRef.current = true;
+    window.location.replace(redirectTo);
+  }, [state?.redirectTo]);
 
   const selectedCta = useMemo(
     () =>
@@ -865,7 +886,7 @@ export default function EmailTemplateForm({
           ) : null}
 
           <div className="flex items-center gap-3">
-            <SubmitButton mode={mode} />
+            <SubmitButton mode={mode} redirecting={Boolean(state?.redirectTo)} />
           </div>
         </div>
 
