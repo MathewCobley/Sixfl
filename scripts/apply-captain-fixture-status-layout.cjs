@@ -74,6 +74,8 @@ if (
   throw new Error("Captain fixture confirmation status is still using the bunched side column.");
 }
 
+require("./apply-captain-latest-result-outcomes.cjs");
+
 console.log(
   "Captain fixture status now sits beside the fixture name, with the date and venue on a full-width line below.",
 );
