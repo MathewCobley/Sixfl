@@ -1,0 +1,111 @@
+name: Temporary email template create completion fix
+
+on:
+  push:
+    branches:
+      - fix/email-template-create-completion
+
+permissions:
+  contents: write
+
+jobs:
+  patch-source:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/email-template-create-completion
+
+      - name: Apply source repair
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          function patch(path, replacements) {
+            let source = fs.readFileSync(path, 'utf8');
+            for (const [before, after, description] of replacements) {
+              if (!source.includes(before)) {
+                throw new Error(`${path}: missing patch anchor for ${description}`);
+              }
+              source = source.replace(before, after);
+            }
+            fs.writeFileSync(path, source, 'utf8');
+          }
+
+          patch('src/components/admin/email-templates/EmailTemplateForm.tsx', [
+            [
+              '  errors?: Record<string, string[]>;\n};',
+              '  errors?: Record<string, string[]>;\n  redirectTo?: string;\n};',
+              'redirect result state',
+            ],
+            [
+              `function SubmitButton({ mode }: { mode: "create" | "edit" }) {\n  const { pending } = useFormStatus();\n\n  return (\n    <button\n      type="submit"\n      disabled={pending}\n      className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"\n    >\n      {pending\n        ? mode === "create"\n          ? "Creating template..."\n          : "Saving changes..."\n        : mode === "create"\n          ? "Create template"\n          : "Save changes"}\n    </button>\n  );\n}`,
+              `function SubmitButton({\n  mode,\n  redirecting,\n}: {\n  mode: "create" | "edit";\n  redirecting: boolean;\n}) {\n  const { pending } = useFormStatus();\n  const busy = pending || redirecting;\n\n  return (\n    <button\n      type="submit"\n      disabled={busy}\n      aria-disabled={busy}\n      className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"\n    >\n      {redirecting\n        ? "Opening template..."\n        : pending\n          ? mode === "create"\n            ? "Creating template..."\n            : "Saving changes..."\n          : mode === "create"\n            ? "Create template"\n            : "Save changes"}\n    </button>\n  );\n}`,
+              'submit completion state',
+            ],
+            [
+              '  const bodyRef = useRef<HTMLTextAreaElement | null>(null);',
+              '  const bodyRef = useRef<HTMLTextAreaElement | null>(null);\n  const redirectStartedRef = useRef(false);',
+              'redirect guard',
+            ],
+            [
+              `  useEffect(() => {\n    if (audience !== "LEAD" && interestType !== "") {\n      setInterestType("");\n    }\n  }, [audience, interestType]);`,
+              `  useEffect(() => {\n    if (audience !== "LEAD" && interestType !== "") {\n      setInterestType("");\n    }\n  }, [audience, interestType]);\n\n  useEffect(() => {\n    const redirectTo = state?.redirectTo?.trim();\n\n    if (!redirectTo || redirectStartedRef.current) return;\n\n    redirectStartedRef.current = true;\n    window.location.replace(redirectTo);\n  }, [state?.redirectTo]);`,
+              'successful create navigation',
+            ],
+            [
+              '<SubmitButton mode={mode} />',
+              '<SubmitButton mode={mode} redirecting={Boolean(state?.redirectTo)} />',
+              'submit redirect prop',
+            ],
+          ]);
+
+          patch('src/app/(admin)/admin/email-templates/actions.ts', [
+            [
+              'import { redirect } from "next/navigation";\n',
+              '',
+              'campaign redirect import',
+            ],
+            [
+              '  errors?: Record<string, string[]>;\n};',
+              '  errors?: Record<string, string[]>;\n  redirectTo?: string;\n};',
+              'campaign redirect state',
+            ],
+            [
+              '  revalidateTemplatePaths(created.id);\n\n  redirect(`/admin/templates/${created.id}`);',
+              '  revalidateTemplatePaths(created.id);\n\n  return {\n    ok: true,\n    success: true,\n    message: "Template created successfully. Opening it now...",\n    redirectTo: `/admin/templates/${created.id}`,\n  };',
+              'campaign create result',
+            ],
+          ]);
+
+          patch('src/app/(admin)/admin/system-email-templates/actions.ts', [
+            [
+              'import { redirect } from "next/navigation";\n',
+              '',
+              'system redirect import',
+            ],
+            [
+              '  errors?: Record<string, string[]>;\n};',
+              '  errors?: Record<string, string[]>;\n  redirectTo?: string;\n};',
+              'system redirect state',
+            ],
+            [
+              '  revalidateTemplatePaths(created.id);\n  redirect(`/admin/templates/${created.id}`);',
+              '  revalidateTemplatePaths(created.id);\n\n  return {\n    ok: true,\n    success: true,\n    message: "System email template created successfully. Opening it now...",\n    redirectTo: `/admin/templates/${created.id}`,\n  };',
+              'system create result',
+            ],
+          ]);
+          NODE
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/components/admin/email-templates/EmailTemplateForm.tsx \
+            'src/app/(admin)/admin/email-templates/actions.ts' \
+            'src/app/(admin)/admin/system-email-templates/actions.ts'
+          git commit -m "Complete email template creation without a stuck redirect"
+          git push origin HEAD:fix/email-template-create-completion
