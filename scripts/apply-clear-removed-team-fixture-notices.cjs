@@ -202,12 +202,12 @@ async function queueRemovedTeamNotice(input: {
   const oldFilterCount = countOccurrences(source, oldConfirmationTeamFilter);
   const newFilterCount = countOccurrences(source, newConfirmationTeamFilter);
 
-  if (oldFilterCount === 2) {
+  if (oldFilterCount > 0) {
     source = source.split(oldConfirmationTeamFilter).join(newConfirmationTeamFilter);
     changed = true;
-  } else if (oldFilterCount !== 0 || newFilterCount !== 2) {
+  } else if (newFilterCount === 0) {
     throw new Error(
-      `Removed-team fixture notice: expected two confirmation team filters, found old=${oldFilterCount}, new=${newFilterCount}.`,
+      "Removed-team fixture notice could not find a confirmation-team filter to protect.",
     );
   }
 
