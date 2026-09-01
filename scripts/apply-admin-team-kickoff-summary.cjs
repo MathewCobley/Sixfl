@@ -66,3 +66,8 @@ require("./apply-admin-lead-prospective-league-filter.cjs");
 require("./apply-night-board-confirmation-reset-hardening.cjs");
 require("./apply-clear-removed-team-fixture-notices.cjs");
 require("./apply-referee-dashboard-click-affordances.cjs");
+
+// Payment safety must remain absolutely last. It re-applies the asymmetric
+// team-fee patch after every compatibility script and aborts the build if a
+// £36/£40 fixture could ever be collapsed back to £40/£40.
+require("./apply-team-specific-fixture-fee-final-guard.cjs");
