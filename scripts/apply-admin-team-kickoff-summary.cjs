@@ -67,3 +67,8 @@ require("./apply-night-board-confirmation-reset-hardening.cjs");
 require("./apply-clear-removed-team-fixture-notices.cjs");
 require("./apply-referee-dashboard-click-affordances.cjs");
 require("./apply-login-session-retention-guard.cjs");
+
+// Payment safety must remain absolutely last. It checks the final generated
+// fixture-fee source and adds a saved-card cap so a stale £40 charge can never
+// debit a team whose agreed automatic match fee is £36.
+require("./apply-team-specific-fixture-fee-final-guard.cjs");
