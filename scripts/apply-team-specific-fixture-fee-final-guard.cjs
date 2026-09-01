@@ -1,11 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-// Re-apply the team-specific fixture fee patch after every other compatibility
-// script has run. This must be the final payment-related source mutation before
-// Next.js builds, otherwise a later legacy patch can silently restore one shared
-// fixture fee and overcharge the cheaper team.
-require("./apply-fixture-team-fee-overrides.cjs");
+// This runs last in prebuild/predev. Do not re-run the old whole fixture patch
+// here because later compatibility steps intentionally evolve the publish code.
+// Instead, add the last-line saved-card safety and then verify the final source
+// that will actually be compiled/deployed.
+require("./apply-team-autopay-fee-authority.cjs");
 
 const root = path.resolve(__dirname, "..");
 
@@ -30,6 +30,7 @@ const publishOne = read("src/app/api/admin/fixtures/publish-one/route.ts");
 const singleFixture = read("src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts");
 const editFixture = read("src/app/(admin)/admin/fixtures/[id]/edit/actions.ts");
 const chargeSync = read("src/lib/payments/fixture-match-fees.ts");
+const autoPay = read("src/lib/payments/team-autopay.ts");
 
 for (const [label, source] of [
   ["batch fixture publishing", publishBatch],
@@ -93,6 +94,32 @@ mustContain(
   "charge sync must use the supplied away-side amount.",
 );
 
+mustContain(
+  autoPay,
+  "autoPayCapPence: number | null;",
+  "saved-card autopay must carry a verified fee cap.",
+);
+mustContain(
+  autoPay,
+  't."standardMatchFeePence"',
+  "saved-card autopay must verify the team's configured standard fee before charging.",
+);
+mustContain(
+  autoPay,
+  "if (chargeAmountPence > autoPayCapPence)",
+  "saved-card autopay must block/correct a stored charge above the verified fee.",
+);
+mustContain(
+  autoPay,
+  "storedAmountPence: row.amountPence",
+  "saved-card corrections must be auditable.",
+);
+mustContain(
+  autoPay,
+  "sixfl_matchday_autopay_${row.chargeId}_${chargeAmountPence}",
+  "saved-card idempotency must include the verified charge amount.",
+);
+
 console.log(
-  "Final team-specific fixture fee guard passed: asymmetric team fees cannot be collapsed to one shared charge.",
+  "Final payment safety passed: asymmetric fixture fees stay separate and saved-card autopay cannot exceed the verified team fee.",
 );
