@@ -30,13 +30,13 @@ source = replaceRequired(
 
 // The verified fee cap is selected alongside SUM(tx.amountPence), so every
 // Team/Fixture column referenced by that expression must be part of GROUP BY.
-// Without this PostgreSQL rejects the entire matchday-autopay query before any
-// card can be considered, which in turn makes the notification cron report a
-// matchday-autopay failure.
+// Anchor the replacement to the GROUP BY clause itself. A previous version
+// matched the same column sequence in SELECT and accidentally added the fields
+// there instead, leaving PostgreSQL to reject the aggregate query at runtime.
 source = replaceRequired(
   source,
-  `      t."autoPaySetupCheckoutSessionId",\n      pc."fixtureId",`,
-  `      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  `    GROUP BY\n      pc."id",\n      pc."teamId",\n      t."name",\n      t."stripeCustomerId",\n      t."stripeDefaultPaymentMethodId",\n      t."autoPaySetupCheckoutSessionId",\n      pc."fixtureId",`,
+  `    GROUP BY\n      pc."id",\n      pc."teamId",\n      t."name",\n      t."stripeCustomerId",\n      t."stripeDefaultPaymentMethodId",\n      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
   "saved-card query fee authority grouping",
 );
 
