@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Prisma } from "@prisma/client";
 
+import RefereeMainDashboardOnly from "@/components/referee/RefereeMainDashboardOnly";
 import { requireReferee } from "@/lib/admin";
 import { ensureRefereeNightConfirmationColumns } from "@/lib/referee-night-confirmations";
 import { formatNightDate } from "@/lib/referee-nights";
@@ -45,73 +46,75 @@ export default async function RefereeLayout({ children }: { children: ReactNode 
   return (
     <>
       {night ? (
-        <section className="mx-auto mb-5 max-w-[1180px] px-4 sm:px-6 lg:px-8">
-          <div
-            className={[
-              "rounded-3xl border p-5 shadow-[0_16px_50px_rgba(0,0,0,0.22)] sm:p-6",
-              isConfirmed
-                ? "border-emerald-400/35 bg-emerald-500/12"
-                : isDeclined
-                  ? "border-red-400/30 bg-red-500/10"
-                  : "border-amber-300/40 bg-amber-400/12",
-            ].join(" ")}
-          >
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
-                  Referee night confirmation
-                </p>
-                <h2 className="mt-2 text-2xl font-bold text-white">
-                  {isConfirmed
-                    ? "✓ Night confirmed"
-                    : isDeclined
-                      ? "You have said you cannot referee this night"
-                      : "Please confirm your next referee night"}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-white/70">
-                  <span className="font-semibold text-white">{formatNightDate(night.nightDate)}</span>
-                  {` · ${night.leagueName}`}
-                  {night.venueName ? ` · ${night.venueName}` : ""}
-                </p>
-                <p className="mt-2 text-sm text-white/60">
-                  {isConfirmed
-                    ? "SIXFL has your confirmation. If your availability changes, tell us here straight away."
-                    : isDeclined
-                      ? "SIXFL will arrange cover. If your availability has changed, you can confirm again below."
-                      : "Please respond now so SIXFL knows whether cover is needed."}
-                </p>
-              </div>
+        <RefereeMainDashboardOnly>
+          <section className="mx-auto mb-5 max-w-[1180px] px-4 sm:px-6 lg:px-8">
+            <div
+              className={[
+                "rounded-3xl border p-5 shadow-[0_16px_50px_rgba(0,0,0,0.22)] sm:p-6",
+                isConfirmed
+                  ? "border-emerald-400/35 bg-emerald-500/12"
+                  : isDeclined
+                    ? "border-red-400/30 bg-red-500/10"
+                    : "border-amber-300/40 bg-amber-400/12",
+              ].join(" ")}
+            >
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
+                    Referee night confirmation
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold text-white">
+                    {isConfirmed
+                      ? "✓ Night confirmed"
+                      : isDeclined
+                        ? "You have said you cannot referee this night"
+                        : "Please confirm your next referee night"}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-white/70">
+                    <span className="font-semibold text-white">{formatNightDate(night.nightDate)}</span>
+                    {` · ${night.leagueName}`}
+                    {night.venueName ? ` · ${night.venueName}` : ""}
+                  </p>
+                  <p className="mt-2 text-sm text-white/60">
+                    {isConfirmed
+                      ? "SIXFL has your confirmation. If your availability changes, tell us here straight away."
+                      : isDeclined
+                        ? "SIXFL will arrange cover. If your availability has changed, you can confirm again below."
+                        : "Please respond now so SIXFL knows whether cover is needed."}
+                  </p>
+                </div>
 
-              <div className="flex min-w-fit flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-                {!isConfirmed ? (
-                  <form action={respondToRefereeNightAction}>
-                    <input type="hidden" name="refereeNightId" value={night.id} />
-                    <input type="hidden" name="answer" value="yes" />
-                    <button
-                      type="submit"
-                      className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3.5 text-sm font-bold text-black transition hover:bg-emerald-300"
-                    >
-                      ✓ Yes, I can referee
-                    </button>
-                  </form>
-                ) : null}
+                <div className="flex min-w-fit flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+                  {!isConfirmed ? (
+                    <form action={respondToRefereeNightAction}>
+                      <input type="hidden" name="refereeNightId" value={night.id} />
+                      <input type="hidden" name="answer" value="yes" />
+                      <button
+                        type="submit"
+                        className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3.5 text-sm font-bold text-black transition hover:bg-emerald-300"
+                      >
+                        ✓ Yes, I can referee
+                      </button>
+                    </form>
+                  ) : null}
 
-                {!isDeclined ? (
-                  <form action={respondToRefereeNightAction}>
-                    <input type="hidden" name="refereeNightId" value={night.id} />
-                    <input type="hidden" name="answer" value="no" />
-                    <button
-                      type="submit"
-                      className="inline-flex w-full items-center justify-center rounded-2xl border border-red-300/35 bg-red-500/15 px-5 py-3.5 text-sm font-bold text-red-50 transition hover:bg-red-500/25"
-                    >
-                      ✕ I can’t referee this night
-                    </button>
-                  </form>
-                ) : null}
+                  {!isDeclined ? (
+                    <form action={respondToRefereeNightAction}>
+                      <input type="hidden" name="refereeNightId" value={night.id} />
+                      <input type="hidden" name="answer" value="no" />
+                      <button
+                        type="submit"
+                        className="inline-flex w-full items-center justify-center rounded-2xl border border-red-300/35 bg-red-500/15 px-5 py-3.5 text-sm font-bold text-red-50 transition hover:bg-red-500/25"
+                      >
+                        ✕ I can’t referee this night
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </RefereeMainDashboardOnly>
       ) : null}
 
       {children}
