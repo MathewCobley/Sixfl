@@ -18,34 +18,19 @@ export const revalidate = 0;
 function cleanText(value: unknown) {
   return String(value ?? "").trim();
 }
-
 function cleanEmail(value: unknown) {
   return cleanText(value).toLowerCase();
 }
-
 function cleanPhone(value: unknown) {
   return cleanText(value) || null;
 }
-
 function isPlausibleEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 async function saveCaptainPhone(teamMemberId: string, phone: string | null) {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
-      "id" TEXT NOT NULL,
-      "teamMemberId" TEXT NOT NULL,
-      "phone" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
-    );
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_teamMemberId_key"
-    ON "TeamMemberProfile"("teamMemberId");
-  `);
+  // This helper ensures the full TeamMemberProfile table/columns exist.
+  await getTeamMemberProfilesByTeamMemberIds([teamMemberId]);
   await prisma.$executeRaw`
     INSERT INTO "TeamMemberProfile" ("id", "teamMemberId", "phone", "updatedAt")
     VALUES (${randomUUID()}, ${teamMemberId}, ${phone}, NOW())
@@ -68,7 +53,6 @@ export async function GET(
 ) {
   const { teamid } = await params;
   const access = await requireCaptain(teamid);
-
   const team = await prisma.team.findUnique({
     where: { id: teamid },
     select: {
@@ -85,10 +69,7 @@ export async function GET(
       },
     },
   });
-
-  if (!team) {
-    return NextResponse.json({ error: "Team not found." }, { status: 404 });
-  }
+  if (!team) return NextResponse.json({ error: "Team not found." }, { status: 404 });
 
   const profiles = await getTeamMemberProfilesByTeamMemberIds(
     team.members.map((member) => member.id),
@@ -115,23 +96,17 @@ export async function POST(
 ) {
   const { teamid } = await params;
   await requireCaptain(teamid);
-
   const body = (await request.json().catch(() => null)) as {
     name?: string;
     email?: string;
     phone?: string;
   } | null;
-
   const name = cleanText(body?.name);
   const email = cleanEmail(body?.email);
   const phone = cleanPhone(body?.phone);
 
-  if (!teamid?.trim()) {
-    return NextResponse.json({ error: "Team not found." }, { status: 400 });
-  }
-  if (!name) {
-    return NextResponse.json({ error: "Enter the new captain's name." }, { status: 400 });
-  }
+  if (!teamid?.trim()) return NextResponse.json({ error: "Team not found." }, { status: 400 });
+  if (!name) return NextResponse.json({ error: "Enter the new captain's name." }, { status: 400 });
   if (!isPlausibleEmail(email)) {
     return NextResponse.json({ error: "Enter a valid email address for the new captain." }, { status: 400 });
   }
@@ -140,7 +115,6 @@ export async function POST(
     where: { id: teamid },
     select: { id: true, name: true, teamMode: true, captainUserId: true },
   });
-
   if (!team) return NextResponse.json({ error: "Team not found." }, { status: 404 });
   if (team.teamMode === "MANAGED") {
     return NextResponse.json({ error: "SIXFL manages captain access for this team." }, { status: 403 });
@@ -153,12 +127,10 @@ export async function POST(
       create: { email, name },
       select: { id: true, name: true, email: true },
     });
-
     const existingMembership = await tx.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId: team.id } },
       select: { id: true, role: true },
     });
-
     const wasAlreadyCaptain = existingMembership?.role === TeamRole.CAPTAIN;
     const membership = existingMembership
       ? await tx.teamMember.update({
@@ -181,7 +153,6 @@ export async function POST(
         },
       });
     }
-
     return { user, membershipId: membership.id, wasAlreadyCaptain };
   });
 
@@ -223,19 +194,16 @@ export async function PATCH(
   if (!access.isAdmin) {
     return NextResponse.json({ error: "Only SIXFL admin can edit captain access." }, { status: 403 });
   }
-
   const body = (await request.json().catch(() => null)) as {
     membershipId?: string;
     name?: string;
     email?: string;
     phone?: string;
   } | null;
-
   const membershipId = cleanText(body?.membershipId);
   const name = cleanText(body?.name);
   const email = cleanEmail(body?.email);
   const phone = cleanPhone(body?.phone);
-
   if (!membershipId || !name || !isPlausibleEmail(email)) {
     return NextResponse.json({ error: "Enter a captain name and valid email address." }, { status: 400 });
   }
@@ -251,13 +219,9 @@ export async function PATCH(
     return NextResponse.json({ error: "That email address already belongs to another SIXFL user." }, { status: 409 });
   }
 
-  await prisma.user.update({
-    where: { id: membership.userId },
-    data: { name, email },
-  });
+  await prisma.user.update({ where: { id: membership.userId }, data: { name, email } });
   await saveCaptainPhone(membership.id, phone);
   revalidateTeam(teamid);
-
   return NextResponse.json({ ok: true, message: "Captain details updated." });
 }
 
@@ -270,7 +234,6 @@ export async function DELETE(
   if (!access.isAdmin) {
     return NextResponse.json({ error: "Only SIXFL admin can remove captain access." }, { status: 403 });
   }
-
   const body = (await request.json().catch(() => null)) as { membershipId?: string } | null;
   const membershipId = cleanText(body?.membershipId);
   if (!membershipId) return NextResponse.json({ error: "Captain not found." }, { status: 400 });
@@ -286,11 +249,7 @@ export async function DELETE(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.teamMember.update({
-      where: { id: membershipId },
-      data: { role: TeamRole.PLAYER },
-    });
-
+    await tx.teamMember.update({ where: { id: membershipId }, data: { role: TeamRole.PLAYER } });
     const team = await tx.team.findUnique({ where: { id: teamid }, select: { captainUserId: true } });
     if (team?.captainUserId === target.userId) {
       const replacement = captains.find((captain) => captain.id !== membershipId);
@@ -306,5 +265,8 @@ export async function DELETE(
   });
 
   revalidateTeam(teamid);
-  return NextResponse.json({ ok: true, message: "Captain access removed. They remain in the squad as a player." });
+  return NextResponse.json({
+    ok: true,
+    message: "Captain access removed. They remain in the squad as a player.",
+  });
 }
