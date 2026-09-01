@@ -4,10 +4,14 @@ on:
   pull_request:
     paths:
       - "src/auth.ts"
+      - "src/middleware.ts"
+      - "src/app/(public)/login/**"
       - "src/lib/auth/sign-in-link-activity.ts"
       - "src/app/(admin)/admin/sign-in-activity/**"
       - "src/components/admin/AdminSidebar.tsx"
       - "prisma/migrations/**"
+      - "scripts/apply-login-session-retention-guard.cjs"
+      - "scripts/apply-admin-team-kickoff-summary.cjs"
       - "scripts/check-sign-in-link-activity-contract.mjs"
       - ".github/workflows/sign-in-link-activity.yml"
   push:
@@ -15,10 +19,14 @@ on:
       - main
     paths:
       - "src/auth.ts"
+      - "src/middleware.ts"
+      - "src/app/(public)/login/**"
       - "src/lib/auth/sign-in-link-activity.ts"
       - "src/app/(admin)/admin/sign-in-activity/**"
       - "src/components/admin/AdminSidebar.tsx"
       - "prisma/migrations/**"
+      - "scripts/apply-login-session-retention-guard.cjs"
+      - "scripts/apply-admin-team-kickoff-summary.cjs"
       - "scripts/check-sign-in-link-activity-contract.mjs"
       - ".github/workflows/sign-in-link-activity.yml"
   workflow_dispatch:

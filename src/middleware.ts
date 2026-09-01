@@ -4,11 +4,42 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+const CANONICAL_HOST = "sixfl.co.uk";
+const LEGACY_WWW_HOST = "www.sixfl.co.uk";
+
 const WHATSAPP_LOGO_ALIASES = new Set([
   "/WhatsApp-Logo.png",
   "/WhatsApp-logo.png",
   "/whatsapp-logo.png",
 ]);
+
+function getRequestHostname(request: NextRequest) {
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const host =
+    forwardedHost || request.headers.get("host") || request.nextUrl.hostname;
+
+  return host.toLowerCase().replace(/:\d+$/, "");
+}
+
+function redirectToCanonicalHost(request: NextRequest) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return null;
+  }
+
+  if (getRequestHostname(request) !== LEGACY_WWW_HOST) {
+    return null;
+  }
+
+  const url = request.nextUrl.clone();
+  url.protocol = "https:";
+  url.hostname = CANONICAL_HOST;
+  url.port = "";
+
+  return NextResponse.redirect(url, 308);
+}
 
 function preserveRegisterInterestContext(request: NextRequest) {
   const currentUrl = request.nextUrl;
@@ -67,6 +98,9 @@ function isHarrogateTuesdaySignup(request: NextRequest) {
 }
 
 export function middleware(request: NextRequest) {
+  const canonicalRedirect = redirectToCanonicalHost(request);
+  if (canonicalRedirect) return canonicalRedirect;
+
   const { pathname } = request.nextUrl;
 
   if (WHATSAPP_LOGO_ALIASES.has(pathname)) {
@@ -93,10 +127,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/register-interest",
-    "/WhatsApp-Logo.png",
-    "/WhatsApp-logo.png",
-    "/whatsapp-logo.png",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

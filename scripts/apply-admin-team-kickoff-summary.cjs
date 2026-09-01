@@ -66,3 +66,4 @@ require("./apply-admin-lead-prospective-league-filter.cjs");
 require("./apply-night-board-confirmation-reset-hardening.cjs");
 require("./apply-clear-removed-team-fixture-notices.cjs");
 require("./apply-referee-dashboard-click-affordances.cjs");
+require("./apply-login-session-retention-guard.cjs");
