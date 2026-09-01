@@ -105,13 +105,15 @@ export async function cancelIncorrectRefereeNightAction(formData: FormData) {
     `);
 
     if (fixtureIds.length > 0) {
-      await tx.fixture.updateMany({
-        where: {
-          id: { in: fixtureIds },
-          refereeId: night.refereeId,
-        },
-        data: { refereeId: null },
-      });
+      // This is an explicit admin correction, not a match-data edit. Use a narrowly
+      // scoped SQL update so completed fixtures can release only this incorrect
+      // referee assignment without weakening the global completed-fixture lock.
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "Fixture"
+        SET "refereeId" = NULL
+        WHERE id IN (${Prisma.join(fixtureIds)})
+          AND "refereeId" = ${night.refereeId}
+      `);
     }
 
     await tx.$executeRaw(Prisma.sql`
