@@ -22,6 +22,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type FailedCronStep = {
+  step: string;
+  error: string;
+};
+
+type CronStepResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
 function isAuthorized(request: NextRequest) {
   const configuredSecret = process.env.CRON_SECRET?.trim();
 
@@ -36,6 +45,27 @@ function isAuthorized(request: NextRequest) {
   const headerSecret = request.headers.get("x-cron-secret")?.trim();
 
   return bearerSecret === configuredSecret || headerSecret === configuredSecret;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error || "Unknown cron error");
+}
+
+async function runCronStep<T>(
+  step: string,
+  failures: FailedCronStep[],
+  work: () => Promise<T>,
+): Promise<CronStepResult<T>> {
+  try {
+    const value = await work();
+    return { ok: true, value };
+  } catch (error) {
+    const message = getErrorMessage(error);
+    console.error(`[notifications-cron] ${step} failed`, error);
+    failures.push({ step, error: message });
+    return { ok: false, error: message };
+  }
 }
 
 async function syncUpcomingRefereeAssignmentsForConfirmations() {
@@ -62,77 +92,132 @@ async function syncUpcomingRefereeAssignmentsForConfirmations() {
   return { syncedFixtures: fixtures.length, affectedNights: affectedNightIds.length };
 }
 
+function summariseAutoPay(
+  results: Awaited<ReturnType<typeof chargeDueMatchdayAutoPayments>>,
+) {
+  return {
+    total: results.length,
+    paid: results.filter((item) => item.status === "paid").length,
+    failed: results.filter((item) => item.status === "failed").length,
+    requiresAction: results.filter((item) => item.status === "requires_action").length,
+    skipped: results.filter((item) => item.status === "skipped").length,
+  };
+}
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const onboarding = await runCaptainOnboardingEmailJob();
-    const fixtureConfirmations = await runFixtureConfirmationReminderJob();
-    const fixtureConfirmationEmails = await runFixtureConfirmationEmailJob();
-    const fixtureConfirmationWarnings =
-      await backfillUpcomingFixtureConfirmationWarningEmails();
-    const aiPredictionIntegrity = await repairUpcomingAiPredictionIntegrity();
-    const lastMinuteReplacements = await reconcilePendingLastMinuteReplacements();
-    const refereeAssignmentSync = await syncUpcomingRefereeAssignmentsForConfirmations();
-    const refereeNights = await queueDueRefereeNightReminderEmails();
-    const refereeConfirmations = await queueDueRefereeNightConfirmationChasers();
-    const referralEmails = await queueMissingReferralRecordedEmails();
-    const referralPayoutEmails = await queueReadyReferralPayoutEmails();
-    const queuedDispatches =
-      onboarding.queuedDispatches +
-      fixtureConfirmations.queued +
-      fixtureConfirmationEmails.queued +
-      fixtureConfirmationWarnings.queued +
-      refereeNights.queued +
-      refereeConfirmations.queued +
-      referralEmails.queued +
-      referralPayoutEmails.queued;
-    const result = await processNotificationQueue(
-      Math.max(25, queuedDispatches + 25),
-    );
+  const failures: FailedCronStep[] = [];
 
-    // Railway already calls this protected GET route on its cron schedule. Run
-    // saved-card collection here as part of the same matchday job so no separate
-    // POST-only admin endpoint or second Railway service is required.
-    const matchdayAutoPayResults = await chargeDueMatchdayAutoPayments();
-    const matchdayAutoPay = {
-      total: matchdayAutoPayResults.length,
-      paid: matchdayAutoPayResults.filter((item) => item.status === "paid").length,
-      failed: matchdayAutoPayResults.filter((item) => item.status === "failed").length,
-      requiresAction: matchdayAutoPayResults.filter(
-        (item) => item.status === "requires_action",
-      ).length,
-      skipped: matchdayAutoPayResults.filter((item) => item.status === "skipped").length,
-    };
+  // Critical safety rule: always try to drain notifications that are already
+  // queued BEFORE running any reminder/reconciliation job. An unrelated failing
+  // raw query must never strand SMS/email delivery again.
+  const existingQueue = await runCronStep(
+    "process-existing-notification-queue",
+    failures,
+    () => processNotificationQueue(100),
+  );
 
-    return NextResponse.json({
-      ok: true,
-      onboarding,
-      fixtureConfirmations,
-      fixtureConfirmationEmails,
-      fixtureConfirmationWarnings,
-      aiPredictionIntegrity,
-      lastMinuteReplacements,
-      refereeAssignmentSync,
-      refereeNights,
-      refereeConfirmations,
-      referralEmails,
-      referralPayoutEmails,
-      matchdayAutoPay,
-      ...result,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Notification cron processing failed.",
-      },
-      { status: 500 },
-    );
-  }
+  const onboarding = await runCronStep(
+    "captain-onboarding",
+    failures,
+    runCaptainOnboardingEmailJob,
+  );
+  const fixtureConfirmations = await runCronStep(
+    "fixture-confirmation-reminders",
+    failures,
+    runFixtureConfirmationReminderJob,
+  );
+  const fixtureConfirmationEmails = await runCronStep(
+    "fixture-confirmation-emails",
+    failures,
+    runFixtureConfirmationEmailJob,
+  );
+  const fixtureConfirmationWarnings = await runCronStep(
+    "fixture-confirmation-warnings",
+    failures,
+    backfillUpcomingFixtureConfirmationWarningEmails,
+  );
+  const aiPredictionIntegrity = await runCronStep(
+    "ai-prediction-integrity",
+    failures,
+    repairUpcomingAiPredictionIntegrity,
+  );
+  const lastMinuteReplacements = await runCronStep(
+    "last-minute-replacement-reconciliation",
+    failures,
+    reconcilePendingLastMinuteReplacements,
+  );
+  const refereeAssignmentSync = await runCronStep(
+    "referee-assignment-sync",
+    failures,
+    syncUpcomingRefereeAssignmentsForConfirmations,
+  );
+  const refereeNights = await runCronStep(
+    "referee-night-reminders",
+    failures,
+    queueDueRefereeNightReminderEmails,
+  );
+  const refereeConfirmations = await runCronStep(
+    "referee-confirmation-chasers",
+    failures,
+    queueDueRefereeNightConfirmationChasers,
+  );
+  const referralEmails = await runCronStep(
+    "referral-recorded-emails",
+    failures,
+    queueMissingReferralRecordedEmails,
+  );
+  const referralPayoutEmails = await runCronStep(
+    "referral-payout-emails",
+    failures,
+    queueReadyReferralPayoutEmails,
+  );
+
+  // Drain again so anything successfully queued by the steps above is sent in
+  // the same cron run even if a different step failed.
+  const generatedQueue = await runCronStep(
+    "process-new-notification-queue",
+    failures,
+    () => processNotificationQueue(200),
+  );
+
+  const autoPayResults = await runCronStep(
+    "matchday-autopay",
+    failures,
+    chargeDueMatchdayAutoPayments,
+  );
+  const matchdayAutoPay = autoPayResults.ok
+    ? summariseAutoPay(autoPayResults.value)
+    : autoPayResults;
+
+  const response = {
+    ok: failures.length === 0,
+    diagnosis:
+      failures.length === 0
+        ? "All notification cron steps completed."
+        : `Cron completed with ${failures.length} failed step${failures.length === 1 ? "" : "s"}. See failedSteps for the exact component.`,
+    failedSteps: failures,
+    existingQueue,
+    onboarding,
+    fixtureConfirmations,
+    fixtureConfirmationEmails,
+    fixtureConfirmationWarnings,
+    aiPredictionIntegrity,
+    lastMinuteReplacements,
+    refereeAssignmentSync,
+    refereeNights,
+    refereeConfirmations,
+    referralEmails,
+    referralPayoutEmails,
+    generatedQueue,
+    matchdayAutoPay,
+  };
+
+  // Keep a failed HTTP status so Railway correctly flags a partial cron failure,
+  // but only after already-queued messages and all independent steps have had a
+  // chance to run.
+  return NextResponse.json(response, { status: failures.length === 0 ? 200 : 500 });
 }
