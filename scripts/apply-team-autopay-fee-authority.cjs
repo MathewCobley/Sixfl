@@ -28,6 +28,18 @@ source = replaceRequired(
   "saved-card query fee authority",
 );
 
+// The verified fee cap is selected alongside SUM(tx.amountPence), so every
+// Team/Fixture column referenced by that expression must be part of GROUP BY.
+// Without this PostgreSQL rejects the entire matchday-autopay query before any
+// card can be considered, which in turn makes the notification cron report a
+// matchday-autopay failure.
+source = replaceRequired(
+  source,
+  `      t."autoPaySetupCheckoutSessionId",\n      pc."fixtureId",`,
+  `      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  "saved-card query fee authority grouping",
+);
+
 source = replaceRequired(
   source,
   `  for (const row of rows) {\n    const outstandingPence = row.amountPence - row.paidPence;\n\n    if (outstandingPence <= 0) {`,

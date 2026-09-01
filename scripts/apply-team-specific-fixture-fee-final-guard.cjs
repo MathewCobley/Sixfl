@@ -106,6 +106,11 @@ mustContain(
 );
 mustContain(
   autoPay,
+  `      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  "saved-card autopay must GROUP BY every Team/Fixture field used to derive the verified fee cap.",
+);
+mustContain(
+  autoPay,
   "if (chargeAmountPence > autoPayCapPence)",
   "saved-card autopay must block/correct a stored charge above the verified fee.",
 );
