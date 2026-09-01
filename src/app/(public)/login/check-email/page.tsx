@@ -41,8 +41,11 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          Make sure you open the link on this device to complete sign-in.
+        <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200">
+          Open the email link on this device in the same normal browser you use
+          for SIXFL, such as Chrome or Safari. If your email app opens its own
+          mini-browser, choose <strong>Open in browser</strong>. This helps SIXFL
+          keep you signed in for your next visit.
         </div>
 
         <div className="mt-6">
