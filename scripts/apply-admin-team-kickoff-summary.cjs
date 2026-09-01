@@ -60,6 +60,64 @@ if (changed) {
   console.log("Admin Teams earliest kick-off summary already applied.");
 }
 
+const captainLayoutPath = path.join(
+  process.cwd(),
+  "src",
+  "app",
+  "captain",
+  "team",
+  "[teamid]",
+  "layout.tsx",
+);
+
+if (!fs.existsSync(captainLayoutPath)) {
+  throw new Error("Captain team layout not found.");
+}
+
+let captainSource = fs.readFileSync(captainLayoutPath, "utf8");
+let captainChanged = false;
+
+if (!captainSource.includes("earliestKickoffTime: true,")) {
+  const captainSelectAnchor = `      teamMode: true,\n      league: {`;
+  if (!captainSource.includes(captainSelectAnchor)) {
+    throw new Error("Could not find captain team kick-off select anchor.");
+  }
+  captainSource = captainSource.replace(
+    captainSelectAnchor,
+    `      teamMode: true,\n      earliestKickoffTime: true,\n      latestKickoffTime: true,\n      league: {`,
+  );
+  captainChanged = true;
+}
+
+if (!captainSource.includes("Kick-off restrictions")) {
+  const captainHeaderAnchor = `              {showCaptainTeamSwitcher ? (\n                <div className="rounded-2xl border border-white/10 bg-black/20 p-2">`;
+  if (!captainSource.includes(captainHeaderAnchor)) {
+    throw new Error("Could not find captain team header right-side anchor.");
+  }
+
+  const kickoffBox = `              {(team.earliestKickoffTime || team.latestKickoffTime) ? (\n                <div className="min-w-[220px] rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3">\n                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">\n                    Kick-off restrictions\n                  </div>\n                  <div className="mt-2 flex flex-wrap gap-2">\n                    {team.earliestKickoffTime ? (\n                      <span className="rounded-full border border-amber-300/20 bg-black/20 px-3 py-1.5 text-xs font-semibold text-amber-50">\n                        Earliest KO {team.earliestKickoffTime}\n                      </span>\n                    ) : null}\n                    {team.latestKickoffTime ? (\n                      <span className="rounded-full border border-amber-300/20 bg-black/20 px-3 py-1.5 text-xs font-semibold text-amber-50">\n                        Latest KO {team.latestKickoffTime}\n                      </span>\n                    ) : null}\n                  </div>\n                </div>\n              ) : null}\n\n`;
+
+  captainSource = captainSource.replace(
+    captainHeaderAnchor,
+    `${kickoffBox}${captainHeaderAnchor}`,
+  );
+  captainChanged = true;
+}
+
+if (!captainSource.includes("earliestKickoffTime: true,")) {
+  throw new Error("Captain team layout does not select earliest kick-off time.");
+}
+if (!captainSource.includes("Kick-off restrictions")) {
+  throw new Error("Captain team layout does not render kick-off restrictions.");
+}
+
+if (captainChanged) {
+  fs.writeFileSync(captainLayoutPath, captainSource, "utf8");
+  console.log("Added team kick-off restrictions to the captain/admin team header.");
+} else {
+  console.log("Captain/admin team kick-off restriction summary already applied.");
+}
+
 // Run these last so they extend the fully prepared native source without being
 // overwritten by an earlier compatibility step.
 require("./apply-admin-lead-prospective-league-filter.cjs");
