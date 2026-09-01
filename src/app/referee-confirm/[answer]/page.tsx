@@ -3,11 +3,9 @@
 // ========================================
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { recordRefereeNightConfirmationResponse } from "@/lib/referee-night-confirmation-response";
 import { formatNightDate } from "@/lib/referee-nights";
-import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -24,16 +22,47 @@ function getAnswer(value: string) {
   return null;
 }
 
+function StaleConfirmationLink() {
+  return (
+    <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-amber-300/30 bg-amber-400/[0.08] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200/80">
+          SIXFL referee confirmation
+        </p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+          This confirmation link is no longer current
+        </h1>
+        <p className="mt-4 text-sm leading-6 text-white/70">
+          The referee night may have been changed since this message was sent, so we have not recorded a response from this old link.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-white/60">
+          Open your referee dashboard to see the latest date, venue and fixtures, then confirm the current night there.
+        </p>
+        <Link
+          href="/referee"
+          className="mt-6 inline-flex rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
+        >
+          Open my referee dashboard
+        </Link>
+      </div>
+    </main>
+  );
+}
+
 export default async function RefereeNightConfirmationPage({ params, searchParams }: PageProps) {
   const { answer: rawAnswer } = await params;
   const sp = (await searchParams) ?? {};
   const answer = getAnswer(rawAnswer);
   const token = sp.token?.trim();
 
-  if (!answer || !token) notFound();
+  if (!answer || !token) {
+    return <StaleConfirmationLink />;
+  }
 
   const saved = await recordRefereeNightConfirmationResponse({ token, answer });
-  if (!saved) notFound();
+  if (!saved) {
+    return <StaleConfirmationLink />;
+  }
 
   const confirmed = answer === "yes";
 
@@ -52,13 +81,13 @@ export default async function RefereeNightConfirmationPage({ params, searchParam
             : `We’ve recorded that you cannot make ${formatNightDate(saved.nightDate)} for ${saved.leagueName}. SIXFL will arrange cover.`}
         </p>
         <p className="mt-3 text-sm leading-6 text-white/55">
-          If this is wrong, reply to the original message as soon as possible.
+          You can always check or update your current availability from the referee dashboard.
         </p>
         <Link
-          href={getPublicSiteUrl()}
+          href="/referee"
           className="mt-6 inline-flex rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
         >
-          Back to SIXFL
+          Open my referee dashboard
         </Link>
       </div>
     </main>
