@@ -176,6 +176,7 @@ require("./apply-referee-dashboard-click-affordances.cjs");
 require("./apply-login-session-retention-guard.cjs");
 require("./apply-referee-settled-balance-summary-fix.cjs");
 require("./apply-multi-captain-operational-notifications.cjs");
+require("./apply-admin-captain-management-visibility.cjs");
 
 // Payment safety must remain absolutely last. It checks the final generated
 // fixture-fee source and adds a saved-card cap so a stale £40 charge can never
