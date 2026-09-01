@@ -25,6 +25,47 @@ function isPlausibleEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ teamid: string }> },
+) {
+  const { teamid } = await params;
+  await requireCaptain(teamid);
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: {
+      id: true,
+      name: true,
+      teamMode: true,
+      members: {
+        where: { role: TeamRole.CAPTAIN },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!team) {
+    return NextResponse.json({ error: "Team not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    teamName: team.name,
+    managed: team.teamMode === "MANAGED",
+    captains: team.members.map((member) => ({
+      membershipId: member.id,
+      userId: member.user.id,
+      name: member.user.name,
+      email: member.user.email,
+    })),
+  });
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ teamid: string }> },
