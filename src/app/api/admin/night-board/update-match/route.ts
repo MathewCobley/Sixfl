@@ -203,6 +203,44 @@ async function clearStaleRefereeNightAssignment(input: {
   return staleNightIds;
 }
 
+async function shouldNotifyExistingRefereeAboutNightStartChange(input: {
+  fixtureId: string;
+  refereeId: string;
+  leagueId: string;
+  beforeKickoffAt: Date;
+  afterKickoffAt: Date;
+  beforeStatus: FixtureStatus;
+  afterStatus: FixtureStatus;
+}) {
+  const nightDate = toLondonDateInputValue(input.beforeKickoffAt);
+  const otherFixtures = await prisma.$queryRaw<Array<{ kickoffAt: Date }>>(Prisma.sql`
+    SELECT "kickoffAt"
+    FROM "Fixture"
+    WHERE id <> ${input.fixtureId}
+      AND "refereeId" = ${input.refereeId}
+      AND "leagueId" = ${input.leagueId}
+      AND "publishedAt" IS NOT NULL
+      AND status = 'SCHEDULED'::"FixtureStatus"
+      AND ("kickoffAt" AT TIME ZONE 'Europe/London')::date = ${nightDate}::date
+  `);
+
+  const otherTimes = otherFixtures.map((row) => new Date(row.kickoffAt).getTime());
+  const beforeTimes = [...otherTimes];
+  const afterTimes = [...otherTimes];
+
+  if (input.beforeStatus === FixtureStatus.SCHEDULED) {
+    beforeTimes.push(input.beforeKickoffAt.getTime());
+  }
+  if (input.afterStatus === FixtureStatus.SCHEDULED) {
+    afterTimes.push(input.afterKickoffAt.getTime());
+  }
+
+  const beforeFirst = beforeTimes.length > 0 ? Math.min(...beforeTimes) : null;
+  const afterFirst = afterTimes.length > 0 ? Math.min(...afterTimes) : null;
+
+  return beforeFirst !== afterFirst;
+}
+
 async function resyncMatchFeeMessages(input: {
   fixtureId: string;
   leagueId: string;
@@ -448,8 +486,21 @@ export async function POST(request: Request) {
   }
 
   const nextRefereeId = referee?.id ?? null;
+  const refereeAssignmentChanged = fixture.refereeId !== nextRefereeId;
+  const notifyExistingRefereeAboutChange =
+    !refereeAssignmentChanged && fixture.refereeId
+      ? await shouldNotifyExistingRefereeAboutNightStartChange({
+          fixtureId: fixture.id,
+          refereeId: fixture.refereeId,
+          leagueId: fixture.leagueId,
+          beforeKickoffAt: fixture.kickoffAt,
+          afterKickoffAt: kickoffAt,
+          beforeStatus: fixture.status,
+          afterStatus: status,
+        })
+      : true;
   const changedRefereeNightIds =
-    fixture.refereeId !== nextRefereeId
+    refereeAssignmentChanged
       ? await clearStaleRefereeNightAssignment({
           fixtureId: fixture.id,
           nextRefereeId,
@@ -495,6 +546,9 @@ export async function POST(request: Request) {
   let notifications: NightBoardFixtureNotificationSummary;
 
   try {
+    const refereeForChangeNotice =
+      refereeAssignmentChanged || notifyExistingRefereeAboutChange;
+
     notifications = await queueNightBoardFixtureChangeNotifications({
       fixtureId: fixture.id,
       leagueId: fixture.leagueId,
@@ -510,7 +564,7 @@ export async function POST(request: Request) {
         venueName: fixture.venue?.name ?? fixture.league.venueName ?? null,
         pitch: fixture.pitch,
         status: fixture.status,
-        referee: fixture.referee,
+        referee: refereeForChangeNotice ? fixture.referee : null,
       },
       after: {
         kickoffAt,
@@ -518,7 +572,7 @@ export async function POST(request: Request) {
         venueName: venue?.name ?? fixture.league.venueName ?? null,
         pitch: pitch || null,
         status,
-        referee,
+        referee: refereeForChangeNotice ? referee : null,
       },
       createdByUserId: user?.id ?? null,
     });
