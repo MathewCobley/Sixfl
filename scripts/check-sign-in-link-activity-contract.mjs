@@ -34,6 +34,9 @@ function expectOrder(source, markers, message) {
 }
 
 const auth = read("src/auth.ts");
+const loginPage = read("src/app/(public)/login/page.tsx");
+const checkEmailPage = read("src/app/(public)/login/check-email/page.tsx");
+const middleware = read("src/middleware.ts");
 const activityService = read("src/lib/auth/sign-in-link-activity.ts");
 const returnService = read("src/lib/auth/authenticated-return-visits.ts");
 const returnTracker = read("src/components/auth/AuthenticatedReturnVisitTracker.tsx");
@@ -105,6 +108,88 @@ expect(
   auth,
   "markLatestSignInLinkUsed({",
   "A successful email sign-in must update its activity record.",
+);
+expect(
+  auth,
+  'const CANONICAL_SITE_URL = "https://sixfl.co.uk";',
+  "Magic-link generation must use the apex SIXFL host.",
+);
+expect(
+  auth,
+  "const canonicalUrl = canonicaliseSIXFLUrl(url);",
+  "NextAuth-generated magic links must be canonicalised before they are emailed.",
+);
+expect(
+  auth,
+  "magicLinkUrl: canonicalUrl,",
+  "Sign-in diagnostics must record the same canonical URL that was emailed.",
+);
+expect(
+  auth,
+  "async redirect({ url, baseUrl }) {",
+  "Post-login redirects must remain on the canonical SIXFL host.",
+);
+
+expect(
+  loginPage,
+  "useSession",
+  "The login page must check whether this browser is already signed in.",
+);
+expect(
+  loginPage,
+  'status === "authenticated"',
+  "An existing browser session must bypass the magic-link form.",
+);
+expect(
+  loginPage,
+  "You’re already signed in",
+  "Logged-in users must be told they do not need another email link.",
+);
+expect(
+  loginPage,
+  "Open my SIXFL account",
+  "Logged-in users must have a direct route to their existing dashboard.",
+);
+expect(
+  loginPage,
+  'signOut({ callbackUrl: "/login" })',
+  "The login page must still allow an intentional account change.",
+);
+expect(
+  checkEmailPage,
+  "same normal browser",
+  "The check-email page must explain that the same browser retains the session.",
+);
+expect(
+  checkEmailPage,
+  "Open in browser",
+  "Users must be warned about email-app mini-browsers.",
+);
+
+expect(
+  middleware,
+  'const CANONICAL_HOST = "sixfl.co.uk";',
+  "Browser traffic must have one canonical SIXFL host.",
+);
+expect(
+  middleware,
+  'const LEGACY_WWW_HOST = "www.sixfl.co.uk";',
+  "The legacy www host must be recognised explicitly.",
+);
+expect(
+  middleware,
+  'request.method !== "GET" && request.method !== "HEAD"',
+  "Canonical redirects must not interfere with POST webhooks or form submissions.",
+);
+expect(
+  middleware,
+  "NextResponse.redirect(url, 308)",
+  "Legacy www visits must permanently preserve their path and query on the apex host.",
+);
+expect(
+  middleware,
+  'matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]',
+  "The canonical-host safeguard must cover login, callback and dashboard routes.",
 );
 
 expect(
