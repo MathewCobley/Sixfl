@@ -29,6 +29,14 @@ function redirectToCanonicalHost(request: NextRequest) {
     return null;
   }
 
+  // Cron calls carry an Authorization header. A www -> apex redirect changes
+  // origin and Node fetch may drop that sensitive header, producing a false 401.
+  // Never redirect protected cron routes; let the endpoint authenticate the
+  // original request directly.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) {
+    return null;
+  }
+
   if (getRequestHostname(request) !== LEGACY_WWW_HOST) {
     return null;
   }
