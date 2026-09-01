@@ -25,6 +25,16 @@ function mustNotMatch(source, pattern, message) {
   }
 }
 
+function mustNotContainBefore(source, needle, boundary, message) {
+  const boundaryIndex = source.indexOf(boundary);
+  if (boundaryIndex === -1) {
+    throw new Error(`Team-specific fixture fee safety failed: ${message} Boundary not found.`);
+  }
+  if (source.slice(0, boundaryIndex).includes(needle)) {
+    throw new Error(`Team-specific fixture fee safety failed: ${message}`);
+  }
+}
+
 const publishBatch = read("src/app/(admin)/admin/fixtures/publish-actions.ts");
 const publishOne = read("src/app/api/admin/fixtures/publish-one/route.ts");
 const singleFixture = read("src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts");
@@ -106,8 +116,14 @@ mustContain(
 );
 mustContain(
   autoPay,
-  `      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  `    GROUP BY\n      pc."id",\n      pc."teamId",\n      t."name",\n      t."stripeCustomerId",\n      t."stripeDefaultPaymentMethodId",\n      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
   "saved-card autopay must GROUP BY every Team/Fixture field used to derive the verified fee cap.",
+);
+mustNotContainBefore(
+  autoPay,
+  `      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  `    FROM "PaymentCharge" pc`,
+  "fee-authority GROUP BY columns must not be inserted as stray raw SELECT columns.",
 );
 mustContain(
   autoPay,
