@@ -118,6 +118,55 @@ if (captainChanged) {
   console.log("Captain/admin team kick-off restriction summary already applied.");
 }
 
+const refereeNightDetailPath = path.join(
+  process.cwd(),
+  "src",
+  "app",
+  "(admin)",
+  "admin",
+  "referee-nights",
+  "[id]",
+  "page.tsx",
+);
+
+if (!fs.existsSync(refereeNightDetailPath)) {
+  throw new Error("Admin referee-night detail page not found.");
+}
+
+let refereeNightSource = fs.readFileSync(refereeNightDetailPath, "utf8");
+let refereeNightChanged = false;
+
+const expectedCalculation = `  const expectedTotal = fixtures.reduce((sum, fixture) => {\n    return sum + fixture.paymentCharges.reduce((chargeSum, charge) => chargeSum + charge.amountPence, 0);\n  }, 0);\n`;
+if (refereeNightSource.includes(expectedCalculation)) {
+  refereeNightSource = refereeNightSource.replace(expectedCalculation, "");
+  refereeNightChanged = true;
+}
+
+const expectedTile = `            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-white/40">Expected</div><div className="mt-1 text-lg font-semibold text-white">{formatMoney(expectedTotal)}</div></div>\n`;
+if (refereeNightSource.includes(expectedTile)) {
+  refereeNightSource = refereeNightSource.replace(expectedTile, "");
+  refereeNightChanged = true;
+}
+
+if (refereeNightSource.includes("Expected</div>")) {
+  throw new Error("Referee-night Expected total is still rendered.");
+}
+if (refereeNightSource.includes("expectedTotal")) {
+  throw new Error("Referee-night expectedTotal calculation is still present.");
+}
+
+if (refereeNightSource.includes('xl:grid-cols-5')) {
+  refereeNightSource = refereeNightSource.replace('xl:grid-cols-5', 'xl:grid-cols-4');
+  refereeNightChanged = true;
+}
+
+if (refereeNightChanged) {
+  fs.writeFileSync(refereeNightDetailPath, refereeNightSource, "utf8");
+  console.log("Removed the irrelevant Expected total from referee-night summaries.");
+} else {
+  console.log("Referee-night Expected total already removed.");
+}
+
 // Run these last so they extend the fully prepared native source without being
 // overwritten by an earlier compatibility step.
 require("./apply-admin-lead-prospective-league-filter.cjs");
