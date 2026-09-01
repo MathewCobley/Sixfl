@@ -60,8 +60,9 @@ if (changed) {
   console.log("Admin Teams earliest kick-off summary already applied.");
 }
 
-// Run these last so they extend the fully prepared native admin source without
-// being overwritten by an earlier compatibility step.
+// Run these last so they extend the fully prepared native source without being
+// overwritten by an earlier compatibility step.
 require("./apply-admin-lead-prospective-league-filter.cjs");
 require("./apply-night-board-confirmation-reset-hardening.cjs");
 require("./apply-clear-removed-team-fixture-notices.cjs");
+require("./apply-referee-dashboard-click-affordances.cjs");
