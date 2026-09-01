@@ -2,9 +2,9 @@
 // File: src/lib/league-rules.ts
 // ========================================
 
-export const LEAGUE_RULES_VERSION = "2.1";
-export const LEAGUE_RULES_EFFECTIVE_DATE = "22 August 2026";
-export const LEAGUE_RULES_NEXT_REVIEW = "22 August 2027";
+export const LEAGUE_RULES_VERSION = "2.2";
+export const LEAGUE_RULES_EFFECTIVE_DATE = "2 September 2026";
+export const LEAGUE_RULES_NEXT_REVIEW = "2 September 2027";
 
 export type LeagueRuleSection = {
   title: string;
@@ -35,9 +35,14 @@ export const leagueRuleSections: LeagueRuleSection[] = [
   {
     title: "3. Player Eligibility and Guest Players",
     points: [
-      "A player may take part if they are properly registered to the team or are being used as a permitted guest player in accordance with the Match Rules.",
+      "A player may only be permanently registered to one team within the same SIXFL league and season.",
+      "A player may be permanently registered to different teams in different SIXFL leagues or competitions.",
+      "A player who is permanently registered to another team in the same league may only take part for a different team as a guest player with prior approval from SIXFL for that fixture.",
+      "A guest appearance does not create a second permanent registration and remains subject to the guest-player limits in the Match Rules.",
+      "A player may take part if they are properly registered to the team or are being used as a permitted guest player in accordance with these League Rules and the Match Rules.",
       "Teams must not field an ineligible player, deliberately misrepresent a player's identity or use another person's registration.",
-      "SIXFL may amend a result, remove a player from a fixture, impose disciplinary action or take another reasonable competition measure where an eligibility breach is established.",
+      "Where a team fields an ineligible player, SIXFL may overturn the result and record the fixture as a 3–0 forfeit loss against that team, together with any other disciplinary or competition action considered appropriate.",
+      "Where both teams are found to have fielded ineligible players, SIXFL will determine the appropriate competition outcome rather than automatically awarding either team a 3–0 win.",
     ],
   },
   {
