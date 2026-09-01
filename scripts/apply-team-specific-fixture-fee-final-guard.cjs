@@ -106,8 +106,13 @@ mustContain(
 );
 mustContain(
   autoPay,
-  `      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
+  `    GROUP BY\n      pc."id",\n      pc."teamId",\n      t."name",\n      t."stripeCustomerId",\n      t."stripeDefaultPaymentMethodId",\n      t."autoPaySetupCheckoutSessionId",\n      t."standardMatchFeePence",\n      f."homeTeamId",\n      f."awayTeamId",\n      f."homeMatchFeePence",\n      f."awayMatchFeePence",\n      f."matchFeePence",\n      pc."fixtureId",`,
   "saved-card autopay must GROUP BY every Team/Fixture field used to derive the verified fee cap.",
+);
+mustNotMatch(
+  autoPay,
+  /SELECT[\s\S]*?t\."autoPaySetupCheckoutSessionId",\s*t\."standardMatchFeePence",\s*f\."homeTeamId",\s*f\."awayTeamId",\s*f\."homeMatchFeePence",\s*f\."awayMatchFeePence",\s*f\."matchFeePence",\s*pc\."fixtureId",[\s\S]*?FROM "PaymentCharge" pc/,
+  "fee-authority GROUP BY columns must not be inserted as stray raw SELECT columns.",
 );
 mustContain(
   autoPay,
