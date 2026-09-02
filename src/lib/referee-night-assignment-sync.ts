@@ -50,32 +50,7 @@ function isFixtureInAutomaticRefereeNightWindow(fixture: FixtureAssignmentRow) {
   return fixture.kickoffAt.getTime() >= cutoff.getTime();
 }
 
-async function getExistingNightId(input: {
-  db: RefereeNightAssignmentDbClient;
-  refereeId: string;
-  leagueId: string;
-  venueId: string | null;
-  nightDate: string;
-}) {
-  const rows = await input.db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT id
-    FROM "RefereeNight"
-    WHERE "refereeId" = ${input.refereeId}
-      AND "leagueId" = ${input.leagueId}
-      AND "nightDate" = ${input.nightDate}::date
-      AND status <> 'CANCELLED'
-      AND (
-        (${input.venueId}::text IS NULL AND "venueId" IS NULL)
-        OR "venueId" = ${input.venueId}
-      )
-    ORDER BY "createdAt" ASC
-    LIMIT 1
-  `);
-
-  return rows[0]?.id ?? null;
-}
-
-async function createRefereeNight(input: {
+async function getOrCreateRefereeNight(input: {
   db: RefereeNightAssignmentDbClient;
   refereeId: string;
   leagueId: string;
@@ -89,29 +64,37 @@ async function createRefereeNight(input: {
     refereeId: input.refereeId,
   });
 
-  await input.db.$executeRaw(Prisma.sql`
+  // This must be atomic. The notifications cron can reconcile the same fixture/night
+  // at the same time as an admin edit or another reconciliation pass. A prior
+  // SELECT-then-INSERT could therefore race and hit the unique referee/night key.
+  // The unique key also remains occupied by a CANCELLED row, so reusing that row
+  // is preferable to trying to insert a second night with the same identity.
+  const rows = await input.db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO "RefereeNight" (
       "id", "refereeId", "leagueId", "venueId", "nightDate", "feePence", "status", "adminNotes", "createdByUserId", "updatedAt"
     ) VALUES (
       ${id}, ${input.refereeId}, ${input.leagueId}, ${input.venueId}, ${input.nightDate}::date, ${feePence}, 'DRAFT', ${AUTO_REFEREE_NIGHT_NOTE}, ${input.createdByUserId ?? null}, NOW()
     )
+    ON CONFLICT ("refereeId", "leagueId", "venueId", "nightDate") DO UPDATE
+    SET
+      "status" = CASE
+        WHEN "RefereeNight"."status" = 'CANCELLED' THEN 'DRAFT'
+        ELSE "RefereeNight"."status"
+      END,
+      "adminNotes" = CASE
+        WHEN "RefereeNight"."status" = 'CANCELLED' THEN ${AUTO_REFEREE_NIGHT_NOTE}
+        ELSE "RefereeNight"."adminNotes"
+      END,
+      "updatedAt" = NOW()
+    RETURNING "id"
   `);
 
-  return id;
-}
+  const refereeNightId = rows[0]?.id;
+  if (!refereeNightId) {
+    throw new Error("Could not create or reuse referee night.");
+  }
 
-async function getOrCreateRefereeNight(input: {
-  db: RefereeNightAssignmentDbClient;
-  refereeId: string;
-  leagueId: string;
-  venueId: string | null;
-  nightDate: string;
-  createdByUserId?: string | null;
-}) {
-  const existingNightId = await getExistingNightId(input);
-  if (existingNightId) return existingNightId;
-
-  return createRefereeNight(input);
+  return refereeNightId;
 }
 
 async function cleanupEmptyHistoricDraftNights(input: {
