@@ -37,7 +37,7 @@ export default function BulkPlayerPoolProfileReminderButton({
 
   async function sendBulkReminder() {
     const confirmed = window.confirm(
-      `Email all ${awaitingCount} players still awaiting their PlayerPool profile?\n\nEach player will receive the full PlayerPool explanation and their own secure profile link.`,
+      `Email all ${awaitingCount} players still awaiting their PlayerPool profile?\n\nEach player will receive the full PlayerPool explanation and their own secure profile link. Eligible players who still have not completed it will then receive an automatic SMS nudge 48 hours after the email is delivered.`,
     );
 
     if (!confirmed) return;
@@ -85,15 +85,16 @@ export default function BulkPlayerPoolProfileReminderButton({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-3xl">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">
-            Profile reminder email
+            Email &amp; SMS profile reminders
           </p>
           <h3 className="mt-2 text-lg font-black text-white">
             Email everyone who is still awaiting their profile
           </h3>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            This sends a friendly explanation of PlayerPool, how SIXFL leagues work,
-            privacy and introductions, plus each player&apos;s own secure form link.
-            Players without a usable email or profile link are safely skipped.
+            This sends the full PlayerPool explanation and each player&apos;s own secure
+            form link. If they still have not completed it, SIXFL automatically sends
+            one SMS 48 hours after the email is delivered and a final SMS five days
+            later. Completed profiles and players without a usable mobile are skipped.
           </p>
         </div>
 
@@ -117,7 +118,7 @@ export default function BulkPlayerPoolProfileReminderButton({
           {result.skipped > 0 ? ` ${result.skipped} skipped.` : ""}
           {result.failed > 0 ? ` ${result.failed} failed.` : ""}
           <div className="mt-1 text-xs text-emerald-100/65">
-            The latest queued or sent date is now shown on each player card below.
+            SMS follow-up starts automatically only after the email is actually sent. The latest email date is shown on each player card below.
           </div>
           {result.errors.length > 0 ? (
             <details className="mt-3 text-xs text-amber-100/80">
