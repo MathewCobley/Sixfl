@@ -63,7 +63,11 @@ const convertLeadButton = read("src/components/admin/leads/ConvertLeadToTeamButt
 const adminLeadsPage = read("src/app/(admin)/admin/leads/page.tsx");
 
 const checks = [
-  [leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"'), "League Rules must remain on v2.1"],
+  [
+    leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"') ||
+      leagueRules.includes('LEAGUE_RULES_VERSION = "2.2"'),
+    "League Rules must remain on supported v2.1/v2.2",
+  ],
   [leagueRules.includes("public-facing team identity must be suitable for public use"), "League Rules must retain the team-name and branding suitability rule"],
   [leagueRules.includes("administrative forfeit result will be 3–0"), "League Rules must define the default 3–0 forfeit result"],
   [leagueRules.includes("less than 24 hours before kick-off"), "League Rules must retain the late-cancellation rule"],
