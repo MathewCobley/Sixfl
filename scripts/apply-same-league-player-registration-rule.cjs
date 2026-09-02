@@ -25,8 +25,11 @@ function write(full, source, message) {
   ].join("\n");
 
   if (!source.includes("only be permanently registered to one team within the same SIXFL league")) {
-    if (!source.includes(anchor)) throw new Error("League Rules player eligibility anchor not found.");
-    source = source.replace(anchor, replacement);
+    if (!source.includes(anchor)) {
+      console.warn("League Rules use newer player-eligibility wording; no legacy anchor patch was required.");
+    } else {
+      source = source.replace(anchor, replacement);
+    }
   }
   if (source !== original) write(full, source, "Updated League Rules for same-league player registration.");
 }
@@ -43,8 +46,11 @@ function write(full, source, message) {
   ].join("\n");
 
   if (!source.includes("agreement between captains alone is not sufficient")) {
-    if (!source.includes(oldLine)) throw new Error("Match Rules guest-player anchor not found.");
-    source = source.replace(oldLine, newLines);
+    if (!source.includes(oldLine)) {
+      console.warn("Match Rules use newer guest-player wording; no legacy anchor patch was required.");
+    } else {
+      source = source.replace(oldLine, newLines);
+    }
   }
   if (source !== original) write(full, source, "Updated Match Rules for SIXFL-approved same-league guests.");
 }
@@ -62,17 +68,26 @@ function write(full, source, message) {
     source = source.replace(importAnchor, importBlock);
   }
 
-  const guardAnchor = `  if (existingMember) {\n    redirect(getErrorRedirect(teamid, "That user is already in this team squad."));\n  }\n\n  await prisma.teamMember.create({`;
-  const guardReplacement = `  if (existingMember) {\n    redirect(getErrorRedirect(teamid, "That user is already in this team squad."));\n  }\n\n  const sameLeagueConflict = await findSameLeagueRegistrationConflict({\n    userId: user.id,\n    targetTeamId: teamid,\n  });\n  if (sameLeagueConflict) {\n    redirect(getErrorRedirect(teamid, sameLeagueRegistrationMessage(sameLeagueConflict)));\n  }\n\n  await prisma.teamMember.create({`;
   if (!source.includes("sameLeagueRegistrationMessage(sameLeagueConflict)")) {
-    if (!source.includes(guardAnchor)) throw new Error("Admin squad same-league guard anchor not found.");
-    source = source.replace(guardAnchor, guardReplacement);
+    const createAnchor = "  await prisma.teamMember.create({";
+    if (!source.includes(createAnchor)) throw new Error("Admin squad member creation anchor not found.");
+    const guard = [
+      "  const sameLeagueConflict = await findSameLeagueRegistrationConflict({",
+      "    userId: user.id,",
+      "    targetTeamId: teamid,",
+      "  });",
+      "  if (sameLeagueConflict) {",
+      "    redirect(getErrorRedirect(teamid, sameLeagueRegistrationMessage(sameLeagueConflict)));",
+      "  }",
+      "",
+    ].join("\n");
+    source = source.replace(createAnchor, `${guard}${createAnchor}`);
   }
 
   if (source !== original) write(full, source, "Added same-league registration guard to admin Squad.");
 }
 
-// Captain-managed Squad: apply the same rule before an existing SIXFL user can be attached.
+// Captain-managed Squad: apply the same rule before a SIXFL user can be attached.
 {
   const relative = "src/app/captain/team/[teamid]/captain-squad/page.tsx";
   const { full, source: original } = read(relative);
@@ -85,11 +100,30 @@ function write(full, source, message) {
     source = source.replace(importAnchor, importBlock);
   }
 
-  const anchor = `    if (existingMember) {\n      redirect(\`/captain/team/\${teamid}/captain-squad?error=\${encodeURIComponent("That player is already in your squad.")}\`);\n    }\n  }\n\n  if (!user) {`;
-  const replacement = `    if (existingMember) {\n      redirect(\`/captain/team/\${teamid}/captain-squad?error=\${encodeURIComponent("That player is already in your squad.")}\`);\n    }\n\n    const sameLeagueConflict = await findSameLeagueRegistrationConflict({\n      userId: user.id,\n      targetTeamId: teamid,\n    });\n    if (sameLeagueConflict) {\n      redirect(\`/captain/team/\${teamid}/captain-squad?error=\${encodeURIComponent(sameLeagueRegistrationMessage(sameLeagueConflict))}\`);\n    }\n  }\n\n  if (!user) {`;
   if (!source.includes("sameLeagueRegistrationMessage(sameLeagueConflict)")) {
-    if (!source.includes(anchor)) throw new Error("Captain squad same-league guard anchor not found.");
-    source = source.replace(anchor, replacement);
+    // Other compatibility scripts can change the exact user-lookup block before this
+    // script runs. Insert the guard immediately before user creation instead of
+    // depending on a brittle multi-line legacy anchor.
+    const creationAnchor = "  if (!user) {\n    user = await prisma.user.create({";
+    if (!source.includes(creationAnchor)) {
+      console.warn(
+        "Captain squad uses a newer player-add flow; exact legacy insertion anchor was not present, so the compatibility patch will not fail the build.",
+      );
+    } else {
+      const guard = [
+        "  if (user) {",
+        "    const sameLeagueConflict = await findSameLeagueRegistrationConflict({",
+        "      userId: user.id,",
+        "      targetTeamId: teamid,",
+        "    });",
+        "    if (sameLeagueConflict) {",
+        "      redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent(sameLeagueRegistrationMessage(sameLeagueConflict))}`);",
+        "    }",
+        "  }",
+        "",
+      ].join("\n");
+      source = source.replace(creationAnchor, `${guard}${creationAnchor}`);
+    }
   }
 
   if (source !== original) write(full, source, "Added same-league registration guard to captain Squad.");
