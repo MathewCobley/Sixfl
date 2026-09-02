@@ -28,6 +28,7 @@ export async function findSameLeagueRegistrationConflict(input: {
       userId: input.userId,
       teamId: { not: input.targetTeamId },
       team: { leagueId: targetTeam.leagueId },
+      user: { emailVerified: { not: null } },
     },
     select: {
       team: {
