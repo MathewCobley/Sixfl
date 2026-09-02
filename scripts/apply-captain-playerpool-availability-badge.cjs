@@ -46,11 +46,27 @@ replaceOnce(
     "        SELECT COUNT(*)::bigint AS \"count\"",
     "        FROM \"PlayerPoolProfile\" profile",
     "        JOIN \"TeamPlayerProspect\" prospect ON prospect.\"id\" = profile.\"prospectId\"",
-    "        WHERE profile.\"leagueId\" = ${team.league.id}",
-    "          AND profile.\"status\" = 'AVAILABLE'",
+    "        WHERE profile.\"status\" = 'AVAILABLE'",
     "          AND profile.\"profileSubmittedAt\" IS NOT NULL",
     "          AND profile.\"consentShareProfile\" = true",
     "          AND profile.\"consentContact\" = true",
+    "          AND (",
+    "            EXISTS (",
+    "              SELECT 1",
+    "              FROM \"PlayerPoolLeaguePreference\" preference",
+    "              WHERE preference.\"profileId\" = profile.\"id\"",
+    "                AND preference.\"leagueId\" = ${team.league.id}",
+    "                AND preference.\"availabilityStatus\" IN ('AVAILABLE', 'MOST_WEEKS', 'SOMETIMES')",
+    "            )",
+    "            OR (",
+    "              NOT EXISTS (",
+    "                SELECT 1",
+    "                FROM \"PlayerPoolLeaguePreference\" preference",
+    "                WHERE preference.\"profileId\" = profile.\"id\"",
+    "              )",
+    "              AND profile.\"leagueId\" = ${team.league.id}",
+    "            )",
+    "          )",
     "          AND NOT EXISTS (",
     "            SELECT 1",
     "            FROM \"TeamPlayerProspect\" squad_prospect",
@@ -108,29 +124,36 @@ replaceOnce(
 );
 
 const unreadBadgeAnchor = [
-  "                      {item.unreadCount && item.unreadCount > 0 ? (",
-  '                        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[11px] font-black text-black">',
-  "                          {item.unreadCount}",
-  "                        </span>",
-  "                      ) : null}",
+  "                          {item.unreadCount && item.unreadCount > 0 ? (",
+  "                            <span",
+  '                              aria-hidden="true"',
+  '                              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1.5 text-[11px] font-bold leading-none text-black"',
+  "                            >",
+  "                              {item.unreadCount}",
+  "                            </span>",
+  "                          ) : null}",
 ].join("\n");
 
-if (!source.includes("player${item.availabilityCount === 1")) {
-  // aria label should already have been added above; this is only a defensive marker.
-}
+const availabilityBadge = [
+  "                          {item.availabilityCount && item.availabilityCount > 0 ? (",
+  "                            <span",
+  '                              aria-hidden="true"',
+  '                              className="inline-flex items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-400/20 px-2 py-0.5 text-[10px] font-black text-emerald-100"',
+  "                            >",
+  "                              {item.availabilityCount} available",
+  "                            </span>",
+  "                          ) : null}",
+].join("\n");
 
-replaceOnce(
-  unreadBadgeAnchor,
-  [
+if (!source.includes(availabilityBadge)) {
+  if (!source.includes(unreadBadgeAnchor)) {
+    throw new Error("Could not find PlayerPool availability badge insertion point");
+  }
+  source = source.replace(
     unreadBadgeAnchor,
-    "                      {item.availabilityCount && item.availabilityCount > 0 ? (",
-    '                        <span className="inline-flex items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-100">',
-    "                          {item.availabilityCount} available",
-    "                        </span>",
-    "                      ) : null}",
-  ].join("\n"),
-  "PlayerPool availability badge",
-);
+    [unreadBadgeAnchor, availabilityBadge].join("\n"),
+  );
+}
 
 fs.writeFileSync(filePath, source);
 console.log("Captain PlayerPool nav now shows available players in the team's league.");
