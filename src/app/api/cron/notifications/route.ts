@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
+import { runCaptainRulesOnboardingEmailJob } from "@/lib/captain/rules-onboarding-emails";
 import { repairUpcomingAiPredictionIntegrity } from "@/lib/fixtures/aiPredictionIntegrity";
 import { runFixtureConfirmationEmailJob } from "@/lib/fixtures/confirmation-emails";
 import { runFixtureConfirmationReminderJob } from "@/lib/fixtures/confirmation-reminder-job";
@@ -125,6 +126,11 @@ export async function GET(request: NextRequest) {
     failures,
     runCaptainOnboardingEmailJob,
   );
+  const rulesOnboarding = await runCronStep(
+    "captain-rules-onboarding",
+    failures,
+    runCaptainRulesOnboardingEmailJob,
+  );
   const fixtureConfirmations = await runCronStep(
     "fixture-confirmation-reminders",
     failures,
@@ -202,6 +208,7 @@ export async function GET(request: NextRequest) {
     failedSteps: failures,
     existingQueue,
     onboarding,
+    rulesOnboarding,
     fixtureConfirmations,
     fixtureConfirmationEmails,
     fixtureConfirmationWarnings,
