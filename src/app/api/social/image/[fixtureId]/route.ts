@@ -5,46 +5,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import {
-  createCanvas,
-  registerFont,
-  type CanvasRenderingContext2D,
-} from "canvas";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 const WIDTH = 1080;
 const HEIGHT = 1080;
-
-const FONT_REGULAR = path.join(
-  process.cwd(),
-  "public",
-  "fonts",
-  "Inter-Regular.ttf",
-);
-
-const FONT_BOLD = path.join(
-  process.cwd(),
-  "public",
-  "fonts",
-  "Inter-Bold.ttf",
-);
-
-let fontsRegistered = false;
-
-function ensureFontsRegistered() {
-  if (fontsRegistered) return;
-
-  try {
-    registerFont(FONT_REGULAR, { family: "Inter" });
-    registerFont(FONT_BOLD, { family: "Inter", weight: "700" });
-  } catch {
-    // fallback to system fonts
-  }
-
-  fontsRegistered = true;
-}
 
 function fitText(value: string, max = 26) {
   if (value.length <= max) return value;
@@ -61,6 +27,37 @@ function normaliseText(value: string) {
     .replaceAll("–", "-")
     .replaceAll("—", "-")
     .trim();
+}
+
+function xml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function svgFontSize(text: string, preferred: number, maxWidth: number) {
+  // A lightweight approximation is sufficient here and avoids pulling the
+  // native node-canvas package into this Vercel function. Inter/Arial average
+  // glyph width is roughly 0.56em for the all-caps/team-name text we render.
+  const estimatedWidth = Math.max(1, text.length) * preferred * 0.56;
+  if (estimatedWidth <= maxWidth) return preferred;
+  return Math.max(16, Math.floor((maxWidth / (text.length * 0.56)) / 2) * 2);
+}
+
+function textNode(input: {
+  text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
+  fontSize: number;
+  weight?: number;
+  color?: string;
+}) {
+  const size = svgFontSize(input.text, input.fontSize, input.maxWidth);
+  return `<text x="${input.x}" y="${input.y}" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-size="${size}" font-weight="${input.weight ?? 700}" fill="${input.color ?? "#FFFFFF"}">${xml(input.text)}</text>`;
 }
 
 function formatKickoff(date: Date) {
@@ -84,9 +81,7 @@ async function loadImageBuffer(src: string | null | undefined) {
 
   if (src.startsWith("http://") || src.startsWith("https://")) {
     const response = await fetch(src, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${src}`);
-    }
+    if (!response.ok) throw new Error(`Failed to fetch image: ${src}`);
     return Buffer.from(await response.arrayBuffer());
   }
 
@@ -99,7 +94,6 @@ async function loadImageBuffer(src: string | null | undefined) {
 
 async function makeBadgeBox(input: Buffer, boxSize = 260) {
   const trimmed = await sharp(input).trim().png().toBuffer();
-
   const resized = await sharp(trimmed)
     .resize(boxSize - 40, boxSize - 40, {
       fit: "contain",
@@ -121,41 +115,6 @@ async function makeBadgeBox(input: Buffer, boxSize = 260) {
     .toBuffer();
 }
 
-function drawCenteredTextBlock(input: {
-  ctx: CanvasRenderingContext2D;
-  text: string;
-  x: number;
-  y: number;
-  maxWidth: number;
-  fontSize: number;
-  weight?: number;
-  color?: string;
-}) {
-  const {
-    ctx,
-    text,
-    x,
-    y,
-    maxWidth,
-    fontSize,
-    weight = 700,
-    color = "#FFFFFF",
-  } = input;
-
-  let size = fontSize;
-  while (size > 16) {
-    ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
-    if (ctx.measureText(text).width <= maxWidth) break;
-    size -= 2;
-  }
-
-  ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
-  ctx.fillStyle = color;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y);
-}
-
 function getTemplateName(input: {
   socialPostType: string | null;
   status: string;
@@ -164,9 +123,7 @@ function getTemplateName(input: {
 }) {
   if (
     input.socialPostType === "RESULT" ||
-    (input.status === "COMPLETED" &&
-      input.homeScore !== null &&
-      input.awayScore !== null)
+    (input.status === "COMPLETED" && input.homeScore !== null && input.awayScore !== null)
   ) {
     return "result-card-master.png";
   }
@@ -183,23 +140,66 @@ function getTemplateName(input: {
 }
 
 function getUpdateHeadline(status: string) {
-  if (status === "POSTPONED") {
-    return "POSTPONED";
-  }
-
-  if (status === "CANCELLED") {
-    return "CANCELLED";
-  }
-
+  if (status === "POSTPONED") return "POSTPONED";
+  if (status === "CANCELLED") return "CANCELLED";
   return "FIXTURE UPDATE";
+}
+
+function buildTextLayer(input: {
+  templateName: string;
+  status: string;
+  leagueName: string;
+  homeName: string;
+  awayName: string;
+  venueName: string;
+  kickoffText: string;
+  scoreText: string | null;
+}) {
+  const isResult = input.templateName === "result-card-master.png";
+  const isUpdate = input.templateName === "update-card-master.png";
+  const nodes = [
+    textNode({
+      text: input.leagueName,
+      x: 540,
+      y: 267,
+      maxWidth: 860,
+      fontSize: 24,
+      weight: 700,
+      color: "#F4F7FA",
+    }),
+  ];
+
+  if (isResult) {
+    nodes.push(
+      textNode({ text: input.homeName, x: 280, y: 645, maxWidth: 340, fontSize: 38, weight: 800 }),
+      textNode({ text: input.awayName, x: 800, y: 645, maxWidth: 340, fontSize: 38, weight: 800 }),
+      textNode({ text: input.scoreText ?? "0 - 0", x: 540, y: 520, maxWidth: 280, fontSize: 86, weight: 800 }),
+    );
+  } else if (isUpdate) {
+    nodes.push(
+      textNode({ text: getUpdateHeadline(input.status), x: 540, y: 520, maxWidth: 320, fontSize: 52, weight: 800 }),
+      textNode({ text: input.homeName, x: 280, y: 645, maxWidth: 340, fontSize: 38, weight: 800 }),
+      textNode({ text: input.awayName, x: 800, y: 645, maxWidth: 340, fontSize: 38, weight: 800 }),
+    );
+  } else {
+    nodes.push(
+      textNode({ text: input.homeName, x: 280, y: 645, maxWidth: 340, fontSize: 40, weight: 800 }),
+      textNode({ text: input.awayName, x: 800, y: 645, maxWidth: 340, fontSize: 40, weight: 800 }),
+    );
+  }
+
+  nodes.push(
+    textNode({ text: input.venueName, x: 540, y: 842, maxWidth: 500, fontSize: 34, weight: 800 }),
+    textNode({ text: input.kickoffText, x: 540, y: 905, maxWidth: 500, fontSize: 24, weight: 700, color: "#F4F7FA" }),
+  );
+
+  return Buffer.from(`<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">${nodes.join("")}</svg>`);
 }
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ fixtureId: string }> },
 ) {
-  ensureFontsRegistered();
-
   const { fixtureId } = await context.params;
 
   const fixture = await prisma.fixture.findUnique({
@@ -209,34 +209,11 @@ export async function GET(
       kickoffAt: true,
       status: true,
       socialPostType: true,
-      league: {
-        select: {
-          name: true,
-        },
-      },
-      venue: {
-        select: {
-          name: true,
-        },
-      },
-      homeTeam: {
-        select: {
-          name: true,
-          logoUrl: true,
-        },
-      },
-      awayTeam: {
-        select: {
-          name: true,
-          logoUrl: true,
-        },
-      },
-      result: {
-        select: {
-          homeScore: true,
-          awayScore: true,
-        },
-      },
+      league: { select: { name: true } },
+      venue: { select: { name: true } },
+      homeTeam: { select: { name: true, logoUrl: true } },
+      awayTeam: { select: { name: true, logoUrl: true } },
+      result: { select: { homeScore: true, awayScore: true } },
     },
   });
 
@@ -246,250 +223,61 @@ export async function GET(
 
   const homeScore = fixture.result?.homeScore ?? null;
   const awayScore = fixture.result?.awayScore ?? null;
-
   const templateName = getTemplateName({
     socialPostType: fixture.socialPostType,
     status: fixture.status,
     homeScore,
     awayScore,
   });
+  const templatePath = path.join(process.cwd(), "public", "social", "templates", templateName);
 
-  const templatePath = path.join(
-    process.cwd(),
-    "public",
-    "social",
-    "templates",
-    templateName,
-  );
-
-  const base = sharp(templatePath).resize(WIDTH, HEIGHT);
-
-  const homeLogoBuffer = await loadImageBuffer(fixture.homeTeam.logoUrl);
-  const awayLogoBuffer = await loadImageBuffer(fixture.awayTeam.logoUrl);
-
-  const homeBadge = homeLogoBuffer
-    ? await makeBadgeBox(homeLogoBuffer, 260)
-    : null;
-  const awayBadge = awayLogoBuffer
-    ? await makeBadgeBox(awayLogoBuffer, 260)
-    : null;
+  const [homeLogoBuffer, awayLogoBuffer] = await Promise.all([
+    loadImageBuffer(fixture.homeTeam.logoUrl),
+    loadImageBuffer(fixture.awayTeam.logoUrl),
+  ]);
+  const [homeBadge, awayBadge] = await Promise.all([
+    homeLogoBuffer ? makeBadgeBox(homeLogoBuffer, 260) : null,
+    awayLogoBuffer ? makeBadgeBox(awayLogoBuffer, 260) : null,
+  ]);
 
   const homeName = normaliseText(fitText(fixture.homeTeam.name, 22));
   const awayName = normaliseText(fitText(fixture.awayTeam.name, 22));
   const leagueName = normaliseText(fitText(fixture.league.name, 58));
-  const venueName = normaliseText(
-    fitText(fixture.venue?.name ?? "Venue TBC", 36),
-  );
+  const venueName = normaliseText(fitText(fixture.venue?.name ?? "Venue TBC", 36));
   const kickoffText = formatKickoff(fixture.kickoffAt);
-  const scoreText =
-    homeScore !== null && awayScore !== null
-      ? `${homeScore} - ${awayScore}`
-      : null;
-
-  const canvas = createCanvas(WIDTH, HEIGHT);
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
+  const scoreText = homeScore !== null && awayScore !== null ? `${homeScore} - ${awayScore}` : null;
   const isResult = templateName === "result-card-master.png";
   const isUpdate = templateName === "update-card-master.png";
 
-  drawCenteredTextBlock({
-    ctx,
-    text: leagueName,
-    x: 540,
-    y: 267,
-    maxWidth: 860,
-    fontSize: 24,
-    weight: 700,
-    color: "#F4F7FA",
-  });
-
-  if (isResult) {
-    drawCenteredTextBlock({
-      ctx,
-      text: homeName,
-      x: 280,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 38,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: awayName,
-      x: 800,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 38,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: scoreText ?? "0 - 0",
-      x: 540,
-      y: 520,
-      maxWidth: 280,
-      fontSize: 86,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: venueName,
-      x: 540,
-      y: 842,
-      maxWidth: 500,
-      fontSize: 34,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: kickoffText,
-      x: 540,
-      y: 905,
-      maxWidth: 500,
-      fontSize: 24,
-      weight: 700,
-      color: "#F4F7FA",
-    });
-  } else if (isUpdate) {
-    drawCenteredTextBlock({
-      ctx,
-      text: getUpdateHeadline(fixture.status),
-      x: 540,
-      y: 520,
-      maxWidth: 320,
-      fontSize: 52,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: homeName,
-      x: 280,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 38,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: awayName,
-      x: 800,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 38,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: venueName,
-      x: 540,
-      y: 842,
-      maxWidth: 500,
-      fontSize: 34,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: kickoffText,
-      x: 540,
-      y: 905,
-      maxWidth: 500,
-      fontSize: 24,
-      weight: 700,
-      color: "#F4F7FA",
-    });
-  } else {
-    drawCenteredTextBlock({
-      ctx,
-      text: homeName,
-      x: 280,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 40,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: awayName,
-      x: 800,
-      y: 645,
-      maxWidth: 340,
-      fontSize: 40,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: venueName,
-      x: 540,
-      y: 842,
-      maxWidth: 500,
-      fontSize: 34,
-      weight: 800,
-      color: "#FFFFFF",
-    });
-
-    drawCenteredTextBlock({
-      ctx,
-      text: kickoffText,
-      x: 540,
-      y: 905,
-      maxWidth: 500,
-      fontSize: 24,
-      weight: 700,
-      color: "#F4F7FA",
-    });
-  }
-
-  const textLayer = canvas.toBuffer("image/png");
-
   const composites: sharp.OverlayOptions[] = [];
-
   if (homeBadge) {
-    composites.push({
-      input: homeBadge,
-      left: 150,
-      top: isResult || isUpdate ? 320 : 350,
-    });
+    composites.push({ input: homeBadge, left: 150, top: isResult || isUpdate ? 320 : 350 });
   }
-
   if (awayBadge) {
-    composites.push({
-      input: awayBadge,
-      left: 670,
-      top: isResult || isUpdate ? 320 : 350,
-    });
+    composites.push({ input: awayBadge, left: 670, top: isResult || isUpdate ? 320 : 350 });
   }
-
   composites.push({
-    input: textLayer,
+    input: buildTextLayer({
+      templateName,
+      status: fixture.status,
+      leagueName,
+      homeName,
+      awayName,
+      venueName,
+      kickoffText,
+      scoreText,
+    }),
     left: 0,
     top: 0,
   });
 
-  const output = await base.composite(composites).png().toBuffer();
-  const body = new Uint8Array(output);
+  const output = await sharp(templatePath)
+    .resize(WIDTH, HEIGHT)
+    .composite(composites)
+    .png()
+    .toBuffer();
 
-  return new Response(body, {
+  return new Response(new Uint8Array(output), {
     status: 200,
     headers: {
       "Content-Type": "image/png",
