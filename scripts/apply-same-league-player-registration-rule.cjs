@@ -94,3 +94,5 @@ function write(full, source, message) {
 
   if (source !== original) write(full, source, "Added same-league registration guard to captain Squad.");
 }
+
+require("./apply-player-email-verification.cjs");

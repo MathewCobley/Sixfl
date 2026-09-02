@@ -54,5 +54,5 @@ export async function findSameLeagueRegistrationConflict(input: {
 
 export function sameLeagueRegistrationMessage(conflict: SameLeagueRegistrationConflict) {
   const competition = [conflict.leagueName, conflict.season].filter(Boolean).join(" · ");
-  return `This player is already permanently registered to ${conflict.teamName}${competition ? ` in ${competition}` : " in this league"}. A player can only be permanently registered to one team in the same SIXFL league/season. If they are needed for another team, they must be used as a SIXFL-approved guest for that fixture instead.`;
+  return `This player is already attached to ${conflict.teamName}${competition ? ` in ${competition}` : " in this league"}. A player can only be permanently registered to one team in the same SIXFL league/season. If their email is still pending verification, contact SIXFL rather than creating a second registration. If they are needed for another team, they must be used as a SIXFL-approved guest for that fixture instead.`;
 }
