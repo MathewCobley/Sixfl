@@ -12,6 +12,7 @@ import { backfillUpcomingFixtureConfirmationWarningEmails } from "@/lib/fixtures
 import { reconcilePendingLastMinuteReplacements } from "@/lib/fixtures/last-minute-replacement-resolution";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
+import { runPlayerPoolProfileSmsReminderJob } from "@/lib/player-pool/profile-sms-reminders";
 import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
 import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
@@ -131,6 +132,11 @@ export async function GET(request: NextRequest) {
     failures,
     runCaptainRulesOnboardingEmailJob,
   );
+  const playerPoolProfileSmsReminders = await runCronStep(
+    "player-pool-profile-sms-reminders",
+    failures,
+    runPlayerPoolProfileSmsReminderJob,
+  );
   const fixtureConfirmations = await runCronStep(
     "fixture-confirmation-reminders",
     failures,
@@ -209,6 +215,7 @@ export async function GET(request: NextRequest) {
     existingQueue,
     onboarding,
     rulesOnboarding,
+    playerPoolProfileSmsReminders,
     fixtureConfirmations,
     fixtureConfirmationEmails,
     fixtureConfirmationWarnings,
