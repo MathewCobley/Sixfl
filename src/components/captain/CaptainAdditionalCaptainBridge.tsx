@@ -178,17 +178,17 @@ function installAdditionalCaptainForm(teamId: string) {
   addPlayerSection.insertAdjacentElement("beforebegin", panel);
   const currentCaptains = panel.querySelector<HTMLElement>("[data-current-captains]");
   const status = panel.querySelector<HTMLElement>("[data-captain-status]");
-  const form = panel.querySelector<HTMLFormElement>("[data-additional-captain-form]");
-  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  if (!currentCaptains || !status || !form || !button) return true;
+  if (!currentCaptains || !status) return false;
 
   void renderCaptains(teamId, currentCaptains, status);
 
-  form.addEventListener("submit", async (event) => {
+  const form = panel.querySelector<HTMLFormElement>("[data-additional-captain-form]");
+  form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(form);
-    button.disabled = true;
-    button.textContent = "Adding captain…";
+    status.className = "rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100";
+    status.textContent = "Adding captain…";
+
     const response = await fetch(`/api/captain/team/${encodeURIComponent(teamId)}/additional-captains`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,8 +209,6 @@ function installAdditionalCaptainForm(teamId: string) {
       form.reset();
       await renderCaptains(teamId, currentCaptains, status);
     }
-    button.disabled = false;
-    button.textContent = "Add captain and send login";
   });
 
   return true;
@@ -222,6 +220,7 @@ export default function CaptainAdditionalCaptainBridge() {
   useEffect(() => {
     const teamId = getCaptainSquadTeamId(pathname);
     if (!teamId) return;
+    const resolvedTeamId: string = teamId;
 
     let frame = 0;
     let attempts = 0;
@@ -229,7 +228,7 @@ export default function CaptainAdditionalCaptainBridge() {
     function install() {
       if (disposed) return;
       attempts += 1;
-      const installed = installAdditionalCaptainForm(teamId);
+      const installed = installAdditionalCaptainForm(resolvedTeamId);
       if (!installed && attempts < 60) frame = window.requestAnimationFrame(install);
     }
     frame = window.requestAnimationFrame(install);
