@@ -1,99 +1,140 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const relative = "src/app/captain/team/[teamid]/captain-squad/page.tsx";
-const full = path.join(process.cwd(), relative);
-if (!fs.existsSync(full)) throw new Error(`Missing ${relative}`);
-
-let source = fs.readFileSync(full, "utf8");
-let changed = false;
-
-function replaceOnce(oldText, newText, label) {
-  if (source.includes(newText)) return;
-  if (!source.includes(oldText)) throw new Error(`Could not find ${label}`);
-  source = source.replace(oldText, newText);
-  changed = true;
+function patchFile(relative, patch) {
+  const full = path.join(process.cwd(), relative);
+  if (!fs.existsSync(full)) throw new Error(`Missing ${relative}`);
+  const original = fs.readFileSync(full, "utf8");
+  const updated = patch(original);
+  if (updated !== original) {
+    fs.writeFileSync(full, updated, "utf8");
+    console.log(`Applied player verification changes to ${relative}.`);
+  }
 }
 
-replaceOnce(
-  '  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;\n  const phone = String(formData.get("phone") ?? "").trim() || null;',
-  '  const email = String(formData.get("email") ?? "").trim().toLowerCase();\n  const phone = String(formData.get("phone") ?? "").trim();',
-  "captain player email/phone parsing",
-);
+patchFile("src/app/captain/team/[teamid]/captain-squad/page.tsx", (input) => {
+  let source = input;
 
-replaceOnce(
-  '  if (!displayName) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);\n  }',
-  '  if (!displayName) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);\n  }\n  if (!email) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player email address. The player must verify this address before they count as registered.")}`);\n  }\n  if (!phone) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player mobile/SMS number.")}`);\n  }',
-  "captain player required-field validation",
-);
+  function replaceOnce(oldText, newText, label) {
+    if (source.includes(newText)) return;
+    if (!source.includes(oldText)) throw new Error(`Could not find ${label}`);
+    source = source.replace(oldText, newText);
+  }
 
-replaceOnce(
-  '    select: { id: true, teamMode: true },',
-  '    select: { id: true, name: true, teamMode: true },',
-  "captain player team name select",
-);
+  replaceOnce(
+    '  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;\n  const phone = String(formData.get("phone") ?? "").trim() || null;',
+    '  const email = String(formData.get("email") ?? "").trim().toLowerCase();\n  const phone = String(formData.get("phone") ?? "").trim();',
+    "captain player email/phone parsing",
+  );
 
-replaceOnce(
-  '  let user = email\n    ? await prisma.user.findUnique({ where: { email }, select: { id: true } })\n    : null;',
-  '  let user = await prisma.user.findUnique({\n    where: { email },\n    select: { id: true, emailVerified: true },\n  });',
-  "captain player user lookup",
-);
+  replaceOnce(
+    '  if (!displayName) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);\n  }',
+    '  if (!displayName) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);\n  }\n  if (!email) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player email address. The player must verify this address before they count as registered.")}`);\n  }\n  if (!phone) {\n    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player mobile/SMS number.")}`);\n  }',
+    "captain player required-field validation",
+  );
 
-replaceOnce(
-  '      data: { name: displayName, email },\n      select: { id: true },',
-  '      data: { name: displayName, email },\n      select: { id: true, emailVerified: true },',
-  "captain player user creation select",
-);
+  replaceOnce(
+    '    select: { id: true, teamMode: true },',
+    '    select: { id: true, name: true, teamMode: true },',
+    "captain player team name select",
+  );
 
-replaceOnce(
-  '  revalidatePath(`/captain/team/${teamid}`);\n  revalidatePath(`/captain/team/${teamid}/captain-squad`);',
-  '  await sendDashboardLoginEmail({\n    email,\n    displayName,\n    teamName: team.name,\n    callbackPath: `/player/team/${teamid}`,\n  });\n\n  revalidatePath(`/captain/team/${teamid}`);\n  revalidatePath(`/captain/team/${teamid}/captain-squad`);',
-  "automatic player verification email",
-);
+  replaceOnce(
+    '  let user = email\n    ? await prisma.user.findUnique({ where: { email }, select: { id: true } })\n    : null;',
+    '  let user = await prisma.user.findUnique({\n    where: { email },\n    select: { id: true, emailVerified: true },\n  });',
+    "captain player user lookup",
+  );
 
-replaceOnce(
-  '      return "Player added to your squad.";',
-  '      return "Player added. We have emailed them a verification link. They count as registered once they use that link.";',
-  "player added feedback",
-);
+  replaceOnce(
+    '      data: { name: displayName, email },\n      select: { id: true },',
+    '      data: { name: displayName, email },\n      select: { id: true, emailVerified: true },',
+    "captain player user creation select",
+  );
 
-replaceOnce(
-  '              email: true,\n            },',
-  '              email: true,\n              emailVerified: true,\n            },',
-  "member email verification select",
-);
+  replaceOnce(
+    '  revalidatePath(`/captain/team/${teamid}`);\n  revalidatePath(`/captain/team/${teamid}/captain-squad`);',
+    '  await sendDashboardLoginEmail({\n    email,\n    displayName,\n    teamName: team.name,\n    callbackPath: `/player/team/${teamid}`,\n  });\n\n  revalidatePath(`/captain/team/${teamid}`);\n  revalidatePath(`/captain/team/${teamid}/captain-squad`);',
+    "automatic player verification email",
+  );
 
-replaceOnce(
-  '                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>\n                          {getRoleLabel(member.role)}\n                        </span>',
-  '                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>\n                          {getRoleLabel(member.role)}\n                        </span>\n                        {member.user.emailVerified ? (\n                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Email verified</span>\n                        ) : (\n                          <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">Pending verification</span>\n                        )}',
-  "verification status badge",
-);
+  replaceOnce(
+    '      return "Player added to your squad.";',
+    '      return "Player added. We have emailed them a secure link. They count as registered once their email has been verified.";',
+    "player added feedback",
+  );
 
-replaceOnce(
-  '                Add a basic player record now so they can be picked for goals, assists and Player of the Match. Add an email if you want to send a dashboard login link.',
-  '                Enter the player name, email and mobile number. We will email the player a secure verification link. Until they use it, they are shown as pending and do not count as a verified registered player.',
-  "captain player form guidance",
-);
+  replaceOnce(
+    '              email: true,\n            },',
+    '              email: true,\n              emailVerified: true,\n            },',
+    "member email verification select",
+  );
 
-replaceOnce(
-  '                  <span>Email optional</span>\n                  <input\n                    name="email"\n                    type="email"',
-  '                  <span>Email</span>\n                  <input\n                    name="email"\n                    type="email"\n                    required',
-  "required email field",
-);
+  replaceOnce(
+    '                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>\n                          {getRoleLabel(member.role)}\n                        </span>',
+    '                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>\n                          {getRoleLabel(member.role)}\n                        </span>\n                        {member.user.emailVerified ? (\n                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-100">Email verified</span>\n                        ) : (\n                          <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-100">Pending verification</span>\n                        )}',
+    "verification status badge",
+  );
 
-replaceOnce(
-  '                  <span>Phone optional</span>\n                  <input\n                    name="phone"',
-  '                  <span>Mobile / SMS number</span>\n                  <input\n                    name="phone"\n                    required',
-  "required phone field",
-);
+  replaceOnce(
+    '                Add a basic player record now so they can be picked for goals, assists and Player of the Match. Add an email if you want to send a dashboard login link.',
+    '                Enter the player name, email and mobile number. We will email the player a secure verification/sign-in link. Until they use it, they are shown as pending and cannot be selected as a registered player.',
+    "captain player form guidance",
+  );
 
-if (!source.includes("Pending verification")) throw new Error("Verification badge was not installed.");
-if (!source.includes("The player must verify this address")) throw new Error("Server-side email requirement was not installed.");
-if (!source.includes("await sendDashboardLoginEmail({\n    email,")) throw new Error("Automatic verification email was not installed.");
+  replaceOnce(
+    '                  <span>Email optional</span>\n                  <input\n                    name="email"\n                    type="email"',
+    '                  <span>Email</span>\n                  <input\n                    name="email"\n                    type="email"\n                    required',
+    "required email field",
+  );
 
-if (changed) {
-  fs.writeFileSync(full, source, "utf8");
-  console.log("Player registration now requires email/mobile and email verification.");
-} else {
-  console.log("Player email verification already applied.");
-}
+  replaceOnce(
+    '                  <span>Phone optional</span>\n                  <input\n                    name="phone"',
+    '                  <span>Mobile / SMS number</span>\n                  <input\n                    name="phone"\n                    required',
+    "required phone field",
+  );
+
+  if (!source.includes("Pending verification")) throw new Error("Verification badge was not installed.");
+  if (!source.includes("The player must verify this address")) throw new Error("Server-side email requirement was not installed.");
+  if (!source.includes("await sendDashboardLoginEmail({\n    email,")) throw new Error("Automatic verification email was not installed.");
+
+  return source;
+});
+
+patchFile("src/app/captain/team/[teamid]/fixtures/[fixtureId]/selection/actions.ts", (input) => {
+  let source = input;
+
+  if (!source.includes("emailVerified: true,")) {
+    const anchor = '            name: true,\n            email: true,\n          },';
+    if (!source.includes(anchor)) throw new Error("Fixture selection player email anchor not found.");
+    source = source.replace(anchor, '            name: true,\n            email: true,\n            emailVerified: true,\n          },');
+  }
+
+  if (!source.includes("This player has not verified their email address")) {
+    const anchor = '  if (!membership) {\n    redirect(buildSelectionRedirect(teamid, fixtureId, "?error=Team%20member%20not%20found."));\n  }\n\n  await prisma.$transaction';
+    const replacement = '  if (!membership) {\n    redirect(buildSelectionRedirect(teamid, fixtureId, "?error=Team%20member%20not%20found."));\n  }\n\n  if (selectionStatus !== "NOT_SELECTED" && !membership.user.emailVerified) {\n    redirect(\n      buildSelectionRedirect(\n        teamid,\n        fixtureId,\n        `?error=${encodeURIComponent("This player has not verified their email address yet, so they are not eligible to be selected as a registered player.")}`,\n      ),\n    );\n  }\n\n  await prisma.$transaction';
+    if (!source.includes(anchor)) throw new Error("Fixture selection verification guard anchor not found.");
+    source = source.replace(anchor, replacement);
+  }
+
+  return source;
+});
+
+patchFile("src/auth.ts", (input) => {
+  let source = input;
+
+  if (!source.includes('async signIn({ user, account })')) {
+    if (!source.includes('async signIn({ user })')) throw new Error("NextAuth sign-in event anchor not found.");
+    source = source.replace('async signIn({ user })', 'async signIn({ user, account })');
+  }
+
+  if (!source.includes('emailVerified: new Date()')) {
+    const anchor = '    async signIn({ user, account }) {\n      await Promise.all([';
+    const replacement = '    async signIn({ user, account }) {\n      if (account?.provider === "email" && user.id) {\n        await prisma.user.update({\n          where: { id: user.id },\n          data: { emailVerified: new Date() },\n        });\n      }\n\n      await Promise.all([';
+    if (!source.includes(anchor)) throw new Error("NextAuth email verification event anchor not found.");
+    source = source.replace(anchor, replacement);
+  }
+
+  return source;
+});
+
+console.log("Player registration now requires a real, verified email before match selection.");
