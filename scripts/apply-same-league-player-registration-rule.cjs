@@ -101,9 +101,6 @@ function write(full, source, message) {
   }
 
   if (!source.includes("sameLeagueRegistrationMessage(sameLeagueConflict)")) {
-    // Other compatibility scripts can change the exact user-lookup block before this
-    // script runs. Insert the guard immediately before user creation instead of
-    // depending on a brittle multi-line legacy anchor.
     const creationAnchor = "  if (!user) {\n    user = await prisma.user.create({";
     if (!source.includes(creationAnchor)) {
       console.warn(
@@ -129,4 +126,4 @@ function write(full, source, message) {
   if (source !== original) write(full, source, "Added same-league registration guard to captain Squad.");
 }
 
-require("./apply-player-email-verification.cjs");
+require("./apply-player-email-verification-v2.cjs");
