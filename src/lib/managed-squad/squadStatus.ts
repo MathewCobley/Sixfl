@@ -218,6 +218,35 @@ export async function getTeamMemberSquadStatusMap(teamId: string, db: DbClient =
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+async function persistSquadStatus(input: {
+  db: DbClient;
+  teamId: string;
+  membershipId: string;
+  status: TeamMemberSquadStatus;
+  note: string | null;
+}) {
+  const rows = await input.db.$queryRaw<Array<{ squadStatus: string }>>(Prisma.sql`
+    UPDATE "TeamMember"
+    SET
+      "squadStatus" = ${input.status},
+      "squadStatusUpdatedAt" = NOW(),
+      "squadStatusNote" = ${input.note}
+    WHERE "id" = ${input.membershipId}
+      AND "teamId" = ${input.teamId}
+    RETURNING "squadStatus"
+  `);
+
+  if (rows.length === 0) return false;
+
+  if (rows[0]?.squadStatus !== input.status) {
+    throw new Error(
+      `Squad status persistence mismatch for ${input.membershipId}: expected ${input.status}, got ${rows[0]?.squadStatus ?? "missing"}.`,
+    );
+  }
+
+  return true;
+}
+
 export async function setTeamMemberSquadStatus(input: {
   teamId: string;
   membershipId: string;
@@ -230,19 +259,17 @@ export async function setTeamMemberSquadStatus(input: {
 
   const note = input.note?.trim() || null;
 
-  const updated = await db.$executeRaw(Prisma.sql`
-    UPDATE "TeamMember"
-    SET
-      "squadStatus" = ${input.status},
-      "squadStatusUpdatedAt" = NOW(),
-      "squadStatusNote" = ${note}
-    WHERE "id" = ${input.membershipId}
-      AND "teamId" = ${input.teamId}
-  `);
+  const didUpdate = await persistSquadStatus({
+    db,
+    teamId: input.teamId,
+    membershipId: input.membershipId,
+    status: input.status,
+    note,
+  });
 
-  const didUpdate = Number(updated) > 0;
+  if (!didUpdate) return false;
 
-  if (didUpdate && input.status === "INJURED") {
+  if (input.status === "INJURED") {
     await cancelQueuedAvailabilityChasesForUnavailablePlayer({
       membershipId: input.membershipId,
       db,
@@ -250,7 +277,7 @@ export async function setTeamMemberSquadStatus(input: {
     });
   }
 
-  if (didUpdate && input.status === "INACTIVE") {
+  if (input.status === "INACTIVE") {
     await Promise.all([
       runInactiveCleanupSafely("availability chases", () =>
         cancelQueuedAvailabilityChasesForUnavailablePlayer({
@@ -267,7 +294,37 @@ export async function setTeamMemberSquadStatus(input: {
         }),
       ),
     ]);
+
+    // The status is the source of truth. Write it once more after all cleanup so
+    // no cleanup-side effect, legacy trigger or overlapping request can leave a
+    // former player looking ACTIVE again after the captain has saved INACTIVE.
+    const stillInactive = await persistSquadStatus({
+      db,
+      teamId: input.teamId,
+      membershipId: input.membershipId,
+      status: "INACTIVE",
+      note,
+    });
+
+    if (!stillInactive) {
+      throw new Error(`Inactive squad member disappeared while saving ${input.membershipId}.`);
+    }
   }
 
-  return didUpdate;
+  const persistedRows = await db.$queryRaw<Array<{ squadStatus: string }>>(Prisma.sql`
+    SELECT "squadStatus"
+    FROM "TeamMember"
+    WHERE "id" = ${input.membershipId}
+      AND "teamId" = ${input.teamId}
+    LIMIT 1
+  `);
+  const persistedStatus = persistedRows[0]?.squadStatus ?? null;
+
+  if (persistedStatus !== input.status) {
+    throw new Error(
+      `Squad status did not remain saved for ${input.membershipId}: expected ${input.status}, got ${persistedStatus ?? "missing"}.`,
+    );
+  }
+
+  return true;
 }
