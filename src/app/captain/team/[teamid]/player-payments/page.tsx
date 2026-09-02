@@ -78,7 +78,7 @@ export default async function SquadPaymentsPage(props: Props) {
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-amber-50/75 sm:text-base">
             SIXFL sends individual payment links by email. Every player who is still part of
-            the current squad must therefore have an email address saved before {team.name}
+            the current squad must therefore have an email address saved before {team.name}{" "}
             can set up or update Squad payments.
           </p>
 
