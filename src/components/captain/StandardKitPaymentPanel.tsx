@@ -17,6 +17,8 @@ type KitPaymentRequest = {
   amountPence: number;
   paidPence: number;
   outstandingPence: number;
+  kitFundPaidPence: number;
+  externalPaidPence: number;
   status: "OPEN" | "PAID" | "CANCELLED";
   paymentUrl: string | null;
   createdAt: string;
@@ -27,6 +29,11 @@ type PaymentResponse = {
   requests?: KitPaymentRequest[];
   emailsQueued?: number;
   emailsFailed?: number;
+  error?: string;
+};
+
+type CancelPaymentResponse = {
+  ok?: boolean;
   error?: string;
 };
 
@@ -43,6 +50,7 @@ export default function StandardKitPaymentPanel({ teamId }: { teamId: string }) 
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,6 +145,41 @@ export default function StandardKitPaymentPanel({ teamId }: { teamId: string }) 
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function cancelRequest(request: KitPaymentRequest) {
+    const confirmed = window.confirm(
+      `Cancel ${request.payerName}'s ${formatMoney(request.amountPence)} kit payment request?`,
+    );
+    if (!confirmed) return;
+
+    setCancellingRequestId(request.id);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/captain/team/${encodeURIComponent(teamId)}/extra-kit-payments/${encodeURIComponent(request.id)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response.json().catch(() => null)) as CancelPaymentResponse | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "The kit payment request could not be cancelled.");
+      }
+
+      setMessage(`${request.payerName}'s kit payment request was cancelled.`);
+      await load();
+      router.refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The kit payment request could not be cancelled.",
+      );
+    } finally {
+      setCancellingRequestId(null);
     }
   }
 
@@ -282,15 +325,34 @@ export default function StandardKitPaymentPanel({ teamId }: { teamId: string }) 
                           : "Awaiting payment"}
                     </span>
                   </div>
-                  {request.paymentUrl ? (
-                    <a
-                      href={request.paymentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
-                    >
-                      Open payment link
-                    </a>
+                  {request.paymentUrl ||
+                  (request.status === "OPEN" &&
+                    (request.externalPaidPence ?? request.paidPence) <= 0) ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      {request.paymentUrl ? (
+                        <a
+                          href={request.paymentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex text-xs font-semibold text-sky-200 underline decoration-sky-400/40 underline-offset-4"
+                        >
+                          Open payment link
+                        </a>
+                      ) : null}
+                      {request.status === "OPEN" &&
+                      (request.externalPaidPence ?? request.paidPence) <= 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => void cancelRequest(request)}
+                          disabled={cancellingRequestId === request.id}
+                          className="inline-flex text-xs font-semibold text-red-200 underline decoration-red-400/40 underline-offset-4 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {cancellingRequestId === request.id
+                            ? "Cancelling…"
+                            : "Cancel request"}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               ))
