@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { buildThreadReplyAddress } from "@/lib/email/reply-address";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getMessageThreadById } from "@/lib/messaging/service";
@@ -170,7 +171,16 @@ export async function sendAdminEmailReplyAction(formData: FormData) {
   try {
     const now = new Date();
     const subject = getReplySubject(thread);
-    const replyTo = thread.replyAddress?.trim() || "hello@sixfl.co.uk";
+    let replyTo = thread.replyAddress?.trim() || null;
+
+    if (!replyTo) {
+      replyTo = buildThreadReplyAddress(thread.id);
+      await prisma.messageThread.update({
+        where: { id: thread.id },
+        data: { replyAddress: replyTo },
+      });
+    }
+
     const html = buildManualReplyHtml({
       body,
       teamName: thread.team?.name ?? thread.contactName ?? null,
