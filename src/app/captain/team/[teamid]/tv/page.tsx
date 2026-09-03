@@ -9,6 +9,7 @@ import SixflTvFixtureMatchup from "@/components/sixfl-tv/SixflTvFixtureMatchup";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getSixflTvVideos } from "@/lib/sixfl-tv/videos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,19 +41,6 @@ function formatDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function getVideoUrls(value: string | null | undefined) {
-  return (value ?? "")
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function getVideoLabel(index: number) {
-  if (index === 0) return "Match highlights ▶";
-  if (index === 1) return "Full match ▶";
-  return `Extra clip ${index - 1} ▶`;
 }
 
 function getOpponent(row: TvFixtureRow, teamId: string) {
@@ -106,7 +94,7 @@ export default async function CaptainSixflTvPage({
   `);
 
   const totalVideos = fixtures.reduce(
-    (sum, fixture) => sum + getVideoUrls(fixture.sixflTvUrl).length,
+    (sum, fixture) => sum + getSixflTvVideos(fixture.sixflTvUrl).length,
     0,
   );
 
@@ -151,7 +139,7 @@ export default async function CaptainSixflTvPage({
             </div>
           ) : (
             fixtures.map((fixture) => {
-              const urls = getVideoUrls(fixture.sixflTvUrl);
+              const videos = getSixflTvVideos(fixture.sixflTvUrl);
               const accessibleTitle =
                 fixture.homeScore !== null && fixture.awayScore !== null
                   ? `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`
@@ -163,22 +151,14 @@ export default async function CaptainSixflTvPage({
                     <div className="min-w-0 flex-1">
                       <h3 className="sr-only">{accessibleTitle}</h3>
                       <SixflTvFixtureMatchup
-                        homeTeam={{
-                          name: fixture.homeTeamName,
-                          logoUrl: fixture.homeTeamLogoUrl,
-                        }}
-                        awayTeam={{
-                          name: fixture.awayTeamName,
-                          logoUrl: fixture.awayTeamLogoUrl,
-                        }}
+                        homeTeam={{ name: fixture.homeTeamName, logoUrl: fixture.homeTeamLogoUrl }}
+                        awayTeam={{ name: fixture.awayTeamName, logoUrl: fixture.awayTeamLogoUrl }}
                         homeScore={fixture.homeScore}
                         awayScore={fixture.awayScore}
                       />
 
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-white/60">
-                          Opponent: {getOpponent(fixture, team.id)}
-                        </span>
+                        <span className="text-white/60">Opponent: {getOpponent(fixture, team.id)}</span>
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55">
                           {fixture.status.toLowerCase()}
                         </span>
@@ -189,15 +169,15 @@ export default async function CaptainSixflTvPage({
                     </div>
 
                     <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-                      {urls.map((url, index) => (
+                      {videos.map((video) => (
                         <a
-                          key={`${fixture.id}-${url}`}
-                          href={url}
+                          key={`${fixture.id}-${video.kind}-${video.url}`}
+                          href={video.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
                         >
-                          {getVideoLabel(index)}
+                          {video.label} ▶
                         </a>
                       ))}
                     </div>
