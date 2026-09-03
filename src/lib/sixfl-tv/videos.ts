@@ -48,8 +48,6 @@ export function parseSixflTvVideoValue(value: string | null | undefined): SixflT
   const trimmed = original.trim();
   if (!trimmed) return emptySixflTvVideoSet();
 
-  // Read the short-lived structured format too, so this remains safe if any
-  // value was saved while the richer editor was being developed.
   if (trimmed.startsWith("{")) {
     try {
       const parsed = JSON.parse(trimmed) as StoredVideoSetV2;
@@ -66,8 +64,8 @@ export function parseSixflTvVideoValue(value: string | null | undefined): SixflT
     }
   }
 
-  // Line positions are meaningful. In particular a leading blank line means
-  // there are no highlights and line 2 is a full-match-only video.
+  // Line positions are meaningful. A leading blank line means there are no
+  // highlights and line 2 is a full-match-only video.
   const rawLines = original.includes("\n")
     ? original.replace(/\r/g, "").split("\n")
     : original.split(",");
@@ -131,15 +129,25 @@ export function buildSixflTvVideoValue(input: {
   const storedValue = slots.join("\n");
   const videos = getSixflTvVideos(storedValue);
 
-  return {
-    ok: true as const,
-    value: storedValue,
-    count: videos.length,
-    videos,
-  };
+  return { ok: true as const, value: storedValue, count: videos.length, videos };
 }
 
 export function normaliseExistingSixflTvVideoValue(value: string | null | undefined) {
-  const parsed = parseSixflTvVideoValue(value);
-  return buildSixflTvVideoValue(parsed);
+  const original = value ?? "";
+  if (!original.trim()) return buildSixflTvVideoValue({});
+
+  const trimmed = original.trim();
+  if (!trimmed.startsWith("{")) {
+    const rawParts = original.includes("\n")
+      ? original.replace(/\r/g, "").split("\n")
+      : original.split(",");
+    const invalid = rawParts
+      .filter((part) => part.trim())
+      .some((part) => !normaliseSixflTvUrl(part));
+    if (invalid) {
+      return { ok: false as const, value: null, count: 0, videos: [] as SixflTvVideo[] };
+    }
+  }
+
+  return buildSixflTvVideoValue(parseSixflTvVideoValue(original));
 }
