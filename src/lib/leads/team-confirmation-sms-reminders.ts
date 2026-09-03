@@ -241,7 +241,33 @@ async function queueTeamLeadSms(input: {
     },
   });
 
-  await logNotificationDispatchToThread({ dispatch, recipient });
+  // The dispatch keeps its stage-specific source type so the database can enforce
+  // one first/final reminder per lead. The inbox thread itself must stay attached
+  // to the underlying LEAD, otherwise a manual reply inherits the automation
+  // source type and collides with that uniqueness rule.
+  await prisma.messageThread.updateMany({
+    where: {
+      sourceId: lead.leadId,
+      sourceType: {
+        in: [
+          TEAM_LEAD_CONFIRMATION_SMS_FIRST_SOURCE_TYPE,
+          TEAM_LEAD_CONFIRMATION_SMS_FINAL_SOURCE_TYPE,
+        ],
+      },
+    },
+    data: {
+      sourceType: "LEAD",
+    },
+  });
+
+  await logNotificationDispatchToThread({
+    dispatch: {
+      ...dispatch,
+      sourceType: "LEAD",
+      sourceId: lead.leadId,
+    },
+    recipient,
+  });
   return dispatch;
 }
 
