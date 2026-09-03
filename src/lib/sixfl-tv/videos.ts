@@ -44,12 +44,15 @@ export function emptySixflTvVideoSet(): SixflTvVideoSet {
 }
 
 export function parseSixflTvVideoValue(value: string | null | undefined): SixflTvVideoSet {
-  const raw = value?.trim();
-  if (!raw) return emptySixflTvVideoSet();
+  const original = value ?? "";
+  const trimmed = original.trim();
+  if (!trimmed) return emptySixflTvVideoSet();
 
-  if (raw.startsWith("{")) {
+  // Read the short-lived structured format too, so this remains safe if any
+  // value was saved while the richer editor was being developed.
+  if (trimmed.startsWith("{")) {
     try {
-      const parsed = JSON.parse(raw) as StoredVideoSetV2;
+      const parsed = JSON.parse(trimmed) as StoredVideoSetV2;
       if (parsed?.v === 2) {
         const highlights = normaliseSixflTvUrl(parsed.highlights);
         const fullMatch = normaliseSixflTvUrl(parsed.fullMatch);
@@ -59,16 +62,23 @@ export function parseSixflTvVideoValue(value: string | null | undefined): SixflT
         return { highlights, fullMatch, extras };
       }
     } catch {
-      // Fall through to the legacy newline format.
+      // Fall through to the line-based format.
     }
   }
 
-  const legacy = unique(raw.split(/[\n,]+/));
-  return {
-    highlights: legacy[0] ?? null,
-    fullMatch: legacy[1] ?? null,
-    extras: legacy.slice(2),
-  };
+  // Line positions are meaningful. In particular a leading blank line means
+  // there are no highlights and line 2 is a full-match-only video.
+  const rawLines = original.includes("\n")
+    ? original.replace(/\r/g, "").split("\n")
+    : original.split(",");
+  const lines = rawLines.map((line) => normaliseSixflTvUrl(line));
+  const highlights = lines[0] ?? null;
+  const fullMatch = lines[1] ?? null;
+  const extras = unique(rawLines.slice(2)).filter(
+    (url) => url !== highlights && url !== fullMatch,
+  );
+
+  return { highlights, fullMatch, extras };
 }
 
 export function getSixflTvVideos(value: string | null | undefined): SixflTvVideo[] {
@@ -104,26 +114,32 @@ export function buildSixflTvVideoValue(input: {
   const supplied = [input.highlights, input.fullMatch, ...rawExtras].filter(
     (value): value is string => Boolean(value?.trim()),
   );
-  const invalid = supplied.find((value) => !normaliseSixflTvUrl(value));
-  if (invalid) {
+  if (supplied.some((value) => !normaliseSixflTvUrl(value))) {
     return { ok: false as const, value: null, count: 0, videos: [] as SixflTvVideo[] };
   }
 
   const highlights = normaliseSixflTvUrl(input.highlights);
   const fullMatch = normaliseSixflTvUrl(input.fullMatch);
   const extras = unique(rawExtras).filter((url) => url !== highlights && url !== fullMatch);
-  const videos = getSixflTvVideos(
-    JSON.stringify({ v: 2, highlights, fullMatch, extras } satisfies StoredVideoSetV2),
-  );
 
-  if (videos.length === 0) {
-    return { ok: true as const, value: null, count: 0, videos };
+  if (!highlights && !fullMatch && extras.length === 0) {
+    return { ok: true as const, value: null, count: 0, videos: [] as SixflTvVideo[] };
   }
+
+  const slots = [highlights ?? "", fullMatch ?? "", ...extras];
+  while (slots.length > 0 && !slots[slots.length - 1]) slots.pop();
+  const storedValue = slots.join("\n");
+  const videos = getSixflTvVideos(storedValue);
 
   return {
     ok: true as const,
-    value: JSON.stringify({ v: 2, highlights, fullMatch, extras } satisfies StoredVideoSetV2),
+    value: storedValue,
     count: videos.length,
     videos,
   };
+}
+
+export function normaliseExistingSixflTvVideoValue(value: string | null | undefined) {
+  const parsed = parseSixflTvVideoValue(value);
+  return buildSixflTvVideoValue(parsed);
 }
