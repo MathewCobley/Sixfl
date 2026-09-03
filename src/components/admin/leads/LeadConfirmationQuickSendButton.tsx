@@ -239,7 +239,8 @@ export default function LeadConfirmationQuickSendButton({
         </div>
       ) : smsStatusFailed ? (
         <div className="max-w-[190px] text-right text-[11px] leading-4 text-amber-200/70">
-          Automatic SMS status unavailable
+          <div>SMS status display unavailable</div>
+          <div className="text-white/35">This does not mean SMS is disabled.</div>
         </div>
       ) : null}
     </div>

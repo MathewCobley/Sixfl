@@ -42,34 +42,34 @@ type TeamLeadSmsStatusRow = {
   latestInboundAt: Date | null;
   firstStatus: string | null;
   firstCreatedAt: Date | null;
+  firstUpdatedAt: Date | null;
   firstScheduledFor: Date | null;
-  firstProcessingAt: Date | null;
   firstProcessedAt: Date | null;
   firstSentAt: Date | null;
   firstFailedAt: Date | null;
   firstCancelledAt: Date | null;
-  firstErrorMessage: string | null;
+  firstFailureReason: string | null;
   finalStatus: string | null;
   finalCreatedAt: Date | null;
+  finalUpdatedAt: Date | null;
   finalScheduledFor: Date | null;
-  finalProcessingAt: Date | null;
   finalProcessedAt: Date | null;
   finalSentAt: Date | null;
   finalFailedAt: Date | null;
   finalCancelledAt: Date | null;
-  finalErrorMessage: string | null;
+  finalFailureReason: string | null;
 };
 
 type DispatchSnapshot = {
   status: string | null;
   createdAt: Date | null;
+  updatedAt: Date | null;
   scheduledFor: Date | null;
-  processingAt: Date | null;
   processedAt: Date | null;
   sentAt: Date | null;
   failedAt: Date | null;
   cancelledAt: Date | null;
-  errorMessage: string | null;
+  failureReason: string | null;
 };
 
 function formatDateTime(value: Date) {
@@ -108,16 +108,16 @@ function dispatchStatusLine(
   }
 
   if (dispatch.status === "FAILED") {
-    const failedAt = dispatch.failedAt ?? dispatch.processedAt ?? dispatch.createdAt;
+    const failedAt = dispatch.failedAt ?? dispatch.processedAt ?? dispatch.updatedAt ?? dispatch.createdAt;
     return {
       text: failedAt ? `${label} failed ${formatDateTime(failedAt)}` : `${label} failed`,
       tone: "danger",
-      title: dispatch.errorMessage,
+      title: dispatch.failureReason,
     };
   }
 
   if (dispatch.status === "PROCESSING") {
-    const processingAt = dispatch.processingAt ?? dispatch.createdAt;
+    const processingAt = dispatch.updatedAt ?? dispatch.createdAt;
     return {
       text: processingAt
         ? `${label} sending ${formatDateTime(processingAt)}`
@@ -138,13 +138,13 @@ function dispatchStatusLine(
   }
 
   if (dispatch.status === "CANCELLED") {
-    const cancelledAt = dispatch.cancelledAt ?? dispatch.processedAt ?? dispatch.createdAt;
+    const cancelledAt = dispatch.cancelledAt ?? dispatch.processedAt ?? dispatch.updatedAt ?? dispatch.createdAt;
     return {
       text: cancelledAt
         ? `${label} not sent ${formatDateTime(cancelledAt)}`
         : `${label} not sent`,
       tone: "warning",
-      title: dispatch.errorMessage,
+      title: dispatch.failureReason,
     };
   }
 
@@ -176,24 +176,24 @@ function buildStatus(row: TeamLeadSmsStatusRow, now: Date): TeamLeadSmsStatus {
   const firstDispatch: DispatchSnapshot = {
     status: row.firstStatus,
     createdAt: row.firstCreatedAt,
+    updatedAt: row.firstUpdatedAt,
     scheduledFor: row.firstScheduledFor,
-    processingAt: row.firstProcessingAt,
     processedAt: row.firstProcessedAt,
     sentAt: row.firstSentAt,
     failedAt: row.firstFailedAt,
     cancelledAt: row.firstCancelledAt,
-    errorMessage: row.firstErrorMessage,
+    failureReason: row.firstFailureReason,
   };
   const finalDispatch: DispatchSnapshot = {
     status: row.finalStatus,
     createdAt: row.finalCreatedAt,
+    updatedAt: row.finalUpdatedAt,
     scheduledFor: row.finalScheduledFor,
-    processingAt: row.finalProcessingAt,
     processedAt: row.finalProcessedAt,
     sentAt: row.finalSentAt,
     failedAt: row.finalFailedAt,
     cancelledAt: row.finalCancelledAt,
-    errorMessage: row.finalErrorMessage,
+    failureReason: row.finalFailureReason,
   };
 
   const firstLine = dispatchStatusLine("First SMS", firstDispatch, now);
@@ -298,22 +298,22 @@ export async function GET() {
       ) AS "latestInboundAt",
       first_sms."status"::text AS "firstStatus",
       first_sms."createdAt" AS "firstCreatedAt",
+      first_sms."updatedAt" AS "firstUpdatedAt",
       first_sms."scheduledFor" AS "firstScheduledFor",
-      first_sms."processingAt" AS "firstProcessingAt",
       first_sms."processedAt" AS "firstProcessedAt",
       first_sms."sentAt" AS "firstSentAt",
       first_sms."failedAt" AS "firstFailedAt",
       first_sms."cancelledAt" AS "firstCancelledAt",
-      first_sms."errorMessage" AS "firstErrorMessage",
+      first_sms."failureReason" AS "firstFailureReason",
       final_sms."status"::text AS "finalStatus",
       final_sms."createdAt" AS "finalCreatedAt",
+      final_sms."updatedAt" AS "finalUpdatedAt",
       final_sms."scheduledFor" AS "finalScheduledFor",
-      final_sms."processingAt" AS "finalProcessingAt",
       final_sms."processedAt" AS "finalProcessedAt",
       final_sms."sentAt" AS "finalSentAt",
       final_sms."failedAt" AS "finalFailedAt",
       final_sms."cancelledAt" AS "finalCancelledAt",
-      final_sms."errorMessage" AS "finalErrorMessage"
+      final_sms."failureReason" AS "finalFailureReason"
     FROM "InterestLead" lead
     JOIN "LeadTeamConfirmation" confirmation
       ON confirmation."leadId" = lead."id"
@@ -333,13 +333,13 @@ export async function GET() {
       SELECT
         dispatch."status",
         dispatch."createdAt",
+        dispatch."updatedAt",
         dispatch."scheduledFor",
-        dispatch."processingAt",
         dispatch."processedAt",
         dispatch."sentAt",
         dispatch."failedAt",
         dispatch."cancelledAt",
-        dispatch."errorMessage"
+        dispatch."failureReason"
       FROM "NotificationDispatch" dispatch
       WHERE dispatch."sourceId" = lead."id"
         AND dispatch."sourceType" = ${FIRST_SMS_SOURCE_TYPE}
@@ -353,13 +353,13 @@ export async function GET() {
       SELECT
         dispatch."status",
         dispatch."createdAt",
+        dispatch."updatedAt",
         dispatch."scheduledFor",
-        dispatch."processingAt",
         dispatch."processedAt",
         dispatch."sentAt",
         dispatch."failedAt",
         dispatch."cancelledAt",
-        dispatch."errorMessage"
+        dispatch."failureReason"
       FROM "NotificationDispatch" dispatch
       WHERE dispatch."sourceId" = lead."id"
         AND dispatch."sourceType" = ${FINAL_SMS_SOURCE_TYPE}
