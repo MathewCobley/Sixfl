@@ -1,11 +1,6 @@
 import Link from "next/link";
 
-function getFirstUrl(value: string | null | undefined) {
-  return (value ?? "")
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .find(Boolean) ?? null;
-}
+import { getFirstSixflTvUrl } from "@/lib/sixfl-tv/videos";
 
 export default function SixflTvFixtureBadge({
   recorded,
@@ -14,7 +9,7 @@ export default function SixflTvFixtureBadge({
   recorded: boolean;
   url?: string | null;
 }) {
-  const firstUrl = getFirstUrl(url);
+  const firstUrl = getFirstSixflTvUrl(url);
   if (!recorded && !firstUrl) return null;
 
   const className =

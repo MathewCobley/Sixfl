@@ -6,6 +6,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import {
+  buildSixflTvVideoValue,
+  getSixflTvVideos,
+  parseSixflTvVideoValue,
+} from "@/lib/sixfl-tv/videos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,53 +36,6 @@ function formatKickoff(value: Date) {
     minute: "2-digit",
     timeZone: "Europe/London",
   }).format(value);
-}
-
-function normaliseVideoUrl(value: string) {
-  const raw = value.trim();
-  if (!raw) return null;
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function parseVideoLinks(value: unknown) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return { ok: true as const, value: null, count: 0, links: [] as string[] };
-
-  const parts = raw
-    .split(/[\n,]+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const normalised: string[] = [];
-  for (const part of parts) {
-    const url = normaliseVideoUrl(part);
-    if (!url) return { ok: false as const, value: null, count: 0, links: [] as string[] };
-    if (!normalised.includes(url)) normalised.push(url);
-  }
-
-  return {
-    ok: true as const,
-    value: normalised.length ? normalised.join("\n") : null,
-    count: normalised.length,
-    links: normalised,
-  };
-}
-
-function getSavedLinks(value: string | null) {
-  return parseVideoLinks(value).links;
-}
-
-function getVideoLinkLabel(index: number) {
-  if (index === 0) return "Open match highlights";
-  if (index === 1) return "Open full match";
-  return `Open extra clip ${index - 1}`;
 }
 
 async function getSixflTvFixtures() {
@@ -109,7 +67,9 @@ async function saveSixflTvFixtureAction(formData: FormData) {
   await requireAdmin();
 
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
-  const rawUrl = String(formData.get("sixflTvUrl") ?? "").trim();
+  const highlights = String(formData.get("highlightsUrl") ?? "");
+  const fullMatch = String(formData.get("fullMatchUrl") ?? "");
+  const extras = String(formData.get("extraUrls") ?? "");
   const markedRecorded = formData.get("sixflTvRecorded") === "on";
   const action = String(formData.get("action") ?? "save");
 
@@ -125,7 +85,7 @@ async function saveSixflTvFixtureAction(formData: FormData) {
       WHERE "id" = ${fixtureId}
     `);
   } else {
-    const parsed = parseVideoLinks(rawUrl);
+    const parsed = buildSixflTvVideoValue({ highlights, fullMatch, extras });
 
     if (!parsed.ok) {
       redirect("/admin/sixfl-tv?error=invalid-url");
@@ -163,7 +123,10 @@ export default async function AdminSixflTvPage({
 
   const sp = (await searchParams) ?? {};
   const fixtures = await getSixflTvFixtures();
-  const totalLinks = fixtures.reduce((sum, fixture) => sum + getSavedLinks(fixture.sixflTvUrl).length, 0);
+  const totalLinks = fixtures.reduce(
+    (sum, fixture) => sum + getSixflTvVideos(fixture.sixflTvUrl).length,
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -173,7 +136,7 @@ export default async function AdminSixflTvPage({
         </p>
         <h1 className="mt-2 text-3xl font-black text-white">Recorded fixture dashboard</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-fuchsia-50/75">
-          View, edit, open, or remove SIXFL TV/Veo links. Use one line per clip: line 1 is Match Highlights, line 2 is Full Match, and line 3 onwards are extra clips.
+          Add match highlights, a full match, or both. Either field can be left blank, so a match can be published as full-match-only when no highlights are available. Extra clips are optional.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
@@ -193,7 +156,7 @@ export default async function AdminSixflTvPage({
 
       {sp.error === "invalid-url" ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
-          Enter valid http or https video links, one per line.
+          Enter valid http or https video links. Highlights and full match are separate optional fields; enter extra clips one per line.
         </div>
       ) : null}
 
@@ -213,12 +176,11 @@ export default async function AdminSixflTvPage({
           ) : (
             fixtures.map((fixture) => {
               const fixtureLabel = `${fixture.homeTeamName} vs ${fixture.awayTeamName}`;
-              const context = [
-                fixture.leagueName,
-                fixture.leagueSeason,
-                fixture.venueName,
-              ].filter(Boolean).join(" · ");
-              const links = getSavedLinks(fixture.sixflTvUrl);
+              const context = [fixture.leagueName, fixture.leagueSeason, fixture.venueName]
+                .filter(Boolean)
+                .join(" · ");
+              const saved = parseSixflTvVideoValue(fixture.sixflTvUrl);
+              const videos = getSixflTvVideos(fixture.sixflTvUrl);
 
               return (
                 <div key={fixture.id} className="px-6 py-5">
@@ -227,31 +189,33 @@ export default async function AdminSixflTvPage({
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-semibold text-white">{fixtureLabel}</h3>
                         <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-fuchsia-100">
-                          {links.length} video{links.length === 1 ? "" : "s"}
+                          {videos.length} video{videos.length === 1 ? "" : "s"}
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-white/55">{formatKickoff(fixture.kickoffAt)}</p>
                       <p className="mt-1 text-sm text-white/45">{context}</p>
-                      {links.length > 0 ? (
+                      {videos.length > 0 ? (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {links.map((link, index) => (
+                          {videos.map((video) => (
                             <a
-                              key={`${fixture.id}-${link}`}
-                              href={link}
+                              key={`${fixture.id}-${video.kind}-${video.url}`}
+                              href={video.url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/15 px-3 py-1.5 text-xs font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/20"
                             >
-                              {getVideoLinkLabel(index)}
+                              Open {video.label.toLowerCase()}
                             </a>
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-3 text-sm text-amber-100/80">Marked as recorded, but no video link has been saved.</p>
+                        <p className="mt-3 text-sm text-amber-100/80">
+                          Marked as recorded, but no video link has been saved.
+                        </p>
                       )}
                     </div>
 
-                    <form action={saveSixflTvFixtureAction} className="w-full max-w-xl space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <form action={saveSixflTvFixtureAction} className="w-full max-w-xl space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                       <input type="hidden" name="fixtureId" value={fixture.id} />
                       <label className="flex items-center justify-between gap-3 text-sm font-semibold text-white/80">
                         <span>Show as SIXFL TV recorded</span>
@@ -262,17 +226,45 @@ export default async function AdminSixflTvPage({
                           className="h-4 w-4 accent-fuchsia-500"
                         />
                       </label>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block space-y-1.5 text-sm font-semibold text-white/80">
+                          <span>Match highlights <span className="font-normal text-white/40">(optional)</span></span>
+                          <input
+                            type="url"
+                            name="highlightsUrl"
+                            defaultValue={saved.highlights ?? ""}
+                            placeholder="Highlights link"
+                            className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
+                          />
+                        </label>
+                        <label className="block space-y-1.5 text-sm font-semibold text-white/80">
+                          <span>Full match <span className="font-normal text-white/40">(optional)</span></span>
+                          <input
+                            type="url"
+                            name="fullMatchUrl"
+                            defaultValue={saved.fullMatch ?? ""}
+                            placeholder="Full match link"
+                            className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
+                          />
+                        </label>
+                      </div>
+
                       <label className="block space-y-1.5 text-sm font-semibold text-white/80">
-                        <span>Veo / video links</span>
+                        <span>Extra clips <span className="font-normal text-white/40">(optional, one per line)</span></span>
                         <textarea
-                          name="sixflTvUrl"
-                          rows={4}
-                          defaultValue={fixture.sixflTvUrl ?? ""}
-                          placeholder="Line 1 highlights, line 2 full match, line 3+ extra clips…"
-                          className="min-h-[6.5rem] w-full resize-y rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
+                          name="extraUrls"
+                          rows={3}
+                          defaultValue={saved.extras.join("\n")}
+                          placeholder="Extra clip links, one per line…"
+                          className="min-h-[5rem] w-full resize-y rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/50"
                         />
                       </label>
-                      <p className="text-xs leading-5 text-white/45">Line 1 = Match Highlights. Line 2 = Full Match. Line 3 onwards = extra clips.</p>
+
+                      <p className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-500/[0.07] px-3 py-2 text-xs leading-5 text-fuchsia-50/70">
+                        Highlights-only, full-match-only, or both are all valid. Leave whichever one you do not have blank.
+                      </p>
+
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"

@@ -9,6 +9,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { getSixflTvVideos } from "@/lib/sixfl-tv/videos";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 const SIXFL_TV_UPLOAD_SOURCE_TYPE = "FIXTURE_SIXFL_TV_UPLOAD";
@@ -29,13 +30,6 @@ type SixflTvFixtureEmailRow = {
   awayScore: number | null;
 };
 
-function getVideoUrls(value: string | null | undefined) {
-  return (value ?? "")
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function formatFixtureDate(value: Date) {
   return formatDateTimeInLondon(value, {
     weekday: "short",
@@ -51,7 +45,6 @@ function getFixtureTitle(fixture: SixflTvFixtureEmailRow) {
   if (fixture.homeScore !== null && fixture.awayScore !== null) {
     return `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`;
   }
-
   return `${fixture.homeTeamName} vs ${fixture.awayTeamName}`;
 }
 
@@ -59,10 +52,10 @@ function getCaptainTvUrl(teamId: string) {
   return new URL(`/captain/team/${teamId}/tv`, `${getPublicSiteUrl()}/`).toString();
 }
 
-function getVideoSummary(videoCount: number) {
-  if (videoCount <= 1) return "match highlights";
-  if (videoCount === 2) return "match highlights and the full match";
-  return `match highlights, the full match and ${videoCount - 2} extra clip${videoCount - 2 === 1 ? "" : "s"}`;
+function joinVideoLabels(labels: string[]) {
+  if (labels.length === 1) return labels[0].toLowerCase();
+  if (labels.length === 2) return `${labels[0].toLowerCase()} and ${labels[1].toLowerCase()}`;
+  return `${labels.slice(0, -1).map((label) => label.toLowerCase()).join(", ")} and ${labels.at(-1)?.toLowerCase()}`;
 }
 
 async function getFixtureEmailRow(fixtureId: string) {
@@ -90,7 +83,6 @@ async function getFixtureEmailRow(fixtureId: string) {
     WHERE f."id" = ${fixtureId}
     LIMIT 1
   `);
-
   return rows[0] ?? null;
 }
 
@@ -101,16 +93,13 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
     return { queued: 0, skipped: true, reason: "fixture_not_published" };
   }
 
-  const videoUrls = getVideoUrls(fixture.sixflTvUrl);
-  if (videoUrls.length === 0) {
+  const videos = getSixflTvVideos(fixture.sixflTvUrl);
+  if (videos.length === 0) {
     return { queued: 0, skipped: true, reason: "no_video_links" };
   }
 
   const existing = await prisma.notificationDispatch.findFirst({
-    where: {
-      sourceType: SIXFL_TV_UPLOAD_SOURCE_TYPE,
-      sourceId: fixture.id,
-    },
+    where: { sourceType: SIXFL_TV_UPLOAD_SOURCE_TYPE, sourceId: fixture.id },
     select: { id: true },
   });
 
@@ -122,7 +111,7 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
   const leagueLabel = [fixture.leagueName, fixture.leagueSeason].filter(Boolean).join(" · ");
   const fixtureDate = formatFixtureDate(fixture.kickoffAt);
   const venueLabel = fixture.venueName ?? "Venue TBC";
-  const videoSummary = getVideoSummary(videoUrls.length);
+  const videoSummary = joinVideoLabels(videos.map((video) => video.label));
   const teams = [
     { id: fixture.homeTeamId, name: fixture.homeTeamName },
     { id: fixture.awayTeamId, name: fixture.awayTeamName },
@@ -140,11 +129,8 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
       audience: NotificationAudience.TEAM,
       isTransactional: true,
       subject: `SIXFL TV is ready: ${fixtureTitle}`,
-      body: `${SIXFL_TV_EMAIL_BRAND_MARKER}\n\nHi ${team.name},\n\nYour SIXFL TV ${videoSummary} for **${fixtureTitle}** is now available.\n\nMatch: **${fixtureTitle}**\nDate: ${fixtureDate}\nVenue: ${venueLabel}\nLeague: ${leagueLabel}\n\nOpen your SIXFL TV tab to watch the match highlights and any full-match/extra clip links.\n\n{{cta}}`,
-      emailCta: {
-        label: "Watch on SIXFL TV",
-        url: captainTvUrl,
-      },
+      body: `${SIXFL_TV_EMAIL_BRAND_MARKER}\n\nHi ${team.name},\n\nYour SIXFL TV ${videoSummary} for **${fixtureTitle}** is now available.\n\nMatch: **${fixtureTitle}**\nDate: ${fixtureDate}\nVenue: ${venueLabel}\nLeague: ${leagueLabel}\n\nOpen your SIXFL TV tab to watch the available videos.\n\n{{cta}}`,
+      emailCta: { label: "Watch on SIXFL TV", url: captainTvUrl },
       sourceType: SIXFL_TV_UPLOAD_SOURCE_TYPE,
       sourceId: fixture.id,
       metadata: {
@@ -152,10 +138,8 @@ export async function queueSixflTvFixtureUploadedEmailsOnce(fixtureId: string) {
         fixtureId: fixture.id,
         teamId: team.id,
         teamName: team.name,
-        videoCount: videoUrls.length,
-        videoLabels: videoUrls.map((_, index) =>
-          index === 0 ? "Match highlights" : index === 1 ? "Full match" : `Extra clip ${index - 1}`,
-        ),
+        videoCount: videos.length,
+        videoLabels: videos.map((video) => video.label),
       } satisfies Prisma.InputJsonValue,
     });
 

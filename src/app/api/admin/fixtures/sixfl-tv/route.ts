@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import { normaliseExistingSixflTvVideoValue } from "@/lib/sixfl-tv/videos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,44 +14,6 @@ type FlagRow = {
   sixflTvRecorded: boolean;
   sixflTvUrl: string | null;
 };
-
-function normaliseVideoUrl(value: string) {
-  const raw = value.trim();
-  if (!raw) return null;
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function parseVideoLinks(value: unknown) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return { ok: true as const, value: null, count: 0 };
-
-  const parts = raw
-    .split(/[\n,]+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const normalised: string[] = [];
-  for (const part of parts) {
-    const url = normaliseVideoUrl(part);
-    if (!url) {
-      return { ok: false as const, value: null, count: 0 };
-    }
-    if (!normalised.includes(url)) normalised.push(url);
-  }
-
-  return {
-    ok: true as const,
-    value: normalised.length ? normalised.join("\n") : null,
-    count: normalised.length,
-  };
-}
 
 export async function GET() {
   await requireAdmin();
@@ -86,17 +49,22 @@ export async function POST(request: Request) {
   }
 
   const suppliedUrl = typeof body?.sixflTvUrl === "string" ? body.sixflTvUrl : undefined;
-  const parsedLinks = suppliedUrl === undefined ? undefined : parseVideoLinks(suppliedUrl);
+  const parsedLinks =
+    suppliedUrl === undefined ? undefined : normaliseExistingSixflTvVideoValue(suppliedUrl);
 
   if (parsedLinks && !parsedLinks.ok) {
-    return NextResponse.json({ error: "Enter valid http or https video links, one per line." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Enter valid http or https video links." },
+      { status: 400 },
+    );
   }
 
   const storedLinks = parsedLinks?.value;
   const sixflTvRecorded = body?.sixflTvRecorded ?? Boolean(storedLinks);
-  const urlSql = parsedLinks === undefined
-    ? Prisma.empty
-    : Prisma.sql`, "sixflTvUrl" = ${storedLinks}`;
+  const urlSql =
+    parsedLinks === undefined
+      ? Prisma.empty
+      : Prisma.sql`, "sixflTvUrl" = ${storedLinks}`;
 
   const rows = await prisma.$queryRaw<FlagRow[]>(Prisma.sql`
     UPDATE "Fixture"
