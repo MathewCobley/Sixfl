@@ -84,7 +84,12 @@ const after = [
   '    staleFixtureFeeRepair.awayMatchFeePence = existingAwayChargePence;',
   '  }',
   '',
-  '  if (Object.keys(staleFixtureFeeRepair).length > 0) {',
+  '  // Completed fixtures stay immutable. Their existing charge can still be used',
+  '  // for player-payment collection without repairing historical fixture fields.',
+  '  if (',
+  '    fixture.status !== "COMPLETED" &&',
+  '    Object.keys(staleFixtureFeeRepair).length > 0',
+  '  ) {',
   '    await prisma.fixture.update({',
   '      where: { id: fixture.id },',
   '      data: staleFixtureFeeRepair,',
@@ -122,6 +127,7 @@ for (const marker of [
   'existingChargeByTeamId.get(fixture.awayTeam.id) ?? storedAwayFeePence',
   'staleFixtureFeeRepair.homeMatchFeePence = existingHomeChargePence',
   'staleFixtureFeeRepair.awayMatchFeePence = existingAwayChargePence',
+  'fixture.status !== "COMPLETED"',
   'homeMatchFeePence: resolvedHomeFeePence',
   'awayMatchFeePence: resolvedAwayFeePence',
 ]) {
@@ -131,5 +137,5 @@ for (const marker of [
 }
 
 console.log(
-  "Captain squad payments now use an existing active fixture charge before stale raw fixture fee fields, and repair stale zero/null team-side fixture fees when safe.",
+  "Captain squad payments now use active fixture charges, keep completed fixtures immutable, and only repair stale fixture fee fields before completion.",
 );
