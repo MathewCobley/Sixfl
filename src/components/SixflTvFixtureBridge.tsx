@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+import { getSixflTvVideos } from "@/lib/sixfl-tv/videos";
+
 type AdminTvFixture = {
   id: string;
   sixflTvRecorded: boolean;
@@ -21,10 +23,7 @@ function normalise(value: string | null | undefined) {
 }
 
 function getVideoUrls(value: string | null | undefined) {
-  return (value ?? "")
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return getSixflTvVideos(value).map((video) => video.url);
 }
 
 async function loadAdminFixtures() {
@@ -103,13 +102,13 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
 
     const urlInput = document.createElement("textarea");
     urlInput.rows = 3;
-    urlInput.placeholder = "Paste one Veo/YouTube link per line…";
+    urlInput.placeholder = "Line 1 highlights, line 2 full match…";
     urlInput.value = savedFixture?.sixflTvUrl ?? "";
     urlInput.className = "min-h-[5.5rem] w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none placeholder:text-white/35 focus:border-fuchsia-300/60";
 
     const helper = document.createElement("div");
     helper.className = "text-[10px] leading-4 text-fuchsia-100/55";
-    helper.textContent = "Line 1 = match highlights. Line 2 = full match. Line 3+ = extra clips.";
+    helper.textContent = "Line 1 = match highlights. Line 2 = full match. Leave line 1 blank for full-match-only. Line 3+ = extra clips.";
 
     const actions = document.createElement("div");
     actions.className = "flex flex-wrap gap-2";
@@ -128,7 +127,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
     openLink.target = "_blank";
     openLink.rel = "noopener noreferrer";
     openLink.className = "rounded-lg border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-semibold text-white/75 transition hover:bg-black/30";
-    openLink.textContent = "Open highlights";
+    openLink.textContent = "Open first video";
 
     function refreshStatus() {
       const urls = getVideoUrls(urlInput.value);
@@ -162,7 +161,7 @@ function injectNightBoardControls(fixtures: Map<string, AdminTvFixture>) {
       const ok = await saveAdminFixture({
         fixtureId,
         sixflTvRecorded: checkbox.checked || urls.length > 0,
-        sixflTvUrl: urls.join("\n"),
+        sixflTvUrl: urlInput.value,
       });
 
       setDisabled(false);
