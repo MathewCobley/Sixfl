@@ -389,12 +389,40 @@ export default function FixtureMatchupGrid({
       const key = getWeekLabel(fixture.round);
       grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
     }
-    return Array.from(grouped.entries()).sort(([a], [b]) => {
-      const aNumber = Number(a.replace("Week ", ""));
-      const bNumber = Number(b.replace("Week ", ""));
-      if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
-      return a.localeCompare(b);
+
+    const fixtureDayFormatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
+
+    return Array.from(grouped.entries())
+      .map(
+        ([roundLabel, roundFixtures]) =>
+          [
+            roundLabel,
+            [...roundFixtures].sort((a, b) => {
+              const aKickoff = new Date(a.kickoffAt).getTime();
+              const bKickoff = new Date(b.kickoffAt).getTime();
+              const sameMatchDay =
+                fixtureDayFormatter.format(aKickoff) === fixtureDayFormatter.format(bKickoff);
+
+              if (!sameMatchDay) return bKickoff - aKickoff;
+              if (aKickoff !== bKickoff) return aKickoff - bKickoff;
+              return (a.position ?? Number.MAX_SAFE_INTEGER) -
+                (b.position ?? Number.MAX_SAFE_INTEGER);
+            }),
+          ] as [string, GridFixture[]],
+      )
+      .sort(([a], [b]) => {
+        const aNumber = Number(a.replace("Week ", ""));
+        const bNumber = Number(b.replace("Week ", ""));
+        if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return bNumber - aNumber;
+        if (Number.isFinite(aNumber)) return -1;
+        if (Number.isFinite(bNumber)) return 1;
+        return a.localeCompare(b);
+      });
   }, [fixtures]);
 
   return (
