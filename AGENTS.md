@@ -63,6 +63,15 @@ npm run audit:dom:changed
 
 `audit:dom` reports the full legacy inventory. `audit:dom:changed` fails when changed source files add or modify suspicious DOM mutation without a valid exception.
 
+## Git and merge discipline
+
+- Never commit or push product/source changes directly to `main`, including small fixes and emergency UI patches.
+- Always create a feature/fix branch and open a pull request into `main`.
+- Do not merge while the **DOM bridge policy** check is red. A DOM-policy failure must be fixed by moving the behaviour into the owning React/Next.js source, not by repairing or extending the bridge.
+- Do not merge while required critical-feature checks for the affected area are red.
+- A failed check after a direct push is not an approval path: it means the gate was bypassed. Revert the change or replace it through a pull request before continuing.
+- Agents and automation must treat branch-and-PR workflow as mandatory even when their GitHub credentials technically allow direct writes to `main`.
+
 ## Critical feature contracts
 
 A new feature must never silently remove an existing working feature.
