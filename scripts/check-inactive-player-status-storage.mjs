@@ -29,6 +29,14 @@ const reminderJob = read(
 );
 const packageJson = read("package.json");
 
+let productionStartCommand = "";
+try {
+  const packageConfig = JSON.parse(packageJson);
+  productionStartCommand = packageConfig?.scripts?.start ?? "";
+} catch {
+  failures.push("package.json must remain valid JSON.");
+}
+
 expect(
   migration.includes(
     'DROP CONSTRAINT IF EXISTS "TeamMember_squadStatus_check"',
@@ -48,7 +56,9 @@ expect(
   "Unexpected historic squad-status values must be repaired before the new constraint is installed.",
 );
 expect(
-  packageJson.includes('"start": "prisma migrate deploy'),
+  productionStartCommand.includes("prisma migrate deploy") &&
+    productionStartCommand.indexOf("prisma migrate deploy") <
+      productionStartCommand.indexOf("next start"),
   "Production startup must continue to deploy Prisma migrations before serving requests.",
 );
 
