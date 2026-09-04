@@ -45,8 +45,8 @@ export type CaptainPhoneSyncResult = {
 
 /**
  * Copy a known team/lead mobile number onto the matching captain membership
- * when the email address identifies exactly one captain and the member profile
- * does not already have a phone number.
+ * when the email address identifies that captain and every known number for
+ * that team/email normalises to the same mobile.
  *
  * Existing non-empty member-profile phone numbers are never overwritten.
  */
