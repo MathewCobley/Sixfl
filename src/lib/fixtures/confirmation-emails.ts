@@ -6,7 +6,7 @@ import {
 } from "@prisma/client";
 
 import { queueDirectNotification } from "@/lib/notifications/service";
-import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { upsertTeamOperationalEmailRecipients } from "@/lib/notifications/team-operational-recipients";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
@@ -92,11 +92,13 @@ function getEmailCopy(input: {
 }
 
 async function hasDispatch(input: {
+  recipientId: string;
   sourceType: string;
   sourceId: string;
 }) {
   const dispatch = await prisma.notificationDispatch.findFirst({
     where: {
+      recipientId: input.recipientId,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
       status: {
@@ -111,6 +113,13 @@ async function hasDispatch(input: {
   });
 
   return Boolean(dispatch);
+}
+
+function captainFixturesUrl(teamId: string, fixtureId: string) {
+  return new URL(
+    `/captain/team/${teamId}/fixtures?fixtureId=${encodeURIComponent(fixtureId)}`,
+    getSiteUrl(),
+  ).toString();
 }
 
 export async function queueInitialFixtureConfirmationEmailForTeam(input: {
@@ -172,23 +181,16 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
     return "skipped";
   }
 
-  const sourceId = `${fixture.id}:${input.teamId}`;
-  const sourceType = getSourceType("initial");
-  if (await hasDispatch({ sourceType, sourceId })) {
-    return "already-sent";
-  }
-
   const team =
     fixture.homeTeam.id === input.teamId ? fixture.homeTeam : fixture.awayTeam;
   const opponent =
     fixture.homeTeam.id === input.teamId ? fixture.awayTeam : fixture.homeTeam;
-  const { recipient } = await upsertTeamNotificationRecipient(input.teamId);
-  if (!recipient.email?.trim()) return "no-email";
+  const recipients = await upsertTeamOperationalEmailRecipients(input.teamId);
+  if (recipients.length === 0) return "no-email";
 
-  const captainFixturesUrl = new URL(
-    `/captain/team/${input.teamId}/fixtures?fixtureId=${encodeURIComponent(fixture.id)}`,
-    getSiteUrl(),
-  ).toString();
+  const sourceId = `${fixture.id}:${input.teamId}`;
+  const sourceType = getSourceType("initial");
+  const dashboardUrl = captainFixturesUrl(input.teamId, fixture.id);
   const copy = getEmailCopy({
     mode: "initial",
     teamName: team.name,
@@ -196,62 +198,77 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
     kickoffAt: fixture.kickoffAt,
   });
 
-  const dispatch = await queueDirectNotification({
-    recipientId: recipient.id,
-    channel: NotificationChannel.EMAIL,
-    audience: NotificationAudience.TEAM,
-    subject: copy.subject,
-    body: copy.body,
-    isTransactional: true,
-    sourceType,
-    sourceId,
-    emailBranding: {
-      teamName: team.name,
-      teamLogoUrl: team.logoUrl ?? null,
-      leagueName: fixture.league.season
-        ? `${fixture.league.name} — ${fixture.league.season}`
-        : fixture.league.name,
-    },
-    emailCta: {
-      label: "Confirm team availability",
-      url: captainFixturesUrl,
-    },
-    metadata: {
-      kind: "fixture_confirmation_email",
-      mode: "initial",
-      trigger: "published_fixture_team_added",
-      fixtureId: fixture.id,
-      leagueId: fixture.leagueId,
-      teamId: input.teamId,
-      teamName: team.name,
-      opponentName: opponent.name,
-    },
-  });
+  let queued = 0;
+  let existing = 0;
 
-  if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
-    return "skipped";
+  for (const recipient of recipients) {
+    if (await hasDispatch({ recipientId: recipient.id, sourceType, sourceId })) {
+      existing += 1;
+      continue;
+    }
+
+    const dispatch = await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.EMAIL,
+      audience: NotificationAudience.TEAM,
+      subject: copy.subject,
+      body: copy.body,
+      isTransactional: true,
+      sourceType,
+      sourceId,
+      emailBranding: {
+        teamName: team.name,
+        teamLogoUrl: team.logoUrl ?? null,
+        leagueName: fixture.league.season
+          ? `${fixture.league.name} — ${fixture.league.season}`
+          : fixture.league.name,
+      },
+      emailCta: {
+        label: "Confirm team availability",
+        url: dashboardUrl,
+      },
+      metadata: {
+        kind: "fixture_confirmation_email",
+        mode: "initial",
+        trigger: "published_fixture_team_added",
+        fixtureId: fixture.id,
+        leagueId: fixture.leagueId,
+        teamId: input.teamId,
+        teamName: team.name,
+        opponentName: opponent.name,
+        operationalCaptainCopy: true,
+      },
+    });
+
+    if (dispatch.status === NotificationDispatchStatus.QUEUED) {
+      queued += 1;
+    }
   }
 
-  await prisma.fixtureCaptainConfirmation.upsert({
-    where: {
-      fixtureId_teamId: {
+  if (queued > 0) {
+    await prisma.fixtureCaptainConfirmation.upsert({
+      where: {
+        fixtureId_teamId: {
+          fixtureId: fixture.id,
+          teamId: input.teamId,
+        },
+      },
+      update: {
+        status: FixtureCaptainConfirmationStatus.PENDING,
+        lastChasedAt: new Date(),
+      },
+      create: {
         fixtureId: fixture.id,
         teamId: input.teamId,
+        status: FixtureCaptainConfirmationStatus.PENDING,
+        lastChasedAt: new Date(),
       },
-    },
-    update: {
-      status: FixtureCaptainConfirmationStatus.PENDING,
-      lastChasedAt: new Date(),
-    },
-    create: {
-      fixtureId: fixture.id,
-      teamId: input.teamId,
-      status: FixtureCaptainConfirmationStatus.PENDING,
-      lastChasedAt: new Date(),
-    },
-  });
+    });
 
-  return "queued";
+    return "queued";
+  }
+
+  return existing > 0 ? "already-sent" : "skipped";
 }
 
 export async function runFixtureConfirmationEmailJob() {
@@ -319,101 +336,122 @@ export async function runFixtureConfirmationEmailJob() {
 
       const team = fixture.homeTeam.id === teamId ? fixture.homeTeam : fixture.awayTeam;
       const opponent = fixture.homeTeam.id === teamId ? fixture.awayTeam : fixture.homeTeam;
-      const sourceId = `${fixture.id}:${teamId}`;
+      const recipients = await upsertTeamOperationalEmailRecipients(teamId);
 
-      const initialSourceType = getSourceType("initial");
-      const initialAlreadySent = await hasDispatch({
-        sourceType: initialSourceType,
-        sourceId,
-      });
-
-      let mode: ConfirmationEmailMode | null = null;
-
-      if (!initialAlreadySent) {
-        mode = "initial";
-      } else if (fixture.kickoffAt <= urgentCutoff) {
-        const sourceType = getSourceType("auto24h");
-        if (!(await hasDispatch({ sourceType, sourceId }))) mode = "auto24h";
-      } else if (fixture.kickoffAt <= standardCutoff) {
-        const sourceType = getSourceType("auto72h");
-        if (!(await hasDispatch({ sourceType, sourceId }))) mode = "auto72h";
-      }
-
-      if (!mode) {
-        summary.alreadySent += 1;
-        continue;
-      }
-
-      const { recipient } = await upsertTeamNotificationRecipient(teamId);
-      if (!recipient.email?.trim()) {
+      if (recipients.length === 0) {
         summary.noEmail += 1;
         continue;
       }
 
-      const captainFixturesUrl = new URL(
-        `/captain/team/${teamId}/fixtures?fixtureId=${encodeURIComponent(fixture.id)}`,
-        getSiteUrl(),
-      ).toString();
-      const copy = getEmailCopy({
-        mode,
-        teamName: team.name,
-        opponentName: opponent.name,
-        kickoffAt: fixture.kickoffAt,
-      });
+      const sourceId = `${fixture.id}:${teamId}`;
+      const dashboardUrl = captainFixturesUrl(teamId, fixture.id);
+      let queuedForTeam = 0;
 
-      const dispatch = await queueDirectNotification({
-        recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.TEAM,
-        subject: copy.subject,
-        body: copy.body,
-        isTransactional: true,
-        sourceType: getSourceType(mode),
-        sourceId,
-        emailBranding: {
-          teamName: team.name,
-          teamLogoUrl: team.logoUrl ?? null,
-          leagueName: fixture.league.season
-            ? `${fixture.league.name} — ${fixture.league.season}`
-            : fixture.league.name,
-        },
-        emailCta: {
-          label: mode === "initial" ? "Confirm team availability" : "Open fixture details",
-          url: captainFixturesUrl,
-        },
-        metadata: {
-          kind: "fixture_confirmation_email",
+      for (const recipient of recipients) {
+        const initialAlreadySent = await hasDispatch({
+          recipientId: recipient.id,
+          sourceType: getSourceType("initial"),
+          sourceId,
+        });
+
+        let mode: ConfirmationEmailMode | null = null;
+
+        if (!initialAlreadySent) {
+          mode = "initial";
+        } else if (fixture.kickoffAt <= urgentCutoff) {
+          const sourceType = getSourceType("auto24h");
+          if (
+            !(await hasDispatch({
+              recipientId: recipient.id,
+              sourceType,
+              sourceId,
+            }))
+          ) {
+            mode = "auto24h";
+          }
+        } else if (fixture.kickoffAt <= standardCutoff) {
+          const sourceType = getSourceType("auto72h");
+          if (
+            !(await hasDispatch({
+              recipientId: recipient.id,
+              sourceType,
+              sourceId,
+            }))
+          ) {
+            mode = "auto72h";
+          }
+        }
+
+        if (!mode) {
+          summary.alreadySent += 1;
+          continue;
+        }
+
+        const copy = getEmailCopy({
           mode,
-          fixtureId: fixture.id,
-          leagueId: fixture.leagueId,
-          teamId,
           teamName: team.name,
           opponentName: opponent.name,
-        },
-      });
+          kickoffAt: fixture.kickoffAt,
+        });
 
-      if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
-        summary.skipped += 1;
-        continue;
+        const dispatch = await queueDirectNotification({
+          recipientId: recipient.id,
+          channel: NotificationChannel.EMAIL,
+          audience: NotificationAudience.TEAM,
+          subject: copy.subject,
+          body: copy.body,
+          isTransactional: true,
+          sourceType: getSourceType(mode),
+          sourceId,
+          emailBranding: {
+            teamName: team.name,
+            teamLogoUrl: team.logoUrl ?? null,
+            leagueName: fixture.league.season
+              ? `${fixture.league.name} — ${fixture.league.season}`
+              : fixture.league.name,
+          },
+          emailCta: {
+            label: mode === "initial" ? "Confirm team availability" : "Open fixture details",
+            url: dashboardUrl,
+          },
+          metadata: {
+            kind: "fixture_confirmation_email",
+            mode,
+            fixtureId: fixture.id,
+            leagueId: fixture.leagueId,
+            teamId,
+            teamName: team.name,
+            opponentName: opponent.name,
+            operationalCaptainCopy: true,
+          },
+        });
+
+        if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
+          summary.skipped += 1;
+          continue;
+        }
+
+        queuedForTeam += 1;
+        summary.queued += 1;
       }
 
-      await prisma.fixtureCaptainConfirmation.upsert({
-        where: {
-          fixtureId_teamId: {
+      if (queuedForTeam > 0) {
+        await prisma.fixtureCaptainConfirmation.upsert({
+          where: {
+            fixtureId_teamId: {
+              fixtureId: fixture.id,
+              teamId,
+            },
+          },
+          update: { lastChasedAt: new Date() },
+          create: {
             fixtureId: fixture.id,
             teamId,
+            status: FixtureCaptainConfirmationStatus.PENDING,
+            lastChasedAt: new Date(),
           },
-        },
-        update: { lastChasedAt: new Date() },
-        create: {
-          fixtureId: fixture.id,
-          teamId,
-          status: FixtureCaptainConfirmationStatus.PENDING,
-          lastChasedAt: new Date(),
-        },
-      });
-
-      summary.queued += 1;
+        });
+      }
     }
   }
 
