@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { deleteFixtureAction } from "@/app/(admin)/admin/fixtures/actions";
 import { FixtureConfirmationChaseButton } from "@/components/admin/fixtures/FixtureConfirmationChaseButton";
@@ -89,6 +89,7 @@ type MatchupGridData = {
 
 const VISIBILITY_OPTIONS: VisibilityFilter[] = ["all", "published", "draft"];
 const STATUS_OPTIONS: StatusFilter[] = ["active", "postponed", "cancelled", "all"];
+const FIXTURE_CARD_SCROLL_KEY = "sixfl:admin-fixtures:card-scroll";
 
 function parseVisibility(value: string | null): VisibilityFilter {
   if (value === "published" || value === "draft") return value;
@@ -122,12 +123,14 @@ function buildGridHref(
   divisionId?: string | null,
   visibility: VisibilityFilter = "all",
   status: StatusFilter = "active",
+  focusFixtureId?: string | null,
 ) {
   const params = new URLSearchParams();
   if (leagueId) params.set("leagueId", leagueId);
   if (divisionId) params.set("divisionId", divisionId);
   if (visibility !== "all") params.set("visibility", visibility);
   if (status !== "active") params.set("status", status);
+  if (focusFixtureId) params.set("focusFixture", focusFixtureId);
   const query = params.toString();
   return query ? `/admin/fixtures?${query}` : "/admin/fixtures";
 }
@@ -139,10 +142,24 @@ function buildFixtureEditHref(input: {
   visibility: VisibilityFilter;
   status: StatusFilter;
 }) {
-  const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility, input.status);
+  const returnTo = buildGridHref(
+    input.leagueId,
+    input.divisionId || null,
+    input.visibility,
+    input.status,
+    input.fixtureId,
+  );
   const params = new URLSearchParams({ returnTo });
   if (input.divisionId) params.set("divisionId", input.divisionId);
   return `/admin/fixtures/${input.fixtureId}/edit?${params.toString()}`;
+}
+
+function rememberFixtureCardScrollPosition() {
+  try {
+    window.sessionStorage.setItem(FIXTURE_CARD_SCROLL_KEY, String(window.scrollY));
+  } catch {
+    // Scroll restoration has a React-ref fallback if session storage is unavailable.
+  }
 }
 
 function getCellTone(cell: GridCell) {
@@ -213,7 +230,7 @@ function confirmationLabel(status: ConfirmationStatus) {
 
 function confirmationTone(status: ConfirmationStatus) {
   if (status === "CONFIRMED") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
-  if (status === "ISSUE_RAISED") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  if (status === "ISSUE_RAISED") return "border-amber-400/20 bg-amber-500/10 text-amber-200";
   if (status === "OVERDUE") return "border-red-400/20 bg-red-500/10 text-red-200";
   return "border-white/10 bg-white/[0.045] text-white/75";
 }
@@ -330,12 +347,15 @@ export default function FixtureMatchupGrid({
   const divisionIdFromUrl = searchParams.get("divisionId") ?? "";
   const visibilityFromUrl = parseVisibility(searchParams.get("visibility"));
   const statusFromUrl = parseStatus(searchParams.get("status"));
+  const focusFixtureId = searchParams.get("focusFixture") ?? "";
   const [selectedLeagueId, setSelectedLeagueId] = useState(initialLeagueId ?? leagueIdFromUrl);
   const [selectedDivisionId, setSelectedDivisionId] = useState(initialDivisionId ?? divisionIdFromUrl);
   const [selectedVisibility, setSelectedVisibility] = useState<VisibilityFilter>(visibilityFromUrl);
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>(statusFromUrl);
   const [data, setData] = useState<MatchupGridData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const focusedFixtureRef = useRef<HTMLElement | null>(null);
+  const restoredFocusIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setSelectedLeagueId(leagueIdFromUrl || initialLeagueId || "");
@@ -389,13 +409,74 @@ export default function FixtureMatchupGrid({
       const key = getWeekLabel(fixture.round);
       grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
     }
-    return Array.from(grouped.entries()).sort(([a], [b]) => {
-      const aNumber = Number(a.replace("Week ", ""));
-      const bNumber = Number(b.replace("Week ", ""));
-      if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
-      return a.localeCompare(b);
+
+    const fixtureDayFormatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
+
+    return Array.from(grouped.entries())
+      .map(
+        ([roundLabel, roundFixtures]) =>
+          [
+            roundLabel,
+            [...roundFixtures].sort((a, b) => {
+              const aKickoff = new Date(a.kickoffAt).getTime();
+              const bKickoff = new Date(b.kickoffAt).getTime();
+              const sameMatchDay =
+                fixtureDayFormatter.format(aKickoff) === fixtureDayFormatter.format(bKickoff);
+
+              if (!sameMatchDay) return bKickoff - aKickoff;
+              if (aKickoff !== bKickoff) return aKickoff - bKickoff;
+              return (a.position ?? Number.MAX_SAFE_INTEGER) -
+                (b.position ?? Number.MAX_SAFE_INTEGER);
+            }),
+          ] as [string, GridFixture[]],
+      )
+      .sort(([a], [b]) => {
+        const aNumber = Number(a.replace("Week ", ""));
+        const bNumber = Number(b.replace("Week ", ""));
+        if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return bNumber - aNumber;
+        if (Number.isFinite(aNumber)) return -1;
+        if (Number.isFinite(bNumber)) return 1;
+        return a.localeCompare(b);
+      });
   }, [fixtures]);
+
+  useEffect(() => {
+    if (isLoading || !focusFixtureId) return;
+    if (restoredFocusIdRef.current === focusFixtureId) return;
+    if (!fixtures.some((fixture) => fixture.id === focusFixtureId)) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      let restoredScroll = false;
+
+      try {
+        const storedValue = window.sessionStorage.getItem(FIXTURE_CARD_SCROLL_KEY);
+        const storedScroll = storedValue === null ? Number.NaN : Number(storedValue);
+        if (Number.isFinite(storedScroll) && storedScroll >= 0) {
+          window.scrollTo({ top: storedScroll, behavior: "auto" });
+          restoredScroll = true;
+        }
+        window.sessionStorage.removeItem(FIXTURE_CARD_SCROLL_KEY);
+      } catch {
+        // Fall back to the saved fixture card itself below.
+      }
+
+      if (!restoredScroll) {
+        focusedFixtureRef.current?.scrollIntoView({
+          behavior: "auto",
+          block: "center",
+        });
+      }
+
+      restoredFocusIdRef.current = focusFixtureId;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusFixtureId, fixtures, isLoading]);
 
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
@@ -535,7 +616,11 @@ export default function FixtureMatchupGrid({
                           const showCaptainConfirmations = isPublished && fixture.status === "SCHEDULED";
 
                           return (
-                            <article key={fixture.id} className="rounded-3xl border border-white/10 bg-black/25 p-4 transition hover:border-white/20 hover:bg-white/[0.04]">
+                            <article
+                              key={fixture.id}
+                              ref={fixture.id === focusFixtureId ? focusedFixtureRef : undefined}
+                              className="scroll-mt-6 rounded-3xl border border-white/10 bg-black/25 p-4 transition hover:border-white/20 hover:bg-white/[0.04]"
+                            >
                               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="min-w-0">
                                   <div className="text-sm font-semibold leading-6 text-white">{fixture.homeTeamName} <span className="text-white/35">vs</span> {fixture.awayTeamName}</div>
@@ -562,7 +647,13 @@ export default function FixtureMatchupGrid({
                               ) : null}
 
                               <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-                                <Link href={buildFixtureEditHref({ fixtureId: fixture.id, leagueId: selectedLeagueId, divisionId: selectedDivisionId, visibility: selectedVisibility, status: selectedStatus })} className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15">Edit fixture</Link>
+                                <Link
+                                  href={buildFixtureEditHref({ fixtureId: fixture.id, leagueId: selectedLeagueId, divisionId: selectedDivisionId, visibility: selectedVisibility, status: selectedStatus })}
+                                  onClick={rememberFixtureCardScrollPosition}
+                                  className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15"
+                                >
+                                  Edit fixture
+                                </Link>
                                 <form
                                   action={deleteFixtureAction}
                                   onSubmit={(event) => {
