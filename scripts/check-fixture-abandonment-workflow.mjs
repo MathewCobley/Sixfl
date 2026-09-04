@@ -90,12 +90,13 @@ expect(
   "only the assigned referee/admin may record an abandonment and it must require confirmation",
 );
 expect(
-  form.includes("Match abandoned?") &&
+  form.includes("Match abandoned / confirmed team no-show?") &&
+    form.includes("Fixture outcome / reason") &&
     form.includes("Team responsible") &&
     form.includes("SIXFL result decision") &&
     form.includes("Award 3-0 to") &&
-    form.includes("Mark match abandoned"),
-  "referee night UI must expose the abandonment reason, responsible-team and official-result controls",
+    form.includes("Record fixture outcome"),
+  "referee night UI must expose the abandonment/no-show reason, responsible-team and admin official-result controls",
 );
 expect(
   page.includes("<AbandonedMatchForm") &&
