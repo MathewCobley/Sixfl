@@ -14,6 +14,7 @@ import {
 import AdminCard from "@/components/admin/AdminCard";
 import BulkLeadEmailForm from "@/components/admin/leads/BulkLeadEmailForm";
 import BulkLeadSmsForm from "@/components/admin/leads/BulkLeadSmsForm";
+import LeadCallNotesCell from "@/components/admin/leads/LeadCallNotesCell";
 import LeadConfirmationQuickSendButton from "@/components/admin/leads/LeadConfirmationQuickSendButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -443,7 +444,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
           <div className="px-6 py-10 text-center text-white/55">No leads match the current filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1460px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1660px] border-collapse text-left text-sm">
               <thead className="border-b border-white/10 bg-black/25 text-[11px] uppercase tracking-[0.16em] text-white/35">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Lead</th>
@@ -455,6 +456,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   <th className="px-4 py-3 font-semibold">Nights</th>
                   <th className="px-4 py-3 font-semibold">Prospective league</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
+                  <th className="px-4 py-3 font-semibold">Call / notes</th>
                   <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
@@ -532,6 +534,9 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-white/55">{formatDate(lead.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <LeadCallNotesCell leadId={lead.id} />
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-2">
                           {lead.interestType === "TEAM" ? (
