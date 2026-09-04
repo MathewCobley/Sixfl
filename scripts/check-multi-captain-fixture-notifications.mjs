@@ -20,10 +20,17 @@ function expect(condition, message) {
 const recipientPath = "src/lib/notifications/team-operational-recipients.ts";
 const emailPath = "src/lib/fixtures/confirmation-emails.ts";
 const smsPath = "src/lib/fixtures/confirmation-reminders.ts";
+const teamContactPath = "src/lib/notifications/team-contacts.ts";
+const captainPhoneSyncPath = "src/lib/notifications/team-captain-contact-sync.ts";
+const captainPhoneBackfillPath =
+  "prisma/migrations/20260904124500_backfill_captain_contact_phones/migration.sql";
 
 const recipients = read(recipientPath);
 const emails = read(emailPath);
 const sms = read(smsPath);
+const teamContacts = read(teamContactPath);
+const captainPhoneSync = read(captainPhoneSyncPath);
+const captainPhoneBackfill = read(captainPhoneBackfillPath);
 
 expect(
   recipients.includes("where: { teamId: input.teamId, role: TeamRole.CAPTAIN }") &&
@@ -59,6 +66,33 @@ expect(
     sms.includes("dispatch.recipientId !== recipient.id") &&
     sms.includes("for (const recipient of recipients)"),
   "fixture confirmation SMS reminders must fan out to every captain with a saved phone number",
+);
+
+expect(
+  captainPhoneSync.includes("syncTeamCaptainPhonesFromKnownContacts") &&
+    captainPhoneSync.includes("team.contactEmail") &&
+    captainPhoneSync.includes("team.secondaryContactEmail") &&
+    captainPhoneSync.includes("team.convertedFromLead?.email") &&
+    captainPhoneSync.includes("candidates.size > 1") &&
+    captainPhoneSync.includes("if (currentPhone) continue") &&
+    captainPhoneSync.includes('INSERT INTO "TeamMemberProfile"'),
+  "known team/lead phone numbers must backfill only unambiguous matching captain profiles without overwriting an existing member phone",
+);
+
+expect(
+  teamContacts.includes("syncTeamCaptainPhonesFromKnownContacts(team.id)") &&
+    teamContacts.includes("captainProfiles.get(member.id)?.phone") &&
+    teamContacts.includes("phone: memberPhone"),
+  "team contact snapshots must surface the captain member-profile phone after contact sync",
+);
+
+expect(
+  captainPhoneBackfill.includes("LOWER(BTRIM(team.\"contactEmail\"))") &&
+    captainPhoneBackfill.includes("LOWER(BTRIM(team.\"secondaryContactEmail\"))") &&
+    captainPhoneBackfill.includes("lead.\"convertedTeamId\"") &&
+    captainPhoneBackfill.includes("HAVING COUNT(DISTINCT \"phoneKey\") = 1") &&
+    captainPhoneBackfill.includes('WHERE NULLIF(BTRIM("TeamMemberProfile"."phone"), \'\') IS NULL'),
+  "deployment migration must backfill existing captains only where the email/phone match is unambiguous and the member phone is blank",
 );
 
 if (failures.length) {
