@@ -65,14 +65,19 @@ const adminLeadsPage = read("src/app/(admin)/admin/leads/page.tsx");
 const checks = [
   [
     leagueRules.includes('LEAGUE_RULES_VERSION = "2.1"') ||
-      leagueRules.includes('LEAGUE_RULES_VERSION = "2.2"'),
-    "League Rules must remain on supported v2.1/v2.2",
+      leagueRules.includes('LEAGUE_RULES_VERSION = "2.2"') ||
+      leagueRules.includes('LEAGUE_RULES_VERSION = "2.3"'),
+    "League Rules must remain on supported v2.1/v2.2/v2.3",
   ],
   [leagueRules.includes("public-facing team identity must be suitable for public use"), "League Rules must retain the team-name and branding suitability rule"],
   [leagueRules.includes("administrative forfeit result will be 3–0"), "League Rules must define the default 3–0 forfeit result"],
   [leagueRules.includes("less than 24 hours before kick-off"), "League Rules must retain the late-cancellation rule"],
   [leagueRules.includes("There is no automatic right to an independent appeal"), "League Rules must retain the review/appeal wording"],
-  [matchRules.includes('MATCH_RULES_VERSION = "Version 2.2 — August 2026"'), "Match Rules must remain on v2.2"],
+  [
+    matchRules.includes('MATCH_RULES_VERSION = "Version 2.2 — August 2026"') ||
+      matchRules.includes('MATCH_RULES_VERSION = "Version 2.3 — September 2026"'),
+    "Match Rules must remain on supported v2.2/v2.3",
+  ],
   [matchRules.includes("A kick-in may not be played directly to the taker's own goalkeeper"), "Match Rules must retain the direct kick-in goalkeeper restriction"],
   [matchRules.includes("If the goalkeeper handles the ball outside the goalkeeper area, a penalty kick is awarded"), "Match Rules must retain the goalkeeper handball penalty rule"],
   [matchRules.includes("Shin pads are mandatory"), "Match Rules must retain mandatory shin pads"],
