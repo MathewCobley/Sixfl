@@ -43,6 +43,9 @@ jobs:
       - name: Check last-minute replacement resolution
         run: node scripts/check-last-minute-replacement-resolution.mjs
 
+      - name: Check fixture card ordering
+        run: node scripts/check-fixture-card-ordering.mjs
+
       - name: Check sign-in link activity
         run: node scripts/check-sign-in-link-activity-contract.mjs
 
@@ -117,6 +120,7 @@ jobs:
           node scripts/check-night-board-fixture-notifications.mjs
           node scripts/check-standard-team-player-payment-links.mjs
           node scripts/check-last-minute-replacement-resolution.mjs
+          node scripts/check-fixture-card-ordering.mjs
           node scripts/check-sign-in-link-activity-contract.mjs
           node scripts/check-ai-prediction-matchup-integrity.mjs
           node scripts/check-ai-prediction-text-team-integrity.mjs
