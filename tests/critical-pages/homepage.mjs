@@ -64,10 +64,12 @@ async function assertHomepage(page, label) {
   }
 
   const hero = page.getByTestId("homepage-hero");
+  const directory = page.getByTestId("homepage-league-directory");
   const tv = page.getByTestId("homepage-sixfl-tv");
   const predictor = page.getByTestId("homepage-ai-predictor");
 
   await hero.waitFor({ state: "visible" });
+  await directory.waitFor({ state: "attached" });
   await tv.waitFor({ state: "visible" });
   await predictor.waitFor({ state: "visible" });
 
@@ -77,8 +79,11 @@ async function assertHomepage(page, label) {
 
   await page.getByRole("heading", {
     level: 1,
-    name: /Local 6-a-side football across North Yorkshire/i,
+    name: /Local 6-a-side football\./i,
   }).waitFor({ state: "visible" });
+  await page.getByText(
+    /Find your league — or help build the next one\./i,
+  ).waitFor({ state: "visible" });
   await page.getByRole("heading", {
     name: /Watch the Goal of the Week and every SIXFL highlight/i,
   }).waitFor({ state: "visible" });
@@ -86,8 +91,18 @@ async function assertHomepage(page, label) {
     name: /Match predictions, powered by SIXFL AI Predictor/i,
   }).waitFor({ state: "visible" });
 
-  const areaCardCount = await hero.locator("article").count();
-  if (areaCardCount !== 4) fail(`${label} expected 4 homepage league cards, found ${areaCardCount}.`);
+  // The league directory is database-backed. This critical-page workflow
+  // deliberately runs with an unavailable database, so verify the stable
+  // homepage entry points rather than requiring a fixed number of live cards.
+  await page.getByRole("link", { name: /VIEW LIVE LEAGUES/i }).waitFor({
+    state: "visible",
+  });
+  await page.getByRole("link", { name: /NEW LEAGUES FORMING/i }).waitFor({
+    state: "visible",
+  });
+  await page.getByRole("link", { name: "REGISTER", exact: true }).waitFor({
+    state: "visible",
+  });
 
   const tvBeforePredictor = await page.evaluate(() => {
     const tvSection = document.querySelector('[data-testid="homepage-sixfl-tv"]');
@@ -102,14 +117,6 @@ async function assertHomepage(page, label) {
   const tvLink = page.getByRole("link", { name: /WATCH SIXFL TV/i }).first();
   const tvHref = await tvLink.getAttribute("href");
   if (!tvHref?.includes("youtube.com")) fail(`${label} SIXFL TV channel link is missing.`);
-
-  const harrogatePlayerHref = await page
-    .getByRole("link", { name: "Join as player" })
-    .first()
-    .getAttribute("href");
-  if (!harrogatePlayerHref?.includes("area=Harrogate")) {
-    fail(`${label} Harrogate player link regressed.`);
-  }
 
   await waitForImagesToSettle(page);
 
