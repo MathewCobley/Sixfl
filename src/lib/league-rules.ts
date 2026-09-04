@@ -2,9 +2,9 @@
 // File: src/lib/league-rules.ts
 // ========================================
 
-export const LEAGUE_RULES_VERSION = "2.2";
-export const LEAGUE_RULES_EFFECTIVE_DATE = "2 September 2026";
-export const LEAGUE_RULES_NEXT_REVIEW = "2 September 2027";
+export const LEAGUE_RULES_VERSION = "2.3";
+export const LEAGUE_RULES_EFFECTIVE_DATE = "4 September 2026";
+export const LEAGUE_RULES_NEXT_REVIEW = "4 September 2027";
 
 export type LeagueRuleSection = {
   title: string;
@@ -50,6 +50,7 @@ export const leagueRuleSections: LeagueRuleSection[] = [
     points: [
       "There is no maximum registered squad size.",
       "A maximum of nine players may take part for a team in any single fixture: six players on the pitch and up to three rolling substitutes.",
+      "Only six players may be on the pitch for a team at any one time. Fielding more than six players at any time may result in the fixture being forfeited and recorded as a 3–0 defeat, at SIXFL's discretion.",
       "Every player who participates in the fixture, including any permitted guest player, counts towards the nine-player limit.",
       "A team may only exceed the nine-player matchday limit with prior approval from SIXFL.",
     ],
