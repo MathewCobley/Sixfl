@@ -346,6 +346,12 @@ export default async function AdminFixturesPage({
   );
 
   const sortedFixtures = [...selectedFixtures].sort((a, b) => {
+    if (a.round !== b.round) {
+      if (a.round === null) return 1;
+      if (b.round === null) return -1;
+      return b.round - a.round;
+    }
+
     const rankDifference = getFixtureDisplayRank(a) - getFixtureDisplayRank(b);
     if (rankDifference !== 0) return rankDifference;
     const dateDifference = a.kickoffAt.getTime() - b.kickoffAt.getTime();
