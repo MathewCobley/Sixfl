@@ -29,8 +29,11 @@ if (!sidebar.includes('description: "Orders"')) {
   failures.push("AdminSidebar Kits navigation must retain the Orders description.");
 }
 
-if (!sidebar.includes('className="grid grid-cols-3 gap-1.5"')) {
-  failures.push("AdminSidebar must own its column layout natively.");
+if (
+  !sidebar.includes('className="grid grid-cols-3 items-start gap-2"') ||
+  !sidebar.includes("navigationColumns.map")
+) {
+  failures.push("AdminSidebar must own its three-column layout natively.");
 }
 
 if (!retiredBridge.includes("Retired compatibility shell") || !retiredBridge.includes("return null;")) {
