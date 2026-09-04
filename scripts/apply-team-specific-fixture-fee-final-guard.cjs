@@ -3,8 +3,9 @@ const path = require("node:path");
 
 // This runs last in prebuild/predev. Do not re-run the old whole fixture patch
 // here because later compatibility steps intentionally evolve the publish code.
-// Instead, add the last-line saved-card safety and then verify the final source
-// that will actually be compiled/deployed.
+// Instead, finish the edit-page fee inheritance, add the last-line saved-card
+// safety and then verify the final source that will actually be compiled/deployed.
+require("./apply-edit-fixture-fee-inheritance.cjs");
 require("./apply-team-autopay-fee-authority.cjs");
 
 const root = path.resolve(__dirname, "..");
@@ -94,6 +95,21 @@ mustContain(
   "fixture edits must persist the away-side fee.",
 );
 mustContain(
+  editFixture,
+  "homeTeam.standardMatchFeePence ??",
+  "a blank home-side edit must inherit the home team's standard fee.",
+);
+mustContain(
+  editFixture,
+  "awayTeam.standardMatchFeePence ??",
+  "a blank away-side edit must inherit the away team's standard fee.",
+);
+mustNotMatch(
+  editFixture,
+  /const hasExplicitMatchFee\s*=/m,
+  "fixture edits must not derive the shared fallback from only the populated side.",
+);
+mustContain(
   chargeSync,
   "amountPence: input.homeMatchFeePence",
   "charge sync must use the supplied home-side amount.",
@@ -142,5 +158,5 @@ mustContain(
 );
 
 console.log(
-  "Final payment safety passed: asymmetric fixture fees stay separate and saved-card autopay cannot exceed the verified team fee.",
+  "Final payment safety passed: asymmetric fixture fees stay separate, blank edits inherit the correct team standard and saved-card autopay cannot exceed the verified team fee.",
 );
