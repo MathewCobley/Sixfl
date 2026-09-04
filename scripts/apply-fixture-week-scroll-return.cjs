@@ -2,99 +2,105 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = process.cwd();
+const failures = [];
 
-function patchFile(relativePath, transform, label) {
+function read(relativePath) {
   const filePath = path.join(root, relativePath);
   if (!fs.existsSync(filePath)) {
-    throw new Error(`[fixture-week-scroll] Missing ${label}: ${relativePath}`);
+    failures.push(`Missing required file: ${relativePath}`);
+    return "";
   }
-  const before = fs.readFileSync(filePath, "utf8");
-  const after = transform(before);
-  if (after === before) {
-    const alreadyPatched =
-      before.includes("fixture-week-unassigned") ||
-      before.includes('startsWith("/admin/fixtures#")');
-    if (alreadyPatched) {
-      console.log(`[fixture-week-scroll] ${label} already patched.`);
-      return;
-    }
-    throw new Error(`[fixture-week-scroll] Could not patch ${label}: source anchor changed.`);
-  }
-  fs.writeFileSync(filePath, after, "utf8");
-  console.log(`[fixture-week-scroll] Patched ${label}.`);
+  return fs.readFileSync(filePath, "utf8");
 }
 
-patchFile(
-  "src/components/admin/fixtures/FixtureMatchupGrid.tsx",
-  (source) => {
-    if (!source.includes("function getWeekAnchor(")) {
-      source = source.replace(
-        `function getWeekLabel(round: number | null) {\n  return round === null ? \"Unassigned week\" : \`Week \${round}\`;\n}\n`,
-        `function getWeekLabel(round: number | null) {\n  return round === null ? \"Unassigned week\" : \`Week \${round}\`;\n}\n\nfunction getWeekAnchor(round: number | null) {\n  return round === null ? \"fixture-week-unassigned\" : \`fixture-week-\${round}\`;\n}\n`,
-      );
-    }
+function expect(source, marker, message) {
+  if (!source.includes(marker)) failures.push(message);
+}
 
-    source = source.replace(
-      `  status: StatusFilter;\n}) {\n  const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility, input.status);\n  const params = new URLSearchParams({ returnTo });`,
-      `  status: StatusFilter;\n  round: number | null;\n}) {\n  const returnTo = buildGridHref(input.leagueId, input.divisionId || null, input.visibility, input.status);\n  const returnToWeek = \`${"${returnTo}"}#${"${getWeekAnchor(input.round)}"}\`;\n  const params = new URLSearchParams({ returnTo: returnToWeek });`,
-    );
+function reject(source, marker, message) {
+  if (source.includes(marker)) failures.push(message);
+}
 
-    source = source.replace(
-      `<div key={roundLabel} className="space-y-3">`,
-      `<div\n                      key={roundLabel}\n                      id={getWeekAnchor(roundFixtures[0]?.round ?? null)}\n                      className="scroll-mt-6 space-y-3"\n                    >`,
-    );
+const grid = read("src/components/admin/fixtures/FixtureMatchupGrid.tsx");
+const action = read("src/app/(admin)/admin/fixtures/[id]/edit/actions.ts");
+const page = read("src/app/(admin)/admin/fixtures/[id]/edit/page.tsx");
 
-    source = source.replace(
-      `status: selectedStatus })}`,
-      `status: selectedStatus, round: fixture.round })}`,
-    );
-
-    return source;
-  },
-  "fixture matchup grid",
+// Fixture-card return handling is now owned natively by FixtureMatchupGrid.
+// This compatibility entry remains in the historic prebuild chain only as a
+// guard. It must never rewrite source again.
+expect(
+  grid,
+  'const FIXTURE_CARD_SCROLL_KEY = "sixfl:admin-fixtures:card-scroll";',
+  "FixtureMatchupGrid must retain its native session-scroll key.",
+);
+expect(
+  grid,
+  'if (focusFixtureId) params.set("focusFixture", focusFixtureId);',
+  "Fixture list return links must retain the focused fixture id.",
+);
+expect(
+  grid,
+  'const focusFixtureId = searchParams.get("focusFixture") ?? "";',
+  "FixtureMatchupGrid must read the focused fixture from the URL.",
+);
+expect(
+  grid,
+  "onClick={rememberFixtureCardScrollPosition}",
+  "Edit fixture must remember the current card-list scroll position.",
+);
+expect(
+  grid,
+  "focusedFixtureRef.current?.scrollIntoView({",
+  "Fixture return must retain its React-ref fallback.",
+);
+expect(
+  grid,
+  "if (!sameMatchDay) return bKickoff - aKickoff;",
+  "Fixture cards must keep newer match dates first within a week.",
+);
+expect(
+  grid,
+  "if (aKickoff !== bKickoff) return aKickoff - bKickoff;",
+  "Fixtures on one match night must stay in chronological kick-off order.",
+);
+expect(
+  grid,
+  "if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return bNumber - aNumber;",
+  "Fixture week groups must remain newest first.",
+);
+expect(
+  action,
+  'parsed.startsWith("/admin/fixtures?")',
+  "The fixture edit action must accept the native filtered fixture-list return URL.",
+);
+expect(
+  page,
+  'value.startsWith("/admin/fixtures?")',
+  "The fixture edit page must accept the native filtered fixture-list return URL.",
 );
 
-patchFile(
-  "src/app/(admin)/admin/fixtures/[id]/edit/actions.ts",
-  (source) => {
-    source = source.replace(
-      `function safeFixturesReturnTo(value: FormDataEntryValue | null) {\n  const parsed = String(value ?? \"\").trim();\n  return parsed === \"/admin/fixtures\" || parsed.startsWith(\"/admin/fixtures?\")\n    ? parsed\n    : \"/admin/fixtures\";\n}\n`,
-      `function safeFixturesReturnTo(value: FormDataEntryValue | null) {\n  const parsed = String(value ?? \"\").trim();\n  return (\n    parsed === \"/admin/fixtures\" ||\n    parsed.startsWith(\"/admin/fixtures?\") ||\n    parsed.startsWith(\"/admin/fixtures#\")\n  )\n    ? parsed\n    : \"/admin/fixtures\";\n}\n\nfunction stripHash(value: string) {\n  return value.split(\"#\", 1)[0] || \"/admin/fixtures\";\n}\n\nfunction withWeekAnchor(value: string, round: number | null) {\n  const base = stripHash(value);\n  const anchor = round === null ? \"fixture-week-unassigned\" : \`fixture-week-\${round}\`;\n  return \`${"${base}"}#${"${anchor}"}\`;\n}\n`,
-    );
-
-    source = source.replace(
-      `  const requestId = randomUUID().slice(0, 8);\n\n  try {`,
-      `  const requestId = randomUUID().slice(0, 8);\n  let successReturnTo = returnTo;\n\n  try {`,
-    );
-
-    source = source.replace(
-      `    const round = parseOptionalInt(formData.get(\"round\"), \"Week\");\n`,
-      `    const round = parseOptionalInt(formData.get(\"round\"), \"Week\");\n    successReturnTo = withWeekAnchor(returnTo, round);\n`,
-    );
-
-    source = source.replace(
-      `    revalidatePath(returnTo);`,
-      `    revalidatePath(stripHash(successReturnTo));`,
-    );
-
-    source = source.replace(
-      `  redirect(returnTo);\n}`,
-      `  redirect(successReturnTo);\n}`,
-    );
-
-    return source;
-  },
-  "fixture edit action",
+reject(
+  grid,
+  "round: fixture.round })}",
+  "The retired week-hash patch must not add an unsupported round property to the edit-link helper.",
+);
+reject(
+  action,
+  'startsWith("/admin/fixtures#")',
+  "The edit action must not restore the retired hash-based return path.",
+);
+reject(
+  page,
+  'startsWith("/admin/fixtures#")',
+  "The edit page must not restore the retired hash-based return path.",
 );
 
-patchFile(
-  "src/app/(admin)/admin/fixtures/[id]/edit/page.tsx",
-  (source) => {
-    source = source.replace(
-      `function safeReturnTo(value: string) {\n  return value === \"/admin/fixtures\" || value.startsWith(\"/admin/fixtures?\")\n    ? value\n    : \"/admin/fixtures\";\n}\n`,
-      `function safeReturnTo(value: string) {\n  return (\n    value === \"/admin/fixtures\" ||\n    value.startsWith(\"/admin/fixtures?\") ||\n    value.startsWith(\"/admin/fixtures#\")\n  )\n    ? value\n    : \"/admin/fixtures\";\n}\n`,
-    );
-    return source;
-  },
-  "fixture edit page",
+if (failures.length > 0) {
+  throw new Error(
+    `[fixture-week-scroll] Native fixture-card return contract failed:\n - ${failures.join("\n - ")}`,
+  );
+}
+
+console.log(
+  "[fixture-week-scroll] Native fixture-card focus return verified; no source patch required.",
 );
