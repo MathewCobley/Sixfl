@@ -1,21 +1,19 @@
 -- Repair the upcoming Harrogate Tuesday Mens fixture between Ripon Cider Boys
--- and Wetherby Wanderers after a one-sided £0 edit incorrectly allowed the
--- other side to fall back to the shared £0 fixture value.
+-- and Wetherby Wanderers after a one-sided £0 edit incorrectly made both sides
+-- free.
 --
 -- Intended result:
---   * Ripon Cider Boys remains an explicit £0 for this fixture only;
---   * Wetherby Wanderers keeps/restores its own charge;
---   * prefer Wetherby's existing positive fixture charge (if one was merely
---     voided), then its configured standard fee, then the SIXFL £40 default;
---   * never rewrite money that has already been paid.
+--   * Ripon Cider Boys remains £0 for this fixture only;
+--   * Wetherby Wanderers uses its existing positive charge where available,
+--     otherwise its configured standard fee, otherwise the SIXFL £40 default;
+--   * paid money is never rewritten.
 
--- 1. Correct the side-specific fixture values. Only the nearest upcoming
--- matching scheduled fixture is touched, so future rematches are unaffected.
+-- 1. Restore the two side-specific fixture fees.
 WITH candidate AS (
   SELECT
     fixture."id" AS fixture_id,
     fixture."leagueId" AS league_id,
-    COALESCE(fixture."kickoffAt", fixture."date") AS kickoff_at,
+    fixture."kickoffAt" AS kickoff_at,
     CASE
       WHEN home_team."name" = 'Ripon Cider Boys' THEN home_team."id"
       ELSE away_team."id"
@@ -30,24 +28,22 @@ WITH candidate AS (
   JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
   WHERE league."name" = 'Harrogate Tuesday Mens'
     AND fixture."status" = 'SCHEDULED'
-    AND COALESCE(fixture."kickoffAt", fixture."date") >= TIMESTAMP '2026-09-04 00:00:00'
+    AND fixture."kickoffAt" >= TIMESTAMP '2026-09-04 00:00:00'
     AND (
       (home_team."name" = 'Ripon Cider Boys' AND away_team."name" = 'Wetherby Wanderers')
       OR
       (home_team."name" = 'Wetherby Wanderers' AND away_team."name" = 'Ripon Cider Boys')
     )
-  ORDER BY COALESCE(fixture."kickoffAt", fixture."date") ASC
+  ORDER BY fixture."kickoffAt" ASC
   LIMIT 1
 ), target AS (
   SELECT
     candidate.*,
-    CASE
-      WHEN COALESCE(existing_charge."amountPence", 0) > 0
-        THEN existing_charge."amountPence"
-      WHEN COALESCE(wetherby_team."standardMatchFeePence", 0) > 0
-        THEN wetherby_team."standardMatchFeePence"
-      ELSE 4000
-    END AS wetherby_fee_pence
+    COALESCE(
+      NULLIF(existing_charge."amountPence", 0),
+      NULLIF(wetherby_team."standardMatchFeePence", 0),
+      4000
+    ) AS wetherby_fee_pence
   FROM candidate
   JOIN "Team" wetherby_team ON wetherby_team."id" = candidate.wetherby_id
   LEFT JOIN "PaymentCharge" existing_charge
@@ -69,13 +65,12 @@ SET
 FROM target
 WHERE fixture."id" = target.fixture_id;
 
--- 2. Re-open Wetherby's untouched fixture charge if the £0 edit merely voided
--- it. Any charge with real payment activity is left alone.
+-- 2. Re-open Wetherby's untouched charge if it was voided by the bad £0 edit.
 WITH candidate AS (
   SELECT
     fixture."id" AS fixture_id,
     fixture."leagueId" AS league_id,
-    COALESCE(fixture."kickoffAt", fixture."date") AS kickoff_at,
+    fixture."kickoffAt" AS kickoff_at,
     CASE
       WHEN home_team."name" = 'Wetherby Wanderers' THEN home_team."id"
       ELSE away_team."id"
@@ -86,24 +81,22 @@ WITH candidate AS (
   JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
   WHERE league."name" = 'Harrogate Tuesday Mens'
     AND fixture."status" = 'SCHEDULED'
-    AND COALESCE(fixture."kickoffAt", fixture."date") >= TIMESTAMP '2026-09-04 00:00:00'
+    AND fixture."kickoffAt" >= TIMESTAMP '2026-09-04 00:00:00'
     AND (
       (home_team."name" = 'Ripon Cider Boys' AND away_team."name" = 'Wetherby Wanderers')
       OR
       (home_team."name" = 'Wetherby Wanderers' AND away_team."name" = 'Ripon Cider Boys')
     )
-  ORDER BY COALESCE(fixture."kickoffAt", fixture."date") ASC
+  ORDER BY fixture."kickoffAt" ASC
   LIMIT 1
 ), target AS (
   SELECT
     candidate.*,
-    CASE
-      WHEN COALESCE(existing_charge."amountPence", 0) > 0
-        THEN existing_charge."amountPence"
-      WHEN COALESCE(wetherby_team."standardMatchFeePence", 0) > 0
-        THEN wetherby_team."standardMatchFeePence"
-      ELSE 4000
-    END AS wetherby_fee_pence
+    COALESCE(
+      NULLIF(existing_charge."amountPence", 0),
+      NULLIF(wetherby_team."standardMatchFeePence", 0),
+      4000
+    ) AS wetherby_fee_pence
   FROM candidate
   JOIN "Team" wetherby_team ON wetherby_team."id" = candidate.wetherby_id
   LEFT JOIN "PaymentCharge" existing_charge
@@ -112,7 +105,6 @@ WITH candidate AS (
 )
 UPDATE "PaymentCharge" charge
 SET
-  "chargeType" = 'MATCH_FEE',
   "amountPence" = target.wetherby_fee_pence,
   "status" = 'OPEN',
   "dueDate" = target.kickoff_at,
@@ -139,12 +131,12 @@ WHERE charge."fixtureId" = target.fixture_id
       AND player_fee."status" = 'PAID'
   );
 
--- 3. If Wetherby had no charge row at all, create the normal fixture charge.
+-- 3. Create Wetherby's charge if there is no row to restore.
 WITH candidate AS (
   SELECT
     fixture."id" AS fixture_id,
     fixture."leagueId" AS league_id,
-    COALESCE(fixture."kickoffAt", fixture."date") AS kickoff_at,
+    fixture."kickoffAt" AS kickoff_at,
     CASE
       WHEN home_team."name" = 'Wetherby Wanderers' THEN home_team."id"
       ELSE away_team."id"
@@ -155,22 +147,18 @@ WITH candidate AS (
   JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
   WHERE league."name" = 'Harrogate Tuesday Mens'
     AND fixture."status" = 'SCHEDULED'
-    AND COALESCE(fixture."kickoffAt", fixture."date") >= TIMESTAMP '2026-09-04 00:00:00'
+    AND fixture."kickoffAt" >= TIMESTAMP '2026-09-04 00:00:00'
     AND (
       (home_team."name" = 'Ripon Cider Boys' AND away_team."name" = 'Wetherby Wanderers')
       OR
       (home_team."name" = 'Wetherby Wanderers' AND away_team."name" = 'Ripon Cider Boys')
     )
-  ORDER BY COALESCE(fixture."kickoffAt", fixture."date") ASC
+  ORDER BY fixture."kickoffAt" ASC
   LIMIT 1
 ), target AS (
   SELECT
     candidate.*,
-    CASE
-      WHEN COALESCE(wetherby_team."standardMatchFeePence", 0) > 0
-        THEN wetherby_team."standardMatchFeePence"
-      ELSE 4000
-    END AS wetherby_fee_pence
+    COALESCE(NULLIF(wetherby_team."standardMatchFeePence", 0), 4000) AS wetherby_fee_pence
   FROM candidate
   JOIN "Team" wetherby_team ON wetherby_team."id" = candidate.wetherby_id
 )
@@ -179,7 +167,6 @@ INSERT INTO "PaymentCharge" (
   "teamId",
   "fixtureId",
   "leagueId",
-  "chargeType",
   "title",
   "amountPence",
   "status",
@@ -193,8 +180,7 @@ SELECT
   target.wetherby_id,
   target.fixture_id,
   target.league_id,
-  'MATCH_FEE',
-  'Match fee • Ripon Cider Boys vs Wetherby Wanderers',
+  'Match fee • Wetherby Wanderers vs Ripon Cider Boys',
   target.wetherby_fee_pence,
   'OPEN',
   target.kickoff_at,
@@ -210,8 +196,7 @@ WHERE NOT EXISTS (
     AND existing_charge."teamId" = target.wetherby_id
 );
 
--- 4. Ripon's side stays free. Void only an untouched charge and clear any
--- stale checkout metadata; paid money is never changed.
+-- 4. Ripon's side remains free. Only void an untouched charge.
 WITH target AS (
   SELECT
     fixture."id" AS fixture_id,
@@ -225,13 +210,13 @@ WITH target AS (
   JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
   WHERE league."name" = 'Harrogate Tuesday Mens'
     AND fixture."status" = 'SCHEDULED'
-    AND COALESCE(fixture."kickoffAt", fixture."date") >= TIMESTAMP '2026-09-04 00:00:00'
+    AND fixture."kickoffAt" >= TIMESTAMP '2026-09-04 00:00:00'
     AND (
       (home_team."name" = 'Ripon Cider Boys' AND away_team."name" = 'Wetherby Wanderers')
       OR
       (home_team."name" = 'Wetherby Wanderers' AND away_team."name" = 'Ripon Cider Boys')
     )
-  ORDER BY COALESCE(fixture."kickoffAt", fixture."date") ASC
+  ORDER BY fixture."kickoffAt" ASC
   LIMIT 1
 )
 UPDATE "PaymentCharge" charge
