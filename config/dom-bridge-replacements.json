@@ -103,7 +103,7 @@
         "src/components/captain/CaptainResultsNavBridge.tsx"
       ],
       "responsibilities": [
-        "Expose the simple result history as Results in captain navigation.",
+        "Expose the simple result history as Team results in captain navigation.",
         "Expose the detailed appearances, ratings, scorers, assists, Player of the Match and dispute workflow as Match reports.",
         "Keep both links in the owned React navigation without cloning or relabelling rendered anchors."
       ],
@@ -111,7 +111,7 @@
         {
           "path": "src/app/captain/team/[teamid]/layout.tsx",
           "contains": [
-            "{ href: `/captain/team/${teamid}/results-history`, label: \"Results\" }",
+            "{ href: `/captain/team/${teamid}/results-history`, label: \"Team results\" }",
             "{ href: `/captain/team/${teamid}/results`, label: \"Match reports\" }"
           ]
         }
@@ -301,17 +301,38 @@
         "Render SIXFL TV in the homepage React tree before the AI Predictor rather than inserting it after render.",
         "Render the SIXFL TV logo, Goal of the Week and latest uploaded match links from owned components.",
         "Render AI Predictor branding and explanatory copy directly rather than replacing elements and text nodes after render.",
-        "Keep the Harrogate, Wetherby, Northallerton and Heartlands card names, statuses and registration destinations in the actual homepage data."
+        "Render the live, forming and planned league directory from the authoritative league data service rather than hard-coded or post-render card rewriting."
       ],
       "checks": [
         {
           "path": "src/app/(public)/page.tsx",
           "contains": [
+            "<HomepageLeagueDirectory />",
             "<SixflTvHomepageSection />",
-            "<HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />",
-            "Harrogate West Tuesday League",
-            "harrogatePlayerLink",
-            "North Yorkshire Heartlands League"
+            "<HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />"
+          ]
+        },
+        {
+          "path": "src/components/home/HomepageLeagueDirectory.tsx",
+          "contains": [
+            "export default async function HomepageLeagueDirectory()",
+            "const leagues = await getHomepageLeagues();",
+            "data-testid=\"homepage-league-directory\"",
+            "const live = leagues.filter((league) => league.homepageStage === \"LIVE\")",
+            "const forming = leagues.filter((league) => league.homepageStage === \"FORMING\")",
+            "const planned = leagues.filter((league) => league.homepageStage === \"PLANNED\")",
+            "View league",
+            "Enter a team",
+            "Join as a player"
+          ]
+        },
+        {
+          "path": "src/lib/leagues/homepage-leagues.ts",
+          "contains": [
+            "export const HOMEPAGE_LEAGUE_STAGES = [",
+            "export type HomepageLeagueStage =",
+            "export async function getHomepageLeagues(options?:",
+            "COALESCE(league.\"homepageStage\", 'HIDDEN') <> 'HIDDEN'"
           ]
         },
         {
@@ -341,7 +362,7 @@
         "src/components/captain/CaptainOutstandingBalanceBridge.tsx"
       ],
       "responsibilities": [
-        "Show the captain's actual outstanding team balance and open-charge count from the payment ledger without rewriting a rendered card.",
+        "Show the captain's team fee due now, or the next upcoming team fee when nothing is currently due, from the payment ledger without rewriting a rendered card.",
         "Keep the historical bridge path as an inert compatibility shell until its remaining build dependency is removed."
       ],
       "checks": [
@@ -349,9 +370,11 @@
           "path": "src/app/captain/team/[teamid]/page.tsx",
           "contains": [
             "getTeamPaymentLedger(teamid)",
-            "Outstanding balance",
-            "formatMoney(ledger.outstandingPence)",
-            "ledger.openChargeCount"
+            "paymentFocusEntry",
+            "paymentDueNowPence",
+            "dueNowEntries.length",
+            "Due now",
+            "Next team fee"
           ]
         },
         {
