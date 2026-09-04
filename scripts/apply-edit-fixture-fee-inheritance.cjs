@@ -34,53 +34,23 @@ if (!source.includes("const DEFAULT_MATCH_FEE_PENCE = 4000;")) {
   changed = true;
 }
 
-const oldTeamSelect = [
-  "          select: {",
-  "            id: true,",
-  "            name: true,",
-  "            leagueId: true,",
-  "            logoUrl: true,",
-  "            latestKickoffTime: true,",
-  "          },",
-].join("\n");
-const teamSelectWithFee = [
-  "          select: {",
-  "            id: true,",
-  "            name: true,",
-  "            leagueId: true,",
-  "            logoUrl: true,",
-  "            latestKickoffTime: true,",
-  "            standardMatchFeePence: true,",
-  "          },",
-].join("\n");
-
-if (count(teamSelectWithFee) < 2) {
-  const occurrences = count(oldTeamSelect);
-  if (occurrences < 2) {
-    throw new Error(
-      `Could not find both fixture edit team selects; found ${occurrences}.`,
-    );
+// Load each selected team's own configured fee. Use line-based insertion so
+// this survives unrelated additions to the select block (for example KO fields).
+if (count("standardMatchFeePence: true,") < 2) {
+  const lines = source.split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index].trim() !== "latestKickoffTime: true,") continue;
+    if (lines[index + 1]?.trim() === "standardMatchFeePence: true,") continue;
+    const indent = lines[index].match(/^\s*/)?.[0] ?? "";
+    lines.splice(index + 1, 0, `${indent}standardMatchFeePence: true,`);
+    changed = true;
   }
-  source = source.replaceAll(oldTeamSelect, teamSelectWithFee);
-  changed = true;
+  source = lines.join("\n");
 }
 
-const oldFeeResolution = [
-  "    const homeMatchFeePence = hasFixturePlaceholder",
-  "      ? null",
-  "      : requestedHomeMatchFeePence;",
-  "    const awayMatchFeePence = hasFixturePlaceholder",
-  "      ? null",
-  "      : requestedAwayMatchFeePence;",
-  "    const hasExplicitMatchFee =",
-  "      homeMatchFeePence !== null || awayMatchFeePence !== null;",
-  "    const fixtureMatchFeePence = hasFixturePlaceholder",
-  "      ? null",
-  "      : hasExplicitMatchFee",
-  "        ? Math.max(homeMatchFeePence ?? 0, awayMatchFeePence ?? 0)",
-  "        : null;",
-].join("\n");
-
+// Replace the whole fee-resolution section rather than depending on the exact
+// legacy formatting. Earlier compatibility scripts may have changed whitespace
+// or nearby lines, but these semantic anchors are stable.
 const inheritedFeeResolution = [
   "    const homeMatchFeePence = hasFixturePlaceholder",
   "      ? null",
@@ -98,10 +68,27 @@ const inheritedFeeResolution = [
 ].join("\n");
 
 if (!source.includes(inheritedFeeResolution)) {
-  if (!source.includes(oldFeeResolution)) {
-    throw new Error("Could not find fixture edit team-fee resolution block.");
+  const start = source.indexOf("    const homeMatchFeePence = hasFixturePlaceholder");
+  const end = source.indexOf("\n\n    await prisma.$transaction", start);
+  if (start === -1 || end === -1) {
+    throw new Error("Could not find fixture edit team-fee resolution anchors.");
   }
-  source = source.replace(oldFeeResolution, inheritedFeeResolution);
+  source = `${source.slice(0, start)}${inheritedFeeResolution}${source.slice(end)}`;
+  changed = true;
+}
+
+// Persist both side-specific values on the fixture itself. The existing fee
+// compatibility script may already have done this; if so this is a no-op.
+const sharedFeeSave = "          matchFeePence: fixtureMatchFeePence,\n";
+const sideSpecificFeeSave =
+  "          matchFeePence: fixtureMatchFeePence,\n" +
+  "          homeMatchFeePence,\n" +
+  "          awayMatchFeePence,\n";
+if (!source.includes(sideSpecificFeeSave)) {
+  if (!source.includes(sharedFeeSave)) {
+    throw new Error("Could not find fixture edit fee save anchor.");
+  }
+  source = source.replace(sharedFeeSave, sideSpecificFeeSave);
   changed = true;
 }
 
@@ -118,6 +105,9 @@ if (
 }
 if (source.includes("const hasExplicitMatchFee =")) {
   throw new Error("Fixture edit still derives a shared fee from only the populated side.");
+}
+if (!source.includes(sideSpecificFeeSave)) {
+  throw new Error("Fixture edit is not persisting both side-specific fees.");
 }
 
 if (changed) {
