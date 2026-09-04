@@ -123,7 +123,7 @@ export async function getHomepageLeagues(options?: {
     // Keep the public homepage usable during a brief database outage, while
     // preserving failures in admin reads where hidden leagues are requested.
     if (includeHidden) throw error;
-    console.error(
+    console.warn(
       "Homepage league directory could not load; using an empty directory.",
       error,
     );
