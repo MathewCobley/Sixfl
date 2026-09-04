@@ -24,6 +24,30 @@ function getLeadId(row: HTMLTableRowElement) {
   return /^\/admin\/leads\/([^/?#]+)/.exec(href)?.[1] ?? null;
 }
 
+function findLeadTable() {
+  return Array.from(document.querySelectorAll<HTMLTableElement>("table")).find((table) => {
+    const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th")).map(
+      (header) => header.textContent?.trim().toLowerCase() ?? "",
+    );
+
+    return (
+      headers.includes("prospective league") &&
+      headers.includes("created") &&
+      headers.includes("action")
+    );
+  }) ?? null;
+}
+
+function getInjectedCell(row: HTMLTableRowElement) {
+  return (
+    Array.from(row.children).find(
+      (child) =>
+        child instanceof HTMLTableCellElement &&
+        child.dataset.leadCalledCell !== undefined,
+    ) as HTMLTableCellElement | undefined
+  ) ?? null;
+}
+
 function buildNoteControl(leadId: string) {
   const wrapper = document.createElement("div");
   wrapper.className = "mt-2";
@@ -86,7 +110,9 @@ function buildNoteControl(leadId: string) {
       form.classList.add("hidden");
       toggle.classList.remove("hidden");
       toggle.textContent = "✓ Note saved · add another";
-      window.setTimeout(() => { toggle.textContent = "+ Add note"; }, 2500);
+      window.setTimeout(() => {
+        toggle.textContent = "+ Add note";
+      }, 2500);
     } catch (error) {
       console.error(error);
       save.textContent = "Try again";
@@ -140,40 +166,124 @@ function buildCell(leadId: string, calledAt: string | null) {
   return cell;
 }
 
+function buildPlaceholderCell() {
+  const cell = document.createElement("td");
+  cell.dataset.leadCalledCell = "pending";
+  cell.className = "px-4 py-3";
+  return cell;
+}
+
+function reconcileRows(
+  table: HTMLTableElement,
+  statuses: Map<string, string | null>,
+) {
+  table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
+    const actionCell = row.lastElementChild;
+    if (!(actionCell instanceof HTMLTableCellElement)) return;
+
+    const leadId = getLeadId(row);
+    const existingCell = getInjectedCell(row);
+
+    if (!existingCell) {
+      row.insertBefore(
+        leadId ? buildCell(leadId, statuses.get(leadId) ?? null) : buildPlaceholderCell(),
+        actionCell,
+      );
+      return;
+    }
+
+    if (leadId && existingCell.dataset.leadCalledCell !== leadId) {
+      existingCell.replaceWith(buildCell(leadId, statuses.get(leadId) ?? null));
+      return;
+    }
+
+    if (existingCell.nextElementSibling !== actionCell) {
+      row.insertBefore(existingCell, actionCell);
+    }
+  });
+}
+
+function reconcileHeader(table: HTMLTableElement) {
+  const headerRow = table.querySelector<HTMLTableRowElement>("thead tr");
+  if (!headerRow) return;
+
+  const headers = Array.from(headerRow.children).filter(
+    (child): child is HTMLTableCellElement => child instanceof HTMLTableCellElement,
+  );
+  const actionHeader = headers.find(
+    (header) => header.textContent?.trim().toLowerCase() === "action",
+  );
+  if (!actionHeader) return;
+
+  const existingHeader = headers.find(
+    (header) =>
+      header.dataset.leadCalledHeader === "true" ||
+      header.textContent?.trim().toLowerCase() === "call / notes",
+  );
+
+  if (existingHeader) {
+    existingHeader.dataset.leadCalledHeader = "true";
+    if (existingHeader.nextElementSibling !== actionHeader) {
+      headerRow.insertBefore(existingHeader, actionHeader);
+    }
+    return;
+  }
+
+  const th = document.createElement("th");
+  th.dataset.leadCalledHeader = "true";
+  th.className = "px-4 py-3 font-semibold";
+  th.textContent = "Call / notes";
+  headerRow.insertBefore(th, actionHeader);
+}
+
 export default function AdminLeadCallStatusBridge() {
   useEffect(() => {
     let disposed = false;
+    let observer: MutationObserver | null = null;
+    let frame: number | null = null;
+    let statuses = new Map<string, string | null>();
 
-    async function install() {
-      const table = document.querySelector<HTMLTableElement>("table");
-      if (!table || table.dataset.leadCalledInstalled === "true") return;
+    function reconcile() {
+      if (disposed) return;
+      const table = findLeadTable();
+      if (!table) return;
 
-      const response = await fetch("/api/admin/leads/call-status", { cache: "no-store" });
-      if (!response.ok || disposed) return;
-      const payload = (await response.json()) as StatusResponse;
-      const statuses = new Map((payload.leads ?? []).map((lead) => [lead.id, lead.calledAt]));
-
-      const headerRow = table.querySelector<HTMLTableRowElement>("thead tr");
-      const actionHeader = headerRow?.lastElementChild;
-      if (headerRow && actionHeader) {
-        const th = document.createElement("th");
-        th.className = "px-4 py-3 font-semibold";
-        th.textContent = "Call / notes";
-        headerRow.insertBefore(th, actionHeader);
-      }
-
-      table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
-        const leadId = getLeadId(row);
-        const actionCell = row.lastElementChild;
-        if (!leadId || !actionCell) return;
-        row.insertBefore(buildCell(leadId, statuses.get(leadId) ?? null), actionCell);
-      });
-
-      table.dataset.leadCalledInstalled = "true";
+      // Reconcile body cells first so the Action column can never be left
+      // one cell out of alignment if React refreshes the table in place.
+      reconcileRows(table, statuses);
+      reconcileHeader(table);
     }
 
-    void install().catch((error) => console.error("Lead call status could not be loaded", error));
-    return () => { disposed = true; };
+    function scheduleReconcile() {
+      if (disposed || frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        reconcile();
+      });
+    }
+
+    async function install() {
+      const response = await fetch("/api/admin/leads/call-status", { cache: "no-store" });
+      if (!response.ok || disposed) return;
+
+      const payload = (await response.json()) as StatusResponse;
+      statuses = new Map((payload.leads ?? []).map((lead) => [lead.id, lead.calledAt]));
+      if (disposed) return;
+
+      observer = new MutationObserver(() => scheduleReconcile());
+      observer.observe(document.body, { childList: true, subtree: true });
+      scheduleReconcile();
+    }
+
+    void install().catch((error) =>
+      console.error("Lead call status could not be loaded", error),
+    );
+
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   return null;
