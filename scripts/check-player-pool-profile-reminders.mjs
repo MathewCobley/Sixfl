@@ -122,7 +122,7 @@ expect(
 );
 expect(
   bulkControl,
-  "The latest queued or sent date is now shown on each player card below.",
+  "The latest email date is shown on each player card below.",
   "The bulk result must tell the admin where to verify per-player dates.",
 );
 expect(
