@@ -103,7 +103,7 @@
         "src/components/captain/CaptainResultsNavBridge.tsx"
       ],
       "responsibilities": [
-        "Expose the simple result history as Results in captain navigation.",
+        "Expose the simple result history as Team results in captain navigation.",
         "Expose the detailed appearances, ratings, scorers, assists, Player of the Match and dispute workflow as Match reports.",
         "Keep both links in the owned React navigation without cloning or relabelling rendered anchors."
       ],
@@ -111,7 +111,7 @@
         {
           "path": "src/app/captain/team/[teamid]/layout.tsx",
           "contains": [
-            "{ href: `/captain/team/${teamid}/results-history`, label: \"Results\" }",
+            "{ href: `/captain/team/${teamid}/results-history`, label: \"Team results\" }",
             "{ href: `/captain/team/${teamid}/results`, label: \"Match reports\" }"
           ]
         }
@@ -301,17 +301,35 @@
         "Render SIXFL TV in the homepage React tree before the AI Predictor rather than inserting it after render.",
         "Render the SIXFL TV logo, Goal of the Week and latest uploaded match links from owned components.",
         "Render AI Predictor branding and explanatory copy directly rather than replacing elements and text nodes after render.",
-        "Keep the Harrogate, Wetherby, Northallerton and Heartlands card names, statuses and registration destinations in the actual homepage data."
+        "Render live, forming and planned league cards from the canonical League data rather than hard-coded post-render mutations."
       ],
       "checks": [
         {
           "path": "src/app/(public)/page.tsx",
           "contains": [
+            "<HomepageLeagueDirectory />",
             "<SixflTvHomepageSection />",
-            "<HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />",
-            "Harrogate West Tuesday League",
-            "harrogatePlayerLink",
-            "North Yorkshire Heartlands League"
+            "<HomepageAiPredictorSection teamLogos={predictorSampleTeamLogos} />"
+          ]
+        },
+        {
+          "path": "src/components/home/HomepageLeagueDirectory.tsx",
+          "contains": [
+            "getHomepageLeagues",
+            "data-testid=\"homepage-league-directory\"",
+            "<LeagueLaunchCard key={league.id} league={league} />",
+            "league.homepageStage === \"LIVE\"",
+            "league.homepageStage === \"FORMING\"",
+            "league.homepageStage === \"PLANNED\""
+          ]
+        },
+        {
+          "path": "src/lib/leagues/homepage-leagues.ts",
+          "contains": [
+            "export async function getHomepageLeagues",
+            "league.\"homepageStage\"",
+            "league.\"homepagePriority\"",
+            "league.\"name\" ASC"
           ]
         },
         {
@@ -341,7 +359,8 @@
         "src/components/captain/CaptainOutstandingBalanceBridge.tsx"
       ],
       "responsibilities": [
-        "Show the captain's actual outstanding team balance and open-charge count from the payment ledger without rewriting a rendered card.",
+        "Show the captain's actionable due-now or next team fee from the shared payment ledger without rewriting a rendered card.",
+        "Show the number of team charges currently due when payment is required.",
         "Keep the historical bridge path as an inert compatibility shell until its remaining build dependency is removed."
       ],
       "checks": [
@@ -349,9 +368,11 @@
           "path": "src/app/captain/team/[teamid]/page.tsx",
           "contains": [
             "getTeamPaymentLedger(teamid)",
-            "Outstanding balance",
-            "formatMoney(ledger.outstandingPence)",
-            "ledger.openChargeCount"
+            "const dueNowEntries = outstandingEntries.filter((entry) => entry.isPayableNow);",
+            "const paymentDueNowPence = dueNowEntries.reduce(",
+            "Team payment",
+            "Pay / view fees",
+            "dueNowEntries.length"
           ]
         },
         {
@@ -359,6 +380,55 @@
           "contains": [
             "Retired compatibility shell",
             "return null;"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "admin-lead-call-notes",
+      "removedPaths": [
+        "src/components/admin/leads/AdminLeadCallStatusBridge.tsx"
+      ],
+      "responsibilities": [
+        "Render Call / notes as a real column in the admin Leads React table.",
+        "Show whether a lead has been called and allow an administrator to mark a lead as called without inserting table cells after render.",
+        "Allow an administrator to add a quick lead note without scraping or mutating the rendered table.",
+        "Keep the Action column structurally separate from Call / notes across React refreshes."
+      ],
+      "checks": [
+        {
+          "path": "src/app/(admin)/admin/leads/page.tsx",
+          "contains": [
+            "import LeadCallNotesCell from \"@/components/admin/leads/LeadCallNotesCell\";",
+            ">Call / notes</th>",
+            "<LeadCallNotesCell leadId={lead.id} />",
+            ">Action</th>"
+          ]
+        },
+        {
+          "path": "src/components/admin/leads/LeadCallNotesCell.tsx",
+          "contains": [
+            "/api/admin/leads/call-status",
+            "/api/admin/leads/quick-note",
+            "Mark called",
+            "+ Add note",
+            "Save note"
+          ],
+          "notContains": [
+            "MutationObserver",
+            "document.querySelector",
+            "document.createElement",
+            "insertBefore",
+            "innerHTML"
+          ]
+        },
+        {
+          "path": "src/components/RouteScopedBridges.tsx",
+          "contains": [
+            "export default function RouteScopedBridges()"
+          ],
+          "notContains": [
+            "AdminLeadCallStatusBridge"
           ]
         }
       ]
