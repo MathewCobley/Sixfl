@@ -7,17 +7,14 @@
 import { randomUUID } from "crypto";
 import {
   FixtureStatus,
-  NotificationAudience,
-  NotificationChannel,
-  NotificationDispatchStatus,
   Prisma,
   UserRole,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { formatDateTimeInLondon, toLondonDateInputValue } from "@/lib/datetime/london";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { toLondonDateInputValue } from "@/lib/datetime/london";
+import { scheduleRefereeEveningForNight } from "@/lib/referees/evening-notifications";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -77,84 +74,6 @@ function getRefereeIdsByPitch(formData: FormData) {
     const value = String(formData.get(`refereeIdByPitch${index + 1}`) ?? "").trim();
     return value || null;
   });
-}
-
-function getFirstName(name: string | null, email: string | null) {
-  const fromName = name?.trim().split(/\s+/).filter(Boolean)[0];
-  const fromEmail = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim().split(/\s+/)[0];
-
-  return fromName || fromEmail || "there";
-}
-
-function getBaseUrl() {
-  return (process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk").replace(/\/+$/, "");
-}
-
-function formatNightDateLabel(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-
-  return formatDateTimeInLondon(date, {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function formatKickoffLabel(value: Date) {
-  return formatDateTimeInLondon(value, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-async function upsertRefereeRecipient(input: {
-  refereeId: string;
-  name: string | null;
-  email: string | null;
-}) {
-  const recipient = await prisma.notificationRecipient.upsert({
-    where: {
-      sourceType_sourceId: {
-        sourceType: "REFEREE",
-        sourceId: input.refereeId,
-      },
-    },
-    update: {
-      audience: NotificationAudience.REFEREE,
-      displayName: input.name?.trim() || null,
-      email: input.email?.trim().toLowerCase() || null,
-      emailNormalized: input.email?.trim().toLowerCase() || null,
-      transactionalEmailOptIn: true,
-    },
-    create: {
-      sourceType: "REFEREE",
-      sourceId: input.refereeId,
-      audience: NotificationAudience.REFEREE,
-      displayName: input.name?.trim() || null,
-      email: input.email?.trim().toLowerCase() || null,
-      emailNormalized: input.email?.trim().toLowerCase() || null,
-      transactionalEmailOptIn: true,
-    },
-  });
-
-  await prisma.notificationPreference.upsert({
-    where: { recipientId: recipient.id },
-    update: {
-      emailEnabled: true,
-    },
-    create: {
-      recipientId: recipient.id,
-      emailEnabled: true,
-      smsEnabled: true,
-      urgentSmsEnabled: true,
-      marketingEmailEnabled: false,
-      marketingSmsEnabled: false,
-    },
-  });
-
-  return recipient;
 }
 
 async function findOrCreateRefereeNight(input: {
@@ -219,29 +138,6 @@ async function findOrCreateRefereeNight(input: {
   `);
 
   return id;
-}
-
-function buildRefereeEmailBody(group: RefereeEmailGroup) {
-  const nightUrl = `${getBaseUrl()}/referee/night/${group.nightId}`;
-  const fixtureLines = group.fixtures.map((fixture) => {
-    const pitch = fixture.pitch ? ` · ${fixture.pitch}` : "";
-    return `- ${formatKickoffLabel(fixture.kickoffAt)}${pitch}: ${fixture.homeTeamName} vs ${fixture.awayTeamName}`;
-  });
-
-  return [
-    `Hi ${getFirstName(group.refereeName, group.refereeEmail)},`,
-    "",
-    `You have been assigned to referee ${group.fixtures.length} fixture${group.fixtures.length === 1 ? "" : "s"} for ${group.leagueName}${group.leagueSeason ? ` — ${group.leagueSeason}` : ""} on ${formatNightDateLabel(group.nightDate)}.`,
-    group.venueName ? `Venue: ${group.venueName}` : "Venue: TBC",
-    "",
-    "Fixtures:",
-    ...fixtureLines,
-    "",
-    "Open your referee night page to view fixtures, enter scores and complete the end-of-night cashup:",
-    "{{cta}}",
-    "",
-    "This was sent as a referee assignment only. Team fixture emails have not been resent.",
-  ].join("\n");
 }
 
 export async function backfillRefereeAssignmentsAction(formData: FormData) {
@@ -391,42 +287,11 @@ export async function backfillRefereeAssignmentsAction(formData: FormData) {
     }
   });
 
-  let sentEmailCount = 0;
+  const sentEmailCount = 0; // Deferred evening bookings are not immediate queued emails.
 
   if (sendRefereeEmails) {
     for (const group of emailGroupsByNightId.values()) {
-      if (!group.refereeEmail) continue;
-
-      const recipient = await upsertRefereeRecipient({
-        refereeId: group.refereeId,
-        name: group.refereeName,
-        email: group.refereeEmail,
-      });
-
-      const dispatch = await queueDirectNotification({
-        recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.REFEREE,
-        subject: `SIXFL referee assignment: ${group.leagueName}${group.leagueSeason ? ` — ${group.leagueSeason}` : ""} · ${formatNightDateLabel(group.nightDate)}`,
-        body: buildRefereeEmailBody(group),
-        isTransactional: true,
-        sourceType: "REFEREE_ASSIGNMENT_BACKFILL",
-        sourceId: group.nightId,
-        emailCta: {
-          label: "Open referee night",
-          url: `${getBaseUrl()}/referee/night/${group.nightId}`,
-        },
-        metadata: {
-          kind: "referee_assignment_backfill",
-          refereeNightId: group.nightId,
-          refereeId: group.refereeId,
-          fixtureIds: group.fixtures.map((fixture) => fixture.id),
-        },
-      });
-
-      if (dispatch.status === NotificationDispatchStatus.QUEUED) {
-        sentEmailCount += 1;
-      }
+      await scheduleRefereeEveningForNight({ refereeNightId: group.nightId, createdByUserId: user?.id });
     }
   }
 

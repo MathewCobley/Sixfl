@@ -87,7 +87,7 @@ if (
 
 for (const expected of [
   "NotificationAudience.TEAM",
-  "NotificationAudience.REFEREE",
+  "const refereeEveningChanged =",
   "NotificationChannel.EMAIL",
   "NotificationChannel.SMS",
   "FixtureCaptainConfirmationStatus.PENDING",
@@ -109,7 +109,7 @@ for (const expected of [
 requireText(
   notifications,
   "input.before.referee?.id !== input.after.referee?.id",
-  "Referee assignment changes must notify both the removed and newly assigned referee.",
+  "Referee assignment changes must capture both the removed and newly assigned referee for evening consolidation.",
 );
 requireText(
   route,

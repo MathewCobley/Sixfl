@@ -21,6 +21,7 @@ import {
 } from "@/lib/email/buildEmail";
 import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
+import { EVENING_SOURCE, isLegacyRefereeNotice, LEGACY_REFEREE_REASON } from "@/lib/referees/evening-policy";
 import { getEmailReplyDomain } from "@/lib/resend/client";
 import { getNotificationRecipientById } from "./recipients";
 import {
@@ -45,6 +46,8 @@ const ATTEMPT_STATUS = {
 } as const satisfies Record<NotificationAttemptStatus, NotificationAttemptStatus>;
 
 export type QueueNotificationFromTemplateInput = {
+  /** Only consolidated, time-critical referee messages may bypass SMS quiet hours. */
+  urgent?: boolean;
   templateKey: string;
   recipientId: string;
   variables?: NotificationTemplateVariables;
@@ -251,7 +254,7 @@ function getMetadataObject(value: Prisma.JsonValue | null) {
   return value as Record<string, Prisma.JsonValue>;
 }
 
-async function applySmsShortLinks(dispatch: NotificationDispatch) {
+async function applySmsShortLinks(dispatch: NotificationDispatch, db: Prisma.TransactionClient = prisma) {
   if (dispatch.channel !== "SMS") return dispatch;
 
   const shortened = shortenSmsBodyLinks({
@@ -266,7 +269,7 @@ async function applySmsShortLinks(dispatch: NotificationDispatch) {
 
   const metadata = getMetadataObject(dispatch.metadata);
 
-  return prisma.notificationDispatch.update({
+  return db.notificationDispatch.update({
     where: { id: dispatch.id },
     data: {
       bodyText: shortened.bodyText,
@@ -422,8 +425,8 @@ async function createNonQueuedTemplateDispatch(input: {
   metadata?: Prisma.InputJsonValue;
   scheduledFor: Date;
   createdByUserId?: string | null;
-}) {
-  const dispatch = await prisma.notificationDispatch.create({
+}, db: Prisma.TransactionClient = prisma) {
+  const dispatch = await db.notificationDispatch.create({
     data: {
       recipientId: input.recipient.id,
       templateId: input.template.id,
@@ -445,7 +448,7 @@ async function createNonQueuedTemplateDispatch(input: {
     },
   });
 
-  return applySmsShortLinks(dispatch);
+  return applySmsShortLinks(dispatch, db);
 }
 
 async function createNonQueuedDirectDispatch(input: {
@@ -487,11 +490,11 @@ async function createNonQueuedDirectDispatch(input: {
   return applySmsShortLinks(dispatch);
 }
 
-export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput) {
-  const template = await prisma.notificationTemplate.findUnique({ where: { key: input.templateKey } });
+export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput, db: Prisma.TransactionClient = prisma) {
+  const template = await db.notificationTemplate.findUnique({ where: { key: input.templateKey } });
   if (!template || !template.isActive) throw new Error("Notification template not found or inactive.");
 
-  const recipient = await getNotificationRecipientById(input.recipientId);
+  const recipient = await db.notificationRecipient.findUnique({ where: { id: input.recipientId }, include: { preferences: true } });
   if (!recipient) throw new Error("Notification recipient not found.");
 
   const isTransactional = template.kind === "TRANSACTIONAL";
@@ -501,9 +504,10 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
     emailBranding: input.emailBranding,
     paymentSummary: input.paymentSummary,
   });
-  const scheduledFor = resolveScheduledFor({ channel: template.channel, scheduledFor: input.scheduledFor });
+  const urgentSms = input.urgent && input.sourceType === EVENING_SOURCE && template.channel === "SMS" && recipient.preferences?.urgentSmsEnabled;
+  const scheduledFor = urgentSms ? (input.scheduledFor ?? new Date()) : resolveScheduledFor({ channel: template.channel, scheduledFor: input.scheduledFor });
 
-  const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
+  const fixtureBlockReason = isLegacyRefereeNotice(input.sourceType) ? LEGACY_REFEREE_REASON : await getUnpublishedFixtureBlockReason({
     sourceType: input.sourceType,
     sourceId: input.sourceId,
     metadata: input.metadata,
@@ -523,7 +527,7 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
       metadata: input.metadata,
       scheduledFor,
       createdByUserId: input.createdByUserId,
-    });
+    }, db);
   }
 
   const allowed = canQueueForRecipient({ recipient, channel: template.channel, isTransactional });
@@ -541,12 +545,12 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
       metadata: input.metadata,
       scheduledFor,
       createdByUserId: input.createdByUserId,
-    });
+    }, db);
   }
 
   if (template.channel === "EMAIL") ensureEmailRepliesConfigured();
 
-  const dispatch = await prisma.notificationDispatch.create({
+  const dispatch = await db.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
       templateId: template.id,
@@ -566,7 +570,7 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
     },
   });
 
-  return applySmsShortLinks(dispatch);
+  return applySmsShortLinks(dispatch, db);
 }
 
 export async function queueDirectNotification(input: QueueDirectNotificationInput) {
@@ -585,7 +589,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
   });
   const scheduledFor = resolveScheduledFor({ channel: input.channel, scheduledFor: input.scheduledFor });
 
-  const fixtureBlockReason = await getUnpublishedFixtureBlockReason({
+  const fixtureBlockReason = isLegacyRefereeNotice(input.sourceType) ? LEGACY_REFEREE_REASON : await getUnpublishedFixtureBlockReason({
     sourceType: input.sourceType,
     sourceId: input.sourceId,
     metadata: input.metadata,
@@ -669,13 +673,12 @@ export async function getDueNotificationDispatches(limit = 50) {
 }
 
 export async function markNotificationDispatchProcessing(dispatchId: string) {
-  return prisma.notificationDispatch.update({
-    where: { id: dispatchId },
-    data: {
-      status: DISPATCH_STATUS.PROCESSING,
-      processedAt: new Date(),
-    },
+  // Atomic claim: cron and manual queue processors must not both send this row.
+  const claimed = await prisma.notificationDispatch.updateMany({
+    where: { id: dispatchId, status: DISPATCH_STATUS.QUEUED, scheduledFor: { lte: new Date() } },
+    data: { status: DISPATCH_STATUS.PROCESSING, processedAt: new Date() },
   });
+  return claimed.count === 1;
 }
 
 export async function markNotificationDispatchSent(input: {

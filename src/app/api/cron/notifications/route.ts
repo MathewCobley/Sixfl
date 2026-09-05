@@ -14,8 +14,7 @@ import { runTeamLeadConfirmationSmsReminderJob } from "@/lib/leads/team-confirma
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
 import { runPlayerPoolProfileSmsReminderJob } from "@/lib/player-pool/profile-sms-reminders";
-import { queueDueRefereeNightConfirmationChasers } from "@/lib/referee-night-confirmations";
-import { queueDueRefereeNightReminderEmails } from "@/lib/referee-night-emails";
+import { runRefereeEveningNotifications } from "@/lib/referees/evening-notifications";
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
 import { prisma } from "@/lib/prisma";
 import {
@@ -173,15 +172,10 @@ export async function GET(request: NextRequest) {
     failures,
     syncUpcomingRefereeAssignmentsForConfirmations,
   );
-  const refereeNights = await runCronStep(
-    "referee-night-reminders",
+  const refereeEvenings = await runCronStep(
+    "referee-evening-bookings-and-reminders",
     failures,
-    queueDueRefereeNightReminderEmails,
-  );
-  const refereeConfirmations = await runCronStep(
-    "referee-confirmation-chasers",
-    failures,
-    queueDueRefereeNightConfirmationChasers,
+    runRefereeEveningNotifications,
   );
   const referralEmails = await runCronStep(
     "referral-recorded-emails",
@@ -229,8 +223,7 @@ export async function GET(request: NextRequest) {
     aiPredictionIntegrity,
     lastMinuteReplacements,
     refereeAssignmentSync,
-    refereeNights,
-    refereeConfirmations,
+    refereeEvenings,
     referralEmails,
     referralPayoutEmails,
     generatedQueue,

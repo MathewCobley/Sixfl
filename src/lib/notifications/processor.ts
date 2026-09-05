@@ -13,6 +13,8 @@ import {
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
+import { refereeEveningDeliveryBlock } from "@/lib/referees/evening-notifications";
+import { isLegacyRefereeNotice, LEGACY_REFEREE_REASON } from "@/lib/referees/evening-policy";
 import { sendEmailWithResend } from "./providers/resend";
 import { sendSmsWithTwilio } from "./providers/twilio";
 import {
@@ -330,15 +332,24 @@ export async function processNotificationQueue(limit = 25) {
   };
 
   for (const dispatch of dueDispatches) {
+    let claimed = false;
+    let acceptedByProvider = false;
     try {
+      claimed = await markNotificationDispatchProcessing(dispatch.id);
+      if (!claimed) {
+        result.skipped += 1;
+        result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Dispatch already claimed or cancelled." });
+        continue;
+      }
       const metadata = getMetadataRecord(dispatch.metadata);
-      const unpublishedFixtureBlockReason = await getUnpublishedFixtureBlockReason({
+      const unpublishedFixtureBlockReason = isLegacyRefereeNotice(dispatch.sourceType) ? LEGACY_REFEREE_REASON : await getUnpublishedFixtureBlockReason({
         sourceType: dispatch.sourceType,
         sourceId: dispatch.sourceId,
         metadata: dispatch.metadata,
       });
       const cancellationReason =
         unpublishedFixtureBlockReason ??
+        (await refereeEveningDeliveryBlock(dispatch)) ??
         (await getQueuedMatchFeeCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId })) ??
         (await getQueuedFixtureReminderCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId, metadata, createdAt: dispatch.createdAt })) ??
         (await getQueuedManagedSquadAvailabilityCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId, metadata })) ??
@@ -353,13 +364,12 @@ export async function processNotificationQueue(limit = 25) {
 
       if (dispatch.channel === NotificationChannel.EMAIL) {
         if (!dispatch.recipient.email?.trim()) {
+          await markNotificationDispatchCancelled(dispatch.id, "Recipient email missing.");
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Recipient email missing." });
           continue;
         }
         if (!dispatch.subject?.trim()) throw new Error("Email dispatch is missing a subject.");
-
-        await markNotificationDispatchProcessing(dispatch.id);
 
         const thread = await findOrCreateEmailThreadForOutbound({
           recipientId: dispatch.recipientId,
@@ -382,6 +392,7 @@ export async function processNotificationQueue(limit = 25) {
           replyTo,
         });
 
+        acceptedByProvider = true;
         await markNotificationDispatchSent({
           dispatchId: dispatch.id,
           provider: sendResult.provider,
@@ -414,15 +425,15 @@ export async function processNotificationQueue(limit = 25) {
 
       if (dispatch.channel === NotificationChannel.SMS) {
         if (!dispatch.recipient.phone?.trim()) {
+          await markNotificationDispatchCancelled(dispatch.id, "Recipient phone missing.");
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Recipient phone missing." });
           continue;
         }
 
-        await markNotificationDispatchProcessing(dispatch.id);
-
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });
 
+        acceptedByProvider = true;
         await markNotificationDispatchSent({
           dispatchId: dispatch.id,
           provider: sendResult.provider,
@@ -459,6 +470,19 @@ export async function processNotificationQueue(limit = 25) {
       result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Unsupported notification channel." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Notification processing failed.";
+      if (acceptedByProvider) {
+        // A logging/DB failure after provider acceptance is not a failed delivery.
+        // Leave SENT (or uncertain PROCESSING) intact; never make it retryable.
+        console.error("Notification accepted; post-send recording needs repair", dispatch.id, error);
+        result.sent += 1;
+        result.items.push({ dispatchId: dispatch.id, status: "sent", channel: dispatch.channel, message: "Provider accepted the message; delivery-history recording needs attention." });
+        continue;
+      }
+      if (!claimed) {
+        result.failed += 1;
+        result.items.push({ dispatchId: dispatch.id, status: "failed", channel: dispatch.channel, message });
+        continue;
+      }
 
       await markNotificationDispatchFailed({
         dispatchId: dispatch.id,
