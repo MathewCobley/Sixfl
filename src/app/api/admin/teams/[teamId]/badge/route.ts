@@ -22,7 +22,7 @@ function isSameOriginUpload(request: Request) {
   }
 }
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ teamId: string }> }) {
   // Keep redirects outside the catch so an unauthorised session can never reach a write.
   const { user } = await requireAdmin();
   if (!isSameOriginUpload(request)) {
@@ -30,7 +30,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const { id: teamId } = await context.params;
+    const { teamId } = await context.params;
     const form = await readImageUploadForm(request);
     const action = form.get("action");
     const expectedLogoUrl = form.get("expectedLogoUrl");

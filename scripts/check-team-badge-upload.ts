@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import sharp from "sharp";
 import { ImageUploadError, optimiseBadgeImage, readImageUploadForm } from "../src/lib/images/upload";
 import { MAX_IMAGE_UPLOAD_BYTES } from "../src/lib/images/constants";
@@ -82,7 +82,7 @@ async function main() {
   await check("native upload navigation and shared team field remain wired", () => {
     const read = (path: string) => readFileSync(path, "utf8");
     assert.match(read("src/app/(admin)/admin/teams/[id]/layout.tsx"), /href=\{`\/admin\/teams\/\$\{id\}\/badge`\}/);
-    const route = read("src/app/api/admin/teams/[id]/badge/route.ts");
+    const route = read("src/app/api/admin/teams/[teamId]/badge/route.ts");
     assert.ok(route.indexOf("await requireAdmin()") < route.indexOf("await saveTeamBadge("));
     assert.match(route, /isSameOriginUpload\(request\)/);
     assert.match(route, /revalidatePath\("\/", "layout"\)/);
@@ -95,6 +95,13 @@ async function main() {
     assert.match(store, /new URL\(`/);
     assert.match(read("src/app/api/team-badges/[id]/route.ts"), /"Content-Type": "image\/png"/);
     assert.doesNotMatch(store, /writeFile|unlinkSync/);
+  });
+  await check("upload route uses the existing teamId dynamic segment without conflicts", () => {
+    const segments = readdirSync("src/app/api/admin/teams").filter((name) => name.startsWith("["));
+    assert.deepEqual(segments, ["[teamId]"]);
+    const route = readFileSync("src/app/api/admin/teams/[teamId]/badge/route.ts", "utf8");
+    assert.ok(route.includes("params: Promise<{ teamId: string }>"));
+    assert.ok(route.includes("const { teamId } = await context.params"));
   });
   console.log(`Team badge upload: ${checks} checks passed.`);
 }
