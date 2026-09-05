@@ -1,0 +1,39 @@
+name: Referee evening communications
+
+on:
+  push:
+    branches: [fix/referee-evening-digest-20260905]
+  pull_request:
+    paths:
+      - 'src/lib/referee*'
+      - 'src/lib/referees/**'
+      - 'src/lib/notifications/**'
+      - 'src/lib/fixtures/**'
+      - 'src/app/api/cron/notifications/**'
+      - 'prisma/migrations/**'
+      - 'tests/referee-evening*'
+      - '.github/workflows/referee-evening-comms.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  referee-evening:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Audit referee notification entry points and match-duration sources
+        run: |
+          git ls-files '*AGENTS.md' '*referee*' '*Referee*'
+          git grep -n -E 'referee assignment|REFEREE.*(ASSIGN|NOTICE)|queueRefereeNight|matchDuration|matchLengthMinutes|durationMinutes|matchMinutes' -- src scripts prisma tests || true
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Verify evening policy
+        run: npx tsx --test tests/referee-evening-comms.test.ts
+      - name: Type check
+        run: npx tsc --noEmit
