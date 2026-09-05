@@ -1,0 +1,40 @@
+name: Apply reviewed payment order integration (temporary)
+on:
+  push:
+    branches: [fix/team-payments-oldest-first]
+    paths: ['.github/workflows/payment-order-integrate-once.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/fix/team-payments-oldest-first'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact reviewed source edits
+        run: |
+          python3 .payment-order-review/integrate.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/lib/payments/team-credit-policy.ts')
+          s=p.read_text()
+          before='    if (!target || target.outstandingPence <= 0) break;'
+          after='''    const requested = order.ledger.entries.find(entry => entry.chargeId === input.chargeId);
+              const targetDate = target ? (target.dueDate ?? target.kickoffAt ?? target.createdAt).getTime() : Infinity;
+              const requestedDate = requested ? (requested.dueDate ?? requested.kickoffAt ?? requested.createdAt).getTime() : -Infinity;
+              if (!requested || !target || target.outstandingPence <= 0 || targetDate > requestedDate) break;'''
+          assert s.count(before)==1
+          p.write_text(s.replace(before,after))
+          p=Path('src/app/captain/team/[teamid]/payments/use-credit-for-collected/route.ts')
+          s=p.read_text()
+          before='SELECT pg_advisory_xact_lock(hashtext(${`captain-collected-credit:${chargeId}`}))'
+          assert s.count(before)==1
+          p.write_text(s.replace(before,before+'::text'))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          while IFS= read -r file || [ -n "$file" ]; do git add -- "$file"; done < /tmp/payment-order-changed-files.txt
+          git rm -r .payment-order-review .github/workflows/payment-order-review-once.yml .github/workflows/payment-order-integrate-once.yml
+          git diff --cached --stat
+          git commit -m 'Enforce oldest-first direct team checkout and credit; preserve fixture-specific squad payments'
+          git push origin HEAD:fix/team-payments-oldest-first
