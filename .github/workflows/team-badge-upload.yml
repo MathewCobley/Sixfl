@@ -1,0 +1,31 @@
+name: Team badge upload
+on:
+  pull_request:
+    paths:
+      - 'src/lib/images/**'
+      - 'src/lib/team-badges.ts'
+      - 'src/app/api/admin/teams/**'
+      - 'src/app/api/team-badges/**'
+      - 'src/app/(admin)/admin/teams/**'
+      - 'src/components/admin/teams/**'
+      - 'prisma/migrations/**'
+      - 'scripts/check-team-badge-upload.ts'
+      - '.github/workflows/team-badge-upload.yml'
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  image-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Exercise real image processing and multipart limits
+        run: npx tsx scripts/check-team-badge-upload.ts
+      - name: Audit all existing badge consumers for compatibility
+        run: git grep -n -E 'logoUrl|team-logos/' -- src scripts || true
