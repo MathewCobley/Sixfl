@@ -1,0 +1,58 @@
+name: Fixture guest approval contracts
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  guest-approvals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_guest_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_guest_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_guest_test
+      GUEST_APPROVAL_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_guest_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply complete production source preparation
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test permissions, real PostgreSQL transactions, races and native wiring
+        run: npx tsx --test tests/fixture-guest-approvals.test.ts
+      - name: Prove the tests detect a removed admin safeguard
+        shell: bash
+        run: |
+          target=src/lib/fixtures/guest-approvals.ts
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          node - <<'JS'
+          const fs = require("node:fs");
+          const path = "src/lib/fixtures/guest-approvals.ts";
+          const source = fs.readFileSync(path, "utf8");
+          const guard = 'if (actors[0]?.role !== "ADMIN")';
+          if (!source.includes(guard)) throw new Error("Admin safeguard marker not found");
+          fs.writeFileSync(path, source.replace(guard, "if (false)"));
+          JS
+          if npx tsx --test --test-name-pattern="storage layer independently" tests/fixture-guest-approvals.test.ts > guest-negative-control.log 2>&1; then
+            cat guest-negative-control.log
+            echo "ERROR: removing the admin guard did not fail its test"
+            exit 1
+          fi
+          grep -q "Missing expected rejection" guest-negative-control.log
+          echo "Negative control passed: the permission test rejected a removed admin guard."
+      - name: Type-check application
+        run: npx tsc --noEmit
