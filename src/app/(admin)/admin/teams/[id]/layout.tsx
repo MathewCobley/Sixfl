@@ -294,6 +294,12 @@ export default async function AdminTeamDetailLayout({
               Team overview
             </Link>
             <Link
+              href={`/admin/teams/${id}/badge`}
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+            >
+              Upload badge
+            </Link>
+            <Link
               href={`/admin/teams/${id}/managed-squad`}
               className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
             >
