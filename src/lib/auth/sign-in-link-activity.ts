@@ -204,13 +204,13 @@ export async function markSignInLinkSent(input: {
 
   try {
     await ensureSignInLinkActivityTable();
+    // NextAuth sends the email and stores its token concurrently. The token
+    // write can fail before email acceptance returns: never clear that failure.
     await prisma.$executeRaw`
       UPDATE "SignInLinkActivity"
       SET
         "sentAt" = NOW(),
         "providerMessageId" = ${trimOptional(input.providerMessageId, 255)},
-        "failureReason" = NULL,
-        "failedAt" = NULL,
         "updatedAt" = NOW()
       WHERE "id" = ${input.activityId}
     `;

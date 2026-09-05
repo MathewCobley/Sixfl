@@ -35,7 +35,10 @@ function harness(options = {}) {
         const enrich = query.includes('"userNameSnapshot" =');
         const row = rows.get(values[values.length - (enrich ? 2 : 1)]);
         if (row && enrich) { row.team = values[4]; row.host = values[6]; }
-        else if (row && query.includes('"sentAt" = NOW()')) row.sent = true;
+        else if (row && query.includes('"sentAt" = NOW()')) {
+          row.sent = true;
+          if (query.includes('"failureReason" = NULL')) delete row.failure;
+        }
         else if (row && query.includes('"failedAt" = NOW()')) row.failure ??= values[0];
       }
       return 1;
@@ -48,6 +51,7 @@ function harness(options = {}) {
     resend: { Resend: class {
       emails = { send: async (mail) => {
         sent.push(mail);
+        if (state.sendWait) await state.sendWait;
         if (state.sendError) return { error: { message: state.sendError } };
         return { data: { id: "mock-provider-id" }, error: null };
       } };
@@ -280,4 +284,34 @@ test("technical warnings never recommend registration or expose raw errors", () 
   assert.ok(page.includes('data.canLogin === false'));
   const route = fs.readFileSync(path.join(root, "src/app/api/auth/[...nextauth]/route.ts"), "utf8");
   assert.ok(route.includes("withTrackedSignInRequest(request, () => handler(request, context))"));
+});
+
+// NextAuth v4 uses Promise.all for delivery and token persistence, not a
+// sequential send-then-token flow. A late provider success must not erase an
+// earlier failure returned to the browser.
+test("parallel token failure survives a later email-provider success", async () => {
+  let release;
+  const sendWait = new Promise(resolve => { release = resolve; });
+  const h = harness({ prospect, sendWait });
+  let sender;
+  await h.tracker.withTrackedSignInRequest(request(), async () => {
+    await h.auth.callbacks.signIn({ user: prototypeUser, account: emailAccount, email: { verificationRequest: true } });
+    sender = h.auth.providers[0].sendVerificationRequest({
+      identifier: email,
+      url: "https://sixfl.co.uk/api/auth/callback/email?token=DO_NOT_STORE",
+      provider: { from: "test@example.com" },
+    });
+    try {
+      await Promise.all([sender, new Promise((_, reject) => setImmediate(() => reject(new Error("Token persistence failed"))))]);
+      return new Response("unexpected success");
+    } catch { return failedResponse("EmailSignin"); }
+  });
+  const row = [...h.rows.values()][0];
+  assert.ok(row.failure);
+  const originalFailure = row.failure;
+  assert.equal(row.sent, undefined);
+  release();
+  await sender;
+  assert.equal(row.sent, true);
+  assert.equal(row.failure, originalFailure);
 });
