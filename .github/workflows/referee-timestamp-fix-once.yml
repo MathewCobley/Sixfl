@@ -1,0 +1,58 @@
+name: Verify referee confirmation timestamp correction
+on:
+  push:
+    branches: [fix/referee-evening-digest-20260905]
+    paths: ['.github/workflows/referee-timestamp-fix-once.yml']
+permissions:
+  contents: write
+jobs:
+  verify:
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/fix/referee-evening-digest-20260905'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_referee_test
+        ports: ['5432:5432']
+        options: --health-cmd 'pg_isready -U postgres' --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_referee_test
+      EMAIL_REPLY_DOMAIN: example.invalid
+      SIXFL_ISOLATED_REFEREE_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Correct and verify native SQL parameter typing
+        run: |
+          python3 - <<'PY'
+          import pathlib, hashlib
+          p=pathlib.Path('src/lib/referees/evening-notifications.ts'); b=p.read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest() == '7ef4cb405ecc6c266b8284bced0f84ee18e980a6'
+          t=b.decode(); assert t.count('${row.respondedAt} ELSE NULL END') == 2
+          t=t.replace('${row.respondedAt} ELSE NULL END','${row.respondedAt}::timestamp ELSE NULL::timestamp END')
+          assert hashlib.sha256(t.encode()).hexdigest() == '27c7cbfe733abb6f5982837a71967e8328445c3d91492ecf4c34e56a3398dc50'
+          p.write_text(t)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/referees/evening-notifications.ts
+          git commit -m 'Explicitly type nullable referee confirmation timestamp parameters'
+          git push origin HEAD:fix/referee-evening-digest-20260905
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Create disposable schema only
+        run: |
+          npx prisma db push --skip-generate
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260626120500_add_referee_nights/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260626133000_add_referee_profiles/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260706193000_referee_night_confirmations/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;'
+      - name: Verify native referee SQL and concurrency behaviour
+        run: npx tsx --test tests/referee-evening-database.test.ts
