@@ -79,12 +79,12 @@ function formatDateTime(value?: Date | null) {
 }
 
 function confirmationDetail(info?: ConfirmationInfo | null) {
-  if (!info) return "Not chased yet";
+  if (!info) return "Booking pending — waits 60 minutes after the last assignment change";
   if (info.confirmationStatus === "CONFIRMED") return `Confirmed ${formatDateTime(info.confirmationConfirmedAt)}`;
   if (info.confirmationStatus === "DECLINED") return `Declined ${formatDateTime(info.confirmationDeclinedAt)}`;
-  if (info.confirmationLastChasedAt) return `Last chased ${formatDateTime(info.confirmationLastChasedAt)}`;
+  if (info.confirmationLastChasedAt) return `Last communication queued ${formatDateTime(info.confirmationLastChasedAt)}`;
   if (info.confirmationSentAt) return `Sent ${formatDateTime(info.confirmationSentAt)}`;
-  return "Not chased yet";
+  return "Booking pending — waits 60 minutes after the last assignment change";
 }
 
 async function getConfirmationMap(nightIds: string[]) {
@@ -218,7 +218,7 @@ export default async function AdminRefereeNightsPage({
 
       {sp.chased ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          Referee confirmation chase queued.
+          Evening booking schedule checked. One settled booking email and one later SMS are used; duplicate alerts are suppressed.
         </div>
       ) : null}
 
@@ -279,7 +279,7 @@ export default async function AdminRefereeNightsPage({
                           disabled={isClosed}
                           className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35"
                         >
-                          Chase ref
+                          Check booking
                         </button>
                       </form>
                     </div>

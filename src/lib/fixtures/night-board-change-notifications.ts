@@ -9,7 +9,6 @@ import {
   NotificationAudience,
   NotificationChannel,
   NotificationDispatchStatus,
-  NotificationRecipientSourceType,
   Prisma,
 } from "@prisma/client";
 
@@ -18,16 +17,13 @@ import {
   queueDirectNotification,
   queueNotificationFromTemplate,
 } from "@/lib/notifications/service";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
-import { getRefereeProfileByUserId } from "@/lib/referees/profile";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 const TEAM_CHANGE_SOURCE_TYPE = "FIXTURE_NIGHT_BOARD_CHANGE_NOTICE";
 const TEAM_STATUS_SOURCE_TYPE = "FIXTURE_NIGHT_BOARD_STATUS_NOTICE";
-const REFEREE_CHANGE_SOURCE_TYPE = "FIXTURE_NIGHT_BOARD_REFEREE_NOTICE";
 
 const STALE_CONFIRMATION_SOURCE_TYPES = [
   "FIXTURE_CONFIRMATION_INITIAL_EMAIL",
@@ -89,7 +85,6 @@ export type NightBoardFixtureNotificationSummary = {
 };
 
 type DeliveryOutcome = "queued" | "skipped" | "existing" | "failed";
-type RefereeNoticeAction = "assigned" | "removed" | "updated";
 
 function emptyDeliveryCounts(): NightBoardNotificationDeliveryCounts {
   return {
@@ -269,9 +264,6 @@ function captainFixtureUrl(teamId: string, fixtureId: string) {
   ).toString();
 }
 
-function refereeDashboardUrl() {
-  return new URL("/referee", `${getPublicSiteUrl()}/`).toString();
-}
 
 async function cancelQueuedStaleFixtureMessages(fixtureId: string) {
   await Promise.all([
@@ -401,43 +393,6 @@ async function queueOnce(input: {
   }
 }
 
-async function upsertRefereeRecipient(
-  referee: NightBoardNotificationReferee,
-) {
-  const [profile, lead] = await Promise.all([
-    getRefereeProfileByUserId(referee.id).catch((error) => {
-      console.warn("Could not load referee profile for fixture-change notice", {
-        refereeId: referee.id,
-        error,
-      });
-      return null;
-    }),
-    referee.createdFromLeadId
-      ? prisma.interestLead.findUnique({
-          where: { id: referee.createdFromLeadId },
-          select: { phone: true },
-        })
-      : Promise.resolve(null),
-  ]);
-
-  return upsertNotificationRecipient({
-    sourceType: NotificationRecipientSourceType.REFEREE,
-    sourceId: referee.id,
-    audience: NotificationAudience.REFEREE,
-    displayName: referee.name || referee.email || "Referee",
-    email: referee.email,
-    phone: profile?.phone ?? lead?.phone ?? null,
-    marketingEmailOptIn: true,
-    marketingSmsOptIn: true,
-    transactionalEmailOptIn: true,
-    transactionalSmsOptIn: true,
-    metadata: {
-      userId: referee.id,
-      entityType: "REFEREE",
-      origin: "night_board_fixture_change",
-    },
-  });
-}
 
 function teamEmailCopy(input: {
   status: FixtureStatus;
@@ -534,111 +489,6 @@ function teamSmsCopy(input: {
   )} at ${input.after.venueName || "venue TBC"}. Please review and confirm: ${
     input.dashboardUrl
   }`;
-}
-
-function refereeCopy(input: {
-  action: RefereeNoticeAction;
-  firstName: string;
-  homeTeamName: string;
-  awayTeamName: string;
-  before: NightBoardFixtureNotificationState;
-  after: NightBoardFixtureNotificationState;
-  changeLines: string[];
-  dashboardUrl: string;
-}) {
-  const fixtureName = `${input.homeTeamName} vs ${input.awayTeamName}`;
-
-  if (input.action === "removed") {
-    return {
-      subject: `SIXFL referee assignment removed: ${fixtureName}`,
-      body: [
-        `Hi ${input.firstName},`,
-        "",
-        `You are no longer assigned to referee ${fixtureName}.`,
-        "",
-        "Previous fixture details:",
-        fixtureSummary({
-          homeTeamName: input.homeTeamName,
-          awayTeamName: input.awayTeamName,
-          state: input.before,
-        }),
-        "",
-        "Please check your SIXFL referee dashboard for your current assignments.",
-        "",
-        "{{cta}}",
-      ].join("\n"),
-      sms: `SIXFL referee update: you are no longer assigned to ${fixtureName} on ${formatKickoff(
-        input.before.kickoffAt,
-      )}. Check your dashboard: ${input.dashboardUrl}`,
-      ctaLabel: "Open referee dashboard",
-    };
-  }
-
-  if (input.action === "assigned") {
-    return {
-      subject: `SIXFL referee assignment: ${fixtureName}`,
-      body: [
-        `Hi ${input.firstName},`,
-        "",
-        `You have been assigned to referee ${fixtureName}.`,
-        "",
-        "Fixture details:",
-        fixtureSummary({
-          homeTeamName: input.homeTeamName,
-          awayTeamName: input.awayTeamName,
-          state: input.after,
-        }),
-        "",
-        "Please check your SIXFL referee dashboard.",
-        "",
-        "{{cta}}",
-      ].join("\n"),
-      sms: `SIXFL referee assignment: ${fixtureName}, ${formatKickoff(
-        input.after.kickoffAt,
-      )}, ${input.after.venueName || "venue TBC"}, ${
-        input.after.pitch?.trim() || "pitch TBC"
-      }. Check your dashboard: ${input.dashboardUrl}`,
-      ctaLabel: "Open referee dashboard",
-    };
-  }
-
-  const statusSentence =
-    input.after.status === FixtureStatus.CANCELLED
-      ? "This fixture has been cancelled."
-      : input.after.status === FixtureStatus.POSTPONED
-        ? "This fixture has been postponed."
-        : "The details of one of your assigned fixtures have changed.";
-
-  return {
-    subject: `SIXFL referee fixture update: ${fixtureName}`,
-    body: [
-      `Hi ${input.firstName},`,
-      "",
-      statusSentence,
-      "",
-      "What changed:",
-      ...input.changeLines.map((line) => `- ${line}`),
-      "",
-      "Current fixture:",
-      fixtureSummary({
-        homeTeamName: input.homeTeamName,
-        awayTeamName: input.awayTeamName,
-        state: input.after,
-      }),
-      "",
-      "Please check your SIXFL referee dashboard.",
-      "",
-      "{{cta}}",
-    ].join("\n"),
-    sms: `SIXFL referee update: ${fixtureName} is now ${formatKickoff(
-      input.after.kickoffAt,
-    )}, ${input.after.venueName || "venue TBC"}, ${
-      input.after.pitch?.trim() || "pitch TBC"
-    } (${formatStatus(input.after.status)}). Check your dashboard: ${
-      input.dashboardUrl
-    }`,
-    ctaLabel: "Open referee dashboard",
-  };
 }
 
 async function rescheduleFixtureReminderEmails(input: {
@@ -934,86 +784,16 @@ export async function queueNightBoardFixtureChangeNotifications(input: {
     summary.remindersSkipped = reminders.skipped;
   }
 
-  const refereeNotices: Array<{
-    action: RefereeNoticeAction;
-    referee: NightBoardNotificationReferee;
-  }> = [];
-
-  if (input.before.referee?.id !== input.after.referee?.id) {
-    if (input.before.referee) {
-      refereeNotices.push({ action: "removed", referee: input.before.referee });
-    }
-    if (input.after.referee) {
-      refereeNotices.push({ action: "assigned", referee: input.after.referee });
-    }
-  } else if (input.after.referee && refereeChangeLines.length > 0) {
-    refereeNotices.push({ action: "updated", referee: input.after.referee });
+  // Fixture triggers atomically capture both old and new referee/date buckets,
+  // including removals, moves and deletes. Do not send a fixture-level message.
+  // The evening worker compares arrival/last-kick-off/finish/venue after settling.
+  const refereeEveningChanged =
+    input.before.referee?.id !== input.after.referee?.id || refereeChangeLines.length > 0;
+  if (refereeEveningChanged) {
+    summary.reason = "Referee evening booking updated. One settled email and one later SMS replace individual match alerts.";
   }
 
-  const refereeUrl = refereeDashboardUrl();
-
-  for (const notice of refereeNotices) {
-    const recipient = await upsertRefereeRecipient(notice.referee);
-    const firstName =
-      notice.referee.name?.trim().split(/\s+/)[0] ||
-      notice.referee.email ||
-      "there";
-    const copy = refereeCopy({
-      action: notice.action,
-      firstName,
-      homeTeamName: input.homeTeam.name,
-      awayTeamName: input.awayTeam.name,
-      before: input.before,
-      after: input.after,
-      changeLines: refereeChangeLines,
-      dashboardUrl: refereeUrl,
-    });
-    const sourceId = `${input.fixtureId}:${hash}:${notice.action}:${notice.referee.id}`;
-    const metadata = {
-      kind: "night_board_referee_fixture_change",
-      fixtureId: input.fixtureId,
-      leagueId: input.leagueId,
-      refereeId: notice.referee.id,
-      action: notice.action,
-      changeHash: hash,
-      changeLines: refereeChangeLines,
-      status: input.after.status,
-    };
-
-    recordOutcome(
-      referee,
-      NotificationChannel.EMAIL,
-      await queueOnce({
-        recipientId: recipient.id,
-        channel: NotificationChannel.EMAIL,
-        audience: NotificationAudience.REFEREE,
-        subject: copy.subject,
-        body: copy.body,
-        sourceType: REFEREE_CHANGE_SOURCE_TYPE,
-        sourceId,
-        metadata,
-        emailCta: { label: copy.ctaLabel, url: refereeUrl },
-        createdByUserId: input.createdByUserId,
-      }),
-    );
-
-    recordOutcome(
-      referee,
-      NotificationChannel.SMS,
-      await queueOnce({
-        recipientId: recipient.id,
-        channel: NotificationChannel.SMS,
-        audience: NotificationAudience.REFEREE,
-        body: copy.sms,
-        sourceType: REFEREE_CHANGE_SOURCE_TYPE,
-        sourceId,
-        metadata,
-        createdByUserId: input.createdByUserId,
-      }),
-    );
-  }
-
-  if (!shouldNotifyTeams && refereeNotices.length === 0) {
+  if (!shouldNotifyTeams && !refereeEveningChanged) {
     summary.reason =
       input.after.status === FixtureStatus.COMPLETED
         ? "The fixture was marked completed; no team reconfirmation notice was sent."

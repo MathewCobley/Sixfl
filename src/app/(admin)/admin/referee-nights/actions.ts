@@ -8,8 +8,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toLondonDateInputValue } from "@/lib/datetime/london";
-import { queueRefereeNightConfirmationChase } from "@/lib/referee-night-confirmations";
-import { queueRefereeNightBookedEmail } from "@/lib/referee-night-emails";
+import { scheduleRefereeEveningForNight } from "@/lib/referees/evening-notifications";
 import {
   createRefereeNightId,
   findFixturesForNight,
@@ -204,7 +203,7 @@ export async function createRefereeNightAction(formData: FormData) {
   await recalculateRefereeNightCashup(id);
 
   try {
-    await queueRefereeNightBookedEmail({ refereeNightId: id, createdByUserId: user?.id ?? null });
+    await scheduleRefereeEveningForNight({ refereeNightId: id, createdByUserId: user?.id ?? null });
   } catch (error) {
     console.warn("Could not queue referee booking email", error);
   }
@@ -218,9 +217,8 @@ export async function chaseRefereeNightConfirmationAction(formData: FormData) {
   const refereeNightId = readRequired(formData, "refereeNightId", "Referee night");
   const returnTo = safeReturnTo(readString(formData, "returnTo"));
 
-  await queueRefereeNightConfirmationChase({
+  await scheduleRefereeEveningForNight({
     refereeNightId,
-    mode: "manual",
     createdByUserId: user?.id ?? null,
   });
 

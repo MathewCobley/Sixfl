@@ -10,6 +10,7 @@ import {
   type RefereeNightConfirmationStatus,
 } from "@/lib/referee-night-confirmations";
 import { prisma } from "@/lib/prisma";
+import { recordEveningAnswerForNight } from "@/lib/referees/evening-notifications";
 
 export async function recordRefereeNightConfirmationResponse(input: {
   token: string;
@@ -52,5 +53,6 @@ export async function recordRefereeNightConfirmationResponse(input: {
       u.email AS "refereeEmail"
   `);
 
+  if (rows[0]) await recordEveningAnswerForNight(rows[0].id, input.answer);
   return rows[0] ?? null;
 }
