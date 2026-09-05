@@ -2,7 +2,10 @@ name: Referee evening communications
 on:
   pull_request:
   push:
-    branches: [main, fix/referee-evening-digest-20260905]
+    branches: [main]
+concurrency:
+  group: referee-evening-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -45,4 +48,6 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260706193000_referee_night_confirmations/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;'
       - name: Exercise migration, transactions, duplicates and confirmations
-        run: npx tsx --test tests/referee-evening-database.test.ts
+        run: |
+          npx tsx --test tests/referee-evening-database.test.ts
+          npx tsx --test tests/referee-evening-cashup-sync.test.ts
