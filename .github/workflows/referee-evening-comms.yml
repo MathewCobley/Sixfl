@@ -1,46 +1,48 @@
 name: Referee evening communications
-
 on:
-  push:
-    branches: [fix/referee-evening-digest-20260905]
   pull_request:
-    paths:
-      - 'src/lib/referee*'
-      - 'src/lib/referees/**'
-      - 'src/lib/notifications/**'
-      - 'src/lib/fixtures/**'
-      - 'src/app/api/cron/notifications/**'
-      - 'prisma/migrations/**'
-      - 'tests/referee-evening*'
-      - '.github/workflows/referee-evening-comms.yml'
-
+  push:
+    branches: [main, fix/referee-evening-digest-20260905]
 permissions:
   contents: read
-
 jobs:
   referee-evening:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_referee_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      # Disposable CI service only. No production secrets or delivery API keys.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_referee_test
+      EMAIL_REPLY_DOMAIN: example.invalid
+      SIXFL_ISOLATED_REFEREE_TEST: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Archive tracked review source (no environment or credentials)
-        run: git archive --format=tar.gz -o /tmp/referee-source.tar.gz HEAD src scripts prisma config .github tests docs AGENTS.md ENGINEERING.md DEV_RULES.md package.json package-lock.json tsconfig.json next.config.ts next-env.d.ts eslint.config.mjs postcss.config.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: referee-source
-          path: /tmp/referee-source.tar.gz
-          retention-days: 1
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - name: Audit referee notification entry points and match-duration sources
-        run: |
-          git ls-files '*AGENTS.md' '*referee*' '*Referee*'
-          git grep -n -E 'referee assignment|REFEREE.*(ASSIGN|NOTICE)|queueRefereeNight|matchDuration|matchLengthMinutes|durationMinutes|matchMinutes' -- src scripts prisma tests || true
       - run: npm ci
       - run: npm run prebuild
       - run: npx prisma generate
-      - name: Verify evening policy
+      - name: Check timing, content and regression contracts
         run: npx tsx --test tests/referee-evening-comms.test.ts
       - name: Type check
         run: npx tsc --noEmit
+      - name: Create isolated test schema
+        run: |
+          npx prisma db push --skip-generate
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260626120500_add_referee_nights/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260626133000_add_referee_profiles/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260706193000_referee_night_confirmations/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;'
+      - name: Exercise migration, transactions, duplicates and confirmations
+        run: npx tsx --test tests/referee-evening-database.test.ts
