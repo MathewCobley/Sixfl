@@ -1,0 +1,70 @@
+name: Team payment oldest-first policy
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  payment-order:
+    name: Preserve direct payment priority and squad allocations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only_password
+          POSTGRES_DB: sixfl_payment_order_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_payment_order_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:test_only_password@localhost:5432/sixfl_payment_order_test
+      PAYMENT_ORDER_TEST_DATABASE_URL: postgresql://postgres:test_only_password@localhost:5432/sixfl_payment_order_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare exact production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test payment ordering, old checkouts, credit, saved cards and squad exemptions
+        run: node --test tests/team-payment-order*.test.cjs
+      - name: Prove the regression suite rejects removal of the payment-order safeguard
+        shell: bash
+        run: |
+          file=src/lib/payments/team-payment-order-policy.ts
+          cp "$file" /tmp/payment-order-policy.original.ts
+          trap 'cp /tmp/payment-order-policy.original.ts "$file"' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/lib/payments/team-payment-order-policy.ts')
+          s=p.read_text()
+          before='return { allowed: false, code: "OLDER_BALANCE", blocker: oldest };'
+          assert s.count(before)==1
+          p.write_text(s.replace(before,'return { allowed: true, code: "NEXT", blocker: null };'))
+          PY
+          if node --test tests/team-payment-order.test.cjs tests/team-payment-order-runtime.test.cjs > /tmp/payment-order-negative-test.log 2>&1; then
+            echo 'ERROR: tests incorrectly accepted removal of the oldest-first gate.'
+            exit 1
+          fi
+          echo 'Negative control passed: removing the oldest-first gate makes the regression suite fail.'
+      - name: Verify existing critical contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+      - name: Type-check all application source
+        run: npx tsc --noEmit
+      - name: Inspect payment entry points after complete source preparation
+        run: |
+          git grep -nE 'checkout.sessions.create|paymentIntents.create|assertTeamChargePaymentOrder|getTeamPaymentOrder' -- src/app/pay src/app/captain src/lib/payments
+          git grep -n 'oldest eligible' -- src/app/captain/team scripts/apply-captain-team-credit-explanation.cjs
+      - name: Verify temporary implementation tools are not shipped
+        run: |
+          test ! -d .payment-order-review
+          test ! -f .github/workflows/payment-order-review-once.yml
+          test ! -f .github/workflows/payment-order-integrate-once.yml

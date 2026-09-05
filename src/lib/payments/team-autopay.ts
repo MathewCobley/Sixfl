@@ -7,6 +7,8 @@ import { Prisma } from "@prisma/client";
 
 import { isMatchFeeChargeDueToday } from "@/lib/payments/match-day-billing";
 import { verifyTeamAutoPayStripeEvidence } from "@/lib/payments/team-autopay-verification";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
+import { paymentOrderMessage } from "@/lib/payments/team-payment-order-policy";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
 
@@ -297,6 +299,26 @@ export async function chargeDueMatchdayAutoPayments(options?: {
         continue;
       }
 
+      // The saved-card mandate remains matchday-only and amount-capped. Do not
+      // redirect a current-match debit onto historic arrears or increase it.
+      const paymentOrder = await getTeamPaymentOrder(row.teamId);
+      const paymentDecision = paymentOrder.decision(row.chargeId);
+      if (!paymentDecision.allowed) {
+        const message = `Saved-card payment paused. ${paymentOrderMessage(paymentDecision)}`;
+        await db.$executeRaw(Prisma.sql`
+          UPDATE "Team" SET "autoPayLastFailureAt" = NOW(), "autoPayLastFailureReason" = ${message}
+          WHERE "id" = ${row.teamId}
+        `);
+        results.push({ chargeId: row.chargeId, teamId: row.teamId, status: "skipped", amountPence: 0, message });
+        continue;
+      }
+      const collectionPence = Math.min(outstandingPence,
+        paymentOrder.ledger.entries.find(entry => entry.chargeId === row.chargeId)?.outstandingPence ?? 0);
+      if (collectionPence <= 0) {
+        results.push({ chargeId: row.chargeId, teamId: row.teamId, status: "skipped", amountPence: 0, message: "Charge is already settled." });
+        continue;
+      }
+
       await db.$executeRaw(Prisma.sql`
         UPDATE "Team"
         SET "autoPayLastAttemptAt" = NOW()
@@ -305,7 +327,7 @@ export async function chargeDueMatchdayAutoPayments(options?: {
 
       const paymentIntent = await stripe.paymentIntents.create(
         {
-          amount: outstandingPence,
+          amount: collectionPence,
           currency: "gbp",
           customer: row.stripeCustomerId,
           payment_method: row.stripeDefaultPaymentMethodId,
@@ -325,12 +347,12 @@ export async function chargeDueMatchdayAutoPayments(options?: {
       );
 
       if (paymentIntent.status === "succeeded") {
-        await recordSuccessfulAutoPay({ row, amountPence: outstandingPence, paymentIntent, db });
+        await recordSuccessfulAutoPay({ row, amountPence: collectionPence, paymentIntent, db });
         results.push({
           chargeId: row.chargeId,
           teamId: row.teamId,
           status: "paid",
-          amountPence: outstandingPence,
+          amountPence: collectionPence,
           paymentIntentId: paymentIntent.id,
         });
       } else {
@@ -346,7 +368,7 @@ export async function chargeDueMatchdayAutoPayments(options?: {
           chargeId: row.chargeId,
           teamId: row.teamId,
           status: paymentIntent.status === "requires_action" ? "requires_action" : "failed",
-          amountPence: outstandingPence,
+          amountPence: collectionPence,
           paymentIntentId: paymentIntent.id,
           message,
         });

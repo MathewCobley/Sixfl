@@ -19,6 +19,8 @@ import {
   getTeamPaymentLedger,
 } from "@/lib/payments/team-payment-ledger";
 import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";
+import { TeamPaymentOrderNotice } from "@/components/payments/TeamPaymentOrderNotice";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -198,6 +200,8 @@ function getCreditMessage(state?: string, amount?: string) {
   switch (state) {
     case "used":
       return `Team credit used${amount ? `: ${formatMoney(Number(amount))}` : ""}.`;
+    case "oldest_first":
+      return "Please clear the earlier team balance first. Unallocated team credit follows the same oldest-first order.";
     case "none":
       return "No available team credit could be used against that charge.";
     case "invalid":
@@ -246,6 +250,11 @@ async function useTeamCreditAction(formData: FormData) {
     redirect(`/captain/team/${teamId}/payments?credit=invalid`);
   }
 
+  const order = await getTeamPaymentOrder(teamId, ledger);
+  if (!order.decision(chargeId).allowed) {
+    redirect(`/captain/team/${teamId}/payments?credit=oldest_first`);
+  }
+
   let result: Awaited<ReturnType<typeof applyAvailableTeamCreditToCharge>>;
 
   try {
@@ -292,6 +301,8 @@ export default async function CaptainPaymentsPage({
     notFound();
   }
 
+  const paymentOrder = await getTeamPaymentOrder(teamid, ledger);
+  const olderTeamBalancePence = paymentOrder.overdue.reduce((sum, entry) => sum + entry.outstandingPence, 0);
   const creditLedger = await getTeamCreditLedger(ledger.relatedTeamIds);
   const creditBalancePence = Math.max(creditLedger.balancePence, 0);
   const recentCreditEntries = creditLedger.entries.slice(0, 6);
@@ -378,6 +389,14 @@ export default async function CaptainPaymentsPage({
 
   return (
     <div className="space-y-8">
+      {paymentOrder.enabled ? (
+        <section data-team-payment-order="oldest-first" className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
+          <h2 className="font-semibold">{olderTeamBalancePence > 0 ? `Older team balance outstanding: ${formatMoney(olderTeamBalancePence)}` : "Team payments: oldest outstanding charge first"}</h2>
+          <p className="mt-2">Direct team payments and unallocated team credit must clear the oldest eligible charge before a newer one. Paying this week's fixture through squad contributions does not clear an older team debt. Held charges remain owed unless separately waived.</p>
+          <p className="mt-2">Individual squad payments and player money passed on by the captain remain attached to their original fixture. A newer saved-card matchday payment is paused while an earlier team balance blocks it; arrears are not added to an automatic debit.</p>
+          {paymentOrder.next?.paymentToken ? <Link href={`/pay/charge/${paymentOrder.next.paymentToken}`} className="mt-3 inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black">Pay next outstanding {formatMoney(paymentOrder.next.outstandingPence)}</Link> : null}
+        </section>
+      ) : null}
       {subscriptionMessage ? (
         <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-sm text-white/70">
           {subscriptionMessage}
@@ -558,13 +577,17 @@ export default async function CaptainPaymentsPage({
           ) : (
             ledger.entries.map((entry) => {
               const isDueNow = isMatchFeeChargePayable(entry.dueDate);
-              const canPayOnline =
+              const paymentDecision = paymentOrder.decision(entry.chargeId);
+              const creditAvailableForChargePence = paymentDecision.allowed
+                ? Math.min(creditBalancePence, entry.outstandingPence) : 0;
+              const payableAfterCreditPence = Math.max(entry.outstandingPence - creditAvailableForChargePence, 0);
+              const canPayOnline = paymentDecision.allowed &&
                 Boolean(entry.paymentToken) &&
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
-                entry.outstandingPence > 0;
-              const canUseCredit =
-                creditBalancePence > 0 &&
+                payableAfterCreditPence > 0;
+              const canUseCredit = paymentDecision.allowed &&
+                creditAvailableForChargePence > 0 &&
                 entry.displayStatus !== "PAID" &&
                 entry.displayStatus !== "VOID" &&
                 entry.outstandingPence > 0;
@@ -610,6 +633,7 @@ export default async function CaptainPaymentsPage({
                     </div>
 
                     <div className="flex flex-col gap-3 lg:items-end">
+                      <TeamPaymentOrderNotice decision={paymentDecision} />
                       <div className="text-right">
                         <div className="text-base font-semibold text-white">
                           {formatMoney(entry.amountPence)}
@@ -668,7 +692,7 @@ export default async function CaptainPaymentsPage({
                               </div>
                             ) : null}
                           </div>
-                        ) : entry.displayStatus !== "PAID" &&
+                        ) : paymentDecision.allowed && entry.displayStatus !== "PAID" &&
                           entry.displayStatus !== "VOID" &&
                           entry.outstandingPence > 0 ? (
                           <div className="text-xs text-white/45">

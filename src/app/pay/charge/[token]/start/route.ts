@@ -8,6 +8,8 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
+import { reusableTeamChargeCheckout } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
 import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 
@@ -68,6 +70,11 @@ export async function POST(
     return NextResponse.redirect(new URL("/", `${getPublicSiteUrl()}/`), 303);
   }
 
+  const initialPaymentOrder = await getTeamPaymentOrder(charge.teamId);
+  if (!initialPaymentOrder.decision(charge.id).allowed) {
+    return NextResponse.redirect(new URL(`/pay/charge/${encodeURIComponent(token)}`, `${getPublicSiteUrl()}/`), 303);
+  }
+
   const paidTotalPence = getChargePaidTotal(charge.transactions);
   const outstandingPence = getChargeOutstandingPence(
     charge.amountPence,
@@ -111,18 +118,27 @@ export async function POST(
     );
   }
 
-  const canReuseExistingSession =
-    charge.lastStripeCheckoutUrl &&
-    charge.lastStripeCheckoutCreatedAt &&
-    charge.lastStripeCheckoutAmountPence === outstandingPence &&
-    Date.now() - charge.lastStripeCheckoutCreatedAt.getTime() <
-      20 * 60 * 60 * 1000;
-
-  if (canReuseExistingSession) {
-    return NextResponse.redirect(charge.lastStripeCheckoutUrl!, 303);
+  // Re-read the actual ledger after credit/player settlement and before using
+  // a cached URL or opening Stripe. Old email links cannot bypass this guard.
+  const finalPaymentOrder = await getTeamPaymentOrder(charge.teamId);
+  const finalPaymentDecision = finalPaymentOrder.decision(charge.id);
+  if (!finalPaymentDecision.allowed) {
+    return NextResponse.redirect(new URL(`/pay/charge/${encodeURIComponent(token)}`, `${getPublicSiteUrl()}/`), 303);
   }
-
+  const verifiedOutstandingPence = Math.min(outstandingPence,
+    finalPaymentOrder.ledger.entries.find(entry => entry.chargeId === charge.id)?.outstandingPence ?? 0);
+  if (verifiedOutstandingPence <= 0) {
+    return NextResponse.redirect(new URL(`/pay/charge/${encodeURIComponent(token)}`, `${getPublicSiteUrl()}/`), 303);
+  }
   const stripe = getStripeServerClient();
+  const reusable = await reusableTeamChargeCheckout({
+    sessionId: charge.lastStripeCheckoutSessionId,
+    chargeId: charge.id, amountPence: verifiedOutstandingPence, stripe,
+  });
+  if (reusable.paymentPending) {
+    return NextResponse.redirect(new URL(`/pay/charge/${encodeURIComponent(token)}?pending=1`, `${getPublicSiteUrl()}/`), 303);
+  }
+  if (reusable.url) return NextResponse.redirect(reusable.url, 303);
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -146,7 +162,7 @@ export async function POST(
         quantity: 1,
         price_data: {
           currency: "gbp",
-          unit_amount: outstandingPence,
+          unit_amount: verifiedOutstandingPence,
           product_data: {
             name: charge.title,
             description: charge.description || undefined,
@@ -155,6 +171,8 @@ export async function POST(
       },
     ],
     metadata: {
+      type: "team_charge",
+      paymentOrderPolicy: "oldest-first-v1",
       chargeId: charge.id,
       fixtureId: charge.fixtureId ?? "",
       teamId: charge.teamId,
@@ -162,6 +180,8 @@ export async function POST(
     },
     payment_intent_data: {
       metadata: {
+        type: "team_charge",
+        paymentOrderPolicy: "oldest-first-v1",
         chargeId: charge.id,
         fixtureId: charge.fixtureId ?? "",
         teamId: charge.teamId,
@@ -182,7 +202,7 @@ export async function POST(
       lastStripeCheckoutSessionId: session.id,
       lastStripeCheckoutUrl: session.url,
       lastStripeCheckoutCreatedAt: new Date(),
-      lastStripeCheckoutAmountPence: outstandingPence,
+      lastStripeCheckoutAmountPence: verifiedOutstandingPence,
     },
   });
 

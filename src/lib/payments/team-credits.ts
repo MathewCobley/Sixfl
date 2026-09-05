@@ -9,6 +9,7 @@ import {
   getDisplayChargeStatus,
   summariseChargesWithPlayerMatchFees,
 } from "@/lib/payments/charge-summary";
+import { assertTeamChargePaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
 
 type CreditDb = Pick<typeof prisma, "$executeRaw" | "$queryRaw">;
@@ -474,6 +475,9 @@ export async function applyAvailableTeamCreditToCharge(input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    for (const teamId of [...teamIds].sort()) {
+      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`team-credit:${teamId}`}))::text`);
+    }
     const current = await getChargeSummary(input.chargeId, tx);
     const creditEligibleTeamIds = await getCreditEligibleTeamIds(teamIds, tx);
 
@@ -492,6 +496,7 @@ export async function applyAvailableTeamCreditToCharge(input: {
       };
     }
 
+    await assertTeamChargePaymentOrder(current.charge.id);
     const creditLedger = await getTeamCreditLedger(creditEligibleTeamIds, tx);
     const amountUsedPence = Math.min(creditLedger.balancePence, current.summary.outstandingPence);
 
