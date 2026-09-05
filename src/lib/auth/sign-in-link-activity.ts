@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
+import { signInRequestContext } from "@/lib/auth/sign-in-request-context";
 
 let ensureTablePromise: Promise<void> | null = null;
 
@@ -17,13 +18,20 @@ function trimOptional(value: string | null | undefined, maximumLength = 500) {
 }
 
 function describeError(error: unknown) {
-  if (error instanceof Error) return error.message.slice(0, 1_000);
-
-  try {
-    return JSON.stringify(error).slice(0, 1_000);
-  } catch {
-    return String(error).slice(0, 1_000);
+  let message: string;
+  if (error instanceof Error) message = error.message;
+  else {
+    try {
+      message = JSON.stringify(error) ?? String(error);
+    } catch {
+      message = String(error);
+    }
   }
+  const safe = message
+    .replace(/\b(?:https?|postgres(?:ql)?|mysql):\/\/[^\s<>]+/gi, "[URL redacted]")
+    .replace(/((?:token|secret|password|api[_-]?key|authorization|cookie|credential|signature)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[redacted]");
+  const stage = signInRequestContext.getStore()?.stage;
+  return `${stage && !safe.startsWith("[") ? `[${stage}] ` : ""}${safe}`.slice(0, 1_000);
 }
 
 function sanitiseCallbackUrl(value: string | null) {
@@ -125,11 +133,31 @@ export async function startSignInLinkActivity(
   const email = normaliseEmail(input.email);
   if (!email) return null;
 
-  const id = randomUUID();
+  const request = signInRequestContext.getStore();
+  const id = request ? request.activityId : randomUUID();
+  if (!id) return null;
   const linkContext = readMagicLinkContext(input.magicLinkUrl);
 
   try {
     await ensureSignInLinkActivityTable();
+    if (request) {
+      // The route recorded this request before authentication began. Enrich
+      // that same row rather than counting a second request when sending starts.
+      await prisma.$executeRaw`
+        UPDATE "SignInLinkActivity"
+        SET
+          "userId" = ${trimOptional(input.userId, 255)},
+          "userNameSnapshot" = ${trimOptional(input.userName, 255)},
+          "accountTypeSnapshot" = ${trimOptional(input.accountType, 100)},
+          "teamIdSnapshot" = ${trimOptional(input.teamId, 255)},
+          "teamNameSnapshot" = ${trimOptional(input.teamName, 255)},
+          "callbackUrl" = ${linkContext.callbackUrl},
+          "linkHost" = ${linkContext.linkHost},
+          "updatedAt" = NOW()
+        WHERE "id" = ${id} AND "emailNormalized" = ${email}
+      `;
+      return id;
+    }
     await prisma.$executeRaw`
       INSERT INTO "SignInLinkActivity" (
         "id",
@@ -163,7 +191,8 @@ export async function startSignInLinkActivity(
     return id;
   } catch (error) {
     console.warn("Could not start sign-in link activity record", error);
-    return null;
+    // An enrichment failure must not orphan the request's existing audit row.
+    return request?.activityId ?? null;
   }
 }
 
@@ -202,7 +231,7 @@ export async function markSignInLinkFailed(input: {
       UPDATE "SignInLinkActivity"
       SET
         "failedAt" = NOW(),
-        "failureReason" = ${describeError(input.error)},
+        "failureReason" = COALESCE("failureReason", ${describeError(input.error)}),
         "updatedAt" = NOW()
       WHERE "id" = ${input.activityId}
     `;

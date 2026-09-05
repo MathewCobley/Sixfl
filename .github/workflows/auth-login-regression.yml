@@ -1,0 +1,29 @@
+name: SIXFL sign-in lifecycle regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  login:
+    name: Verify login lifecycle after production preparation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare exactly the source used in production
+        run: npm run prebuild
+      - name: Test first-time players, verification timing and failure tracking
+        run: node --test tests/auth-sign-in-lifecycle.test.cjs
+      - name: Verify legacy preparation cannot reinsert request-stage verification
+        run: |
+          cp src/auth.ts /tmp/auth-before.ts
+          node scripts/apply-player-email-verification-v2.cjs
+          diff -u /tmp/auth-before.ts src/auth.ts
+          node --test tests/auth-sign-in-lifecycle.test.cjs
