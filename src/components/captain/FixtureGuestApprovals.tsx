@@ -122,7 +122,7 @@ function GuestApprovalPanel({ teamId, fixtureId, canManage }: { teamId: string; 
       {error ? <div role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}<button type="button" disabled={busy || loading} className="ml-3 underline" onClick={() => { setError(""); void reload().catch((err: Error) => setError(err.message)); }}>Reload approvals</button></div> : null}
       {message ? <p role="status" className="mt-4 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-100">{message}</p> : null}
       {data && !data.fixture.editable ? <p className="mt-3 text-sm text-amber-100">Read-only: approvals cannot be added, revoked or backdated after kick-off, or while a fixture is not scheduled.</p> : null}
-      {showForm && editable ? (
+      {showForm && editable && data ? (
         <div className="mt-5 space-y-4 rounded-2xl border border-white/15 bg-black/20 p-4">
           <form onSubmit={search} className="flex flex-wrap items-end gap-3">
             <label className="min-w-0 flex-1 text-sm text-white">Find an existing player by name or email

@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { GuestApprovalError, parseGuestDecision, type GuestDecisionInput } from "./guest-approval-policy";
+
+// Accept SIXFL's extended Prisma client and the isolated test client without requiring unrelated delegates.
+type GuestTransaction = Pick<Prisma.TransactionClient, "$queryRaw" | "$executeRaw">;
+type GuestDatabase = Pick<GuestTransaction, "$queryRaw"> & {
+  $transaction<T>(action: (tx: GuestTransaction) => Promise<T>): Promise<T>;
+};
 
 type FixtureRow = {
   id: string; homeTeamId: string; awayTeamId: string; kickoffAt: Date;
@@ -21,7 +27,7 @@ function assertTeamFixture(fixture: FixtureRow | undefined, teamId: string): ass
 }
 
 /** Reads only. Approval is not attendance, a second registration, a fee or a waiver. */
-export async function getFixtureGuestApprovals(teamId: string, fixtureId: string, db: PrismaClient = prisma) {
+export async function getFixtureGuestApprovals(teamId: string, fixtureId: string, db: GuestDatabase = prisma) {
   const fixtures = await db.$queryRaw<FixtureRow[]>(Prisma.sql`
     SELECT "id", "homeTeamId", "awayTeamId", "kickoffAt", "publishedAt", "status"::text
     FROM "Fixture" WHERE "id" = ${fixtureId}
@@ -51,7 +57,7 @@ export async function getFixtureGuestApprovals(teamId: string, fixtureId: string
 }
 
 /** Called only after full admin access has been checked by the API. */
-export async function searchGuestCandidates(teamId: string, query: string, db: PrismaClient = prisma) {
+export async function searchGuestCandidates(teamId: string, query: string, db: GuestDatabase = prisma) {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [] as GuestCandidate[];
   if (trimmed.length > 80) throw new GuestApprovalError("Search using no more than 80 characters.");
@@ -69,7 +75,7 @@ export async function searchGuestCandidates(teamId: string, query: string, db: P
 
 /** Revalidate at write time and lock the fixture: two admin tabs cannot silently overwrite one another. */
 export async function setFixtureGuestApproval(
-  input: GuestDecisionInput & { teamId: string; actorUserId: string }, db: PrismaClient = prisma,
+  input: GuestDecisionInput & { teamId: string; actorUserId: string }, db: GuestDatabase = prisma,
 ) {
   const decision = parseGuestDecision(input);
   if (!input.teamId || !input.actorUserId) throw new GuestApprovalError("SIXFL admin access is required.", 403);

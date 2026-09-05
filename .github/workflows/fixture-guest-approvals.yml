@@ -32,5 +32,27 @@ jobs:
       - run: npx prisma generate
       - name: Test permissions, real PostgreSQL transactions, races and native wiring
         run: npx tsx --test tests/fixture-guest-approvals.test.ts
+      - name: Prove the tests detect a removed admin safeguard
+        shell: bash
+        run: |
+          target=src/lib/fixtures/guest-approvals.ts
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          node - <<'JS'
+          const fs = require("node:fs");
+          const path = "src/lib/fixtures/guest-approvals.ts";
+          const source = fs.readFileSync(path, "utf8");
+          const guard = 'if (actors[0]?.role !== "ADMIN")';
+          if (!source.includes(guard)) throw new Error("Admin safeguard marker not found");
+          fs.writeFileSync(path, source.replace(guard, "if (false)"));
+          JS
+          if npx tsx --test --test-name-pattern="storage layer independently" tests/fixture-guest-approvals.test.ts > guest-negative-control.log 2>&1; then
+            cat guest-negative-control.log
+            echo "ERROR: removing the admin guard did not fail its test"
+            exit 1
+          fi
+          grep -q "Missing expected rejection" guest-negative-control.log
+          echo "Negative control passed: the permission test rejected a removed admin guard."
       - name: Type-check application
         run: npx tsc --noEmit
