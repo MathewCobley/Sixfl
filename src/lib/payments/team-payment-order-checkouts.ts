@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
-import { getTeamPaymentOrder } from "./team-payment-order";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 
 export function directTeamCheckoutCharge(session: Pick<Stripe.Checkout.Session, "mode" | "metadata" | "client_reference_id">) {
   const metadata = session.metadata ?? {};
@@ -48,6 +48,7 @@ export async function reusableTeamChargeCheckout(input: {
     return { url: null, paymentPending: !recorded };
   }
   if (session.status === "open" && session.amount_total === input.amountPence) {
+    if (!session.url) throw new Error("The open team checkout has no usable payment URL.");
     return { url: session.url, paymentPending: false };
   }
   if (session.status === "open") {
