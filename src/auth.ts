@@ -22,6 +22,7 @@ import {
   markSignInLinkSent,
   startSignInLinkActivity,
 } from "@/lib/auth/sign-in-link-activity";
+import { setSignInRequestStage } from "@/lib/auth/sign-in-request-context";
 
 const LOGIN_CTA_LABEL = "Sign in to SIXFL";
 const CTA_PLACEHOLDER = "{{cta}}";
@@ -242,6 +243,7 @@ export const authOptions: NextAuthOptions = {
     EmailProvider({
       async sendVerificationRequest({ identifier, url, provider }) {
         const email = identifier.toLowerCase().trim();
+        setSignInRequestStage("email preparation");
 
         const [
           existingUser,
@@ -271,7 +273,7 @@ export const authOptions: NextAuthOptions = {
         ]);
 
         if (!existingUser && !pendingCaptain && !captainLoginContext && !pendingSquadActivation) {
-          return;
+          throw new Error("Sign-in access is no longer available. Contact SIXFL.");
         }
 
         const resend = new Resend(process.env.RESEND_API_KEY);
@@ -295,6 +297,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         try {
+          setSignInRequestStage("email delivery");
           const result = await resend.emails.send({
             from,
             to,
@@ -311,6 +314,7 @@ export const authOptions: NextAuthOptions = {
             activityId,
             providerMessageId: result.data?.id ?? null,
           });
+          setSignInRequestStage("verification token");
         } catch (error) {
           await markSignInLinkFailed({ activityId, error });
           throw error;
@@ -329,7 +333,16 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NEXTAUTH_DEBUG === "true",
 
   events: {
-    async signIn({ user }) {
+    async signIn({ user, account }) {
+      // This event runs only AFTER a valid link is consumed and the adapter
+      // has persisted the real user. Never verify in callbacks.signIn: that
+      // also runs on the unauthenticated request, with a prototype user ID.
+      if (account?.provider === "email" && user.id) {
+        await prisma.user.updateMany({
+          where: { id: user.id, emailVerified: null },
+          data: { emailVerified: new Date() },
+        });
+      }
       await Promise.all([
         recordSuccessfulLogin({
           userId: user.id,
@@ -346,6 +359,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "email") {
+        setSignInRequestStage("account checks");
         const email = user.email?.toLowerCase().trim();
 
         if (!email) {
