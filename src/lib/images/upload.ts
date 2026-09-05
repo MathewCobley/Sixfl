@@ -83,12 +83,13 @@ export async function optimiseBadgeImage(file: File): Promise<OptimisedBadgeImag
     if ((metadata.pages ?? 1) > 1) {
       throw new ImageUploadError("Use a still image rather than an animated badge.");
     }
+    // PNG also works in the existing node-canvas PDFs and email clients.
     const oriented = pipeline.rotate();
     const [imageData, thumbnailData] = await Promise.all([
       oriented.clone().resize({ width: 900, height: 900, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 88, effort: 4 }).toBuffer(),
+        .png({ compressionLevel: 9 }).toBuffer(),
       oriented.clone().resize({ width: 240, height: 240, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 82, effort: 4 }).toBuffer(),
+        .png({ compressionLevel: 9 }).toBuffer(),
     ]);
     return { imageData, thumbnailData };
   } catch (error) {

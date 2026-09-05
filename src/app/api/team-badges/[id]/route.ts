@@ -14,7 +14,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!data) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   const etag = `"${id}-${thumbnail ? "thumbnail" : "full"}"`;
   const headers = {
-    "Content-Type": "image/webp",
+    "Content-Type": "image/png",
     "Cache-Control": "public, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
     "Content-Disposition": "inline",

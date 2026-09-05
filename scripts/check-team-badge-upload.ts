@@ -19,11 +19,11 @@ async function main() {
     (error: unknown) => error instanceof ImageUploadError && error.status === status);
 
   for (const format of ["png", "jpeg", "webp"] as const) {
-    await check(`${format} is decoded, resized without enlargement and re-encoded as WebP`, async () => {
+    await check(`${format} is decoded, resized without enlargement and re-encoded as PNG`, async () => {
       const result = await optimiseBadgeImage(file(await image(format), `image/${format}`));
       for (const bytes of [result.imageData, result.thumbnailData]) {
         const metadata = await sharp(bytes).metadata();
-        assert.equal(metadata.format, "webp");
+        assert.equal(metadata.format, "png");
         assert.equal(metadata.width, 160);
         assert.equal(metadata.height, 80);
         assert.equal(metadata.exif, undefined);
@@ -92,6 +92,8 @@ async function main() {
     assert.match(store, /team\.logoUrl \?\? ""/);
     assert.match(store, /tx\.team\.update\(/);
     assert.match(store, /data: \{ logoUrl \}/);
+    assert.match(store, /new URL\(`/);
+    assert.match(read("src/app/api/team-badges/[id]/route.ts"), /"Content-Type": "image\/png"/);
     assert.doesNotMatch(store, /writeFile|unlinkSync/);
   });
   console.log(`Team badge upload: ${checks} checks passed.`);

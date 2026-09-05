@@ -34,7 +34,10 @@ export async function saveTeamBadge(input: {
         INSERT INTO "TeamBadgeImage" ("id", "teamId", "createdByUserId", "imageData", "thumbnailData")
         VALUES (${id}, ${input.teamId}, ${input.createdByUserId}, ${input.image.imageData}, ${input.image.thumbnailData})
       `);
-      logoUrl = `/api/team-badges/${id}`;
+      // Existing server-side social/PDF renderers fetch absolute URLs, but read
+      // relative paths from public/. Keep uploaded badges compatible with both.
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://www.sixfl.co.uk";
+      logoUrl = new URL(`/api/team-badges/${id}`, siteUrl).toString();
     }
     // Retain old immutable images so previously shared image URLs do not break.
     // Removing a badge unlinks it from the team; deleting the team cascades its images.
