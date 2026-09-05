@@ -1,0 +1,47 @@
+name: Payment order source review (temporary)
+on:
+  push:
+    branches: [fix/team-payments-oldest-first]
+    paths: ['.github/workflows/payment-order-review-once.yml']
+permissions:
+  contents: write
+jobs:
+  review:
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/fix/team-payments-oldest-first'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Snapshot relevant native and prepared source without any live connections
+        run: |
+          python3 - <<'PY'
+          import pathlib, shutil, subprocess
+          root=pathlib.Path('.payment-order-review')
+          root.mkdir()
+          paths=[p for p in pathlib.Path('src').rglob('*') if p.is_file() and ('/lib/payments/' in str(p) or '/pay/charge/' in str(p) or str(p).endswith('/payments/page.tsx') or '/payments/remit-collected/' in str(p) or '/payments/use-credit-for-collected/' in str(p) or str(p) in ['src/app/api/stripe/webhook/route.ts','src/app/api/cron/notifications/route.ts','src/lib/prisma.ts','src/lib/requireAdmin.ts'])]
+          (root/'index.txt').write_text('\n'.join(str(p) for p in paths)+'\n\n'+subprocess.run(['git','grep','-nE','checkout.sessions.create|paymentIntents.create|applyAvailableTeamCreditToCharge|Pay now|lastStripeCheckoutSessionId','--','src'],capture_output=True,text=True).stdout)
+          for p in paths:
+            target=root/'native'/p
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy(p,target)
+          PY
+          npm run prebuild > /tmp/payment-prebuild.log
+          python3 - <<'PY'
+          import pathlib, shutil
+          root=pathlib.Path('.payment-order-review')
+          for native in (root/'native').rglob('*'):
+            if native.is_file():
+              relative=native.relative_to(root/'native')
+              target=root/'prepared'/relative
+              target.parent.mkdir(parents=True,exist_ok=True)
+              shutil.copy(relative,target)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .payment-order-review
+          git commit -m 'Snapshot payment sources for review; temporary files will be removed before PR'
+          git push origin HEAD:fix/team-payments-oldest-first
