@@ -60,8 +60,8 @@ async function syncConfirmation(row: EveningRow, db: Db) {
   await db.$executeRaw(Prisma.sql`
     UPDATE "RefereeNight" SET
       "confirmationStatus" = ${row.confirmationStatus},
-      "confirmationConfirmedAt" = CASE WHEN ${row.confirmationStatus} = 'CONFIRMED' THEN ${row.respondedAt} ELSE NULL END,
-      "confirmationDeclinedAt" = CASE WHEN ${row.confirmationStatus} = 'DECLINED' THEN ${row.respondedAt} ELSE NULL END,
+      "confirmationConfirmedAt" = CASE WHEN ${row.confirmationStatus} = 'CONFIRMED' THEN ${row.respondedAt}::timestamp ELSE NULL::timestamp END,
+      "confirmationDeclinedAt" = CASE WHEN ${row.confirmationStatus} = 'DECLINED' THEN ${row.respondedAt}::timestamp ELSE NULL::timestamp END,
       "confirmationResponseNote" = 'Attendance managed by the consolidated referee evening booking.',
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "refereeId" = ${row.refereeId} AND "nightDate" = ${row.nightDate}::date
