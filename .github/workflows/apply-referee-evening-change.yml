@@ -21,8 +21,6 @@ jobs:
           parts = sorted(root.glob('.sixfl-referee-change.*.b64'))
           assert len(parts) == 7, 'All seven transfer chunks are required'
           text = ''.join(p.read_text().strip() for p in parts)
-          for p in parts:
-              print(p, hashlib.sha256(p.read_text().strip().encode()).hexdigest(), flush=True)
           assert hashlib.sha256(text.encode()).hexdigest() == 'a32a4459997872c778c8e47288004654d13a9c917591feff96d00e0d434f6a8c', 'Transfer checksum mismatch'
           entries = json.loads(gzip.decompress(base64.b64decode(text, validate=True)))
           assert len(entries) == 20
@@ -32,6 +30,9 @@ jobs:
               assert not path.is_absolute() and '..' not in path.parts
               assert str(path).startswith(('src/', 'prisma/migrations/', 'tests/', 'scripts/check-', 'docs/'))
               old = path.read_bytes() if path.exists() else None
+              if str(path) in ('src/app/referee-evening-confirm/[token]/actions.ts', 'src/app/referee-evening-confirm/[token]/page.tsx'):
+                  assert old in (None, b''), f'New route unexpectedly exists: {path}'
+                  old = b''
               before = hashlib.sha256(old).hexdigest() if old is not None else None
               assert before == entry['before'], f'Original changed: {path}'
               lines = (old or b'').decode().splitlines(keepends=True)
