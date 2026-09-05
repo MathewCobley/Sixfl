@@ -1,5 +1,6 @@
 import { applyAvailableTeamCreditToCharge, getTeamCreditLedger } from "@/lib/payments/team-credits";
 import { getRelatedTeamIdsForPaymentLedger } from "@/lib/payments/team-payment-ledger";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
 
 export type TeamCreditPolicySnapshot = {
@@ -81,18 +82,32 @@ export async function applyExistingTeamCreditToChargeFirst(input: {
   }
 
   let amountUsedPence = 0;
-  try {
-    const result = await applyAvailableTeamCreditToCharge({
-      chargeId: input.chargeId,
-      teamIds: before.relatedTeamIds,
-      description:
-        input.description?.trim() ||
-        "Existing team credit automatically used before collecting more player money.",
-    });
-    amountUsedPence = result.amountUsedPence;
-  } catch {
-    // Some historical/managed-period charges are deliberately ineligible for
-    // standard-team credit. Leave them unchanged and return the current policy.
+  // This is unallocated team credit, not the players' fixture-specific money.
+  // Apply it in due-date order, and report only credit applied to the caller's
+  // fixture so squad collection calculations cannot attribute older settlement
+  // to the current game.
+  for (let step = 0; step < 20; step++) {
+    const order = await getTeamPaymentOrder(input.teamId);
+    const target = order.enabled ? order.next : order.ledger.entries.find(entry => entry.chargeId === input.chargeId);
+    const requested = order.ledger.entries.find(entry => entry.chargeId === input.chargeId);
+    const targetDate = target ? (target.dueDate ?? target.kickoffAt ?? target.createdAt).getTime() : Infinity;
+    const requestedDate = requested ? (requested.dueDate ?? requested.kickoffAt ?? requested.createdAt).getTime() : -Infinity;
+    if (!requested || !target || target.outstandingPence <= 0 || targetDate > requestedDate) break;
+    try {
+      const result = await applyAvailableTeamCreditToCharge({
+        chargeId: target.chargeId,
+        teamIds: before.relatedTeamIds,
+        description: target.chargeId === input.chargeId
+          ? input.description?.trim() || `Existing team credit used against ${target.title}.`
+          : `Unallocated team credit used against oldest outstanding charge: ${target.title}.`,
+      });
+      if (target.chargeId === input.chargeId) amountUsedPence += result.amountUsedPence;
+      if (result.amountUsedPence <= 0 || result.remainingCreditPence <= 0 || target.chargeId === input.chargeId) break;
+    } catch {
+      // Fail closed: never jump over an ineligible/held charge and silently
+      // consume the same credit against a newer fixture.
+      break;
+    }
   }
 
   return {

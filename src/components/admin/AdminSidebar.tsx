@@ -361,6 +361,12 @@ const navigationGroups = [
         description: "Charges",
       },
       {
+        name: "Payment order",
+        href: "/admin/payments/payment-order",
+        icon: CreditCardIcon,
+        description: "Priority/exceptions",
+      },
+      {
         name: "Late fees",
         href: "/admin/fixtures/late-fees",
         icon: ExclamationTriangleIcon,

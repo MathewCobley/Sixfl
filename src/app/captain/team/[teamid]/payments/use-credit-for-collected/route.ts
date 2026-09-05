@@ -9,6 +9,7 @@ import {
 } from "@/lib/payments/captain-collected-remittance";
 import { getTeamCreditLedger } from "@/lib/payments/team-credits";
 import { getTeamPaymentLedger } from "@/lib/payments/team-payment-ledger";
+import { getTeamPaymentOrder, assertTeamChargePaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
@@ -50,12 +51,19 @@ export async function POST(
     );
   }
 
+  const paymentOrder = await getTeamPaymentOrder(teamid, ledger);
+  if (!paymentOrder.decision(chargeId).allowed) {
+    return NextResponse.redirect(paymentsUrl(teamid, { credit: "oldest_first" }), 303);
+  }
   await ensureCaptainCollectedRemittanceTable();
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      for (const teamId of [...ledger.relatedTeamIds].sort()) {
+        await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`team-credit:${teamId}`}))::text`);
+      }
       await tx.$queryRaw(Prisma.sql`
-        SELECT pg_advisory_xact_lock(hashtext(${`captain-collected-credit:${chargeId}`}))
+        SELECT pg_advisory_xact_lock(hashtext(${`captain-collected-credit:${chargeId}`}))::text
       `);
 
       const chargeRows = await tx.$queryRaw<
@@ -92,6 +100,7 @@ export async function POST(
         return { amountUsedPence: 0, reason: "not_available" as const };
       }
 
+      await assertTeamChargePaymentOrder(charge.id);
       const creditLedger = await getTeamCreditLedger(ledger.relatedTeamIds, tx);
       const creditBalancePence = Math.max(creditLedger.balancePence, 0);
 

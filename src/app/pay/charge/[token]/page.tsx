@@ -10,6 +10,8 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
+import { TeamPaymentOrderNotice } from "@/components/payments/TeamPaymentOrderNotice";
+import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +35,13 @@ function formatKickoff(value: Date) {
 
 export default async function PayChargePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{ pending?: string }>;
 }) {
   const { token } = await params;
+  const paymentPending = (await searchParams)?.pending === "1";
 
   const charge = await prisma.paymentCharge.findUnique({
     where: {
@@ -44,6 +49,7 @@ export default async function PayChargePage({
     },
     select: {
       id: true,
+      teamId: true,
       title: true,
       description: true,
       amountPence: true,
@@ -90,16 +96,16 @@ export default async function PayChargePage({
     notFound();
   }
 
-  const paidTotalPence = getChargePaidTotal(charge.transactions);
-  const outstandingPence = getChargeOutstandingPence(
-    charge.amountPence,
-    paidTotalPence,
-  );
+  const paymentOrder = await getTeamPaymentOrder(charge.teamId);
+  const paymentDecision = paymentOrder.decision(charge.id);
+  const ledgerEntry = paymentOrder.ledger.entries.find(entry => entry.chargeId === charge.id);
+  const paidTotalPence = ledgerEntry ? Math.max(ledgerEntry.amountPence - ledgerEntry.outstandingPence, 0) : getChargePaidTotal(charge.transactions);
+  const outstandingPence = ledgerEntry?.outstandingPence ?? getChargeOutstandingPence(charge.amountPence, paidTotalPence);
   const fixturesHref = charge.fixture?.league?.slug
     ? `/leagues/${charge.fixture.league.slug}/fixtures`
     : "/";
   const fixtureStillPayable = !charge.fixture || charge.fixture.status === "SCHEDULED" || charge.fixture.status === "COMPLETED";
-  const canPay =
+  const canPay = paymentDecision.allowed && !paymentPending &&
     charge.status !== "VOID" &&
     fixtureStillPayable &&
     outstandingPence > 0 &&
@@ -159,7 +165,7 @@ export default async function PayChargePage({
                 {formatMoney(outstandingPence)}
               </div>
               <div className="mt-2 text-sm text-emerald-100/75">
-                Paid {formatMoney(paidTotalPence)} of {formatMoney(charge.amountPence)}
+                Settled {formatMoney(paidTotalPence)} of {formatMoney(ledgerEntry?.amountPence ?? charge.amountPence)}
               </div>
               <div className="mt-2 text-xs uppercase tracking-[0.14em] text-white/45">
                 {charge.status}
@@ -168,7 +174,11 @@ export default async function PayChargePage({
           </div>
 
           <div className="mt-8 border-t border-white/10 pt-6">
-            {canPay ? (
+            {paymentPending && outstandingPence > 0 ? (
+              <p role="status" className="rounded-xl bg-amber-500/10 p-4 text-amber-100">Stripe has already completed a payment and SIXFL is waiting for its confirmation. Please refresh shortly rather than paying again.</p>
+            ) : !paymentDecision.allowed && paymentDecision.code !== "SETTLED" ? (
+              <TeamPaymentOrderNotice decision={paymentDecision} />
+            ) : canPay ? (
               <form action={`/pay/charge/${token}/start`} method="post" className="space-y-3">
                 <button
                   type="submit"

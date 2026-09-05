@@ -21,14 +21,14 @@ function replaceRequired(before, after, label) {
 if (!source.includes("Your team has {formatMoney(creditBalancePence)} available credit")) {
   const creditMessageBlock = `      {creditMessage ? (\n        <div className={\`rounded-2xl border px-5 py-4 text-sm \${sp.credit === \"used\" ? \"border-emerald-400/20 bg-emerald-500/10 text-emerald-100\" : \"border-amber-400/20 bg-amber-500/10 text-amber-100\"}\`}>\n          {creditMessage}\n        </div>\n      ) : null}`;
 
-  const creditNotice = `${creditMessageBlock}\n\n      {creditBalancePence > 0 ? (\n        <div className=\"rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 py-4 text-sm leading-6 text-emerald-50/85\">\n          <span className=\"font-semibold text-white\">\n            Your team has {formatMoney(creditBalancePence)} available credit.\n          </span>{\" \"}\n          SIXFL uses team credit against the next fixture fee before taking another card payment. Team credit is capped at one normal match fee.\n        </div>\n      ) : null}`;
+  const creditNotice = `${creditMessageBlock}\n\n      {creditBalancePence > 0 ? (\n        <div className=\"rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 py-4 text-sm leading-6 text-emerald-50/85\">\n          <span className=\"font-semibold text-white\">\n            Your team has {formatMoney(creditBalancePence)} available credit.\n          </span>{\" \"}\n          SIXFL uses team credit against the oldest eligible outstanding team charge before taking another card payment. Team credit is capped at one normal match fee.\n        </div>\n      ) : null}`;
 
   replaceRequired(creditMessageBlock, creditNotice, "team credit explanation notice");
 }
 
 source = source.replace(
   "            Credit available to use against fixture charges.",
-  "            Used against the next fixture before another payment is taken. Credit is capped at one normal match fee.",
+  "            Used against the oldest eligible charge before another payment is taken. Credit is capped at one normal match fee.",
 );
 
 // Work out exactly what the captain would still have to pay after using the

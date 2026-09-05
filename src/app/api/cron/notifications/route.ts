@@ -16,6 +16,7 @@ import { chargeDueMatchdayAutoPayments } from "@/lib/payments/team-autopay";
 import { runPlayerPoolProfileSmsReminderJob } from "@/lib/player-pool/profile-sms-reminders";
 import { runRefereeEveningNotifications } from "@/lib/referees/evening-notifications";
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
+import { reconcileTeamPaymentOrderCheckouts } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
 import {
   queueMissingReferralRecordedEmails,
@@ -196,6 +197,10 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(200),
   );
 
+  const teamPaymentOrderCheckouts = await runCronStep(
+    "team-payment-order-checkouts", failures, reconcileTeamPaymentOrderCheckouts,
+  );
+
   const autoPayResults = await runCronStep(
     "matchday-autopay",
     failures,
@@ -227,6 +232,7 @@ export async function GET(request: NextRequest) {
     referralEmails,
     referralPayoutEmails,
     generatedQueue,
+    teamPaymentOrderCheckouts,
     matchdayAutoPay,
   };
 
