@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS "TeamPaymentOrderException" (
   "createdByLabel" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "expiresAt" TIMESTAMP(3),
-  CHECK (("action" = 'RESET' AND "expiresAt" IS NULL) OR ("action" <> 'RESET' AND "expiresAt" > "createdAt"))
+  CHECK (("action" = 'RESET' AND "expiresAt" IS NULL) OR ("action" <> 'RESET' AND "expiresAt" IS NOT NULL AND "expiresAt" > "createdAt"))
 );
 CREATE INDEX IF NOT EXISTS "TeamPaymentOrderException_charge_id_idx"
   ON "TeamPaymentOrderException" ("chargeId", "id" DESC);
