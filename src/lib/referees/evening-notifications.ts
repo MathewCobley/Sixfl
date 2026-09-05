@@ -11,7 +11,10 @@ import {
   type EveningFixture, type EveningHistory, type EveningMessageKind, type EveningSnapshot,
 } from "./evening-policy";
 
-type Db = Prisma.TransactionClient;
+// Both the extended root client and its interactive transaction share these delegates.
+type Db = Pick<typeof prisma,
+  "$queryRaw" | "$executeRaw" | "notificationDispatch" | "notificationTemplate"
+  | "notificationRecipient" | "notificationPreference">;
 type ConfirmationStatus = "PENDING" | "CONFIRMED" | "DECLINED";
 type EveningRow = {
   id: string; refereeId: string; nightDate: string; changedAt: Date; generation: number;

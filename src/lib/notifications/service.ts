@@ -30,6 +30,10 @@ import {
 } from "./renderer";
 import { shortenSmsBodyLinks } from "./sms-short-links";
 
+// Preserve the application's extended Prisma delegates in root and transactional calls.
+type NotificationDb = Pick<typeof prisma,
+  "notificationDispatch" | "notificationTemplate" | "notificationRecipient">;
+
 const DISPATCH_STATUS = {
   QUEUED: "QUEUED",
   PROCESSING: "PROCESSING",
@@ -254,7 +258,7 @@ function getMetadataObject(value: Prisma.JsonValue | null) {
   return value as Record<string, Prisma.JsonValue>;
 }
 
-async function applySmsShortLinks(dispatch: NotificationDispatch, db: Prisma.TransactionClient = prisma) {
+async function applySmsShortLinks(dispatch: NotificationDispatch, db: NotificationDb = prisma) {
   if (dispatch.channel !== "SMS") return dispatch;
 
   const shortened = shortenSmsBodyLinks({
@@ -425,7 +429,7 @@ async function createNonQueuedTemplateDispatch(input: {
   metadata?: Prisma.InputJsonValue;
   scheduledFor: Date;
   createdByUserId?: string | null;
-}, db: Prisma.TransactionClient = prisma) {
+}, db: NotificationDb = prisma) {
   const dispatch = await db.notificationDispatch.create({
     data: {
       recipientId: input.recipient.id,
@@ -490,7 +494,7 @@ async function createNonQueuedDirectDispatch(input: {
   return applySmsShortLinks(dispatch);
 }
 
-export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput, db: Prisma.TransactionClient = prisma) {
+export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput, db: NotificationDb = prisma) {
   const template = await db.notificationTemplate.findUnique({ where: { key: input.templateKey } });
   if (!template || !template.isActive) throw new Error("Notification template not found or inactive.");
 
