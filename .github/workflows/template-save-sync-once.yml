@@ -1,0 +1,32 @@
+name: Refresh template-save branch once
+on:
+  push:
+    branches: [fix/template-save-json-20260906]
+    paths: ['.github/workflows/template-save-sync-once.yml']
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/template-save-json-20260906
+          fetch-depth: 0
+      - name: Merge current main into review branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "fix/template-save-json-20260906"
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'maintenance@sixfl.co.uk'
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = 'e0f2ceb84e3d54d3653ae560e3dc66acecc16915'
+          if ! git merge --no-edit origin/main; then
+            git diff --name-only --diff-filter=U
+            git diff --cc
+            exit 1
+          fi
+          git diff --stat origin/main...HEAD
+          git push origin HEAD:refs/heads/fix/template-save-json-20260906
