@@ -265,7 +265,14 @@ export default function LeagueForm({
   }, [name, slugTouched]);
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form
+      action={formAction}
+      // Settings retain their submitted values after action feedback.
+      // Native reset would otherwise revert the checkbox to its original
+      // checked state even though the current React state is different.
+      onReset={event => event.preventDefault()}
+      className="space-y-8"
+    >
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2 md:col-span-2">
           <label htmlFor="name" className="block text-sm font-medium text-white">
