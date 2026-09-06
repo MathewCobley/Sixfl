@@ -29,7 +29,12 @@ export async function saveTeamMoveConfirmation(input: {
     // Target the exact Team id on the card. Never match or update other teams
     // by name, and never overwrite a different response saved by another admin.
     const result = await prisma.team.updateMany({
-      where: { id: teamId, moveConfirmationStatus: input.previousStatus },
+      where: {
+        id: teamId, moveConfirmationStatus: input.previousStatus,
+        // Check persisted league state in the same write so stale
+        // pages cannot bypass a disabled flag or a team transfer.
+        league: { is: { isMoving: true } },
+      },
       data: {
         moveConfirmationStatus: input.status,
         moveConfirmationUpdatedAt: updatedAt,
@@ -37,7 +42,7 @@ export async function saveTeamMoveConfirmation(input: {
       },
     });
     if (result.count !== 1) {
-      return { ok: false, error: "This team changed or was removed. Reload the page before trying again." };
+      return { ok: false, error: "This league is not marked for a move, or the team response changed. Reload the page before trying again." };
     }
   } catch {
     return { ok: false, error: "Could not save the move confirmation. Please try again." };

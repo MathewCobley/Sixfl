@@ -9,6 +9,7 @@ import {
 } from "@/lib/teams/move-confirmation";
 
 type Props = {
+  enabled: boolean;
   teamId: string;
   teamName: string;
   initialStatus: string;
@@ -32,7 +33,7 @@ function timestamp(value?: string | null) {
 }
 
 export default function TeamMoveConfirmationSelect({
-  teamId, teamName, initialStatus, initialUpdatedAt, initialUpdatedBy,
+  enabled, teamId, teamName, initialStatus, initialUpdatedAt, initialUpdatedBy,
 }: Props) {
   const id = useId();
   const [status, setStatus] = useState<TeamMoveConfirmationStatus>(
@@ -52,7 +53,7 @@ export default function TeamMoveConfirmationSelect({
   }, [initialStatus, initialUpdatedAt, initialUpdatedBy]);
 
   async function changeStatus(value: string) {
-    if (inFlight.current || !isTeamMoveConfirmationStatus(value) || value === status) return;
+    if (!enabled || inFlight.current || !isTeamMoveConfirmationStatus(value) || value === status) return;
     const previousStatus = status;
     inFlight.current = true;
     setStatus(value);
@@ -78,6 +79,9 @@ export default function TeamMoveConfirmationSelect({
       setSaving(false);
     }
   }
+
+  // Render nothing unless the owning league explicitly enables tracking.
+  if (!enabled) return null;
 
   return (
     <div className="w-full min-w-0 max-w-sm space-y-1.5" data-team-move-confirmation={teamId}>

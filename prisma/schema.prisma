@@ -111,6 +111,8 @@ model LeagueCompetition {
 }
 
 model League {
+  // Opt-in admin tracking; does not move teams or alter fixtures.
+  isMoving Boolean @default(false)
   id       String  @id @default(cuid())
   name     String
   season   String?

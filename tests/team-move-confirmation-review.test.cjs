@@ -78,7 +78,7 @@ test("save changes only the exact team's tracker and recorded last-update metada
   assert.equal(result.updatedBy, "Test Admin");
   assert.ok(!Number.isNaN(Date.parse(result.updatedAt)));
   assert.deepEqual(h.events, ["auth", "write"]);
-  assert.deepEqual(h.writes[0].where, { id: "team-a", moveConfirmationStatus: "PENDING" });
+  assert.deepEqual(h.writes[0].where, { id: "team-a", moveConfirmationStatus: "PENDING", league: { is: { isMoving: true } } });
   assert.deepEqual(Object.keys(h.writes[0].data).sort(), ["moveConfirmationStatus", "moveConfirmationUpdatedAt", "moveConfirmationUpdatedBy"].sort());
   assert.deepEqual(h.paths, ["/admin/teams", "/admin/teams/team-a"]);
 });

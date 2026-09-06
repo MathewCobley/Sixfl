@@ -10,7 +10,7 @@ let browser, bundle;
 test.before(async () => {
   const result = await esbuild.build({
     stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import Control from './src/components/admin/teams/TeamMoveConfirmationSelect';
-      const root=createRoot(document.getElementById('app')); window.mount=(props)=>root.render(<Control key={props.teamId} {...props}/>);`,
+      const root=createRoot(document.getElementById('app')); window.mount=(props)=>root.render(<Control enabled={true} key={props.teamId} {...props}/>);`,
       loader: "tsx", resolveDir: root }, bundle: true, write: false, platform: "browser", jsx: "automatic",
     plugins: [{ name: "offline-action", setup(build) {
       build.onResolve({ filter: /^@\/app\/.*move-confirmation-actions$/ }, () => ({ path: "mock-action", namespace: "offline" }));

@@ -14,6 +14,7 @@ type LeagueFormValues = {
   slug: string;
   season: string;
   isActive: boolean;
+  isMoving: boolean;
   area: string;
   dayOfWeek: PreferredNight | "";
   leagueType: LeagueType | "";
@@ -219,6 +220,7 @@ export default function LeagueForm({
       slug: initialValues?.slug ?? "",
       season: initialValues?.season ?? "",
       isActive: initialValues?.isActive ?? true,
+      isMoving: initialValues?.isMoving ?? false,
       area: initialValues?.area ?? "",
       dayOfWeek: initialValues?.dayOfWeek ?? "",
       leagueType: initialValues?.leagueType ?? "",
@@ -242,6 +244,9 @@ export default function LeagueForm({
     }),
     [initialValues],
   );
+
+  const [isMoving, setIsMoving] = useState(values.isMoving);
+  useEffect(() => { setIsMoving(values.isMoving); }, [values.isMoving]);
 
   const [name, setName] = useState(values.name);
   const [slug, setSlug] = useState(values.slug);
@@ -407,6 +412,19 @@ export default function LeagueForm({
         <div className="space-y-2 md:col-span-2"><label htmlFor="description" className="block text-sm font-medium text-white">Description</label><TextArea id="description" name="description" defaultValue={values.description} placeholder="Premium weekly 6-a-side football..." rows={6} hasError={Boolean(state.errors?.description)} /><FieldError errors={state.errors} name="description" /></div>
 
         <div className="space-y-2"><label htmlFor="isActive" className="block text-sm font-medium text-white">Status</label><Select id="isActive" name="isActive" defaultValue={values.isActive ? "true" : "false"} options={[{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]} /></div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <input type="hidden" name="leagueMoveSettingPresent" value="1" />
+        <label htmlFor="isMoving" className="flex items-start gap-3 text-sm text-white">
+          <input id="isMoving" name="isMoving" type="checkbox" value="true"
+            checked={isMoving} onChange={event => setIsMoving(event.target.checked)}
+            aria-describedby="league-move-help" className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-500" />
+          <span className="font-semibold">League move</span>
+        </label>
+        <p id="league-move-help" className="mt-2 text-xs leading-5 text-white/60">
+          Show move-confirmation dropdowns for this league's teams. Untick to hide them without deleting saved responses. Save changes to apply. This does not move any teams or send messages.
+        </p>
       </div>
 
       {state.error || state.message ? (

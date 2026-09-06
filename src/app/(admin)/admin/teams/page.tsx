@@ -40,6 +40,7 @@ async function getAdminTeams() {
           season: true,
           badgeUrl: true,
           isActive: true,
+          isMoving: true,
           competition: {
             select: {
               id: true,
@@ -518,6 +519,7 @@ export default async function AdminTeamsPage({
                         </div>
 
                         <TeamMoveConfirmationSelect
+                          enabled={team.league?.isMoving === true}
                           teamId={team.id}
                           teamName={team.name}
                           initialStatus={team.moveConfirmationStatus}
