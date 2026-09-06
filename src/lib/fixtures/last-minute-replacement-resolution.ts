@@ -7,6 +7,7 @@ import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
+import { cancelClosedReplacementSms, REPLACEMENT_SMS_CANCEL_REASON } from "./replacement-sms-lifecycle";
 
 const INITIAL_ORIGIN = "night-board-last-minute-replacement";
 const RESOLVED_ORIGIN = "night-board-last-minute-replacement-resolved";
@@ -80,7 +81,8 @@ async function getLatestInitialAlertCycle(fixtureId: string) {
     FROM "NotificationDispatch" dispatch
     WHERE dispatch."metadata"->>'origin' = ${INITIAL_ORIGIN}
       AND dispatch."metadata"->>'fixtureId' = ${fixtureId}
-      AND dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+      AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
       AND COALESCE(dispatch."metadata"->>'droppedTeamId', '') <> ''
       AND COALESCE(dispatch."metadata"->>'opponentTeamId', '') <> ''
     ORDER BY dispatch."createdAt" DESC
@@ -121,7 +123,8 @@ async function getContactedTeamIds(input: {
     WHERE dispatch."metadata"->>'origin' = ${INITIAL_ORIGIN}
       AND dispatch."metadata"->>'fixtureId' = ${input.fixtureId}
       AND dispatch."metadata"->>'droppedTeamId' = ${input.droppedTeamId}
-      AND dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+      AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
       AND COALESCE(dispatch."metadata"->>'teamId', '') <> ''
   `);
   return rows.map((row) => row.teamId);
@@ -305,6 +308,14 @@ export async function reconcileLastMinuteReplacement(input: {
   fixtureId: string;
   createdByUserId?: string | null;
 }) {
+  // Run even for an already-resolved fixture so earlier queued SMS are cleared.
+  // The delivery gate independently protects any worker already in progress.
+  try {
+    const cancelled = await cancelClosedReplacementSms(input.fixtureId);
+    if (cancelled) console.info("[replacement-sms] Fixture SMS cancelled", { fixtureId: input.fixtureId, cancelled });
+  } catch (error) {
+    console.error("[replacement-sms] Resolution cleanup failed; delivery guard remains active", error);
+  }
   const alert = await getLatestInitialAlertCycle(input.fixtureId);
   if (!alert) {
     return { resolved: false as const, reason: "no_alert" as const, state: null };
@@ -455,7 +466,8 @@ export async function reconcilePendingLastMinuteReplacements(limit = 40) {
     SELECT DISTINCT dispatch."metadata"->>'fixtureId' AS "fixtureId"
     FROM "NotificationDispatch" dispatch
     WHERE dispatch."metadata"->>'origin' = ${INITIAL_ORIGIN}
-      AND dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+      AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
       AND dispatch."createdAt" >= CURRENT_TIMESTAMP - INTERVAL '14 days'
       AND COALESCE(dispatch."metadata"->>'fixtureId', '') <> ''
     LIMIT ${safeLimit}

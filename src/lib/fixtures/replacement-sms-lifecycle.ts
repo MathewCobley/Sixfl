@@ -86,6 +86,8 @@ export async function cancelClosedReplacementSms(fixtureId?: string, db: RawDb =
         AND d."metadata"->>'origin' IN (${REPLACEMENT_REQUEST_SMS_ORIGIN}, ${REPLACEMENT_RESOLVED_SMS_ORIGIN})
         ${fixtureId ? Prisma.sql`AND d."metadata"->>'fixtureId' = ${fixtureId}` : Prisma.empty}
         AND NOT EXISTS (SELECT 1 FROM "NotificationAttempt" a WHERE a."dispatchId" = d."id" AND a."status"::text = 'SUCCESS')
+        AND NOT EXISTS (SELECT 1 FROM "MessageEntry" e WHERE e."notificationDispatchId" = d."id"
+          AND (e."sentAt" IS NOT NULL OR e."providerMessageId" IS NOT NULL OR e."twilioMessageSid" IS NOT NULL))
         AND ${closedRequestPredicate()}
       RETURNING d."id"
     ), history AS (
@@ -110,6 +112,8 @@ export async function cancelOwnedReplacementSms(dispatchId: string, reason: stri
         AND d."status"::text = 'PROCESSING' AND d."sentAt" IS NULL AND d."providerMessageId" IS NULL
         AND d."metadata"->>'origin' IN (${REPLACEMENT_REQUEST_SMS_ORIGIN}, ${REPLACEMENT_RESOLVED_SMS_ORIGIN})
         AND NOT EXISTS (SELECT 1 FROM "NotificationAttempt" a WHERE a."dispatchId" = d."id" AND a."status"::text = 'SUCCESS')
+        AND NOT EXISTS (SELECT 1 FROM "MessageEntry" e WHERE e."notificationDispatchId" = d."id"
+          AND (e."sentAt" IS NOT NULL OR e."providerMessageId" IS NOT NULL OR e."twilioMessageSid" IS NOT NULL))
       RETURNING d."id"
     ) UPDATE "MessageEntry" m SET "providerStatus" = ${`CANCELLED: ${reason}`}, "updatedAt" = CURRENT_TIMESTAMP
       FROM cancelled c WHERE m."notificationDispatchId" = c."id"
