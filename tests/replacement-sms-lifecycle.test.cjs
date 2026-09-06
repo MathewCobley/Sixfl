@@ -98,6 +98,7 @@ test('production cleanup cancels queued offer and all follow-ups, preserving unr
   seedMatrix();const before=state();sql(read(migrationPath));
   assert.deepEqual(state().filter(d=>d.status==='CANCELLED').map(d=>d.id).sort(),cancelledIds);
   for(const old of before)if(!cancelledIds.includes(old.id))assert.deepEqual(state().find(d=>d.id===old.id),old);
+  for(const id of cancelledIds)assert.equal(state().find(d=>d.id===id).metadata.replacementSmsCancelledFrom,id==='retry'?'FAILED':'QUEUED');
   for(const id of cancelledIds){assert.match(sql(`SELECT "providerStatus" FROM "MessageEntry" WHERE "notificationDispatchId"=${quote(id)}`),/^CANCELLED:/);assert.equal(sql(`SELECT "bodyText" FROM "NotificationDispatch" WHERE id=${quote(id)}`),'Original content');}
   const once=JSON.stringify(state());sql(read(migrationPath));assert.equal(JSON.stringify(state()),once);
 });
@@ -158,6 +159,7 @@ test('prepared source retains all three gates and unchanged shared admin/cron en
   assert.ok(processor.indexOf('await getReplacementSmsCancellationReason(dispatch)')<processor.indexOf('await sendSmsWithTwilio'));
   assert.ok(resolution.includes('await cancelClosedReplacementSms(input.fixtureId)'));
   assert.ok(resolution.includes('dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}'));
+  assert.ok(resolution.includes("dispatch.\"metadata\"->>'replacementSmsCancelledFrom' IN ('QUEUED', 'PROCESSING')"),'Failed or queue-time-blocked attempts must not expand email recipients');
   assert.ok(read('src/app/api/admin/night-board/last-minute-replacement/reconcile/route.ts').includes('reconcileLastMinuteReplacement'));
   assert.ok(read('src/app/api/cron/notifications/route.ts').includes('processNotificationQueue(100)'));
 });

@@ -79,6 +79,7 @@ export async function cancelClosedReplacementSms(fixtureId?: string, db: RawDb =
   const rows = await db.$queryRaw<Array<{ count: number }>>(Prisma.sql`
     WITH cancelled AS (
       UPDATE "NotificationDispatch" d SET "status" = 'CANCELLED',
+        "metadata" = d."metadata" || jsonb_build_object('replacementSmsCancelledFrom', d."status"::text),
         "cancelledAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP,
         "failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}
       WHERE d."channel"::text = 'SMS' AND d."status"::text IN ('QUEUED', 'FAILED')
@@ -107,6 +108,7 @@ export async function cancelOwnedReplacementSms(dispatchId: string, reason: stri
   await db.$queryRaw(Prisma.sql`
     WITH cancelled AS (
       UPDATE "NotificationDispatch" d SET "status" = 'CANCELLED',
+        "metadata" = d."metadata" || jsonb_build_object('replacementSmsCancelledFrom', d."status"::text),
         "cancelledAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP, "failureReason" = ${reason}
       WHERE d."id" = ${dispatchId} AND d."channel"::text = 'SMS'
         AND d."status"::text = 'PROCESSING' AND d."sentAt" IS NULL AND d."providerMessageId" IS NULL

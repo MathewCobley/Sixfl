@@ -82,7 +82,8 @@ async function getLatestInitialAlertCycle(fixtureId: string) {
     WHERE dispatch."metadata"->>'origin' = ${INITIAL_ORIGIN}
       AND dispatch."metadata"->>'fixtureId' = ${fixtureId}
       AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
-        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}
+          AND dispatch."metadata"->>'replacementSmsCancelledFrom' IN ('QUEUED', 'PROCESSING')))
       AND COALESCE(dispatch."metadata"->>'droppedTeamId', '') <> ''
       AND COALESCE(dispatch."metadata"->>'opponentTeamId', '') <> ''
     ORDER BY dispatch."createdAt" DESC
@@ -124,7 +125,8 @@ async function getContactedTeamIds(input: {
       AND dispatch."metadata"->>'fixtureId' = ${input.fixtureId}
       AND dispatch."metadata"->>'droppedTeamId' = ${input.droppedTeamId}
       AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
-        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}
+          AND dispatch."metadata"->>'replacementSmsCancelledFrom' IN ('QUEUED', 'PROCESSING')))
       AND COALESCE(dispatch."metadata"->>'teamId', '') <> ''
   `);
   return rows.map((row) => row.teamId);
@@ -467,7 +469,8 @@ export async function reconcilePendingLastMinuteReplacements(limit = 40) {
     FROM "NotificationDispatch" dispatch
     WHERE dispatch."metadata"->>'origin' = ${INITIAL_ORIGIN}
       AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
-        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))
+        OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}
+          AND dispatch."metadata"->>'replacementSmsCancelledFrom' IN ('QUEUED', 'PROCESSING')))
       AND dispatch."createdAt" >= CURRENT_TIMESTAMP - INTERVAL '14 days'
       AND COALESCE(dispatch."metadata"->>'fixtureId', '') <> ''
     LIMIT ${safeLimit}

@@ -6,6 +6,7 @@ DECLARE cancelled_count INTEGER;
 BEGIN
   WITH cancelled AS (
     UPDATE "NotificationDispatch" d SET "status" = 'CANCELLED',
+      "metadata" = d."metadata" || jsonb_build_object('replacementSmsCancelledFrom', d."status"::text),
       "cancelledAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP,
       "failureReason" = 'Replacement request closed — unsent SMS cancelled.'
     WHERE d."channel"::text = 'SMS' AND d."status"::text IN ('QUEUED', 'FAILED')
