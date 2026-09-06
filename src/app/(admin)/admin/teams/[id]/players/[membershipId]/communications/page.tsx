@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/teams/[id]/players/[membershipId]/communications/page.tsx
 // ========================================
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationChannel, NotificationDispatchStatus } from "@prisma/client";
@@ -648,7 +649,7 @@ export default async function AdminPlayerCommunicationsPage({
 
                   {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                      <div dangerouslySetInnerHTML={{ __html: item.bodyHtml }} />
+                      <EmailHtmlPreview html={item.bodyHtml} />
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{item.bodyText}</div>

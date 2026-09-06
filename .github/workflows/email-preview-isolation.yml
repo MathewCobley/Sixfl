@@ -1,0 +1,42 @@
+name: Admin email preview isolation
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  email-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare the source used by production
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Protect all preview consumers and existing critical features
+        run: |
+          node --test tests/email-preview-isolation.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npm run audit:dom
+      - name: Type-check the complete prepared application
+        run: npx tsc --noEmit
+      - name: Install a pinned test-only Chromium driver outside the application
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sixfl-email-preview-browser" --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          node "$RUNNER_TEMP/sixfl-email-preview-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Reproduce leakage and check desktop/mobile isolation without external requests
+        env:
+          EMAIL_PREVIEW_PLAYWRIGHT_MODULE: ${{ runner.temp }}/sixfl-email-preview-browser/node_modules/playwright
+        run: node --test tests/email-preview-isolation.browser.cjs
+      - name: Verify prepared preview callsites and absence of temporary workflows
+        run: |
+          git grep -n 'EmailHtmlPreview' -- src/app src/components
+          test ! -f .github/workflows/email-preview-audit-once.yml
+          test ! -f .github/workflows/email-preview-integrate-once.yml

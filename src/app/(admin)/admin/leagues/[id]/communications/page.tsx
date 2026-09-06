@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/leagues/[id]/communications/page.tsx
 // ========================================
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -486,7 +487,7 @@ export default async function AdminLeagueCommunicationsPage({
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <section className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] [&>*]:min-w-0">
         <LeagueCommunicationsComposer
           leagueId={league.id}
           fromPath={`/admin/leagues/${league.id}/communications`}
@@ -531,7 +532,7 @@ export default async function AdminLeagueCommunicationsPage({
 
                   {message.channel === "EMAIL" && message.htmlBody ? (
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                      <div dangerouslySetInnerHTML={{ __html: message.htmlBody }} />
+                      <EmailHtmlPreview html={message.htmlBody} />
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">{message.textBody || message.body}</div>
