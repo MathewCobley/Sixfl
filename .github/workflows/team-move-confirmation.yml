@@ -33,8 +33,10 @@ jobs:
       - run: npm ci
       - run: npm run prebuild
       - run: npx prisma generate
-      - name: Test three states, admin writes, stale edits, native pages and PostgreSQL persistence
-        run: node --test tests/team-move-confirmation.test.cjs
+      - name: Test team responses and persisted league opt-in using isolated PostgreSQL
+        run: |
+          node --test tests/team-move-confirmation.test.cjs
+          node --test tests/league-move-scope.test.cjs
       - name: Verify critical features and all TypeScript
         run: |
           node scripts/check-critical-feature-contracts.mjs
@@ -43,12 +45,15 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/team-move-browser" --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
           node "$RUNNER_TEMP/team-move-browser/node_modules/playwright/cli.js" install --with-deps chromium
-      - name: Test actual dropdown saving and errors on desktop and mobile
+      - name: Test actual dropdown and league checkbox on desktop and mobile
         env:
           TEAM_MOVE_PLAYWRIGHT_MODULE: ${{ runner.temp }}/team-move-browser/node_modules/playwright
-        run: node --test tests/team-move-confirmation.browser.cjs
+        run: |
+          node --test tests/team-move-confirmation.browser.cjs
+          node --test tests/league-move-scope.browser.cjs
       - name: Verify native owners and remove temporary tooling
         run: |
-          git grep -n 'TeamMoveConfirmationSelect\|moveConfirmationStatus' -- src/app src/components src/lib/teams
+          git grep -nE 'TeamMoveConfirmationSelect|moveConfirmationStatus|isMoving|leagueMoveSettingPresent' -- src/app src/components src/lib/teams
+          test ! -f .github/workflows/league-move-integrate-once.yml
           test ! -f .github/workflows/team-move-inspect-once.yml
           test ! -f .github/workflows/team-move-integrate-once.yml

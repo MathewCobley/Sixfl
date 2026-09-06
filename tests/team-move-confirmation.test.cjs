@@ -78,7 +78,7 @@ test('all three responses target only the selected id and update no operational 
     assert.equal(result.ok, true);
     assert.equal(result.status, status);
     assert.equal(result.updatedBy, 'Test admin');
-    assert.deepEqual(h.writes[0].where, { id: 'team-one', moveConfirmationStatus: 'PENDING' });
+    assert.deepEqual(h.writes[0].where, { id: 'team-one', moveConfirmationStatus: 'PENDING', league: { is: { isMoving: true } } });
     assert.deepEqual(Object.keys(h.writes[0].data).sort(), ['moveConfirmationStatus', 'moveConfirmationUpdatedAt', 'moveConfirmationUpdatedBy']);
     assert.deepEqual(h.refreshes, ['/admin/teams', '/admin/teams/team-one']);
   }
@@ -101,7 +101,7 @@ test('native dropdown has the saved option, a team-specific accessible label and
   const load = loader({ '@/app/(admin)/admin/teams/move-confirmation-actions': { saveTeamMoveConfirmation: () => { throw new Error('SSR must not save'); } } });
   const Component = load('src/components/admin/teams/TeamMoveConfirmationSelect.tsx').default;
   for (const status of ['PENDING', 'CONFIRMED', 'DECLINED']) {
-    const html = renderToStaticMarkup(React.createElement(Component, { teamId: 'team-one', teamName: 'Example FC', initialStatus: status }));
+    const html = renderToStaticMarkup(React.createElement(Component, { enabled: true, teamId: 'team-one', teamName: 'Example FC', initialStatus: status }));
     assert.ok(html.includes('Move confirmation for Example FC'));
     assert.ok(html.includes(`value="${status}" selected=""`));
     assert.ok(html.includes('Saves automatically.'));

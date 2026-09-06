@@ -9,7 +9,7 @@ test.before(async () => {
   const built = await build({
     stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import Select from '@/components/admin/teams/TeamMoveConfirmationSelect';
       const root=createRoot(document.getElementById('root')); let version=0;
-      window.renderMove=(status='PENDING')=>root.render(React.createElement(Select,{key:++version,teamId:'team-one',teamName:'Example FC',initialStatus:status})); window.renderMove();`,
+      window.renderMove=(status='PENDING')=>root.render(React.createElement(Select,{enabled:true,key:++version,teamId:'team-one',teamName:'Example FC',initialStatus:status})); window.renderMove();`,
       resolveDir: root, loader: 'tsx' }, bundle: true, write: false, platform: 'browser', jsx: 'automatic',
     define: { 'process.env.NODE_ENV': '"production"' },
     plugins: [{ name: 'offline-action', setup(api) {

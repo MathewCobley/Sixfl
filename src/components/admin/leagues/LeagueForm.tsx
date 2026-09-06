@@ -4,8 +4,7 @@
 
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { startTransition, useActionState, useEffect, useMemo, useState } from "react";
 import type { LeagueType, PreferredNight } from "@prisma/client";
 import type { LeagueFormState } from "@/app/(admin)/admin/leagues/actions";
 
@@ -14,6 +13,7 @@ type LeagueFormValues = {
   slug: string;
   season: string;
   isActive: boolean;
+  isMoving: boolean;
   area: string;
   dayOfWeek: PreferredNight | "";
   leagueType: LeagueType | "";
@@ -192,9 +192,7 @@ function Select({
   );
 }
 
-function SubmitButton({ mode }: { mode: "create" | "edit" }) {
-  const { pending } = useFormStatus();
-
+function SubmitButton({ mode, pending }: { mode: "create" | "edit"; pending: boolean }) {
   return (
     <button
       type="submit"
@@ -211,7 +209,7 @@ export default function LeagueForm({
   action,
   initialValues,
 }: LeagueFormProps) {
-  const [state, formAction] = useActionState(action, initialState);
+  const [state, formAction, isPending] = useActionState(action, initialState);
 
   const values = useMemo<LeagueFormValues>(
     () => ({
@@ -219,6 +217,7 @@ export default function LeagueForm({
       slug: initialValues?.slug ?? "",
       season: initialValues?.season ?? "",
       isActive: initialValues?.isActive ?? true,
+      isMoving: initialValues?.isMoving ?? false,
       area: initialValues?.area ?? "",
       dayOfWeek: initialValues?.dayOfWeek ?? "",
       leagueType: initialValues?.leagueType ?? "",
@@ -243,6 +242,9 @@ export default function LeagueForm({
     [initialValues],
   );
 
+  const [isMoving, setIsMoving] = useState(values.isMoving);
+  useEffect(() => { setIsMoving(values.isMoving); }, [values.isMoving]);
+
   const [name, setName] = useState(values.name);
   const [slug, setSlug] = useState(values.slug);
   const [slugTouched, setSlugTouched] = useState(Boolean(values.slug));
@@ -260,7 +262,20 @@ export default function LeagueForm({
   }, [name, slugTouched]);
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form
+      action={formAction}
+      onSubmit={event => {
+        // Dispatch the existing server action without React's automatic form
+        // reset, which can restore a checkbox's original defaultChecked value.
+        // Keep action for pre-hydration submission; the hydrated handler owns it.
+        event.preventDefault();
+        if (isPending) return;
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => formAction(formData));
+      }}
+      aria-busy={isPending}
+      className="space-y-8"
+    >
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2 md:col-span-2">
           <label htmlFor="name" className="block text-sm font-medium text-white">
@@ -409,6 +424,19 @@ export default function LeagueForm({
         <div className="space-y-2"><label htmlFor="isActive" className="block text-sm font-medium text-white">Status</label><Select id="isActive" name="isActive" defaultValue={values.isActive ? "true" : "false"} options={[{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]} /></div>
       </div>
 
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <input type="hidden" name="leagueMoveSettingPresent" value="1" />
+        <label htmlFor="isMoving" className="flex items-start gap-3 text-sm text-white">
+          <input id="isMoving" name="isMoving" type="checkbox" value="true"
+            checked={isMoving} onChange={event => setIsMoving(event.target.checked)}
+            aria-describedby="league-move-help" className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-500" />
+          <span className="font-semibold">League move</span>
+        </label>
+        <p id="league-move-help" className="mt-2 text-xs leading-5 text-white/60">
+          Show move-confirmation dropdowns for this league's teams. Untick to hide them without deleting saved responses. Save changes to apply. This does not move any teams or send messages.
+        </p>
+      </div>
+
       {state.error || state.message ? (
         <div className={`rounded-2xl border px-4 py-3 text-sm ${state.error ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
           {state.error || state.message}
@@ -416,7 +444,7 @@ export default function LeagueForm({
       ) : null}
 
       <div className="flex items-center gap-3">
-        <SubmitButton mode={mode} />
+        <SubmitButton mode={mode} pending={isPending} />
       </div>
     </form>
   );
