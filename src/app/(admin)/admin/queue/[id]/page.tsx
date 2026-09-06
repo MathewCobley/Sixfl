@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/queue/[id]/page.tsx
 // ========================================
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationDispatchStatus } from "@prisma/client";
@@ -103,14 +104,7 @@ function MessagePreview({
 
       {hasHtml ? (
         <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white">
-          <iframe
-            title="Rendered email preview"
-            srcDoc={previewHtml}
-            sandbox="allow-popups allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            loading="lazy"
-            className="h-[48rem] w-full bg-white"
-          />
+          <EmailHtmlPreview html={previewHtml} title="Rendered email preview" expanded />
         </div>
       ) : (
         <pre className="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white/75 sixfl-mobile-scroll">

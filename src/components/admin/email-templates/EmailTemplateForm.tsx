@@ -4,6 +4,7 @@
 
 "use client";
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import {
   type KeyboardEvent,
   useActionState,
@@ -902,7 +903,7 @@ export default function EmailTemplateForm({
               {previewSubject || "Your email subject preview"}
             </div>
 
-            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            <EmailHtmlPreview html={previewHtml} />
           </div>
         </aside>
       </div>

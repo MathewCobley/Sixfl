@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/leads/[id]/layout.tsx
 // ========================================
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { NotificationChannel } from "@prisma/client";
 import type { ReactNode } from "react";
@@ -423,7 +424,7 @@ export default async function AdminLeadLayout({
 
                 {item.channel === NotificationChannel.EMAIL && item.htmlBody ? (
                   <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                    <div dangerouslySetInnerHTML={{ __html: item.htmlBody }} />
+                    <EmailHtmlPreview html={item.htmlBody} />
                   </div>
                 ) : (
                   <div className="whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/80">

@@ -4,6 +4,7 @@
 
 "use client";
 
+import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Fragment, useMemo } from "react";
@@ -760,11 +761,7 @@ export default function AdminMessageThread({
 
                       {isHtmlEmailPreview ? (
                         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html: message.htmlBody ?? "",
-                            }}
-                          />
+                          <EmailHtmlPreview html={message.htmlBody ?? ""} />
                         </div>
                       ) : isSmsPreview ? (
                         <SmsTranscriptPreview body={message.body} />
