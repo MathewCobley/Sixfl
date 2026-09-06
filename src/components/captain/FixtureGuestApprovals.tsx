@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import GuestPaymentControl from "./GuestPaymentControl";
 
 type Approval = {
   id: string; playerUserId: string; playerName: string; status: "APPROVED" | "REVOKED";
@@ -117,7 +118,7 @@ function GuestApprovalPanel({ teamId, fixtureId, canManage }: { teamId: string; 
         </div>
         {editable ? <button type="button" disabled={busy} className={buttonStyle} onClick={() => setShowForm(!showForm)}>Approve guest for this fixture</button> : null}
       </div>
-      <p className="mt-3 text-sm leading-6 text-white/60">Permission only—not confirmation that the player has played. This does not add a permanent squad member, change selection, create a fee, waive payment or send a message. Normal guest and matchday squad limits still apply.</p>
+      <p className="mt-3 text-sm leading-6 text-white/60">Approval itself does not select a player, add a permanent squad member or request money. Once SIXFL has approved a guest, the captain can set their fee and send a payment link below without a second player request. Normal guest and matchday squad limits still apply.</p>
       {loading ? <p role="status" className="mt-3 text-sm text-white/70">Loading guest approvals…</p> : null}
       {error ? <div role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}<button type="button" disabled={busy || loading} className="ml-3 underline" onClick={() => { setError(""); void reload().catch((err: Error) => setError(err.message)); }}>Reload approvals</button></div> : null}
       {message ? <p role="status" className="mt-4 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-100">{message}</p> : null}
@@ -170,6 +171,7 @@ function GuestApprovalPanel({ teamId, fixtureId, canManage }: { teamId: string; 
             <p className="text-xs text-white/65">This removes permission only. Check any existing matchday selection or fee separately.</p>
             <div className="flex gap-3"><button disabled={busy || revokeReason.trim().length < 3} className="rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2 text-sm text-red-100 disabled:opacity-50">Confirm revocation</button><button type="button" disabled={busy} onClick={() => setRevoke(null)} className="px-3 py-2 text-sm text-white/70">Cancel</button></div>
           </form> : null}
+          <GuestPaymentControl teamId={teamId} fixtureId={fixtureId} approvalId={approval.id} revision={approval.revision} approvalStatus={approval.status} playerName={approval.playerName} />
         </article>)}
       </div>
     </section>

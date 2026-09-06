@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { FixtureStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { lockTemporaryFixtureFee } from "@/lib/payments/temporary-fee-lock";
 
 const PASS_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PASS_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -398,6 +399,7 @@ export async function redeemTemporaryPlayerPass(input: {
       );
     }
 
+    await lockTemporaryFixtureFee(tx, { fixtureId: input.fixtureId, teamId: input.teamId, userId: pass.userId });
     const existingFees = await tx.$queryRaw<IdRow[]>(Prisma.sql`
       SELECT "id"
       FROM "PlayerMatchFee"
