@@ -36,7 +36,9 @@ for (const marker of [
   "opponentTeamId",
   '"not_selected"',
   "There is no charge for this extra game.",
-  "are not required for this extra game",
+  "last-minute-extra-fixture-covered-email",
+  "last-minute-extra-fixture-covered-sms",
+  "queueNotificationFromTemplate",
   "Your normal fixture arrangements remain in place.",
   "ON CONFLICT",
 ]) {
@@ -78,6 +80,11 @@ expect(
   'UNIQUE INDEX IF NOT EXISTS "LastMinuteReplacementResolution_fixture_drop_replacement_key"',
   "Replacement resolution persistence must prevent duplicate resolved-message cycles.",
 );
+
+const coveredTemplates = read("prisma/migrations/20260906222500_neutral_extra_fixture_covered_templates/migration.sql");
+expect(coveredTemplates, "are not required for this extra game", "Covered fixture templates must explain that the extra game is not required.");
+expect(coveredTemplates, "no reply is needed", "Closure copy must be informational, without implying the recipient volunteered.");
+if (/Thanks for being available/i.test(service + coveredTemplates)) failures.push("Closure copy must not assume availability.");
 
 if (failures.length) {
   console.error("\nLAST-MINUTE REPLACEMENT RESOLUTION CONTRACT FAILED\n");
