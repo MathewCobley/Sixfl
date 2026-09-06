@@ -4,8 +4,7 @@
 
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { startTransition, useActionState, useEffect, useMemo, useState } from "react";
 import type { LeagueType, PreferredNight } from "@prisma/client";
 import type { LeagueFormState } from "@/app/(admin)/admin/leagues/actions";
 
@@ -193,9 +192,7 @@ function Select({
   );
 }
 
-function SubmitButton({ mode }: { mode: "create" | "edit" }) {
-  const { pending } = useFormStatus();
-
+function SubmitButton({ mode, pending }: { mode: "create" | "edit"; pending: boolean }) {
   return (
     <button
       type="submit"
@@ -212,7 +209,7 @@ export default function LeagueForm({
   action,
   initialValues,
 }: LeagueFormProps) {
-  const [state, formAction] = useActionState(action, initialState);
+  const [state, formAction, isPending] = useActionState(action, initialState);
 
   const values = useMemo<LeagueFormValues>(
     () => ({
@@ -267,10 +264,16 @@ export default function LeagueForm({
   return (
     <form
       action={formAction}
-      // Settings retain their submitted values after action feedback.
-      // Native reset would otherwise revert the checkbox to its original
-      // checked state even though the current React state is different.
-      onReset={event => event.preventDefault()}
+      onSubmit={event => {
+        // Dispatch the existing server action without React's automatic form
+        // reset, which can restore a checkbox's original defaultChecked value.
+        // Keep action for pre-hydration submission; the hydrated handler owns it.
+        event.preventDefault();
+        if (isPending) return;
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => formAction(formData));
+      }}
+      aria-busy={isPending}
       className="space-y-8"
     >
       <div className="grid gap-6 md:grid-cols-2">
@@ -441,7 +444,7 @@ export default function LeagueForm({
       ) : null}
 
       <div className="flex items-center gap-3">
-        <SubmitButton mode={mode} />
+        <SubmitButton mode={mode} pending={isPending} />
       </div>
     </form>
   );
