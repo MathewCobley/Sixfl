@@ -1,0 +1,48 @@
+name: Player prospect search
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/sixfl_search_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test search and the actual prepared server page with isolated data
+        run: node --import tsx --test tests/player-prospect-search.test.mjs
+      - name: Prove the page test detects a removed search filter
+        shell: bash
+        run: |
+          target='src/app/(admin)/admin/player-prospects/page.tsx'
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          node - <<'JS'
+          const fs = require('node:fs');
+          const file = 'src/app/(admin)/admin/player-prospects/page.tsx';
+          const source = fs.readFileSync(file, 'utf8');
+          const guard = ' && matchesSearch(prospect)';
+          if (!source.includes(guard)) throw new Error('Search filter not found');
+          fs.writeFileSync(file, source.replace(guard, ''));
+          JS
+          if node --import tsx --test --test-name-pattern='search finds a player beyond' tests/player-prospect-search.test.mjs > /tmp/search-negative.log 2>&1; then
+            cat /tmp/search-negative.log
+            echo 'ERROR: search regression was not detected'
+            exit 1
+          fi
+          grep -q 'AssertionError' /tmp/search-negative.log
+          echo 'Removing the real page search filter caused its regression test to fail.'
+      - name: Type-check the prepared application
+        run: npx tsc --noEmit
