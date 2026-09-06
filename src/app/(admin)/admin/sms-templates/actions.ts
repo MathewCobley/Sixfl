@@ -10,7 +10,6 @@ import {
   NotificationTemplateKind,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -20,6 +19,7 @@ type SmsTemplateActionState = {
   message?: string;
   error?: string;
   errors?: Record<string, string[]>;
+  redirectTo?: string;
 };
 
 type AllowedAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
@@ -184,7 +184,7 @@ async function createSmsTemplate(
   });
 
   revalidateTemplatePaths(created.id);
-  redirect(`/admin/templates/${created.id}`);
+  return { ok: true, success: true, message: "Template saved successfully.", redirectTo: `/admin/templates/${created.id}?created=1` };
 }
 
 async function updateSmsTemplate(

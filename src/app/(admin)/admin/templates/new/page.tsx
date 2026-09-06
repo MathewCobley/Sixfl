@@ -7,9 +7,6 @@ import AdminCard from "@/components/admin/AdminCard";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
 import EmailTemplatePollBridge from "@/components/admin/email-templates/EmailTemplatePollBridge";
 import SmsTemplateForm from "@/components/admin/sms-templates/SmsTemplateForm";
-import { createEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
-import { createSmsTemplateAction, createSystemSmsTemplateAction } from "@/app/(admin)/admin/sms-templates/actions";
-import { createSystemEmailTemplateAction } from "@/app/(admin)/admin/system-email-templates/actions";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type SearchParams = Promise<{ channel?: string; type?: string }>;
@@ -93,16 +90,16 @@ export default async function NewTemplatePage({ searchParams }: { searchParams: 
           selectedChannel === "EMAIL" ? (
             <>
               <EmailTemplatePollBridge />
-              <EmailTemplateForm mode="create" action={createSystemEmailTemplateAction} />
+              <EmailTemplateForm mode="create" templateType="system" />
             </>
-          ) : <SmsTemplateForm mode="create" action={createSystemSmsTemplateAction} />
+          ) : <SmsTemplateForm mode="create" templateType="system" />
         ) : selectedChannel === "EMAIL" ? (
           <>
             <EmailTemplatePollBridge />
-            <EmailTemplateForm mode="create" action={createEmailTemplateAction} />
+            <EmailTemplateForm mode="create" templateType="campaign" />
           </>
         ) : (
-          <SmsTemplateForm mode="create" action={createSmsTemplateAction} />
+          <SmsTemplateForm mode="create" templateType="campaign" />
         )}
       </div>
     </AdminCard>
