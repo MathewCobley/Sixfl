@@ -12,9 +12,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix/league-scoped-move-confirmation
-      - name: Inspect and update owning source files
+      - name: Update and inspect native source
         run: |
-          git grep -nE 'TeamMoveConfirmationSelect|saveTeamMoveConfirmation|isMoving|leagueMoveSettingPresent' -- src scripts prisma || true
           python3 - <<'PY'
           from pathlib import Path
           def edit(file, pairs):
@@ -23,7 +22,7 @@ jobs:
                   assert s.count(old)==1, (file,old,s.count(old))
                   s=s.replace(old,new)
               p.write_text(s)
-          edit('prisma/schema.prisma', [('model League {\n','model League {\n  // Opt-in admin response tracking; does not move teams or alter fixtures.\n  isMoving Boolean @default(false)\n')])
+          edit('prisma/schema.prisma', [('model League {\n','model League {\n  // Opt-in admin tracking; does not move teams or alter fixtures.\n  isMoving Boolean @default(false)\n')])
           edit('src/components/admin/leagues/LeagueForm.tsx', [
               ('  isActive: boolean;','  isActive: boolean;\n  isMoving: boolean;'),
               ('      isActive: initialValues?.isActive ?? true,','      isActive: initialValues?.isActive ?? true,\n      isMoving: initialValues?.isMoving ?? false,'),
@@ -50,9 +49,7 @@ jobs:
             const isMoving = formData.get("leagueMoveSettingPresent") === "1"
               ? parseBoolean(formData.get("isMoving")) : undefined;'''),
               ('data: { name, slug, season, isActive, area,','data: { name, slug, season, isActive, isMoving, area,'),
-              ('  if (existingLeague.slug !== data.slug) revalidatePath', '''  revalidatePath("/admin/teams");
-            revalidatePath("/admin/teams/[id]", "page");
-            if (existingLeague.slug !== data.slug) revalidatePath''')
+              ('  if (existingLeague.slug !== data.slug) revalidatePath', '  revalidatePath("/admin/teams");\n  revalidatePath("/admin/teams/[id]", "page");\n  if (existingLeague.slug !== data.slug) revalidatePath')
           ])
           edit('src/app/(admin)/admin/leagues/[id]/page.tsx', [('isActive: league.isActive, area:', 'isActive: league.isActive, isMoving: league.isMoving, area:')])
           edit('src/app/(admin)/admin/teams/page.tsx', [
@@ -60,7 +57,7 @@ jobs:
               ('                        <TeamMoveConfirmationSelect\n', '                        <TeamMoveConfirmationSelect\n                          enabled={team.league?.isMoving === true}\n')
           ])
           edit('src/app/(admin)/admin/teams/[id]/page.tsx', [
-              ('            slug: true,','            slug: true,\n            isMoving: true,'),
+              ('            slug: true,\n          },\n        },\n        convertedFromLead:', '            slug: true,\n            isMoving: true,\n          },\n        },\n        convertedFromLead:'),
               ('            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">', '            {team.league?.isMoving === true ? (\n            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">'),
               ('              <TeamMoveConfirmationSelect\n', '              <TeamMoveConfirmationSelect\n                enabled={team.league?.isMoving === true}\n'),
               ('            </div>\n\n            <form action={updateTeamDetailsAction}', '            </div>\n            ) : null}\n\n            <form action={updateTeamDetailsAction}')
@@ -74,13 +71,12 @@ jobs:
           edit('src/app/(admin)/admin/teams/move-confirmation-actions.ts', [
               ('where: { id: teamId, moveConfirmationStatus: input.previousStatus },', '''where: {
                   id: teamId, moveConfirmationStatus: input.previousStatus,
-                  // Check persisted league state in the same write: stale pages
-                  // cannot bypass a disabled setting or an intervening transfer.
+                  // Check persisted league state in the same write so stale
+                  // pages cannot bypass a disabled flag or a team transfer.
                   league: { is: { isMoving: true } },
                 },'''),
               ('This team changed or was removed. Reload the page before trying again.', 'This league is not marked for a move, or the team response changed. Reload the page before trying again.')
           ])
-          # Keep prior regression suites, now supplying the explicit league gate.
           edit('tests/team-move-confirmation.test.cjs', [
               ("{ id: 'team-one', moveConfirmationStatus: 'PENDING' }", "{ id: 'team-one', moveConfirmationStatus: 'PENDING', league: { is: { isMoving: true } } }"),
               ("{ teamId: 'team-one', teamName: 'Example FC', initialStatus: status }", "{ enabled: true, teamId: 'team-one', teamName: 'Example FC', initialStatus: status }")
@@ -88,12 +84,8 @@ jobs:
           edit('tests/team-move-confirmation-review.test.cjs', [
               ('{ id: "team-a", moveConfirmationStatus: "PENDING" }', '{ id: "team-a", moveConfirmationStatus: "PENDING", league: { is: { isMoving: true } } }')
           ])
-          edit('tests/team-move-confirmation.browser.cjs', [
-              ("{key:++version,teamId:", "{enabled:true,key:++version,teamId:")
-          ])
-          edit('tests/team-move-confirmation-review.browser.cjs', [
-              ('<Control key={props.teamId} {...props}/>', '<Control enabled={true} key={props.teamId} {...props}/>')
-          ])
+          edit('tests/team-move-confirmation.browser.cjs', [("{key:++version,teamId:", "{enabled:true,key:++version,teamId:")])
+          edit('tests/team-move-confirmation-review.browser.cjs', [('<Control key={props.teamId} {...props}/>', '<Control enabled={true} key={props.teamId} {...props}/>')])
           edit('.github/workflows/team-move-confirmation.yml', [
               ('run: node --test tests/team-move-confirmation.test.cjs', 'run: |\n          node --test tests/team-move-confirmation.test.cjs\n          node --test tests/league-move-scope.test.cjs'),
               ('run: node --test tests/team-move-confirmation.browser.cjs', 'run: |\n          node --test tests/team-move-confirmation.browser.cjs\n          node --test tests/league-move-scope.browser.cjs'),
@@ -102,6 +94,7 @@ jobs:
           PY
           git diff --check
           git diff --stat
+          git grep -nE 'TeamMoveConfirmationSelect|isMoving|leagueMoveSettingPresent' -- src prisma/schema.prisma
           git config user.name 'SIXFL automation'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src prisma/schema.prisma tests .github/workflows/team-move-confirmation.yml
