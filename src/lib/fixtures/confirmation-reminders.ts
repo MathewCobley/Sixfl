@@ -10,7 +10,7 @@ import {
   NotificationTemplateKind,
 } from "@prisma/client";
 import { queueDirectNotification } from "@/lib/notifications/service";
-import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { upsertTeamOperationalSmsRecipients } from "@/lib/notifications/team-operational-recipients";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
@@ -315,6 +315,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     },
     select: {
       id: true,
+      recipientId: true,
       status: true,
       createdAt: true,
     },
@@ -345,18 +346,9 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     });
   }
 
-  const activeExistingDispatch = existingDispatches.find((dispatch) => {
-    if (staleQueuedDispatchIds.includes(dispatch.id)) return false;
-    return fixture.updatedAt.getTime() <= dispatch.createdAt.getTime();
-  });
+  const recipients = await upsertTeamOperationalSmsRecipients(input.teamId);
 
-  if (activeExistingDispatch) {
-    return { ok: true, status: "already_sent", teamName: team.name };
-  }
-
-  const { recipient } = await upsertTeamNotificationRecipient(input.teamId);
-
-  if (!recipient.phone?.trim()) {
+  if (recipients.length === 0) {
     return { ok: false, status: "no_phone", teamName: team.name };
   }
 
@@ -376,47 +368,72 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     return { ok: false, status: "template_missing", teamName: team.name };
   }
 
-  const dispatch = await queueDirectNotification({
-    recipientId: recipient.id,
-    channel: NotificationChannel.SMS,
-    audience: NotificationAudience.TEAM,
-    body: smsBody,
-    isTransactional: true,
-    sourceType,
-    sourceId,
-    metadata: {
-      kind: "fixture_confirmation_sms",
-      mode: input.mode,
-      fixtureId: fixture.id,
-      leagueId: fixture.leagueId,
-      teamId: input.teamId,
-      teamName: team.name,
-      opponentName: opponent.name,
-      templateKey: getTemplateKey(input.mode),
-    },
-  });
+  let queued = 0;
+  let existing = 0;
 
-  if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
-    return { ok: false, status: "skipped", teamName: team.name };
+  for (const recipient of recipients) {
+    const activeExistingDispatch = existingDispatches.find((dispatch) => {
+      if (dispatch.recipientId !== recipient.id) return false;
+      if (staleQueuedDispatchIds.includes(dispatch.id)) return false;
+      return fixture.updatedAt.getTime() <= dispatch.createdAt.getTime();
+    });
+
+    if (activeExistingDispatch) {
+      existing += 1;
+      continue;
+    }
+
+    const dispatch = await queueDirectNotification({
+      recipientId: recipient.id,
+      channel: NotificationChannel.SMS,
+      audience: NotificationAudience.TEAM,
+      body: smsBody,
+      isTransactional: true,
+      sourceType,
+      sourceId,
+      metadata: {
+        kind: "fixture_confirmation_sms",
+        mode: input.mode,
+        fixtureId: fixture.id,
+        leagueId: fixture.leagueId,
+        teamId: input.teamId,
+        teamName: team.name,
+        opponentName: opponent.name,
+        templateKey: getTemplateKey(input.mode),
+        operationalCaptainCopy: true,
+      },
+    });
+
+    if (dispatch.status === NotificationDispatchStatus.QUEUED) {
+      queued += 1;
+    }
   }
 
-  await prisma.fixtureCaptainConfirmation.upsert({
-    where: {
-      fixtureId_teamId: {
+  if (queued > 0) {
+    await prisma.fixtureCaptainConfirmation.upsert({
+      where: {
+        fixtureId_teamId: {
+          fixtureId: fixture.id,
+          teamId: input.teamId,
+        },
+      },
+      update: {
+        lastChasedAt: new Date(),
+      },
+      create: {
         fixtureId: fixture.id,
         teamId: input.teamId,
+        status: FixtureCaptainConfirmationStatus.PENDING,
+        lastChasedAt: new Date(),
       },
-    },
-    update: {
-      lastChasedAt: new Date(),
-    },
-    create: {
-      fixtureId: fixture.id,
-      teamId: input.teamId,
-      status: FixtureCaptainConfirmationStatus.PENDING,
-      lastChasedAt: new Date(),
-    },
-  });
+    });
 
-  return { ok: true, status: "queued", teamName: team.name };
+    return { ok: true, status: "queued", teamName: team.name };
+  }
+
+  if (existing > 0) {
+    return { ok: true, status: "already_sent", teamName: team.name };
+  }
+
+  return { ok: false, status: "skipped", teamName: team.name };
 }

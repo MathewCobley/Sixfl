@@ -16,6 +16,7 @@ import {
   getPhoneDisplayValue,
   normalizePhoneNumber,
 } from "@/lib/notifications/phone";
+import { syncTeamCaptainPhonesFromKnownContacts } from "@/lib/notifications/team-captain-contact-sync";
 
 export type TeamContactPoint = {
   key: string;
@@ -164,6 +165,9 @@ export async function getTeamContactSnapshot(
     return null;
   }
 
+  const { profiles: captainProfiles } =
+    await syncTeamCaptainPhonesFromKnownContacts(team.id);
+
   const recipient = await getNotificationRecipientBySource({
     sourceType: NotificationRecipientSourceType.TEAM,
     sourceId: team.id,
@@ -223,9 +227,11 @@ export async function getTeamContactSnapshot(
   }
 
   for (const member of team.members) {
+    const memberPhone = displayPhone(captainProfiles.get(member.id)?.phone);
     const key = contactKey({
       name: member.user.name,
       email: member.user.email,
+      phone: memberPhone,
       source: `member:${member.id}`,
     });
 
@@ -238,7 +244,7 @@ export async function getTeamContactSnapshot(
       source: "Team member",
       name: cleanValue(member.user.name),
       email: cleanValue(member.user.email),
-      phone: null,
+      phone: memberPhone,
       isPrimary: contacts.length === 0,
     });
   }

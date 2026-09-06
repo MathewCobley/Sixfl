@@ -34,6 +34,9 @@ jobs:
       - name: Check team confirmation workflow
         run: node scripts/check-team-confirmation-contract.mjs
 
+      - name: Check multi-captain fixture notifications
+        run: node scripts/check-multi-captain-fixture-notifications.mjs
+
       - name: Check Night Board fixture-change notifications
         run: node scripts/check-night-board-fixture-notifications.mjs
 
@@ -120,6 +123,7 @@ jobs:
         run: |
           node scripts/check-critical-feature-contracts.mjs
           node scripts/check-team-confirmation-contract.mjs
+          node scripts/check-multi-captain-fixture-notifications.mjs
           node scripts/check-night-board-fixture-notifications.mjs
           node scripts/check-night-board-fixture-issue-resolution.mjs
           node scripts/check-standard-team-player-payment-links.mjs

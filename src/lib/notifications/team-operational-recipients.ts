@@ -2,11 +2,13 @@ import {
   NotificationAudience,
   NotificationRecipientSourceType,
   TeamRole,
+  type NotificationRecipient,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 
 export async function upsertAdditionalCaptainOperationalRecipients(input: {
   teamId: string;
@@ -65,4 +67,46 @@ export async function upsertAdditionalCaptainOperationalRecipients(input: {
   }
 
   return recipients;
+}
+
+function uniqueByContact(
+  recipients: NotificationRecipient[],
+  getKey: (recipient: NotificationRecipient) => string | null,
+) {
+  const seen = new Set<string>();
+
+  return recipients.filter((recipient) => {
+    const key = getKey(recipient);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export async function upsertTeamOperationalEmailRecipients(teamId: string) {
+  const { recipient: primaryRecipient } = await upsertTeamNotificationRecipient(teamId);
+  const additionalCaptains = await upsertAdditionalCaptainOperationalRecipients({
+    teamId,
+    excludeEmail: primaryRecipient.email,
+    excludePhone: primaryRecipient.phone,
+  });
+
+  return uniqueByContact(
+    [primaryRecipient, ...additionalCaptains],
+    (recipient) => recipient.email?.trim().toLowerCase() || null,
+  );
+}
+
+export async function upsertTeamOperationalSmsRecipients(teamId: string) {
+  const { recipient: primaryRecipient } = await upsertTeamNotificationRecipient(teamId);
+  const additionalCaptains = await upsertAdditionalCaptainOperationalRecipients({
+    teamId,
+    excludeEmail: primaryRecipient.email,
+    excludePhone: primaryRecipient.phone,
+  });
+
+  return uniqueByContact(
+    [primaryRecipient, ...additionalCaptains],
+    (recipient) => recipient.phone?.replace(/\D/g, "") || null,
+  );
 }
