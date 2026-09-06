@@ -58,6 +58,7 @@ function harness(options = {}) {
   };
   const module = load(sourcePath, {
     '@/lib/prisma': { prisma },
+    './replacement-sms-lifecycle': { cancelClosedReplacementSms: async () => 0, REPLACEMENT_SMS_CANCEL_REASON: 'Replacement request closed — unsent SMS cancelled.' },
     '@/lib/communications/send-team-broadcast': { sendTeamBroadcastMessage: async payload => { direct.push(payload); return {dispatchId:`direct-${direct.length}`}; } },
     '@/lib/notifications/processor': { processNotificationQueue: async count => { processed.push(count); } },
     '@/lib/notifications/team-contacts': { upsertTeamNotificationRecipient: async id => { contacts.push(id);return {recipient:{id:`recipient-${id}`},snapshot:{teamName:team(id).name,primaryContact:{name:options.noName ? null : 'Ben Example'}}}; } },

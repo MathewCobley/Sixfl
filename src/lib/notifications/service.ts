@@ -21,6 +21,7 @@ import {
 } from "@/lib/email/buildEmail";
 import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
+import { cancelClosedReplacementSms, getReplacementSmsCancellationReason } from "@/lib/fixtures/replacement-sms-lifecycle";
 import { EVENING_SOURCE, isLegacyRefereeNotice, LEGACY_REFEREE_REASON } from "@/lib/referees/evening-policy";
 import { getEmailReplyDomain } from "@/lib/resend/client";
 import { getNotificationRecipientById } from "./recipients";
@@ -520,14 +521,15 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
     metadata: input.metadata,
   });
 
-  if (fixtureBlockReason) {
+  const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: template.channel, metadata: input.metadata });
+  if (replacementSmsBlock || fixtureBlockReason) {
     return createNonQueuedTemplateDispatch({
       template,
       recipient,
       isTransactional,
       rendered,
       status: DISPATCH_STATUS.CANCELLED,
-      reason: fixtureBlockReason,
+      reason: replacementSmsBlock || fixtureBlockReason!,
       variables: input.variables,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
@@ -604,7 +606,8 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     metadata: input.metadata,
   });
 
-  if (fixtureBlockReason) {
+  const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: input.channel, metadata: input.metadata });
+  if (replacementSmsBlock || fixtureBlockReason) {
     return createNonQueuedDirectDispatch({
       recipient,
       channel: input.channel,
@@ -612,7 +615,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       isTransactional,
       rendered,
       status: DISPATCH_STATUS.CANCELLED,
-      reason: fixtureBlockReason,
+      reason: replacementSmsBlock || fixtureBlockReason!,
       variables: input.variables,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
@@ -666,6 +669,14 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
 }
 
 export async function getDueNotificationDispatches(limit = 50) {
+  // Includes future quiet-hours SMS. A failed cleanup must not strand unrelated
+  // email/SMS; the per-message provider gate still fails closed for these SMS.
+  try {
+    const cancelled = await cancelClosedReplacementSms();
+    if (cancelled) console.info("[replacement-sms] Closed-request SMS removed from queue", { cancelled });
+  } catch (error) {
+    console.error("[replacement-sms] Queue cleanup failed; delivery guard remains active", error);
+  }
   return prisma.notificationDispatch.findMany({
     where: {
       status: DISPATCH_STATUS.QUEUED,
