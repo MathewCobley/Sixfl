@@ -1,0 +1,22 @@
+name: Guest payment browser controls
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  guest-payment-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - name: Install isolated browser test dependency
+        run: npm install --no-save --package-lock=false playwright
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise actual guest payment controls without production data
+        run: node tests/guest-payment-links-ui.mjs
