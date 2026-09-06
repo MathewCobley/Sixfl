@@ -1,0 +1,106 @@
+name: Integrate replacement SMS cancellation (temporary)
+on:
+  push:
+    branches: [fix/cancel-resolved-replacement-sms]
+    paths: [.github/workflows/integrate-replacement-sms-once.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cancel-resolved-replacement-sms
+      - name: Change only native server owners and isolated test boundary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def change(path, pairs):
+              p=Path(path); s=p.read_text()
+              for old,new in pairs:
+                  assert s.count(old)==1,(path,old,s.count(old))
+                  s=s.replace(old,new)
+              p.write_text(s)
+          policy='@/lib/fixtures/replacement-sms-lifecycle'
+          p=Path('src/lib/notifications/service.ts');s=p.read_text()
+          anchor='import { prisma } from "@/lib/prisma";'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+'\nimport { cancelClosedReplacementSms, getReplacementSmsCancellationReason } from "'+policy+'";')
+          old='  if (fixtureBlockReason) {\n    return createNonQueuedTemplateDispatch({'
+          assert s.count(old)==1
+          s=s.replace(old,'  const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: template.channel, metadata: input.metadata });\n  if (replacementSmsBlock || fixtureBlockReason) {\n    return createNonQueuedTemplateDispatch({')
+          old='  if (fixtureBlockReason) {\n    return createNonQueuedDirectDispatch({'
+          assert s.count(old)==1
+          s=s.replace(old,'  const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: input.channel, metadata: input.metadata });\n  if (replacementSmsBlock || fixtureBlockReason) {\n    return createNonQueuedDirectDispatch({')
+          assert s.count('      reason: fixtureBlockReason,')==2
+          s=s.replace('      reason: fixtureBlockReason,','      reason: replacementSmsBlock || fixtureBlockReason!,')
+          old='export async function getDueNotificationDispatches(limit = 50) {\n'
+          assert s.count(old)==1
+          s=s.replace(old,old+'''  // Includes future quiet-hours SMS. A failed cleanup must not strand unrelated
+            // email/SMS; the per-message provider gate still fails closed for these SMS.
+            try {
+              const cancelled = await cancelClosedReplacementSms();
+              if (cancelled) console.info("[replacement-sms] Closed-request SMS removed from queue", { cancelled });
+            } catch (error) {
+              console.error("[replacement-sms] Queue cleanup failed; delivery guard remains active", error);
+            }
+          ''')
+          p.write_text(s)
+          change('src/lib/notifications/processor.ts',[
+              ('import { NotificationChannel } from "@prisma/client";', 'import { NotificationChannel } from "@prisma/client";\nimport { cancelOwnedReplacementSms, getReplacementSmsCancellationReason } from "'+policy+'";'),
+              ('        const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });', '''        // Recheck immediately before provider submission, even if the batch was
+                  // fetched/claimed before a replacement was allocated or reconciled.
+                  const replacementSmsBlock = await getReplacementSmsCancellationReason(dispatch);
+                  if (replacementSmsBlock) {
+                    await cancelOwnedReplacementSms(dispatch.id, replacementSmsBlock);
+                    result.skipped += 1;
+                    result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: replacementSmsBlock });
+                    continue;
+                  }
+                  const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });''')
+          ])
+          p=Path('src/lib/fixtures/last-minute-replacement-resolution.ts');s=p.read_text()
+          anchor='import { prisma } from "@/lib/prisma";'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,anchor+'\nimport { cancelClosedReplacementSms, REPLACEMENT_SMS_CANCEL_REASON } from "./replacement-sms-lifecycle";')
+          # Keep cancelled request provenance available for resolving email updates.
+          old='      AND dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})'
+          assert s.count(old)==3
+          s=s.replace(old,'''      AND (dispatch."status"::text IN (${Prisma.join([...LIVE_DISPATCH_STATUSES])})
+                  OR (dispatch."status"::text = 'CANCELLED' AND dispatch."failureReason" = ${REPLACEMENT_SMS_CANCEL_REASON}))''')
+          anchor='  const alert = await getLatestInitialAlertCycle(input.fixtureId);'
+          assert s.count(anchor)==2
+          # Only change the reconciler, never the read-only UI-state helper.
+          index=s.index('export async function reconcileLastMinuteReplacement(')
+          before=s[:index];after=s[index:]
+          assert after.count(anchor)==1
+          after=after.replace(anchor,'''  // Run even for an already-resolved fixture so earlier queued SMS are cleared.
+            // The delivery gate independently protects any worker already in progress.
+            try {
+              const cancelled = await cancelClosedReplacementSms(input.fixtureId);
+              if (cancelled) console.info("[replacement-sms] Fixture SMS cancelled", { fixtureId: input.fixtureId, cancelled });
+            } catch (error) {
+              console.error("[replacement-sms] Resolution cleanup failed; delivery guard remains active", error);
+            }
+          '''+anchor)
+          p.write_text(before+after)
+          p=Path('src/lib/fixtures/replacement-sms-lifecycle.ts');s=p.read_text()
+          old='        AND NOT EXISTS (SELECT 1 FROM "NotificationAttempt" a WHERE a."dispatchId" = d."id" AND a."status"::text = \'SUCCESS\')'
+          assert s.count(old)==2
+          s=s.replace(old,old+'''
+                  AND NOT EXISTS (SELECT 1 FROM "MessageEntry" e WHERE e."notificationDispatchId" = d."id"
+                    AND (e."sentAt" IS NOT NULL OR e."providerMessageId" IS NOT NULL OR e."twilioMessageSid" IS NOT NULL))''')
+          p.write_text(s)
+          change('tests/extra-fixture-covered-copy.test.cjs',[
+              ("    '@/lib/prisma': { prisma },", "    '@/lib/prisma': { prisma },\n    './replacement-sms-lifecycle': { cancelClosedReplacementSms: async () => 0, REPLACEMENT_SMS_CANCEL_REASON: 'Replacement request closed — unsent SMS cancelled.' },")
+          ])
+          PY
+          git diff --check
+          git diff --stat
+          git config user.name 'SIXFL automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/notifications/service.ts src/lib/notifications/processor.ts src/lib/fixtures/last-minute-replacement-resolution.ts src/lib/fixtures/replacement-sms-lifecycle.ts tests/extra-fixture-covered-copy.test.cjs
+          git rm .github/workflows/inspect-replacement-sms-once.yml .github/workflows/integrate-replacement-sms-once.yml
+          git commit -m 'Cancel closed replacement SMS centrally before queueing or sending'
+          git push origin HEAD:fix/cancel-resolved-replacement-sms
