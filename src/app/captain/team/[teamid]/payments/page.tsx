@@ -412,13 +412,13 @@ export default async function CaptainPaymentsPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
-            Due now
+            Your team’s balance due
           </p>
           <p className="mt-3 text-3xl font-semibold text-white">
             {formatMoney(ledger.outstandingPence)}
           </p>
           <p className="mt-2 text-sm text-amber-100/75">
-            Match fees are due on match day. Future fixture payment links are still available for teams who want to pay early.
+            Your team’s match fees are due on match day. Once any earlier balance is cleared, you can pay for upcoming fixtures in advance.
           </p>
         </div>
 
