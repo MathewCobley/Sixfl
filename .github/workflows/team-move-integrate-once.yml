@@ -1,0 +1,66 @@
+name: Integrate native team move tracker (temporary)
+on:
+  push:
+    branches: [feat/team-move-confirmation]
+    paths: [.github/workflows/team-move-integrate-once.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/team-move-confirmation
+      - name: Update native source, not production preparation scripts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def change(path, replacements):
+              p=Path(path); s=p.read_text()
+              for old,new in replacements:
+                  assert s.count(old)==1, (path,old,s.count(old))
+                  s=s.replace(old,new)
+              p.write_text(s)
+          change('prisma/schema.prisma', [
+              ('model Team {\n','enum TeamMoveConfirmationStatus {\n  PENDING\n  CONFIRMED\n  DECLINED\n}\n\nmodel Team {\n'),
+              ('  managerNotes       String?\n','  managerNotes       String?\n\n  // Administrative tracking only; does not transfer or withdraw the team.\n  moveConfirmationStatus    TeamMoveConfirmationStatus @default(PENDING)\n  moveConfirmationUpdatedAt DateTime?\n  moveConfirmationUpdatedBy String?\n')
+          ])
+          component='''                        <TeamMoveConfirmationSelect
+                                    teamId={team.id}
+                                    teamName={team.name}
+                                    initialStatus={team.moveConfirmationStatus}
+                                    initialUpdatedAt={team.moveConfirmationUpdatedAt?.toISOString() ?? null}
+                                    initialUpdatedBy={team.moveConfirmationUpdatedBy}
+                                  />
+
+          '''
+          change('src/app/(admin)/admin/teams/page.tsx', [
+              ('import Link from "next/link";', 'import TeamMoveConfirmationSelect from "@/components/admin/teams/TeamMoveConfirmationSelect";\nimport Link from "next/link";'),
+              ('      createdAt: true,','      createdAt: true,\n      moveConfirmationStatus: true,\n      moveConfirmationUpdatedAt: true,\n      moveConfirmationUpdatedBy: true,'),
+              ('                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">',component+'                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">')
+          ])
+          detail='''            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <TeamMoveConfirmationSelect
+                          teamId={team.id}
+                          teamName={team.name}
+                          initialStatus={team.moveConfirmationStatus}
+                          initialUpdatedAt={team.moveConfirmationUpdatedAt?.toISOString() ?? null}
+                          initialUpdatedBy={team.moveConfirmationUpdatedBy}
+                        />
+                        <p className="mt-2 text-xs leading-5 text-white/50">Record whether this team has agreed to the planned move. This does not change its league, fixtures or squad, and does not send a message.</p>
+                      </div>
+
+          '''
+          change('src/app/(admin)/admin/teams/[id]/page.tsx', [
+              ('import Link from "next/link";', 'import TeamMoveConfirmationSelect from "@/components/admin/teams/TeamMoveConfirmationSelect";\nimport Link from "next/link";'),
+              ('            <form action={updateTeamDetailsAction} className="space-y-5">',detail+'            <form action={updateTeamDetailsAction} className="space-y-5">')
+          ])
+          PY
+          git diff --check
+          git diff --stat
+          git config user.name 'SIXFL automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add prisma/schema.prisma 'src/app/(admin)/admin/teams/page.tsx' 'src/app/(admin)/admin/teams/[id]/page.tsx'
+          git commit -m 'Render move confirmation natively on team cards and settings'
+          git push origin HEAD:feat/team-move-confirmation
