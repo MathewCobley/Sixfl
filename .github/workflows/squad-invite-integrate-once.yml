@@ -1,0 +1,125 @@
+name: Apply native squad invite placeholder fix once
+on:
+  push:
+    branches: [fix/squad-invite-placeholders-no-resend]
+    paths: ['.github/workflows/squad-invite-integrate-once.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/squad-invite-placeholders-no-resend
+      - name: Apply exact reviewed edits without any app or database execution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          expected = {
+            'src/lib/managed-squad/prospectJoinConfirmation.ts': '8f9f502c22029a163e7f83f96abe4d70ab314c9a',
+            'src/app/api/admin/player-prospects/change-team/route.ts': '38760418e503d4deaffa53869e93c6d716fa57fa',
+            'src/lib/notifications/renderer.ts': '91ddd05c998b355ef13e682f2c23e507de269965',
+            'src/lib/notifications/service.ts': '9242899816fea602ee0f399e3481501cd2b118ab',
+            'src/lib/notifications/processor.ts': '6612c1afe4cc928b5935c70e4773e05f0301bf63',
+          }
+          for filename, sha in expected.items():
+              assert subprocess.check_output(['git','hash-object',filename],text=True).strip() == sha, filename + ' changed; stop for review'
+          def once(s, old, new):
+              assert s.count(old) == 1, 'Missing or ambiguous anchor: ' + old[:100]
+              return s.replace(old,new,1)
+          p=Path('src/lib/managed-squad/prospectJoinConfirmation.ts'); s=p.read_text()
+          s=once(s,'async function buildProspectEmailContext(prospect: LoadedProspect)', '''/** All squad invitation paths use this complete context, including after a team change.
+           * Building context only reads data; it never queues or sends a notification. */
+          export async function buildProspectEmailContext(
+            prospect: Pick<LoadedProspect, "id" | "firstName" | "lastName" | "email" | "teamId" | "team">,
+          )''')
+          a=s.index('export async function ensureManagedSquadJoinConfirmationTemplate()'); b=s.index('\nasync function alreadyQueuedOrSent',a)
+          block,n=re.subn(r'    update: \{.*?\n    \},\n    create:', '    update: {}, // Preserve administrator edits and disabled templates.\n    create:',s[a:b],flags=re.S)
+          assert n==3
+          s=s[:a]+block+s[b:]; p.write_text(s)
+          p=Path('src/app/api/admin/player-prospects/change-team/route.ts'); s=p.read_text()
+          s=once(s,'  getManagedSquadJoinConfirmationUrl,','  buildProspectEmailContext,')
+          a=s.index('\nfunction getDisplayName('); b=s.index('\nasync function queueFreshSquadInvite(',a); s=s[:a]+s[b:]
+          s=once(s,'    league: {\n      name: string;','    league: {\n      id: string;\n      area: string | null;\n      name: string;')
+          a=s.index('  const displayName = getDisplayName(input.prospect);'); b=s.index('\n  const recipient =',a)
+          s=s[:a]+'''  const context = await buildProspectEmailContext({
+              ...input.prospect,
+              teamId: input.team.id,
+              team: input.team,
+            });
+            if (!context) throw new Error("A squad invite requires a team and player email.");
+            const { displayName, joinConfirmationUrl, leagueName } = context;
+          '''+s[b:]
+          a=s.index('    variables: {',s.index('  const dispatch =')); b=s.index('\n    sourceType:',a)
+          s=s[:a]+'    variables: context.variables,'+s[b:]
+          old='''          league: {
+                      select: {
+                        name: true,
+                        season: true,
+                        dayOfWeek: true,
+                        venueName: true,
+                      },
+                    },'''
+          s=once(s,old,old.replace('              name: true,','              id: true,\n              area: true,\n              name: true,'))
+          p.write_text(s)
+          p=Path('src/lib/notifications/renderer.ts'); s=p.read_text()
+          s+='''
+          /** Validate the final outbound email, after CTA/optional-token rendering.
+           * Return only token names, never customer content. Do not blank missing fields
+           * or repair/requeue an old message: the caller must stop it before delivery. */
+          export function getUnresolvedEmailPlaceholderReason(input: {
+            channel: string;
+            subject?: string | null;
+            bodyText?: string | null;
+            bodyHtml?: string | null;
+          }): string | null {
+            if (input.channel !== "EMAIL") return null;
+            const tokens = [...new Set(
+              [input.subject, input.bodyText, input.bodyHtml].flatMap(value =>
+                extractNotificationTokens(value ?? "")),
+            )].sort();
+            return tokens.length
+              ? `Email blocked: unresolved template fields: ${tokens.join(", ")}. Nothing was sent.`
+              : null;
+          }
+          '''
+          p.write_text(s)
+          p=Path('src/lib/notifications/service.ts'); s=p.read_text()
+          s=once(s,'  renderNotificationText,','  renderNotificationText,\n  getUnresolvedEmailPlaceholderReason,')
+          old='''    paymentSummary: input.paymentSummary,
+            });
+            const urgentSms'''
+          new='''    paymentSummary: input.paymentSummary,
+            });
+            const unresolvedEmailReason = getUnresolvedEmailPlaceholderReason({ channel: template.channel, ...rendered });
+            if (unresolvedEmailReason) throw new Error(unresolvedEmailReason);
+            const urgentSms'''
+          s=once(s,old,new)
+          old='''    paymentSummary: input.paymentSummary,
+            });
+            const scheduledFor = resolveScheduledFor({ channel: input.channel, scheduledFor: input.scheduledFor });'''
+          new='''    paymentSummary: input.paymentSummary,
+            });
+            const unresolvedEmailReason = getUnresolvedEmailPlaceholderReason({ channel: input.channel, ...rendered });
+            if (unresolvedEmailReason) throw new Error(unresolvedEmailReason);
+            const scheduledFor = resolveScheduledFor({ channel: input.channel, scheduledFor: input.scheduledFor });'''
+          s=once(s,old,new); p.write_text(s)
+          p=Path('src/lib/notifications/processor.ts'); s=p.read_text()
+          s=once(s,'import { NotificationChannel } from "@prisma/client";','import { NotificationChannel } from "@prisma/client";\nimport { getUnresolvedEmailPlaceholderReason } from "./renderer";')
+          s=once(s,'      const cancellationReason =\n        unpublishedFixtureBlockReason ??','      const cancellationReason =\n        getUnresolvedEmailPlaceholderReason(dispatch) ??\n        unpublishedFixtureBlockReason ??')
+          p.write_text(s)
+          for filename in expected:
+              print(filename, subprocess.check_output(['git','hash-object',filename],text=True).strip())
+          PY
+          node --check scripts/check-squad-invite-placeholders.mjs
+          git diff --check
+          git diff --stat
+          git config user.name 'SIXFL code maintenance'
+          git config user.email 'noreply@github.com'
+          git add src/lib/managed-squad/prospectJoinConfirmation.ts src/app/api/admin/player-prospects/change-team/route.ts src/lib/notifications/renderer.ts src/lib/notifications/service.ts src/lib/notifications/processor.ts
+          git commit -m 'Share full squad invite context and block unresolved outgoing email without resends'
+          git push origin HEAD:fix/squad-invite-placeholders-no-resend
