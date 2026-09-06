@@ -40,9 +40,10 @@ async function sentFirst(t: Awaited<ReturnType<typeof target>>, sentAt = ago(49)
     recipientId: t.recipient.id, channel: "SMS", audience: "PLAYER", bodyText: "Legacy first chase", sourceType: FIRST,
     sourceId: t.id, status: "SENT", sentAt, createdAt: ago(96), variables: { profileUrl: `http://localhost:3000/player-pool/profile/${t.id}` },
   } });
+}
 const load = (id: string) => prisma.notificationDispatch.findUniqueOrThrow({ where: { id }, include: { recipient: true } });
 
- test("shared policy has two 48-hour delays and never treats queued time as sent", () => {
+test("shared policy has two 48-hour delays and never treats queued time as sent", () => {
   assert.equal(FIRST_SMS_DELAY_MS, 48 * 3600000); assert.equal(FINAL_SMS_DELAY_MS, 48 * 3600000);
   const p = { status: "INVITED", profileSubmittedAt: null, phone: "07700900123" };
   assert.equal(profileSmsPlan(p, emptyProfileSmsHistory()).stage, null);
@@ -178,7 +179,7 @@ test("production-prepared source wires the cards and guard, retaining the origin
   const page = read("src/app/(admin)/admin/player-pool/page.tsx");
   assert.match(page, /getPlayerPoolProfileSmsHistory\(visibleProfiles.map/);
   assert.match(page, /<PlayerPoolSmsChaseHistory/);
-  assert.match(page, /PlayerPoolNudgeButton/); // existing email controls must survive prebuild
+  assert.match(page, /PlayerPoolNudgeButton/);
   const service = read("src/lib/player-pool/profile-sms-reminders.ts");
   assert.match(service, /queueNotificationFromTemplate/); assert.doesNotMatch(service, /queueDirectNotification|const body =/);
   const processor = read("src/lib/notifications/processor.ts");
