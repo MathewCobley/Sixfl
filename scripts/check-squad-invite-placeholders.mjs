@@ -149,7 +149,7 @@ await check("both queued template emails and direct email replies reject unresol
   await assert.rejects(() => service.queueDirectNotification({ recipientId: recipient.id, channel: "EMAIL", audience: "PLAYER", subject: "Hello", body: "{{missing}}" }), /missing/);
   assert.equal(rows.length, before);
   templates.set("optional-test", { ...original, key: "optional-test", body: "Hi {{firstName}}\n{{pollOptions}}\n{{pollLink}}\n{{cta}}" });
-  const row = await service.queueNotificationFromTemplate({ templateKey: "optional-test", recipientId: recipient.id, variables: { firstName: "Andy", joinConfirmationUrl: "http://localhost/test" } });
+  const row = await service.queueNotificationFromTemplate({ templateKey: "optional-test", recipientId: recipient.id, variables: { firstName: "Andy", teamName: team.name, joinConfirmationUrl: "http://localhost/test" } });
   assert.equal(renderer.getUnresolvedEmailPlaceholderReason(row), null);
 });
 await check("processor blocks old malformed queued emails without repairing or resending history", async () => {

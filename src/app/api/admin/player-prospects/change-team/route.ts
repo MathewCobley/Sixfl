@@ -38,19 +38,7 @@ async function queueFreshSquadInvite(input: {
     email: string;
     phone: string | null;
   };
-  team: {
-    id: string;
-    name: string;
-    logoUrl: string | null;
-    league: {
-      id: string;
-      area: string | null;
-      name: string;
-      season: string | null;
-      dayOfWeek: string | null;
-      venueName: string | null;
-    } | null;
-  };
+  team: NonNullable<Parameters<typeof buildProspectEmailContext>[0]["team"]>;
   createdByUserId: string | null;
 }) {
   await ensureManagedSquadJoinConfirmationTemplate();
