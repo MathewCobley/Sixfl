@@ -1,0 +1,54 @@
+name: Team move confirmation
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  team-move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only_password
+          POSTGRES_DB: sixfl_team_move_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_team_move_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:test_only_password@localhost:5432/sixfl_team_move_test
+      TEAM_MOVE_TEST_DATABASE_URL: postgresql://postgres:test_only_password@localhost:5432/sixfl_team_move_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test three states, admin writes, stale edits, native pages and PostgreSQL persistence
+        run: node --test tests/team-move-confirmation.test.cjs
+      - name: Verify critical features and all TypeScript
+        run: |
+          node scripts/check-critical-feature-contracts.mjs
+          npx tsc --noEmit
+      - name: Install isolated browser test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/team-move-browser" --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          node "$RUNNER_TEMP/team-move-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Test actual dropdown saving and errors on desktop and mobile
+        env:
+          TEAM_MOVE_PLAYWRIGHT_MODULE: ${{ runner.temp }}/team-move-browser/node_modules/playwright
+        run: node --test tests/team-move-confirmation.browser.cjs
+      - name: Verify native owners and remove temporary tooling
+        run: |
+          git grep -n 'TeamMoveConfirmationSelect\|moveConfirmationStatus' -- src/app src/components src/lib/teams
+          test ! -f .github/workflows/team-move-inspect-once.yml
+          test ! -f .github/workflows/team-move-integrate-once.yml
