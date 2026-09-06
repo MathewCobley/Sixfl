@@ -1,0 +1,24 @@
+name: Inspect team move tracking (temporary)
+on:
+  push:
+    branches: [feat/team-move-confirmation]
+    paths: [.github/workflows/team-move-inspect-once.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read relevant native sources only
+        run: |
+          echo '=== EXISTING MOVE TRACKING ==='
+          git grep -niE '(move.{0,25}(confirm|agree)|(confirm|agree).{0,25}move|relocat)' -- src prisma scripts | cut -c1-350 | head -100 || true
+          echo '=== TEAM MODEL ==='
+          sed -n '/^model Team {/,/^}/p' prisma/schema.prisma
+          echo '=== ADMIN AUTH ==='
+          cat src/lib/requireAdmin.ts
+          echo '=== TEAM DETAIL RENDER ANCHORS ==='
+          grep -nE 'return \(|<h1|<form|TeamBadge|requireAdmin|const team|findUnique' 'src/app/(admin)/admin/teams/[id]/page.tsx' | head -60
+          echo '=== CRITICAL CONTRACTS ==='
+          cat docs/critical-feature-contracts.md
