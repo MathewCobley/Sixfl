@@ -6,9 +6,14 @@ import Module, { createRequire } from "node:module";
 import ts from "typescript";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import * as search from "../src/lib/players/prospect-search.ts";
+import * as searchModule from "../src/lib/players/prospect-search.ts";
 
+// tsx loads .ts files as CommonJS in this repository; Node exposes that object
+// as the default export when this ESM test imports it. Production uses Next.js.
+const search = searchModule.default ?? searchModule;
 const { normaliseProspectSearch, createProspectSearchMatcher } = search;
+assert.equal(typeof normaliseProspectSearch, "function");
+assert.equal(typeof createProspectSearchMatcher, "function");
 const sample = { firstName: "Gaël", lastName: "Example", email: "gael+football@example.test", phone: "+44 (0)7700 900123" };
 for (const query of ["gael", "GAËL", "example gael", "  Gael    Example ", "gael+football@", "EXAMPLE.TEST", "07700900123", "+44 7700 900123", "0044 7700 900123", "07700 900 123", "900123", "gael 900123"]) {
   test(`matches name/email/mobile: ${JSON.stringify(query)}`, () => {
