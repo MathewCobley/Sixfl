@@ -64,5 +64,46 @@ try {
     await page.getByRole('button',{name:'Check save status',exact:true}).click();
     await page.waitForURL('**/admin/templates/saved-1?created=1');assert.equal(saves,1);assert.equal(checks,1);await page.close();count++;
   }
+  // A corrected validation error must not leave the next submission pending.
+  // Exercise both a normal acknowledgement and a lost response after that correction.
+  for(const channel of ['EMAIL','SMS']) for(const outcome of ['success','lost-response']) {
+    const page=await pageFor(`channel=${channel}`);
+    await page.clock.install();
+    let saves=0,checks=0;
+    const corrected='Corrected draft must survive a lost save response.';
+    await page.route('**/api/admin/templates/save',async route=>{
+      const body=route.request().postData()||'';
+      if(/name="operation"\r\n\r\ncheck/.test(body)) {
+        checks++;
+        assert.ok(body.includes(corrected),'check must use the corrected submitted draft');
+        return reply(route,{ok:true,message:'Template saved successfully.',redirectTo:'/admin/templates/saved-1?created=1'});
+      }
+      saves++;
+      if(saves===1) return reply(route,{ok:false,error:'Please fix the highlighted fields.',errors:{body:['Please update the message.']}},422);
+      assert.ok(body.includes(corrected),'the second submission must include the correction');
+      if(outcome==='success') return reply(route,{ok:true,message:'Template saved successfully.',redirectTo:'/admin/templates/saved-1?created=1'});
+      // Keep the second request unresolved: it may have committed before its response was lost.
+    });
+    const submit=page.locator('button[type="submit"]');
+    await submit.click();
+    await page.getByRole('alert').waitFor();
+    assert.equal(await submit.isEnabled(),true);
+    await page.locator('textarea[name="body"]').fill(corrected);
+    const secondRequest=page.waitForRequest('**/api/admin/templates/save');
+    await submit.click();
+    await secondRequest;
+    if(outcome==='lost-response') {
+      await page.clock.fastForward(21_000);
+      await page.getByRole('button',{name:'Check save status',exact:true}).waitFor();
+      assert.equal(await submit.getAttribute('aria-busy'),'false');
+      assert.equal(await page.locator('textarea[name="body"]').inputValue(),corrected);
+      assert.equal(saves,2,'timeouts must never automatically resend a save');
+      await page.getByRole('button',{name:'Check save status',exact:true}).click();
+    }
+    await page.waitForURL('**/admin/templates/saved-1?created=1');
+    assert.equal(saves,2);
+    assert.equal(checks,outcome==='lost-response'?1:0);
+    await page.close();count++;
+  }
   console.log(`Template-save browser tests passed: ${count} cases using the real editors and shared save controls.`);
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
