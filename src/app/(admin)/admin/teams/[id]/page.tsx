@@ -3,6 +3,7 @@
 // ========================================
 
 import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
+import TeamMoveConfirmationSelect from "@/components/admin/teams/TeamMoveConfirmationSelect";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -696,6 +697,17 @@ export default async function AdminTeamPage({
             <h2 className="mb-6 text-lg font-semibold text-white">
               Team settings
             </h2>
+
+            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <TeamMoveConfirmationSelect
+                teamId={team.id}
+                teamName={team.name}
+                initialStatus={team.moveConfirmationStatus}
+                initialUpdatedAt={team.moveConfirmationUpdatedAt?.toISOString() ?? null}
+                initialUpdatedBy={team.moveConfirmationUpdatedBy}
+              />
+              <p className="mt-2 text-xs leading-5 text-white/50">Record whether this team has agreed to the planned move. This does not change its league, fixtures or squad, and does not send a message.</p>
+            </div>
 
             <form action={updateTeamDetailsAction} className="space-y-5">
               <input type="hidden" name="id" value={team.id} />

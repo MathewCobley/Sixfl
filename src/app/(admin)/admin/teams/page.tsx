@@ -2,6 +2,7 @@
 // File: src/app/(admin)/admin/teams/page.tsx
 // ========================================
 
+import TeamMoveConfirmationSelect from "@/components/admin/teams/TeamMoveConfirmationSelect";
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
 
@@ -23,6 +24,9 @@ async function getAdminTeams() {
       contactEmail: true,
       contactPhone: true,
       createdAt: true,
+      moveConfirmationStatus: true,
+      moveConfirmationUpdatedAt: true,
+      moveConfirmationUpdatedBy: true,
       captainClaimedAt: true,
       captainInviteSentAt: true,
       captainUserId: true,
@@ -512,6 +516,14 @@ export default async function AdminTeamsPage({
                             <span className="text-white/45">Created:</span> {formatUkDate(team.createdAt)}
                           </div>
                         </div>
+
+                        <TeamMoveConfirmationSelect
+                          teamId={team.id}
+                          teamName={team.name}
+                          initialStatus={team.moveConfirmationStatus}
+                          initialUpdatedAt={team.moveConfirmationUpdatedAt?.toISOString() ?? null}
+                          initialUpdatedBy={team.moveConfirmationUpdatedBy}
+                        />
 
                         <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">
                           <span className="font-mono text-white/70">{team.claimCode}</span>
