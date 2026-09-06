@@ -60,10 +60,16 @@ export function decideTeamPaymentOrder(input: {
   chargeId: string;
 }): PaymentOrderDecision {
   const entry = input.entries.find(item => item.chargeId === input.chargeId);
-  if (!entry || input.unavailableChargeIds.has(input.chargeId)) {
+  if (!entry) {
     return { allowed: false, code: "UNAVAILABLE", blocker: null };
   }
+  // Settlement comes from the ledger, not the fixture's current status. A paid,
+  // void or fully covered historic charge must not show a payment warning even
+  // after cancellation/removal. It still cannot accept another direct payment.
   if (!isOutstandingOrderEntry(entry)) return { allowed: false, code: "SETTLED", blocker: null };
+  if (input.unavailableChargeIds.has(input.chargeId)) {
+    return { allowed: false, code: "UNAVAILABLE", blocker: null };
+  }
   // Managed squad history and conversion boundaries must not become standard-team debt.
   if (!input.enabled || !input.eligibleChargeIds.has(entry.chargeId)) {
     return { allowed: true, code: "EXEMPT", blocker: null };
