@@ -13,6 +13,7 @@ import {
   ensurePlayerMatchFeeReminderTemplates,
 } from "@/lib/payments/player-match-fees";
 import { prisma } from "@/lib/prisma";
+import { withTemporaryRequestLock } from "./temporary-request-lock";
 
 type TemporaryPlayerFeeRow = {
   id: string;
@@ -91,6 +92,10 @@ async function getTemporaryPlayerFee(feeId: string) {
 }
 
 export async function queueTemporaryPlayerMatchFeeRequest(feeId: string) {
+  return withTemporaryRequestLock(feeId, () => queueTemporaryPlayerMatchFeeRequestUnlocked(feeId));
+}
+
+async function queueTemporaryPlayerMatchFeeRequestUnlocked(feeId: string) {
   await ensurePlayerMatchFeeReminderTemplates();
   await ensurePlayerMatchFeePaymentDetails(feeId);
 
