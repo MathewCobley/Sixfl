@@ -18,6 +18,7 @@ export function buildEmailPreviewDocument(html: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src https: data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<base target="_blank">
 <style>html { color-scheme: light; } body { margin: 0; padding: 0; background: #fff; color: #111827; font-family: Arial, Helvetica, sans-serif; overflow-wrap: anywhere; } img { max-width: 100%; } </style>
 </head>
 <body>${html}</body>
@@ -33,7 +34,9 @@ export default function EmailHtmlPreview({
     <iframe
       title={title}
       srcDoc={buildEmailPreviewDocument(html)}
-      sandbox=""
+      // Keep the queue preview's explicit new-tab link behaviour, but never
+      // allow scripts, forms, top navigation or same-origin parent DOM access.
+      sandbox="allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
       loading="lazy"
       className="block w-full min-w-0 border-0 bg-white"
