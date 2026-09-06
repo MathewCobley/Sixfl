@@ -190,13 +190,13 @@ export default async function PayChargePage({
                   Secure payment powered by Stripe.
                 </p>
               </form>
-            ) : charge.status === "VOID" || !fixtureStillPayable ? (
+            ) : (ledgerEntry?.displayStatus ?? charge.status) === "VOID" || (!fixtureStillPayable && paymentDecision.code !== "SETTLED") ? (
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
                 This payment request is no longer active.
               </div>
             ) : (
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100">
-                This charge has already been paid.
+                This charge is settled; no further payment is required.
               </div>
             )}
           </div>
