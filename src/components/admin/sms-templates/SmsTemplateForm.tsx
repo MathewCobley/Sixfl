@@ -4,17 +4,10 @@
 
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useTemplateSave, TemplateSaveControls } from "@/components/admin/templates/useTemplateSave";
 import SmsTemplatePreview from "./SmsTemplatePreview";
 
-type FormState = {
-  ok?: boolean;
-  success?: boolean;
-  message?: string;
-  error?: string;
-  errors?: Record<string, string[]>;
-};
 
 type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
 type SmsCtaUrlKeyValue =
@@ -39,17 +32,10 @@ type SmsTemplateFormValues = {
 
 type SmsTemplateFormProps = {
   mode: "create" | "edit";
-  action: (formData: FormData) => Promise<FormState>;
+  templateType: "campaign" | "system";
   initialValues?: Partial<SmsTemplateFormValues>;
 };
 
-const INITIAL_STATE: FormState = {
-  ok: false,
-  success: false,
-  message: "",
-  error: "",
-  errors: {},
-};
 
 const AUDIENCE_OPTIONS: Array<{
   value: SmsTemplateAudience;
@@ -167,26 +153,6 @@ const REFEREE_TOKENS = [
   "{{link}}",
 ] as const;
 
-function SubmitButton({ mode }: { mode: "create" | "edit" }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {pending
-        ? mode === "create"
-          ? "Creating template..."
-          : "Saving changes..."
-        : mode === "create"
-          ? "Create template"
-          : "Save changes"}
-    </button>
-  );
-}
-
 function slugifyTemplateKey(value: string) {
   return value
     .trim()
@@ -209,18 +175,11 @@ function estimateSegments(text: string) {
 
 export default function SmsTemplateForm({
   mode,
-  action,
+  templateType,
   initialValues,
 }: SmsTemplateFormProps) {
-  async function submitTemplateAction(
-    _prevState: FormState,
-    formData: FormData,
-  ): Promise<FormState> {
-    return action(formData);
-  }
-
-  const [state, formAction] = useActionState(submitTemplateAction, INITIAL_STATE);
-
+  const save = useTemplateSave({ mode, templateType, channel: "SMS" });
+  const { state } = save;
   const [key, setKey] = useState(initialValues?.key ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
@@ -286,7 +245,7 @@ export default function SmsTemplateForm({
   }
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form onSubmit={save.onSubmit} className="space-y-8">
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
 
       <input type="hidden" name="audience" value={audience} />
@@ -295,6 +254,7 @@ export default function SmsTemplateForm({
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="space-y-8">
+          <fieldset disabled={save.pending || Boolean(save.savedUrl) || Boolean(state.needsCheck)} className="min-w-0 space-y-8">
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">Template details</h2>
@@ -435,18 +395,8 @@ export default function SmsTemplateForm({
             </div>
           </section>
 
-          {state?.message || state?.error ? (
-            <div className={[
-              "rounded-2xl border px-4 py-3 text-sm",
-              state?.success || state?.ok ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-red-500/25 bg-red-500/10 text-red-300",
-            ].join(" ")}>
-              {state?.error || state?.message}
-            </div>
-          ) : null}
-
-          <div className="flex items-center gap-3">
-            <SubmitButton mode={mode} />
-          </div>
+          </fieldset>
+          <TemplateSaveControls save={save} mode={mode} />
         </div>
 
         <SmsTemplatePreview
