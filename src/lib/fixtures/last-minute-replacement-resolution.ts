@@ -3,6 +3,9 @@ import { NotificationChannel, Prisma } from "@prisma/client";
 
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { processNotificationQueue } from "@/lib/notifications/processor";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
 
 const INITIAL_ORIGIN = "night-board-last-minute-replacement";
@@ -175,6 +178,62 @@ async function sendResolutionMessage(input: {
     `Pitch: ${input.pitch}`,
   ].join("\n");
 
+  const metadata = {
+    event: "fixture.last_minute_replacement.resolved",
+    fixtureId: input.fixtureId,
+    droppedTeamId: input.droppedTeamId,
+    replacementTeamId: input.replacementTeamId,
+    opponentTeamId: input.opponentTeamId,
+    role: input.role,
+  };
+
+  // All previously contacted teams receive this closure, including
+  // non-responders. Copy belongs to editable System Templates, not
+  // to a thank-you message that implies the team volunteered.
+  if (input.role === "not_selected") {
+    const team = await prisma.team.findUnique({
+      where: { id: input.teamId },
+      select: { id: true, name: true, logoUrl: true, leagueId: true,
+        league: { select: { name: true, season: true } } },
+    });
+    if (!team) throw new Error("Team not found");
+    const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+    const contactName = snapshot.primaryContact.name?.trim() || snapshot.teamName;
+    const leagueName = team.league
+      ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}` : "";
+    const variables = {
+      firstName: contactName.trim().split(/\s+/)[0] || "there",
+      name: contactName, fullName: contactName,
+      teamName: team.name, leagueName,
+      signupUrl: "https://www.sixfl.co.uk/register-interest", link: "",
+      fixtureDate: date, kickoffTime: time,
+      replacementTeamName: input.replacementTeamName,
+      opponentTeamName: input.opponentTeamName,
+      venueName: input.venueName, pitch: input.pitch,
+    };
+    return Promise.all([
+      "last-minute-extra-fixture-covered-email",
+      "last-minute-extra-fixture-covered-sms",
+    ].map(async templateKey => {
+      const dispatch = await queueNotificationFromTemplate({
+        templateKey, recipientId: recipient.id,
+        sourceType: "TEAM", sourceId: team.id, variables,
+        emailBranding: templateKey.endsWith("-email") ? {
+          teamName: snapshot.teamName, teamLogoUrl: team.logoUrl ?? null,
+          leagueName: leagueName || null,
+        } : undefined,
+        metadata: {
+          origin: RESOLVED_ORIGIN, originLabel: "Last-minute replacement resolved",
+          teamId: team.id, teamName: team.name, leagueId: team.leagueId,
+          templateKey, ...metadata,
+        },
+        createdByUserId: input.createdByUserId ?? null,
+      });
+      await logNotificationDispatchToThread({ dispatch, recipient });
+      return dispatch.id;
+    }));
+  }
+
   let subject: string;
   let body: string;
   let sms: string;
@@ -200,7 +259,7 @@ async function sendResolutionMessage(input: {
       "SIXFL",
     ].join("\n");
     sms = `SIXFL: Confirmed — {{teamName}} have the extra ${time} fixture v ${input.opponentTeamName}. ${feeLine}`;
-  } else if (input.role === "opponent") {
+  } else {
     subject = `Replacement confirmed for your ${time} SIXFL fixture`;
     body = [
       "Hi {{firstName}},",
@@ -215,33 +274,7 @@ async function sendResolutionMessage(input: {
       "SIXFL",
     ].join("\n");
     sms = `SIXFL: Replacement confirmed for ${time}. You will now play ${input.replacementTeamName}. Your normal fixture arrangements remain in place.`;
-  } else {
-    subject = `SIXFL extra fixture now covered at ${time}`;
-    body = [
-      "Hi {{firstName}},",
-      "",
-      `Thanks — the extra ${time} fixture has now been allocated to ${input.replacementTeamName}.`,
-      "",
-      `{{teamName}} are not required for this extra game.`,
-      "",
-      `Date: ${date}`,
-      `Kick-off: ${time}`,
-      "",
-      "Thanks for being available to help.",
-      "",
-      "SIXFL",
-    ].join("\n");
-    sms = `SIXFL: The extra ${time} fixture has now been allocated to ${input.replacementTeamName}. {{teamName}} are not required for this extra game. Thanks for being available.`;
   }
-
-  const metadata = {
-    event: "fixture.last_minute_replacement.resolved",
-    fixtureId: input.fixtureId,
-    droppedTeamId: input.droppedTeamId,
-    replacementTeamId: input.replacementTeamId,
-    opponentTeamId: input.opponentTeamId,
-    role: input.role,
-  };
 
   const [emailResult, smsResult] = await Promise.all([
     sendTeamBroadcastMessage({
