@@ -1,0 +1,42 @@
+name: Squad invite placeholder safety
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: squad-invite-placeholders-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  squad-invites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_test_unused
+      NEXTAUTH_SECRET: squad-invite-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare the source used in production
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Exercise real invitation routes, rendering and blocking without external services
+        run: node scripts/check-squad-invite-placeholders.mjs
+      - name: Preserve existing critical features
+        run: node scripts/check-critical-feature-contracts.mjs
+      - name: Type check full application
+        run: npx tsc --noEmit
+      - name: Build production application
+        run: npx next build
+      - name: Verify canonical invitation callsites and no temporary integration code
+        run: |
+          git grep -n 'buildProspectEmailContext\|squadInviteIntroLine\|squadAccessLine\|getUnresolvedEmailPlaceholderReason' -- src
+          test ! -f .github/workflows/squad-invite-integrate-once.yml
