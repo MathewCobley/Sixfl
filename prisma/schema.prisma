@@ -111,6 +111,8 @@ model LeagueCompetition {
 }
 
 model League {
+  // Opt-in admin tracking; does not move teams or alter fixtures.
+  isMoving Boolean @default(false)
   id       String  @id @default(cuid())
   name     String
   season   String?
@@ -197,6 +199,12 @@ enum TeamMode {
   MANAGED
 }
 
+enum TeamMoveConfirmationStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
 model Team {
   id        String  @id @default(cuid())
   name      String
@@ -209,6 +217,11 @@ model Team {
   squadTargetSize    Int?
   matchdayTargetSize Int?
   managerNotes       String?
+
+  // Administrative tracking only; does not transfer or withdraw the team.
+  moveConfirmationStatus    TeamMoveConfirmationStatus @default(PENDING)
+  moveConfirmationUpdatedAt DateTime?
+  moveConfirmationUpdatedBy String?
 
   contactName           String?
   contactEmail          String?

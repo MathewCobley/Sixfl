@@ -71,3 +71,22 @@ export function extractNotificationTokens(template: string) {
 
   return Array.from(tokens).sort((a, b) => a.localeCompare(b));
 }
+
+/** Validate the final outbound email, after CTA/optional-token rendering.
+ * Return only token names, never customer content. Do not blank missing fields
+ * or repair/requeue an old message: the caller must stop it before delivery. */
+export function getUnresolvedEmailPlaceholderReason(input: {
+  channel: string;
+  subject?: string | null;
+  bodyText?: string | null;
+  bodyHtml?: string | null;
+}): string | null {
+  if (input.channel !== "EMAIL") return null;
+  const tokens = [...new Set(
+    [input.subject, input.bodyText, input.bodyHtml].flatMap(value =>
+      extractNotificationTokens(value ?? "")),
+  )].sort();
+  return tokens.length
+    ? `Email blocked: unresolved template fields: ${tokens.join(", ")}. Nothing was sent.`
+    : null;
+}

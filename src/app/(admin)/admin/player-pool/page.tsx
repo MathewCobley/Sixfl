@@ -3,6 +3,8 @@
 // ========================================
 
 import Link from "next/link";
+import PlayerPoolSmsChaseHistory from "@/components/admin/player-pool/PlayerPoolSmsChaseHistory";
+import { getPlayerPoolProfileSmsHistory } from "@/lib/player-pool/profile-sms-reminders";
 
 import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";
 import PlayerPoolJoinedTeams from "@/components/admin/player-pool/PlayerPoolJoinedTeams";
@@ -350,6 +352,8 @@ export default async function AdminPlayerPoolPage({
             profileViewFor(profile, latestRequestByProfileId.get(profile.id) ?? null) === selectedView,
         );
 
+  const smsHistory = await getPlayerPoolProfileSmsHistory(visibleProfiles.map((profile) => profile.id));
+
   const totalAwaitingProfile = counts.awaiting + awaitingProfileLeads.length;
   const savedMessage = getSavedMessage(params.saved);
   const tabs: Array<{ view: ProfileView; label: string; count: number }> = [
@@ -610,6 +614,8 @@ export default async function AdminPlayerPoolPage({
                   <span>·</span>
                   <span>Profile: {formatDate(profile.profileSubmittedAt)}</span>
                 </div>
+
+                <PlayerPoolSmsChaseHistory profile={profile} history={smsHistory.get(profile.id)!} />
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-4">
                   {[

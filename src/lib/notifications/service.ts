@@ -26,6 +26,7 @@ import { getEmailReplyDomain } from "@/lib/resend/client";
 import { getNotificationRecipientById } from "./recipients";
 import {
   renderNotificationText,
+  getUnresolvedEmailPlaceholderReason,
   type NotificationTemplateVariables,
 } from "./renderer";
 import { shortenSmsBodyLinks } from "./sms-short-links";
@@ -508,6 +509,8 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
     emailBranding: input.emailBranding,
     paymentSummary: input.paymentSummary,
   });
+  const unresolvedEmailReason = getUnresolvedEmailPlaceholderReason({ channel: template.channel, ...rendered });
+  if (unresolvedEmailReason) throw new Error(unresolvedEmailReason);
   const urgentSms = input.urgent && input.sourceType === EVENING_SOURCE && template.channel === "SMS" && recipient.preferences?.urgentSmsEnabled;
   const scheduledFor = urgentSms ? (input.scheduledFor ?? new Date()) : resolveScheduledFor({ channel: template.channel, scheduledFor: input.scheduledFor });
 
@@ -591,6 +594,8 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     emailCta: input.emailCta,
     paymentSummary: input.paymentSummary,
   });
+  const unresolvedEmailReason = getUnresolvedEmailPlaceholderReason({ channel: input.channel, ...rendered });
+  if (unresolvedEmailReason) throw new Error(unresolvedEmailReason);
   const scheduledFor = resolveScheduledFor({ channel: input.channel, scheduledFor: input.scheduledFor });
 
   const fixtureBlockReason = isLegacyRefereeNotice(input.sourceType) ? LEGACY_REFEREE_REASON : await getUnpublishedFixtureBlockReason({

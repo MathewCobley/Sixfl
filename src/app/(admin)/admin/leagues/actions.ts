@@ -31,6 +31,7 @@ type ParsedLeagueInput = {
   slug: string;
   season: string | null;
   isActive: boolean;
+  isMoving?: boolean;
   area: string | null;
   dayOfWeek: PreferredNight | null;
   leagueType: LeagueType | null;
@@ -266,6 +267,9 @@ function parseLeagueInput(formData: FormData): {
   const pitchCostPerHourOverridePence = parseOptionalMoneyPence(formData.get("pitchCostPerHourOverride"));
 
   const isActive = parseBoolean(formData.get("isActive"));
+  // Older open forms must not silently clear this new setting.
+  const isMoving = formData.get("leagueMoveSettingPresent") === "1"
+    ? parseBoolean(formData.get("isMoving")) : undefined;
   const requiredRefereesPerNight = parseRequiredRefereesPerNight(formData.get("requiredRefereesPerNight"));
 
   const rawDayOfWeek = String(formData.get("dayOfWeek") ?? "").trim();
@@ -293,7 +297,7 @@ function parseLeagueInput(formData: FormData): {
   if (ctaText && ctaText.length > 80) errors.ctaText = ["CTA text must be 80 characters or fewer."];
 
   return {
-    data: { name, slug, season, isActive, area, dayOfWeek, leagueType, venueName, kickoffInfo, format, surface, description, heroImageUrl, badgeUrl, ctaText },
+    data: { name, slug, season, isActive, isMoving, area, dayOfWeek, leagueType, venueName, kickoffInfo, format, surface, description, heroImageUrl, badgeUrl, ctaText },
     requiredRefereesPerNight: requiredRefereesPerNight ?? 1,
     confirmationDetails: { proposedStartDate: proposedStartDate ?? null, minutesPerGame: minutesPerGame ?? null, costPerTeamPerMatchPence: costPerTeamPerMatchPence ?? null, targetTeamCount: targetTeamCount ?? null },
     bookingDetails: { bookedPitchCount: bookedPitchCount ?? null, bookingStartTime: bookingStartTime ?? null, bookingEndTime: bookingEndTime ?? null, pitchCostPerHourOverridePence: pitchCostPerHourOverridePence ?? null },
@@ -332,6 +336,8 @@ export async function updateLeagueAction(leagueId: string, _prevState: LeagueFor
   await setLeagueConfirmationDetails({ leagueId, details: confirmationDetails });
   await setLeagueBookingDetails({ leagueId, details: bookingDetails });
   revalidatePath("/admin/leagues"); revalidatePath(`/admin/leagues/${leagueId}`); revalidatePath("/admin/referee-availability"); revalidatePath("/admin/night-board"); revalidatePath("/"); revalidatePath("/leagues"); revalidatePath(`/leagues/${data.slug}`);
+  revalidatePath("/admin/teams");
+  revalidatePath("/admin/teams/[id]", "page");
   if (existingLeague.slug !== data.slug) revalidatePath(`/leagues/${existingLeague.slug}`);
   return { success: true, message: "League updated successfully." };
 }

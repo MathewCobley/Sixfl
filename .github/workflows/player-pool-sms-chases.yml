@@ -1,0 +1,58 @@
+name: PlayerPool SMS chase history
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: playerpool-sms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  playerpool-sms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_playerpool_sms_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_playerpool_sms_test
+      NEXTAUTH_SECRET: playerpool-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      SIXFL_ISOLATED_PLAYERPOOL_SMS_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare the actual production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Preserve existing PlayerPool email and critical feature contracts
+        run: |
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Create disposable local schema only
+        run: npx prisma db push --skip-generate
+      - name: Exercise timing, PostgreSQL concurrency, delivery guards, migration and card output
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-pool-sms-chases.test.ts"],outfile:".player-pool-sms-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .player-pool-sms-tests.cjs
+      - name: Check native callsites
+        run: |
+          git grep -n 'getPlayerPoolProfileSmsHistory\|PlayerPoolSmsChaseHistory\|getPlayerPoolProfileSmsDeliveryBlock' -- src
+          test ! -f .github/workflows/playerpool-sms-integrate-once.yml

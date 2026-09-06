@@ -14,6 +14,7 @@ import FormListboxField, {
   type FormListboxOption,
 } from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { createProspectSearchMatcher, normaliseProspectSearch } from "@/lib/players/prospect-search";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
@@ -37,6 +38,7 @@ type SearchParams = {
   leagueId?: string;
   view?: string;
   page?: string;
+  q?: string | string[];
 };
 
 type LeagueFilterOption = {
@@ -277,11 +279,13 @@ function buildProspectHref(input: {
   leagueId: string;
   view: ProspectView;
   page?: number;
+  q?: string;
 }) {
   const params = new URLSearchParams();
   if (input.leagueId) params.set("leagueId", input.leagueId);
   if (input.view !== "pipeline") params.set("view", input.view);
   if ((input.page ?? 1) > 1) params.set("page", String(input.page));
+  if (input.q) params.set("q", input.q);
   const query = params.toString();
   return `/admin/player-prospects${query ? `?${query}` : ""}`;
 }
@@ -948,7 +952,7 @@ function ProspectCard({
               </Link>
               <Link
                 href={`/admin/teams/${prospect.team.id}/communications`}
-                className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+                className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
               >
                 Team comms
               </Link>
@@ -979,6 +983,8 @@ export default async function AdminPlayerProspectsPage({
   const selectedLeagueId = String(filters.leagueId ?? "").trim();
   const selectedView = parseView(filters.view);
   const requestedPage = parsePage(filters.page);
+  const searchQuery = normaliseProspectSearch(filters.q);
+  const matchesSearch = createProspectSearchMatcher(searchQuery);
 
   const [rawProspects, teams, leagues] = await Promise.all([
     prisma.teamPlayerProspect.findMany({
@@ -1064,8 +1070,9 @@ export default async function AdminPlayerProspectsPage({
 
   const selectedLeague =
     leagues.find((league) => league.id === selectedLeagueId) ?? null;
+  // Search before status counts and pagination, not just the twelve visible cards.
   const prospects = allProspects.filter((prospect) =>
-    prospectMatchesLeague(prospect, selectedLeague),
+    prospectMatchesLeague(prospect, selectedLeague) && matchesSearch(prospect),
   );
   const activeSquadMembershipKeys = await loadActiveMembershipKeys(prospects);
   const activeReasonById = new Map<string, string>();
@@ -1196,11 +1203,31 @@ export default async function AdminPlayerProspectsPage({
             <form
               method="get"
               action="/admin/player-prospects"
+              role="search"
+              aria-label="Search player prospects"
               className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-4"
             >
               <input type="hidden" name="view" value={selectedView} />
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Filter prospects
+              </p>
+              <label htmlFor="prospect-search" className="mt-3 block text-sm font-medium text-white/80">
+                Search players
+              </label>
+              <input
+                key={searchQuery}
+                id="prospect-search"
+                name="q"
+                type="search"
+                defaultValue={searchQuery}
+                placeholder="Name, email or mobile number"
+                maxLength={120}
+                autoComplete="off"
+                aria-describedby="prospect-search-help"
+                className="mt-2 h-12 w-full min-w-0 rounded-xl border border-white/15 bg-[#0d1424] px-4 text-sm text-white outline-none placeholder:text-white/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+              />
+              <p id="prospect-search-help" className="mt-2 text-xs leading-5 text-white/50">
+                Searches every page, not just the visible players. The tabs show matching players in each status.
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
                 <FormListboxField
@@ -1214,17 +1241,18 @@ export default async function AdminPlayerProspectsPage({
                   type="submit"
                   className="inline-flex h-12 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
                 >
-                  Apply
+                  Search
                 </button>
                 {selectedLeague ? (
                   <Link
                     href={buildProspectHref({
                       leagueId: "",
                       view: selectedView,
+                      q: searchQuery,
                     })}
                     className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                   >
-                    Clear
+                    Clear league
                   </Link>
                 ) : null}
               </div>
@@ -1234,6 +1262,17 @@ export default async function AdminPlayerProspectsPage({
                   {selectedLeagueLabel}
                 </span>
               </p>
+              {searchQuery ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] px-3 py-2 text-sm text-emerald-100">
+                  <span className="min-w-0 break-words">Matching “{searchQuery}” · {prospects.length} across all status tabs</span>
+                  <Link
+                    href={buildProspectHref({ leagueId: selectedLeagueId, view: selectedView })}
+                    className="shrink-0 rounded-lg px-2 py-1 font-semibold underline underline-offset-4 hover:bg-white/10"
+                  >
+                    Clear search
+                  </Link>
+                </div>
+              ) : null}
             </form>
           </div>
 
@@ -1291,7 +1330,7 @@ export default async function AdminPlayerProspectsPage({
         ).map(([view, label, count]) => (
           <Link
             key={view}
-            href={buildProspectHref({ leagueId: selectedLeagueId, view })}
+            href={buildProspectHref({ leagueId: selectedLeagueId, view, q: searchQuery })}
             className={[
               "flex min-h-12 items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition",
               selectedView === view
@@ -1318,14 +1357,18 @@ export default async function AdminPlayerProspectsPage({
             </h2>
           </div>
           <div className="text-sm text-white/50">
-            Showing {pageStart}-{pageEnd} of {viewProspects.length}
+            Showing {pageStart}-{pageEnd} of {viewProspects.length}{searchQuery ? " matching players" : ""}
           </div>
         </div>
 
         <div className="mt-5 space-y-3">
           {pageProspects.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              {viewMeta.empty}
+              {searchQuery
+                ? prospects.length > 0
+                  ? "No matching players in this status. Check the other status tabs above, or clear the search."
+                  : "No players match this search and league filter. Try part of a name, email or mobile number, or clear the filters."
+                : viewMeta.empty}
             </div>
           ) : (
             pageProspects.map((prospect) => (
@@ -1357,6 +1400,7 @@ export default async function AdminPlayerProspectsPage({
                   leagueId: selectedLeagueId,
                   view: selectedView,
                   page: currentPage - 1,
+                  q: searchQuery,
                 })}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/[0.06] hover:text-white"
               >
@@ -1369,6 +1413,7 @@ export default async function AdminPlayerProspectsPage({
                   leagueId: selectedLeagueId,
                   view: selectedView,
                   page: currentPage + 1,
+                  q: searchQuery,
                 })}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
               >
