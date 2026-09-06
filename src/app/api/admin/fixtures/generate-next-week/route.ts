@@ -17,8 +17,8 @@ type TeamSeed = {
 };
 
 type Pair = {
-  homeTeamId: string;
-  awayTeamId: string;
+  team1Id: string;
+  team2Id: string;
 };
 
 type FixtureSeed = {
@@ -27,6 +27,8 @@ type FixtureSeed = {
   kickoffAt: Date;
   round: number | null;
 };
+
+type CountRow = { count: number | bigint };
 
 function addDays(value: Date, days: number) {
   const next = new Date(value);
@@ -57,8 +59,6 @@ function chooseFixtures(input: {
 }) {
   const pairCounts = new Map<string, number>();
   const pairLatestRound = new Map<string, number>();
-  const homeCounts = new Map<string, number>();
-  const awayCounts = new Map<string, number>();
   const playedCounts = new Map<string, number>();
   const maxRound = Math.max(
     0,
@@ -73,14 +73,6 @@ function chooseFixtures(input: {
     pairLatestRound.set(
       key,
       Math.max(pairLatestRound.get(key) ?? 0, fixture.round ?? 0),
-    );
-    homeCounts.set(
-      fixture.homeTeamId,
-      (homeCounts.get(fixture.homeTeamId) ?? 0) + 1,
-    );
-    awayCounts.set(
-      fixture.awayTeamId,
-      (awayCounts.get(fixture.awayTeamId) ?? 0) + 1,
     );
     playedCounts.set(
       fixture.homeTeamId,
@@ -155,17 +147,9 @@ function chooseFixtures(input: {
     const opponent = remaining.splice(bestOpponentIndex, 1)[0];
     if (!opponent) break;
 
-    const firstBalance =
-      (homeCounts.get(first.id) ?? 0) - (awayCounts.get(first.id) ?? 0);
-    const opponentBalance =
-      (homeCounts.get(opponent.id) ?? 0) -
-      (awayCounts.get(opponent.id) ?? 0);
-
-    if (firstBalance <= opponentBalance) {
-      pairs.push({ homeTeamId: first.id, awayTeamId: opponent.id });
-    } else {
-      pairs.push({ homeTeamId: opponent.id, awayTeamId: first.id });
-    }
+    // SIXFL fixtures are venue-neutral. These are two technical storage slots,
+    // not sporting home/away roles.
+    pairs.push({ team1Id: first.id, team2Id: opponent.id });
   }
 
   return pairs;
@@ -218,16 +202,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const [league, teams, existingFixtures] = await Promise.all([
+    const [league, teams, existingFixtures, activeDivisionRows] = await Promise.all([
       prisma.league.findUnique({
         where: { id: leagueId },
         select: { id: true, slug: true },
       }),
-      prisma.team.findMany({
-        where: { leagueId },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      }),
+      prisma.$queryRaw<TeamSeed[]>(Prisma.sql`
+        SELECT t."id", t."name"
+        FROM "LeagueSeasonTeam" lst
+        JOIN "Team" t ON t."id" = lst."teamId"
+        WHERE lst."leagueId" = ${leagueId}
+          AND lst."isActive" = true
+          AND COALESCE(t."isFixturePlaceholder", false) = false
+        ORDER BY t."name" ASC
+      `),
       prisma.fixture.findMany({
         where: { leagueId },
         orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
@@ -240,6 +228,12 @@ export async function POST(request: Request) {
           pitch: true,
         },
       }),
+      prisma.$queryRaw<CountRow[]>(Prisma.sql`
+        SELECT COUNT(*)::int AS "count"
+        FROM "LeagueDivision"
+        WHERE "leagueId" = ${leagueId}
+          AND "isActive" = true
+      `),
     ]);
 
     if (!league) {
@@ -249,11 +243,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (Number(activeDivisionRows[0]?.count ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This league currently has active divisions. The one-week generator is temporarily blocked here so it cannot mix divisions; use the division schedule tool until the Divisions v2 weekly generator is enabled.",
+          requestId,
+        },
+        { status: 409 },
+      );
+    }
+
     if (teams.length < 2) {
       return NextResponse.json(
         {
           error:
-            "This league needs at least two linked teams before fixtures can be generated.",
+            "This league needs at least two active season teams before fixtures can be generated.",
           requestId,
         },
         { status: 400 },
@@ -300,8 +305,9 @@ export async function POST(request: Request) {
 
         return {
           leagueId,
-          homeTeamId: pair.homeTeamId,
-          awayTeamId: pair.awayTeamId,
+          // Legacy database column names are storage slots only.
+          homeTeamId: pair.team1Id,
+          awayTeamId: pair.team2Id,
           venueId,
           kickoffAt: addMinutes(kickoffBase, batch * slotMinutes),
           round,

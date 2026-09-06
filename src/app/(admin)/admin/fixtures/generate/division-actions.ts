@@ -18,7 +18,8 @@ import { voidFixtureMatchFeeChargesOrThrow } from "@/lib/payments/fixture-match-
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-type Pair = { homeId: string; awayId: string };
+type Pair = { team1Id: string; team2Id: string };
+type CountRow = { count: number | bigint };
 
 type TeamSchedulingRule = {
   id: string;
@@ -97,24 +98,24 @@ function getSessionCapacity(input: {
   return { startDateTime, slotCount, gamesPerSession: slotCount * input.pitches };
 }
 
-function isKickoffAllowed(kickoffAt: Date, homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
+function isKickoffAllowed(kickoffAt: Date, team1: TeamSchedulingRule, team2: TeamSchedulingRule) {
   const kickoffMinutes = getLondonMinutesSinceMidnight(kickoffAt);
-  const homeLatest = parseTimeToMinutes(homeTeam.latestKickoffTime);
-  const awayLatest = parseTimeToMinutes(awayTeam.latestKickoffTime);
+  const team1Latest = parseTimeToMinutes(team1.latestKickoffTime);
+  const team2Latest = parseTimeToMinutes(team2.latestKickoffTime);
 
-  if (homeLatest !== null && kickoffMinutes > homeLatest) {
-    return { allowed: false, reason: `${homeTeam.name} cannot kick off later than ${homeTeam.latestKickoffTime}.` };
+  if (team1Latest !== null && kickoffMinutes > team1Latest) {
+    return { allowed: false, reason: `${team1.name} cannot kick off later than ${team1.latestKickoffTime}.` };
   }
-  if (awayLatest !== null && kickoffMinutes > awayLatest) {
-    return { allowed: false, reason: `${awayTeam.name} cannot kick off later than ${awayTeam.latestKickoffTime}.` };
+  if (team2Latest !== null && kickoffMinutes > team2Latest) {
+    return { allowed: false, reason: `${team2.name} cannot kick off later than ${team2.latestKickoffTime}.` };
   }
   return { allowed: true, reason: null };
 }
 
-function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
-  const homeFee = homeTeam.standardMatchFeePence ?? 0;
-  const awayFee = awayTeam.standardMatchFeePence ?? 0;
-  const highestFee = Math.max(homeFee, awayFee);
+function getStandardFixtureFee(team1: TeamSchedulingRule, team2: TeamSchedulingRule) {
+  const team1Fee = team1.standardMatchFeePence ?? 0;
+  const team2Fee = team2.standardMatchFeePence ?? 0;
+  const highestFee = Math.max(team1Fee, team2Fee);
   return highestFee > 0 ? highestFee : null;
 }
 
@@ -133,8 +134,7 @@ function generateRounds(teamIds: string[]): Pair[][] {
       const a = arr[i];
       const b = arr[n - 1 - i];
       if (!a || !b) continue;
-      const isEvenRound = round % 2 === 0;
-      pairs.push({ homeId: isEvenRound ? a : b, awayId: isEvenRound ? b : a });
+      pairs.push({ team1Id: a, team2Id: b });
     }
     rounds.push(pairs);
     const fixed = arr[0];
@@ -146,23 +146,25 @@ function generateRounds(teamIds: string[]): Pair[][] {
   return rounds;
 }
 
-function mirrorRounds(rounds: Pair[][]): Pair[][] {
-  return rounds.map((pairs) => pairs.map((pair) => ({ homeId: pair.awayId, awayId: pair.homeId })));
+function repeatRounds(rounds: Pair[][]): Pair[][] {
+  return rounds.map((pairs) =>
+    pairs.map((pair) => ({ team1Id: pair.team1Id, team2Id: pair.team2Id })),
+  );
 }
 
 function sortPairsByRestriction(pairs: Pair[], teamMap: Map<string, TeamSchedulingRule>) {
   return [...pairs].sort((a, b) => {
-    const aHome = teamMap.get(a.homeId);
-    const aAway = teamMap.get(a.awayId);
-    const bHome = teamMap.get(b.homeId);
-    const bAway = teamMap.get(b.awayId);
+    const aTeam1 = teamMap.get(a.team1Id);
+    const aTeam2 = teamMap.get(a.team2Id);
+    const bTeam1 = teamMap.get(b.team1Id);
+    const bTeam2 = teamMap.get(b.team2Id);
     const aLimit = Math.min(
-      parseTimeToMinutes(aHome?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
-      parseTimeToMinutes(aAway?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(aTeam1?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(aTeam2?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
     );
     const bLimit = Math.min(
-      parseTimeToMinutes(bHome?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
-      parseTimeToMinutes(bAway?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(bTeam1?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
+      parseTimeToMinutes(bTeam2?.latestKickoffTime ?? null) ?? Number.MAX_SAFE_INTEGER,
     );
     return aLimit - bLimit;
   });
@@ -274,7 +276,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND lst."isActive" = true
-        AND t."leagueId" = ${input.leagueId}
+        AND COALESCE(t."isFixturePlaceholder", false) = false
       ORDER BY t."name" ASC
     `);
   }
@@ -285,7 +287,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND lst."isActive" = true
-      AND t."leagueId" = ${input.leagueId}
+      AND COALESCE(t."isFixturePlaceholder", false) = false
     ORDER BY t."name" ASC
   `);
 }
@@ -346,7 +348,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     pitches,
   });
 
-  const [league, divisionRows, teams, venue, selectedReferees] = await Promise.all([
+  const [league, divisionRows, teams, venue, selectedReferees, activeDivisionRows] = await Promise.all([
     prisma.league.findUnique({ where: { id: leagueId }, select: { id: true, name: true, season: true, slug: true } }),
     divisionId
       ? prisma.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
@@ -354,6 +356,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           FROM "LeagueDivision"
           WHERE "id" = ${divisionId}
             AND "leagueId" = ${leagueId}
+            AND "isActive" = true
           LIMIT 1
         `)
       : Promise.resolve([]),
@@ -363,10 +366,19 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
       where: { id: { in: selectedRefereeIds }, role: "REFEREE" },
       select: { id: true },
     }),
+    prisma.$queryRaw<CountRow[]>(Prisma.sql`
+      SELECT COUNT(*)::int AS "count"
+      FROM "LeagueDivision"
+      WHERE "leagueId" = ${leagueId}
+        AND "isActive" = true
+    `),
   ]);
 
   if (!league) throw new Error("League not found.");
-  if (divisionId && !divisionRows[0]) throw new Error("Selected division was not found for this league.");
+  if (divisionId && !divisionRows[0]) throw new Error("Selected active division was not found for this league.");
+  if (!divisionId && Number(activeDivisionRows[0]?.count ?? 0) > 0) {
+    throw new Error("This league uses active divisions. Choose the exact division to schedule so teams from different divisions cannot be mixed.");
+  }
   if (teams.length < 2) {
     throw new Error(divisionId ? "This division needs at least 2 active teams assigned before generating fixtures. Check the teams are still attached to this season." : "This league needs at least 2 active teams assigned before generating fixtures. Check the teams are still attached to this season.");
   }
@@ -377,14 +389,14 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   if (invalidRefereeIds.length > 0) throw new Error("One or more selected pitch referees could not be found.");
 
   let rounds = generateRounds(teams.map((team) => team.id));
-  if (doubleRoundRobin) rounds = [...rounds, ...mirrorRounds(rounds)];
+  if (doubleRoundRobin) rounds = [...rounds, ...repeatRounds(rounds)];
 
   const teamMap = new Map<string, TeamSchedulingRule>(teams.map((team) => [team.id, team]));
   const fixturesToCreate: Array<{
     leagueId: string;
     divisionId: string | null;
-    homeTeamId: string;
-    awayTeamId: string;
+    team1Id: string;
+    team2Id: string;
     venueId: string | null;
     refereeId: string | null;
     kickoffAt: Date;
@@ -409,20 +421,20 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
         if (slotIndex >= slotCount) throw new Error("Fixture generation tried to use more slots than the session allows.");
 
         const kickoffAt = addMinutes(sessionBase, slotIndex * slotMinutes);
-        const homeTeam = teamMap.get(pair.homeId);
-        const awayTeam = teamMap.get(pair.awayId);
-        if (!homeTeam || !awayTeam) throw new Error("Fixture generation failed because a team was missing.");
+        const team1 = teamMap.get(pair.team1Id);
+        const team2 = teamMap.get(pair.team2Id);
+        if (!team1 || !team2) throw new Error("Fixture generation failed because a team was missing.");
 
-        const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);
+        const allowed = isKickoffAllowed(kickoffAt, team1, team2);
         if (!allowed.allowed) {
-          throw new Error(`Unable to generate fixtures. Week ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`);
+          throw new Error(`Unable to generate fixtures. Week ${roundNumber} would place ${team1.name} vs ${team2.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`);
         }
 
         fixturesToCreate.push({
           leagueId,
           divisionId,
-          homeTeamId: pair.homeId,
-          awayTeamId: pair.awayId,
+          team1Id: pair.team1Id,
+          team2Id: pair.team2Id,
           venueId,
           refereeId: refereeIdsByPitch[pitchNumber - 1] ?? null,
           kickoffAt,
@@ -430,7 +442,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           position: chunkStart + nightlyIndex + 1,
           pitch: `Pitch ${pitchNumber}`,
           status,
-          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
+          matchFeePence: getStandardFixtureFee(team1, team2),
         });
       });
 
@@ -449,8 +461,9 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
       const created = await tx.fixture.create({
         data: {
           leagueId: fixtureData.leagueId,
-          homeTeamId: fixtureData.homeTeamId,
-          awayTeamId: fixtureData.awayTeamId,
+          // Legacy database column names are technical team slots only.
+          homeTeamId: fixtureData.team1Id,
+          awayTeamId: fixtureData.team2Id,
           venueId: fixtureData.venueId,
           refereeId: fixtureData.refereeId,
           kickoffAt: fixtureData.kickoffAt,
