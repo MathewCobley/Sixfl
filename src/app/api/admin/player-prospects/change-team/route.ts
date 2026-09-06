@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import {
   ensureManagedSquadJoinConfirmationTemplate,
-  getManagedSquadJoinConfirmationUrl,
+  buildProspectEmailContext,
   MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
 } from "@/lib/managed-squad/prospectJoinConfirmation";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
@@ -30,43 +30,6 @@ function routeError(error: unknown) {
     : "Something went wrong.";
 }
 
-function getDisplayName(input: {
-  firstName: string;
-  lastName: string | null;
-  email: string | null;
-}) {
-  return (
-    [input.firstName, input.lastName].filter(Boolean).join(" ").trim() ||
-    input.email?.trim() ||
-    "Player"
-  );
-}
-
-function getFirstName(value: string) {
-  return value.trim().split(/\s+/)[0] ?? "";
-}
-
-function formatPreferredNight(value: string | null | undefined) {
-  if (!value || value === "ANY") return null;
-  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-}
-
-function getTeamContextLine(team: {
-  name: string;
-  league: {
-    dayOfWeek: string | null;
-    venueName: string | null;
-  } | null;
-}) {
-  const night = formatPreferredNight(team.league?.dayOfWeek);
-  const venueName = team.league?.venueName?.trim();
-
-  if (night && venueName) return `${team.name} plays on a ${night} night at ${venueName}.`;
-  if (night) return `${team.name} plays on a ${night} night.`;
-  if (venueName) return `${team.name} plays at ${venueName}.`;
-  return `${team.name} is a SIXFL squad.`;
-}
-
 async function queueFreshSquadInvite(input: {
   prospect: {
     id: string;
@@ -80,6 +43,8 @@ async function queueFreshSquadInvite(input: {
     name: string;
     logoUrl: string | null;
     league: {
+      id: string;
+      area: string | null;
       name: string;
       season: string | null;
       dayOfWeek: string | null;
@@ -90,13 +55,13 @@ async function queueFreshSquadInvite(input: {
 }) {
   await ensureManagedSquadJoinConfirmationTemplate();
 
-  const displayName = getDisplayName(input.prospect);
-  const joinConfirmationUrl = getManagedSquadJoinConfirmationUrl(input.prospect.id);
-  const leagueName = input.team.league
-    ? `${input.team.league.name}${
-        input.team.league.season ? ` · ${input.team.league.season}` : ""
-      }`
-    : "";
+  const context = await buildProspectEmailContext({
+    ...input.prospect,
+    teamId: input.team.id,
+    team: input.team,
+  });
+  if (!context) throw new Error("A squad invite requires a team and player email.");
+  const { displayName, joinConfirmationUrl, leagueName } = context;
 
   const recipient = await upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.GENERAL,
@@ -121,17 +86,7 @@ async function queueFreshSquadInvite(input: {
   const dispatch = await queueNotificationFromTemplate({
     templateKey: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
     recipientId: recipient.id,
-    variables: {
-      firstName: getFirstName(displayName) || "there",
-      fullName: displayName,
-      teamName: input.team.name,
-      leagueName,
-      venueName: input.team.league?.venueName ?? "",
-      preferredNight: formatPreferredNight(input.team.league?.dayOfWeek) ?? "",
-      teamContextLine: getTeamContextLine(input.team),
-      joinConfirmationUrl,
-      teamJoinUrl: joinConfirmationUrl,
-    },
+    variables: context.variables,
     sourceType: "MANAGED_SQUAD_JOIN_CONFIRMATION",
     sourceId: input.prospect.id,
     metadata: {
@@ -238,6 +193,8 @@ export async function POST(request: Request) {
           logoUrl: true,
           league: {
             select: {
+              id: true,
+              area: true,
               name: true,
               season: true,
               dayOfWeek: true,
