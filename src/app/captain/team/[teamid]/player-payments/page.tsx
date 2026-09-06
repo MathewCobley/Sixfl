@@ -102,12 +102,12 @@ export default async function SquadPaymentsPage(props: Props) {
                       {member.role.replaceAll("_", " ")}
                     </span>
                   </div>
-                  <Link
+                  <a
                     href={`/captain/team/${team.id}/captain-squad/${member.id}/edit`}
                     className="inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-black/20 px-4 text-xs font-semibold text-white/80 transition hover:bg-white/[0.06] hover:text-white"
                   >
                     Add email or mark inactive
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>
