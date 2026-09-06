@@ -18,6 +18,11 @@ jobs:
       NEXTAUTH_URL: http://localhost:3000
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       EMAIL_REPLY_DOMAIN: replies.example.invalid
+      # Inert values for existing modules instantiated during Next.js page collection.
+      # Tests mock delivery providers; no real credentials or outbound requests.
+      RESEND_API_KEY: re_squad_invite_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      CRON_SECRET: squad-invite-ci-unused
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
