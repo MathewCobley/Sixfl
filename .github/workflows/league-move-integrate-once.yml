@@ -12,91 +12,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix/league-scoped-move-confirmation
-      - name: Update and inspect native source
+      - name: Apply reviewed native edits without writing workflow configuration
         run: |
+          git fetch --depth=1 origin 756b5d7c943a46e6434d6371402ac21439ec6bf5
+          git show '756b5d7c943a46e6434d6371402ac21439ec6bf5:.github/workflows/league-move-integrate-once.yml' > /tmp/reviewed-native-edits.yml
           python3 - <<'PY'
           from pathlib import Path
-          def edit(file, pairs):
-              p=Path(file); s=p.read_text()
-              for old,new in pairs:
-                  assert s.count(old)==1, (file,old,s.count(old))
-                  s=s.replace(old,new)
-              p.write_text(s)
-          edit('prisma/schema.prisma', [('model League {\n','model League {\n  // Opt-in admin tracking; does not move teams or alter fixtures.\n  isMoving Boolean @default(false)\n')])
-          edit('src/components/admin/leagues/LeagueForm.tsx', [
-              ('  isActive: boolean;','  isActive: boolean;\n  isMoving: boolean;'),
-              ('      isActive: initialValues?.isActive ?? true,','      isActive: initialValues?.isActive ?? true,\n      isMoving: initialValues?.isMoving ?? false,'),
-              ('  const [name, setName] = useState(values.name);','  const [isMoving, setIsMoving] = useState(values.isMoving);\n  useEffect(() => { setIsMoving(values.isMoving); }, [values.isMoving]);\n\n  const [name, setName] = useState(values.name);'),
-              ('      {state.error || state.message ? (', '''      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <input type="hidden" name="leagueMoveSettingPresent" value="1" />
-                  <label htmlFor="isMoving" className="flex items-start gap-3 text-sm text-white">
-                    <input id="isMoving" name="isMoving" type="checkbox" value="true"
-                      checked={isMoving} onChange={event => setIsMoving(event.target.checked)}
-                      aria-describedby="league-move-help" className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-500" />
-                    <span className="font-semibold">League move</span>
-                  </label>
-                  <p id="league-move-help" className="mt-2 text-xs leading-5 text-white/60">
-                    Show move-confirmation dropdowns for this league's teams. Untick to hide them without deleting saved responses. Save changes to apply. This does not move any teams or send messages.
-                  </p>
-                </div>
-
-                {state.error || state.message ? (''')
-          ])
-          edit('src/app/(admin)/admin/leagues/actions.ts', [
-              ('  isActive: boolean;','  isActive: boolean;\n  isMoving?: boolean;'),
-              ('  const isActive = parseBoolean(formData.get("isActive"));','''  const isActive = parseBoolean(formData.get("isActive"));
-            // Older open forms must not silently clear this new setting.
-            const isMoving = formData.get("leagueMoveSettingPresent") === "1"
-              ? parseBoolean(formData.get("isMoving")) : undefined;'''),
-              ('data: { name, slug, season, isActive, area,','data: { name, slug, season, isActive, isMoving, area,'),
-              ('  if (existingLeague.slug !== data.slug) revalidatePath', '  revalidatePath("/admin/teams");\n  revalidatePath("/admin/teams/[id]", "page");\n  if (existingLeague.slug !== data.slug) revalidatePath')
-          ])
-          edit('src/app/(admin)/admin/leagues/[id]/page.tsx', [('isActive: league.isActive, area:', 'isActive: league.isActive, isMoving: league.isMoving, area:')])
-          edit('src/app/(admin)/admin/teams/page.tsx', [
-              ('          isActive: true,\n          competition:', '          isActive: true,\n          isMoving: true,\n          competition:'),
-              ('                        <TeamMoveConfirmationSelect\n', '                        <TeamMoveConfirmationSelect\n                          enabled={team.league?.isMoving === true}\n')
-          ])
-          edit('src/app/(admin)/admin/teams/[id]/page.tsx', [
-              ('            slug: true,\n          },\n        },\n        convertedFromLead:', '            slug: true,\n            isMoving: true,\n          },\n        },\n        convertedFromLead:'),
-              ('            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">', '            {team.league?.isMoving === true ? (\n            <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">'),
-              ('              <TeamMoveConfirmationSelect\n', '              <TeamMoveConfirmationSelect\n                enabled={team.league?.isMoving === true}\n'),
-              ('            </div>\n\n            <form action={updateTeamDetailsAction}', '            </div>\n            ) : null}\n\n            <form action={updateTeamDetailsAction}')
-          ])
-          edit('src/components/admin/teams/TeamMoveConfirmationSelect.tsx', [
-              ('type Props = {','type Props = {\n  enabled: boolean;'),
-              ('  teamId, teamName, initialStatus, initialUpdatedAt, initialUpdatedBy,', '  enabled, teamId, teamName, initialStatus, initialUpdatedAt, initialUpdatedBy,'),
-              ('    if (inFlight.current ||', '    if (!enabled || inFlight.current ||'),
-              ('  return (\n    <div', '  // Render nothing unless the owning league explicitly enables tracking.\n  if (!enabled) return null;\n\n  return (\n    <div')
-          ])
-          edit('src/app/(admin)/admin/teams/move-confirmation-actions.ts', [
-              ('where: { id: teamId, moveConfirmationStatus: input.previousStatus },', '''where: {
-                  id: teamId, moveConfirmationStatus: input.previousStatus,
-                  // Check persisted league state in the same write so stale
-                  // pages cannot bypass a disabled flag or a team transfer.
-                  league: { is: { isMoving: true } },
-                },'''),
-              ('This team changed or was removed. Reload the page before trying again.', 'This league is not marked for a move, or the team response changed. Reload the page before trying again.')
-          ])
-          edit('tests/team-move-confirmation.test.cjs', [
-              ("{ id: 'team-one', moveConfirmationStatus: 'PENDING' }", "{ id: 'team-one', moveConfirmationStatus: 'PENDING', league: { is: { isMoving: true } } }"),
-              ("{ teamId: 'team-one', teamName: 'Example FC', initialStatus: status }", "{ enabled: true, teamId: 'team-one', teamName: 'Example FC', initialStatus: status }")
-          ])
-          edit('tests/team-move-confirmation-review.test.cjs', [
-              ('{ id: "team-a", moveConfirmationStatus: "PENDING" }', '{ id: "team-a", moveConfirmationStatus: "PENDING", league: { is: { isMoving: true } } }')
-          ])
-          edit('tests/team-move-confirmation.browser.cjs', [("{key:++version,teamId:", "{enabled:true,key:++version,teamId:")])
-          edit('tests/team-move-confirmation-review.browser.cjs', [('<Control key={props.teamId} {...props}/>', '<Control enabled={true} key={props.teamId} {...props}/>')])
-          edit('.github/workflows/team-move-confirmation.yml', [
-              ('run: node --test tests/team-move-confirmation.test.cjs', 'run: |\n          node --test tests/team-move-confirmation.test.cjs\n          node --test tests/league-move-scope.test.cjs'),
-              ('run: node --test tests/team-move-confirmation.browser.cjs', 'run: |\n          node --test tests/team-move-confirmation.browser.cjs\n          node --test tests/league-move-scope.browser.cjs'),
-              ('          test ! -f .github/workflows/team-move-inspect-once.yml', '          test ! -f .github/workflows/league-move-integrate-once.yml\n          test ! -f .github/workflows/team-move-inspect-once.yml')
-          ])
+          import textwrap
+          old=Path('/tmp/reviewed-native-edits.yml').read_text()
+          script=old.split("          python3 - <<'PY'\n",1)[1].split('\n          PY\n',1)[0]
+          script=textwrap.dedent(script)
+          # Workflow configuration is updated separately through the connector.
+          script=script.split("edit('.github/workflows/team-move-confirmation.yml'",1)[0]
+          exec(compile(script,'reviewed-native-edits','exec'))
           PY
           git diff --check
           git diff --stat
-          git grep -nE 'TeamMoveConfirmationSelect|isMoving|leagueMoveSettingPresent' -- src prisma/schema.prisma
           git config user.name 'SIXFL automation'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src prisma/schema.prisma tests .github/workflows/team-move-confirmation.yml
+          git add src prisma/schema.prisma tests
           git commit -m 'Gate native move tracker by saved League move checkbox'
           git push origin HEAD:fix/league-scoped-move-confirmation
