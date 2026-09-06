@@ -1,0 +1,39 @@
+name: Preserve league form choices (temporary)
+on:
+  push:
+    branches: [fix/league-scoped-move-confirmation]
+    paths: [.github/workflows/league-form-reset-once.yml]
+permissions:
+  contents: write
+jobs:
+  native-edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/league-scoped-move-confirmation
+      - name: Keep the owning settings form from resetting its submitted choices
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/admin/leagues/LeagueForm.tsx')
+          s=p.read_text()
+          old='    <form action={formAction} className="space-y-8">'
+          new='''    <form
+                action={formAction}
+                // Settings retain their submitted values after action feedback.
+                // Native reset would otherwise revert the checkbox to its original
+                // checked state even though the current React state is different.
+                onReset={event => event.preventDefault()}
+                className="space-y-8"
+              >'''
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          git diff --check
+          git diff -- src/components/admin/leagues/LeagueForm.tsx
+          git config user.name 'SIXFL automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/admin/leagues/LeagueForm.tsx
+          git commit -m 'Prevent action reset from reverting saved league checkbox choices'
+          git push origin HEAD:fix/league-scoped-move-confirmation
