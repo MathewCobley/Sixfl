@@ -1,0 +1,116 @@
+name: Integrate covered fixture templates (temporary)
+on:
+  push:
+    branches: [fix/neutral-extra-fixture-covered-copy]
+    paths: [.github/workflows/integrate-covered-copy-once.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/neutral-extra-fixture-covered-copy
+      - name: Change the native shared sender, preserving recipient selection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/lib/fixtures/last-minute-replacement-resolution.ts')
+          s=p.read_text()
+          anchor='import { processNotificationQueue } from "@/lib/notifications/processor";'
+          assert s.count(anchor)==1
+          s=s.replace(anchor, anchor+'\nimport { queueNotificationFromTemplate } from "@/lib/notifications/service";\nimport { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";\nimport { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";')
+          meta='''  const metadata = {
+              event: "fixture.last_minute_replacement.resolved",
+              fixtureId: input.fixtureId,
+              droppedTeamId: input.droppedTeamId,
+              replacementTeamId: input.replacementTeamId,
+              opponentTeamId: input.opponentTeamId,
+              role: input.role,
+            };'''
+          assert s.count(meta)==1
+          s=s.replace(meta+'\n\n','')
+          early='''
+            // All previously contacted teams receive this closure, including
+            // non-responders. Copy belongs to editable System Templates, not
+            // to a thank-you message that implies the team volunteered.
+            if (input.role === "not_selected") {
+              const team = await prisma.team.findUnique({
+                where: { id: input.teamId },
+                select: { id: true, name: true, logoUrl: true, leagueId: true,
+                  league: { select: { name: true, season: true } } },
+              });
+              if (!team) throw new Error("Team not found");
+              const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+              const contactName = snapshot.primaryContact.name?.trim() || snapshot.teamName;
+              const leagueName = team.league
+                ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}` : "";
+              const variables = {
+                firstName: contactName.trim().split(/\\s+/)[0] || "there",
+                name: contactName, fullName: contactName,
+                teamName: team.name, leagueName,
+                signupUrl: "https://www.sixfl.co.uk/register-interest", link: "",
+                fixtureDate: date, kickoffTime: time,
+                replacementTeamName: input.replacementTeamName,
+                opponentTeamName: input.opponentTeamName,
+                venueName: input.venueName, pitch: input.pitch,
+              };
+              return Promise.all([
+                "last-minute-extra-fixture-covered-email",
+                "last-minute-extra-fixture-covered-sms",
+              ].map(async templateKey => {
+                const dispatch = await queueNotificationFromTemplate({
+                  templateKey, recipientId: recipient.id,
+                  sourceType: "TEAM", sourceId: team.id, variables,
+                  emailBranding: templateKey.endsWith("-email") ? {
+                    teamName: snapshot.teamName, teamLogoUrl: team.logoUrl ?? null,
+                    leagueName: leagueName || null,
+                  } : undefined,
+                  metadata: {
+                    origin: RESOLVED_ORIGIN, originLabel: "Last-minute replacement resolved",
+                    teamId: team.id, teamName: team.name, leagueId: team.leagueId,
+                    templateKey, ...metadata,
+                  },
+                  createdByUserId: input.createdByUserId ?? null,
+                });
+                await logNotificationDispatchToThread({ dispatch, recipient });
+                return dispatch.id;
+              }));
+            }
+
+          '''
+          anchor='  let subject: string;'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,meta+'\n'+early+anchor)
+          start=s.index('  } else {\n    subject = `SIXFL extra fixture now covered')
+          end=s.index('\n  const [emailResult, smsResult]',start)
+          s=s[:start]+'  }\n'+s[end:]
+          s=s.replace('  } else if (input.role === "opponent") {','  } else {')
+          p.write_text(s)
+          c=Path('scripts/check-last-minute-replacement-resolution.mjs')
+          text=c.read_text()
+          assert text.count('  "are not required for this extra game",')==1
+          text=text.replace('  "are not required for this extra game",','  "last-minute-extra-fixture-covered-email",\n  "last-minute-extra-fixture-covered-sms",\n  "queueNotificationFromTemplate",')
+          marker='if (failures.length) {'
+          checks='''const coveredTemplates = read("prisma/migrations/20260906222500_neutral_extra_fixture_covered_templates/migration.sql");
+          expect(coveredTemplates, "are not required for this extra game", "Covered fixture templates must explain that the extra game is not required.");
+          expect(coveredTemplates, "no reply is needed", "Closure copy must be informational, without implying the recipient volunteered.");
+          if (/Thanks for being available/i.test(service + coveredTemplates)) failures.push("Closure copy must not assume availability.");
+
+          '''
+          assert text.count(marker)==1
+          c.write_text(text.replace(marker,checks+marker))
+          PY
+          git diff --check
+          echo '=== ALL RESOLUTION CALLERS ==='
+          git grep -n -E 'reconcileLastMinuteReplacement|reconcilePendingLastMinuteReplacements' -- src scripts
+          echo '=== FINAL SENDING SOURCES ==='
+          git grep -n -E 'last-minute-extra-fixture-covered|Thanks for being available|extra fixture now covered' -- src scripts prisma/migrations/20260906222500_neutral_extra_fixture_covered_templates
+          git diff --stat
+          git config user.name 'SIXFL automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/fixtures/last-minute-replacement-resolution.ts scripts/check-last-minute-replacement-resolution.mjs
+          git rm .github/workflows/inspect-covered-copy-once.yml .github/workflows/integrate-covered-copy-once.yml
+          git commit -m 'Use neutral editable email and SMS templates for covered-extra-fixture updates'
+          git push origin HEAD:fix/neutral-extra-fixture-covered-copy
