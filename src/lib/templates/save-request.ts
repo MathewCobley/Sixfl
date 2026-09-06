@@ -10,7 +10,8 @@ export async function requestTemplateSave(
   signal?: AbortSignal,
 ): Promise<TemplateSaveState> {
   const body = new FormData();
-  values.forEach((value, key) => body.append(key, value));
+  // Template fields are single-valued; preserve the first value used by FormData.get.
+  values.forEach((value, key) => { if (!body.has(key)) body.set(key, value); });
   for (const [key, value] of Object.entries({ ...options, operation })) body.set(key, value);
   const controller = new AbortController();
   const abort = () => controller.abort();
