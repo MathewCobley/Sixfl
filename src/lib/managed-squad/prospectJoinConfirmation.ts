@@ -256,18 +256,7 @@ function getSquadInviteFinalChaseBody() {
 export async function ensureManagedSquadJoinConfirmationTemplate() {
   return prisma.notificationTemplate.upsert({
     where: { key: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY },
-    update: {
-      name: SQUAD_INVITE_TEMPLATE_NAME,
-      description: SQUAD_INVITE_TEMPLATE_DESCRIPTION,
-      kind: NotificationTemplateKind.TRANSACTIONAL,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.PLAYER,
-      subject: "Confirm your place with {{teamName}}",
-      body: getSquadInviteBody(),
-      ctaLabel: "Yes, I want to join",
-      ctaUrlKey: "joinConfirmationUrl",
-      isActive: true,
-    },
+    update: {}, // Preserve administrator edits and disabled templates.
     create: {
       key: MANAGED_SQUAD_JOIN_CONFIRMATION_TEMPLATE_KEY,
       name: SQUAD_INVITE_TEMPLATE_NAME,
@@ -287,18 +276,7 @@ export async function ensureManagedSquadJoinConfirmationTemplate() {
 export async function ensureManagedSquadJoinChaseTemplates() {
   await prisma.notificationTemplate.upsert({
     where: { key: MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY },
-    update: {
-      name: "Squad invite chase email",
-      description: "Gentle chase after a managed squad invite has been sent but not confirmed.",
-      kind: NotificationTemplateKind.TRANSACTIONAL,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.PLAYER,
-      subject: "Quick check — {{teamName}} squad invite",
-      body: getSquadInviteChaseBody(),
-      ctaLabel: "Yes, I want to join",
-      ctaUrlKey: "joinConfirmationUrl",
-      isActive: true,
-    },
+    update: {}, // Preserve administrator edits and disabled templates.
     create: {
       key: MANAGED_SQUAD_JOIN_CHASE_TEMPLATE_KEY,
       name: "Squad invite chase email",
@@ -316,18 +294,7 @@ export async function ensureManagedSquadJoinChaseTemplates() {
 
   await prisma.notificationTemplate.upsert({
     where: { key: MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY },
-    update: {
-      name: "Final squad invite chase email",
-      description: "Final check before removing a managed squad prospect from the active pipeline.",
-      kind: NotificationTemplateKind.TRANSACTIONAL,
-      channel: NotificationChannel.EMAIL,
-      audience: NotificationAudience.PLAYER,
-      subject: "Final check — {{teamName}} squad place",
-      body: getSquadInviteFinalChaseBody(),
-      ctaLabel: "Yes, I want to join",
-      ctaUrlKey: "joinConfirmationUrl",
-      isActive: true,
-    },
+    update: {}, // Preserve administrator edits and disabled templates.
     create: {
       key: MANAGED_SQUAD_JOIN_FINAL_CHASE_TEMPLATE_KEY,
       name: "Final squad invite chase email",
@@ -417,7 +384,11 @@ async function loadProspectForSquadEmail(prospectId: string) {
   });
 }
 
-async function buildProspectEmailContext(prospect: LoadedProspect) {
+/** All squad invitation paths use this complete context, including after a team change.
+ * Building context only reads data; it never queues or sends a notification. */
+export async function buildProspectEmailContext(
+  prospect: Pick<LoadedProspect, "id" | "firstName" | "lastName" | "email" | "teamId" | "team">,
+) {
   if (!prospect.teamId || !prospect.team) return null;
 
   const email = prospect.email?.trim().toLowerCase() || null;

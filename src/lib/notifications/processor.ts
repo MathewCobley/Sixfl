@@ -3,6 +3,7 @@
 // ========================================
 
 import { NotificationChannel } from "@prisma/client";
+import { getUnresolvedEmailPlaceholderReason } from "./renderer";
 import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
 import {
   findOrCreateEmailThreadForOutbound,
@@ -349,6 +350,7 @@ export async function processNotificationQueue(limit = 25) {
         metadata: dispatch.metadata,
       });
       const cancellationReason =
+        getUnresolvedEmailPlaceholderReason(dispatch) ??
         unpublishedFixtureBlockReason ??
         (await refereeEveningDeliveryBlock(dispatch)) ??
         (await getQueuedMatchFeeCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId })) ??
