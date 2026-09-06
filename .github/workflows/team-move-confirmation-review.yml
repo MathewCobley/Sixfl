@@ -1,0 +1,79 @@
+name: Team move confirmation review
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  move-confirmation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: move_review_only
+          POSTGRES_DB: sixfl_move_review
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_move_review"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:move_review_only@localhost:5432/sixfl_move_review
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test exact-team saves, authorization and prepared native controls
+        run: |
+          node --test tests/team-move-confirmation-review.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+      - name: Prove migration defaults and replay preserve existing league assignments and responses
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE "Team" ("id" TEXT PRIMARY KEY, "leagueId" TEXT);
+          INSERT INTO "Team" VALUES ('move-review-team', 'original-league');
+          \i prisma/migrations/20260906124500_team_move_confirmation/migration.sql
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM "Team" WHERE "id"='move-review-team' AND "moveConfirmationStatus"='PENDING' AND "moveConfirmationUpdatedAt" IS NULL AND "leagueId"='original-league') THEN
+              RAISE EXCEPTION 'Migration inferred consent or altered the existing team';
+            END IF;
+          END $$;
+          UPDATE "Team" SET "moveConfirmationStatus"='CONFIRMED', "moveConfirmationUpdatedBy"='Test admin' WHERE "id"='move-review-team';
+          \i prisma/migrations/20260906124500_team_move_confirmation/migration.sql
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM "Team" WHERE "id"='move-review-team' AND "moveConfirmationStatus"='CONFIRMED' AND "moveConfirmationUpdatedBy"='Test admin' AND "leagueId"='original-league') THEN
+              RAISE EXCEPTION 'Migration replay lost a saved response or changed the league';
+            END IF;
+          END $$;
+          INSERT INTO "Team" ("id", "leagueId") VALUES ('new-move-review-team', 'other-league');
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM "Team" WHERE "id"='new-move-review-team' AND "moveConfirmationStatus"='PENDING') THEN
+              RAISE EXCEPTION 'New teams do not default to awaiting confirmation';
+            END IF;
+          END $$;
+          SQL
+      - name: Type-check prepared source
+        run: npx tsc --noEmit
+      - name: Install pinned browser driver only in CI temporary storage
+        run: |
+          npm install --prefix "$RUNNER_TEMP/team-move-browser" --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          node "$RUNNER_TEMP/team-move-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Exercise dropdown with mocked saves and blocked external requests
+        env:
+          TEAM_MOVE_PLAYWRIGHT_MODULE: ${{ runner.temp }}/team-move-browser/node_modules/playwright
+        run: node --test tests/team-move-confirmation-review.browser.cjs
+      - name: Verify source scope and no temporary integration tools ship
+        run: |
+          git grep -nE 'TeamMoveConfirmationSelect|moveConfirmationStatus' -- src prisma/schema.prisma
+          test ! -f .github/workflows/team-move-inspect-once.yml
+          test ! -f .github/workflows/team-move-integrate-once.yml
