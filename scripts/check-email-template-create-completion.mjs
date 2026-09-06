@@ -1,55 +1,21 @@
-import fs from "node:fs";
-import path from "node:path";
-
-const root = process.cwd();
-const failures = [];
-
-function read(relativePath) {
-  const absolutePath = path.join(root, relativePath);
-  if (!fs.existsSync(absolutePath)) {
-    failures.push(`Missing required file: ${relativePath}`);
-    return "";
-  }
-  return fs.readFileSync(absolutePath, "utf8");
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const read = path => fs.readFileSync(path,'utf8');
+for (const channel of ['email','sms']) {
+  const form=read(`src/components/admin/${channel}-templates/${channel==='email'?'Email':'Sms'}TemplateForm.tsx`);
+  assert.ok(form.includes('useTemplateSave') && form.includes('onSubmit={save.onSubmit}') && form.includes('<TemplateSaveControls'));
+  assert.ok(!form.includes('useActionState') && !form.includes('useFormStatus'),'save feedback cannot wait on an RSC action transition');
 }
-
-function expect(condition, message) {
-  if (!condition) failures.push(message);
-}
-
-const form = read("src/components/admin/email-templates/EmailTemplateForm.tsx");
-const campaignActions = read("src/app/(admin)/admin/email-templates/actions.ts");
-const systemActions = read("src/app/(admin)/admin/system-email-templates/actions.ts");
-
-expect(
-  form.includes("redirectTo?: string;") &&
-    form.includes("window.location.replace(redirectTo);") &&
-    form.includes('redirecting={Boolean(state?.redirectTo)}'),
-  "A successful email-template create must complete with a dependable client navigation.",
-);
-expect(
-  form.includes('redirecting\n        ? "Opening template..."') &&
-    form.includes("const busy = pending || redirecting;") &&
-    form.includes("disabled={busy}"),
-  "The create button must remain protected from duplicate submissions while the new template opens.",
-);
-expect(
-  campaignActions.includes('message: "Template created successfully. Opening it now..."') &&
-    campaignActions.includes('redirectTo: `/admin/templates/${created.id}`') &&
-    !campaignActions.includes('redirect(`/admin/templates/${created.id}`)'),
-  "Campaign email creation must return a completed result instead of leaving useActionState pending on a thrown redirect.",
-);
-expect(
-  systemActions.includes('message: "System email template created successfully. Opening it now..."') &&
-    systemActions.includes('redirectTo: `/admin/templates/${created.id}`') &&
-    !systemActions.includes('redirect(`/admin/templates/${created.id}`)'),
-  "System email creation must return a completed result instead of leaving useActionState pending on a thrown redirect.",
-);
-
-if (failures.length) {
-  console.error("\nEMAIL TEMPLATE CREATE COMPLETION CONTRACT FAILED\n");
-  for (const failure of failures) console.error(` - ${failure}`);
-  process.exit(1);
-}
-
-console.log("Email template create completion contract passed.");
+const ui=read('src/components/admin/templates/useTemplateSave.tsx');
+assert.ok(ui.includes('inFlight.current') && ui.includes('finally') && ui.includes('setPending(false)'));
+assert.ok(ui.includes('window.location.replace(savedUrl)') && ui.includes('Open saved template'));
+assert.ok(ui.includes('Check save status') && ui.includes('submitted.current'));
+const request=read('src/lib/templates/save-request.ts');
+assert.ok(request.includes('Promise.race') && request.includes('20_000') && request.includes('controller.abort()'));
+const route=read('src/app/api/admin/templates/save/route.ts');
+assert.ok(route.includes('await requireAdmin()') && route.includes('sameOrigin') && route.includes('x-sixfl-template-request'));
+assert.ok(route.includes('operation === "check"') && route.includes('matchesSavedTemplate'));
+for(const action of ['createEmailTemplateAction','updateEmailTemplateAction','createSystemEmailTemplateAction','updateSystemEmailTemplateAction','createSmsTemplateAction','updateSmsTemplateAction','createSystemSmsTemplateAction','updateSystemSmsTemplateAction'])assert.ok(route.includes(action));
+for(const page of ['src/app/(admin)/admin/templates/new/page.tsx','src/app/(admin)/admin/templates/[id]/page.tsx'])assert.ok(!read(page).includes('action={'),'all editors must use JSON saves');
+assert.ok(!read('src/app/(admin)/admin/sms-templates/actions.ts').includes('redirect(`/admin/templates/${created.id}`)'));
+console.log('Template create/save completion contract passed for campaign/system email and SMS.');

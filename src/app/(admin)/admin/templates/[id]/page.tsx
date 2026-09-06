@@ -13,17 +13,12 @@ import AdminCard from "@/components/admin/AdminCard";
 import EmailTemplateForm from "@/components/admin/email-templates/EmailTemplateForm";
 import EmailTemplatePollBridge from "@/components/admin/email-templates/EmailTemplatePollBridge";
 import SmsTemplateForm from "@/components/admin/sms-templates/SmsTemplateForm";
-import { updateEmailTemplateAction } from "@/app/(admin)/admin/email-templates/actions";
-import {
-  updateSmsTemplateAction,
-  updateSystemSmsTemplateAction,
-} from "@/app/(admin)/admin/sms-templates/actions";
-import { updateSystemEmailTemplateAction } from "@/app/(admin)/admin/system-email-templates/actions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ created?: string }>;
 };
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
@@ -103,9 +98,12 @@ function getSmsTemplateAudience(value: NotificationAudience): SmsTemplateAudienc
   return undefined;
 }
 
-export default async function EditTemplatePage({ params }: PageProps) {
+export default async function EditTemplatePage({ params, searchParams }: PageProps) {
   await requireAdmin();
   const { id } = await params;
+  const createdNotice = (await searchParams).created === "1" ? (
+    <p role="status" className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-emerald-200">Template saved successfully.</p>
+  ) : null;
 
   const emailTemplate = await prisma.emailTemplate.findUnique({ where: { id } });
 
@@ -113,6 +111,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
     return (
       <AdminCard title="Edit Email Template">
         <div className="space-y-8">
+          {createdNotice}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
               <div className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">Campaign email</div>
@@ -121,7 +120,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
             <Link href="/admin/templates?type=campaign&channel=EMAIL" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white">Back to templates</Link>
           </div>
           <EmailTemplatePollBridge />
-          <EmailTemplateForm mode="edit" action={updateEmailTemplateAction} initialValues={{ id: emailTemplate.id, key: emailTemplate.key, name: emailTemplate.name, description: emailTemplate.description ?? "", audience: emailTemplate.audience, interestType: emailTemplate.interestType ?? undefined, subject: emailTemplate.subject, body: emailTemplate.body, ctaLabel: emailTemplate.ctaLabel ?? "", ctaUrlKey: getEmailCtaUrlKey(emailTemplate.ctaUrlKey), isActive: emailTemplate.isActive }} />
+          <EmailTemplateForm mode="edit" templateType="campaign" initialValues={{ id: emailTemplate.id, key: emailTemplate.key, name: emailTemplate.name, description: emailTemplate.description ?? "", audience: emailTemplate.audience, interestType: emailTemplate.interestType ?? undefined, subject: emailTemplate.subject, body: emailTemplate.body, ctaLabel: emailTemplate.ctaLabel ?? "", ctaUrlKey: getEmailCtaUrlKey(emailTemplate.ctaUrlKey), isActive: emailTemplate.isActive }} />
         </div>
       </AdminCard>
     );
@@ -140,6 +139,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
     return (
       <AdminCard title="Edit System Email Template">
         <div className="space-y-8">
+          {createdNotice}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
               <div className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">System email</div>
@@ -148,7 +148,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
             <Link href="/admin/templates?type=system&channel=EMAIL" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-medium text-white/80 transition hover:bg-black/30 hover:text-white">Back to templates</Link>
           </div>
           <EmailTemplatePollBridge />
-          <EmailTemplateForm mode="edit" action={updateSystemEmailTemplateAction} initialValues={{ id: notificationTemplate.id, key: notificationTemplate.key, name: notificationTemplate.name, description: notificationTemplate.description ?? "", audience: notificationTemplateAudience, subject: notificationTemplate.subject ?? "", body: notificationTemplate.body, ctaLabel: notificationTemplate.ctaLabel ?? "", ctaUrlKey: getEmailCtaUrlKey(notificationTemplate.ctaUrlKey), isActive: notificationTemplate.isActive }} />
+          <EmailTemplateForm mode="edit" templateType="system" initialValues={{ id: notificationTemplate.id, key: notificationTemplate.key, name: notificationTemplate.name, description: notificationTemplate.description ?? "", audience: notificationTemplateAudience, subject: notificationTemplate.subject ?? "", body: notificationTemplate.body, ctaLabel: notificationTemplate.ctaLabel ?? "", ctaUrlKey: getEmailCtaUrlKey(notificationTemplate.ctaUrlKey), isActive: notificationTemplate.isActive }} />
         </div>
       </AdminCard>
     );
@@ -165,6 +165,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
   return (
     <AdminCard title={isSystemSms ? "Edit System SMS Template" : "Edit SMS Template"}>
       <div className="space-y-8">
+          {createdNotice}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${isSystemSms ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-300"}`}>
@@ -177,7 +178,7 @@ export default async function EditTemplatePage({ params }: PageProps) {
 
         <SmsTemplateForm
           mode="edit"
-          action={isSystemSms ? updateSystemSmsTemplateAction : updateSmsTemplateAction}
+          templateType={isSystemSms ? "system" : "campaign"}
           initialValues={{
             id: notificationTemplate.id,
             key: notificationTemplate.key,

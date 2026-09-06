@@ -7,24 +7,15 @@
 import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import {
   type KeyboardEvent,
-  useActionState,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { useFormStatus } from "react-dom";
+import { useTemplateSave, TemplateSaveControls } from "@/components/admin/templates/useTemplateSave";
 
 import { buildSIXFLEmailHtml } from "@/lib/email/buildEmail";
 
-type FormState = {
-  ok?: boolean;
-  success?: boolean;
-  message?: string;
-  error?: string;
-  errors?: Record<string, string[]>;
-  redirectTo?: string;
-};
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
 type InterestTypeValue = "" | "TEAM" | "PLAYER" | "REFEREE";
@@ -55,17 +46,10 @@ type EmailTemplateFormValues = {
 
 type EmailTemplateFormProps = {
   mode: "create" | "edit";
-  action: (formData: FormData) => Promise<FormState>;
+  templateType: "campaign" | "system";
   initialValues?: Partial<EmailTemplateFormValues>;
 };
 
-const INITIAL_STATE: FormState = {
-  ok: false,
-  success: false,
-  message: "",
-  error: "",
-  errors: {},
-};
 
 const AUDIENCE_OPTIONS: Array<{
   value: TemplateAudience;
@@ -207,36 +191,6 @@ const CTA_OPTIONS: Array<{
   },
 ];
 
-function SubmitButton({
-  mode,
-  redirecting,
-}: {
-  mode: "create" | "edit";
-  redirecting: boolean;
-}) {
-  const { pending } = useFormStatus();
-  const busy = pending || redirecting;
-
-  return (
-    <button
-      type="submit"
-      disabled={busy}
-      aria-disabled={busy}
-      className="inline-flex items-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {redirecting
-        ? "Opening template..."
-        : pending
-          ? mode === "create"
-            ? "Creating template..."
-            : "Saving changes..."
-          : mode === "create"
-            ? "Create template"
-            : "Save changes"}
-    </button>
-  );
-}
-
 function slugifyTemplateKey(value: string) {
   return value
     .trim()
@@ -327,20 +281,11 @@ function previewReplace(text: string) {
 
 export default function EmailTemplateForm({
   mode,
-  action,
+  templateType,
   initialValues,
 }: EmailTemplateFormProps) {
-  async function submitTemplateAction(
-    _prevState: FormState,
-    formData: FormData,
-  ): Promise<FormState> {
-    return action(formData);
-  }
-
-  const [state, formAction] = useActionState(
-    submitTemplateAction,
-    INITIAL_STATE,
-  );
+  const save = useTemplateSave({ mode, templateType, channel: "EMAIL" });
+  const { state } = save;
   const [key, setKey] = useState(initialValues?.key ?? "");
   const [name, setName] = useState(initialValues?.name ?? "");
   const [description, setDescription] = useState(
@@ -360,7 +305,6 @@ export default function EmailTemplateForm({
   );
   const [isActive, setIsActive] = useState(initialValues?.isActive ?? true);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
-  const redirectStartedRef = useRef(false);
 
   useEffect(() => {
     if (mode === "create" && !key.trim() && name.trim()) {
@@ -373,15 +317,6 @@ export default function EmailTemplateForm({
       setInterestType("");
     }
   }, [audience, interestType]);
-
-  useEffect(() => {
-    const redirectTo = state?.redirectTo?.trim();
-
-    if (!redirectTo || redirectStartedRef.current) return;
-
-    redirectStartedRef.current = true;
-    window.location.replace(redirectTo);
-  }, [state?.redirectTo]);
 
   const selectedCta = useMemo(
     () =>
@@ -562,7 +497,7 @@ export default function EmailTemplateForm({
   }
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form onSubmit={save.onSubmit} className="space-y-8">
       {initialValues?.id ? (
         <input type="hidden" name="id" value={initialValues.id} />
       ) : null}
@@ -573,6 +508,7 @@ export default function EmailTemplateForm({
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
         <div className="space-y-8">
+          <fieldset disabled={save.pending || Boolean(save.savedUrl) || Boolean(state.needsCheck)} className="min-w-0 space-y-8">
           <section className="rounded-3xl border border-white/10 bg-neutral-950/90 p-6">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white">
@@ -873,22 +809,8 @@ export default function EmailTemplateForm({
             </span>
           </label>
 
-          {state?.message || state?.error ? (
-            <div
-              className={[
-                "rounded-2xl border px-4 py-3 text-sm",
-                state?.success || state?.ok
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                  : "border-red-500/25 bg-red-500/10 text-red-300",
-              ].join(" ")}
-            >
-              {state?.error || state?.message}
-            </div>
-          ) : null}
-
-          <div className="flex items-center gap-3">
-            <SubmitButton mode={mode} redirecting={Boolean(state?.redirectTo)} />
-          </div>
+          </fieldset>
+          <TemplateSaveControls save={save} mode={mode} />
         </div>
 
         <aside className="rounded-3xl border border-emerald-500/20 bg-[#04120d] p-6">
