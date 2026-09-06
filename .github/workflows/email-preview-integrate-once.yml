@@ -1,0 +1,63 @@
+name: Integrate isolated email previews (temporary)
+on:
+  push:
+    branches: [fix/isolate-admin-email-previews]
+    paths: [.github/workflows/email-preview-integrate-once.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/fix/isolate-admin-email-previews'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply reviewed native component substitutions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          sites = {
+            'src/app/(admin)/admin/leads/[id]/layout.tsx': 'item.htmlBody',
+            'src/app/(admin)/admin/leagues/[id]/communications/page.tsx': 'message.htmlBody',
+            'src/app/(admin)/admin/player-prospects/[prospectId]/communications/page.tsx': 'item.bodyHtml',
+            'src/app/(admin)/admin/teams/[id]/page.tsx': 'item.bodyHtml',
+            'src/app/(admin)/admin/teams/[id]/players/[membershipId]/communications/page.tsx': 'item.bodyHtml',
+            'src/app/(admin)/admin/teams/[id]/prospects/[prospectId]/communications/page.tsx': 'item.bodyHtml',
+            'src/components/admin/email-templates/EmailTemplateForm.tsx': 'previewHtml',
+            'src/components/admin/messages/AdminMessageThread.tsx': 'message.htmlBody ?? ""',
+          }
+          outputs = {}
+          component_import = 'import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";\n'
+          for name, expr in sites.items():
+              p=Path(name); s=p.read_text()
+              pattern=r'<div\s+dangerouslySetInnerHTML=\{\{\s*__html:\s*'+re.escape(expr)+r'\s*,?\s*\}\}\s*/>'
+              matches=list(re.finditer(pattern,s))
+              assert len(matches)==1, (name,len(matches))
+              s=re.sub(pattern,'<EmailHtmlPreview html={'+expr+'} />',s,count=1)
+              s,n=re.subn(r'^import ',component_import+'import ',s,count=1,flags=re.M)
+              assert n==1 and 'dangerouslySetInnerHTML' not in s,name
+              outputs[p]=s
+          queue=Path('src/app/(admin)/admin/queue/[id]/page.tsx'); s=queue.read_text()
+          pattern=r'<iframe\s+title="Rendered email preview"\s+srcDoc=\{previewHtml\}\s+sandbox="allow-popups allow-popups-to-escape-sandbox"\s+referrerPolicy="no-referrer"\s+loading="lazy"\s+className="h-\[48rem\] w-full bg-white"\s*/>'
+          s,n=re.subn(pattern,'<EmailHtmlPreview html={previewHtml} title="Rendered email preview" expanded />',s)
+          assert n==1
+          s,n=re.subn(r'^import ',component_import+'import ',s,count=1,flags=re.M); assert n==1
+          outputs[queue]=s
+          league=Path('src/app/(admin)/admin/leagues/[id]/communications/page.tsx')
+          old='className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]"'
+          new='className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] [&>*]:min-w-0"'
+          assert outputs[league].count(old)==1
+          outputs[league]=outputs[league].replace(old,new)
+          for p,s in outputs.items():
+              p.write_text(s)
+              print('Updated',p)
+          for name in ['.github/workflows/email-preview-audit-once.yml','.github/workflows/email-preview-integrate-once.yml']:
+              Path(name).unlink()
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app src/components .github/workflows/email-preview-audit-once.yml .github/workflows/email-preview-integrate-once.yml
+          git diff --cached --stat
+          git commit -m 'Isolate every admin HTML email preview from the application layout'
+          git push origin HEAD:fix/isolate-admin-email-previews
