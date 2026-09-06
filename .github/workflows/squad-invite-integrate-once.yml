@@ -1,0 +1,39 @@
+name: Apply native squad invite placeholder fix once
+on:
+  push:
+    branches: [fix/squad-invite-placeholders-no-resend]
+    paths: ['.github/workflows/squad-invite-integrate-once.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/squad-invite-placeholders-no-resend
+      - shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/app/api/admin/player-prospects/change-team/route.ts')
+          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='4b2647ef268db7d9cb4dbb6ceabae00d52624be7'
+          s=p.read_text()
+          a=s.index('  team: {',s.index('async function queueFreshSquadInvite(')); b=s.index('  createdByUserId:',a)
+          s=s[:a]+'  team: NonNullable<Parameters<typeof buildProspectEmailContext>[0]["team"]>;\n'+s[b:]
+          p.write_text(s)
+          p=Path('scripts/check-squad-invite-placeholders.mjs')
+          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='37c3273093cacb9cc3a6ac54383076ded285bc6d'
+          s=p.read_text(); old='variables: { firstName: "Andy", joinConfirmationUrl: "http://localhost/test" }'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,'variables: { firstName: "Andy", teamName: team.name, joinConfirmationUrl: "http://localhost/test" }'))
+          PY
+          git diff --check
+          node --check scripts/check-squad-invite-placeholders.mjs
+          git config user.name 'SIXFL code maintenance'
+          git config user.email 'noreply@github.com'
+          git add src/app/api/admin/player-prospects/change-team/route.ts scripts/check-squad-invite-placeholders.mjs
+          git commit -m 'Derive team type from the shared invite context and supply test subject variable'
+          git push origin HEAD:fix/squad-invite-placeholders-no-resend
