@@ -1,0 +1,22 @@
+name: Inspect extra fixture covered copy (temporary)
+on:
+  push:
+    branches: [fix/neutral-extra-fixture-covered-copy]
+    paths: [.github/workflows/inspect-covered-copy-once.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect source only; never read production data or trigger messages
+        run: |
+          echo '=== WORDING AND TEMPLATE OWNERS ==='
+          git grep -n -i -C 5 -E 'Thanks for being available|extra fixture now covered|now been allocated' -- src scripts prisma tests || true
+          echo '=== RELATED FILES ==='
+          git ls-files | grep -Ei 'extra.fixture|replacement|cover.*fixture|fixture.*cover|AGENTS.md' | head -100
+          echo '=== NOTIFICATION TEMPLATE MODEL ==='
+          sed -n '/^model NotificationTemplate {/,/^}/p' prisma/schema.prisma
+          echo '=== CRITICAL CONTRACTS ==='
+          cat docs/critical-feature-contracts.md
