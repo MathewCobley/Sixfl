@@ -13,6 +13,7 @@ import {
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
+import { getPlayerPoolProfileSmsDeliveryBlock } from "@/lib/player-pool/profile-sms-reminders";
 import { refereeEveningDeliveryBlock } from "@/lib/referees/evening-notifications";
 import { isLegacyRefereeNotice, LEGACY_REFEREE_REASON } from "@/lib/referees/evening-policy";
 import { sendEmailWithResend } from "./providers/resend";
@@ -431,6 +432,13 @@ export async function processNotificationQueue(limit = 25) {
           continue;
         }
 
+        const profileSmsBlock = await getPlayerPoolProfileSmsDeliveryBlock(dispatch);
+        if (profileSmsBlock) {
+          await markNotificationDispatchCancelled(dispatch.id, profileSmsBlock);
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: profileSmsBlock });
+          continue;
+        }
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });
 
         acceptedByProvider = true;
