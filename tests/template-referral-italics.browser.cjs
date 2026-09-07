@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   const bundle = await esbuild.build({
     stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import Form from './src/components/admin/email-templates/EmailTemplateForm';
       const saved = window.__SAVED__;
-      const system = new URL(location.href).searchParams.get('type') === 'system';
+      const system = saved ? saved.templateType === 'system' : new URL(location.href).searchParams.get('type') === 'system';
       createRoot(document.getElementById('root')).render(<Form mode={saved ? 'edit' : 'create'} templateType={system ? 'system' : 'campaign'} initialValues={saved || {name:'Isolated referral template',key:'isolated-referral',audience:'GENERAL',subject:'Referral test'}}/>);`, loader: 'tsx', resolveDir: process.cwd() },
     bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env': '{}' },
     tsconfig: path.resolve('tsconfig.json'),
@@ -25,9 +25,9 @@ const { chromium } = require('playwright');
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
   const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const errors = [];
   try {
-    const page = await browser.newPage();
-    const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
       const req = route.request();
@@ -37,9 +37,12 @@ const { chromium } = require('playwright');
       const values = Object.fromEntries(form.entries());
       saves.push(values);
       saved = { ...values, id: 'isolated-template', isActive: values.isActive === 'true' };
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, message: 'Template saved successfully.', redirectTo: '/admin/templates/isolated-template?created=1' + (values.templateType === 'system' ? '&type=system' : '') }) });
+      // Match the real API's safe URL shape for BOTH campaign and system emails.
+      // Template type is loaded from the saved record, not an unsupported redirect query.
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, message: 'Template saved successfully.', redirectTo: '/admin/templates/isolated-template?created=1' }) });
     });
     for (const type of ['campaign', 'system']) {
+      console.log('Testing ' + type + ' editor');
       saved = null;
       await page.goto(origin + '/?type=' + type);
       const body = page.locator('textarea[name="body"]');
@@ -47,7 +50,6 @@ const { chromium } = require('playwright');
       await body.evaluate(el => { el.focus(); el.setSelectionRange(7, 15); });
       await page.getByRole('button', { name: 'Italics', exact: true }).click();
       await page.waitForFunction(() => document.querySelector('textarea[name="body"]').value === 'Before *selected* after');
-      // Scroll the lazy preview into view before querying its document.
       await page.locator('iframe').scrollIntoViewIfNeeded();
       await page.frameLocator('iframe').locator('em').filter({ hasText: 'selected' }).waitFor();
       await page.getByRole('button', { name: 'Italics', exact: true }).click();
@@ -55,6 +57,11 @@ const { chromium } = require('playwright');
       await body.evaluate(el => { el.focus(); el.setSelectionRange(7, 15); });
       await page.keyboard.press('Control+i');
       assert.equal(await body.inputValue(), 'Before *selected* after');
+      await body.fill('Read the terms: https://example.test/terms');
+      await body.evaluate(el => { el.focus(); el.select(); });
+      await page.getByRole('button', { name: 'Italics', exact: true }).click();
+      await page.locator('iframe').scrollIntoViewIfNeeded();
+      await page.frameLocator('iframe').locator('em').filter({ hasText: 'Read the terms: https://example.test/terms' }).waitFor();
       await body.fill('Bold and italic');
       await body.evaluate(el => { el.focus(); el.select(); });
       await page.getByRole('button', { name: 'Bold', exact: true }).click();
@@ -71,7 +78,7 @@ const { chromium } = require('playwright');
       await link.waitFor();
       assert.equal(await link.getAttribute('href'), 'https://www.sixfl.co.uk/player/referrals');
       await page.getByRole('button', { name: 'Create template', exact: true }).click();
-      await page.waitForURL('**/admin/templates/isolated-template?**');
+      await page.waitForURL('**/admin/templates/isolated-template?created=1');
       await page.locator('input[name="ctaUrlKey"]').waitFor({ state: 'attached' });
       assert.equal(await page.locator('input[name="ctaUrlKey"]').inputValue(), 'referralPageUrl');
       assert.equal(await page.locator('input[name="ctaLabel"]').inputValue(), 'Get my referral link');
@@ -91,6 +98,10 @@ const { chromium } = require('playwright');
     assert.equal(await body.inputValue(), '- *First*\n  - *Second*');
     assert.deepEqual(errors, []);
     console.log('Real editor browser checks passed: campaign/system selection, toolbar, Ctrl+I, nested emphasis, referral preview, save/reopen, mobile and caret. No emails were sent.');
+  } catch (error) {
+    console.error('Synthetic editor diagnostics:', { url: page.url(), saveCount: saves.length, pageErrors: errors });
+    console.error(await page.locator('[role="alert"], [role="status"]').allTextContents());
+    throw error;
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

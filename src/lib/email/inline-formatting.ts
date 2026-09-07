@@ -21,7 +21,21 @@ function renderLine(value: string): string {
   };
   for (let i = 0; i < value.length;) {
     const url = /^(?:https?:\/\/|www\.)[^\s<>]+/i.exec(value.slice(i));
-    if (url) { append(url[0]); i += url[0].length; continue; }
+    if (url) {
+      // Preserve URL punctuation, while allowing an emphasized sentence to end in a URL.
+      const trailing = /\*+$/.exec(url[0])?.[0].length ?? 0;
+      let closing = 0;
+      if (trailing <= 3) {
+        for (let depth = stack.length - 1; depth > 0; depth--) {
+          if (closing + stack[depth].marker > trailing) break;
+          closing += stack[depth].marker;
+        }
+      }
+      const length = url[0].length - closing;
+      append(url[0].slice(0, length));
+      i += length;
+      continue;
+    }
     if (value[i] !== "*") { append(value[i++]); continue; }
     let end = i;
     while (value[end] === "*") end++;

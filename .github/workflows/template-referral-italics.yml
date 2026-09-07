@@ -22,12 +22,12 @@ jobs:
       - run: npx prisma generate
       - name: Native renderer, persistence, announcements and composer contracts
         run: node --test tests/template-referral-italics.test.cjs
-      - name: Install isolated browser tooling
+      - name: Install isolated browser tooling without changing locked app dependencies
         run: |
-          npm install --no-save --package-lock=false playwright esbuild
-          npx playwright install --with-deps chromium
+          npm install --prefix "$RUNNER_TEMP/sixfl-editor-tools" --no-package-lock playwright
+          "$RUNNER_TEMP/sixfl-editor-tools/node_modules/.bin/playwright" install --with-deps chromium
       - name: Real editor controls and save/reopen in Chromium
-        run: node tests/template-referral-italics.browser.cjs
+        run: NODE_PATH="$RUNNER_TEMP/sixfl-editor-tools/node_modules" node tests/template-referral-italics.browser.cjs
       - name: Prove missing italic rendering is detected
         shell: bash
         run: |
