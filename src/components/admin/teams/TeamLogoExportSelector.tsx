@@ -1,6 +1,5 @@
 "use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import TeamBadge from "@/components/admin/TeamBadge";
 import { MAX_LOGO_EXPORT_TEAMS, type TeamLogoExportChoice } from "@/lib/team-logo-export-contract";
 
@@ -8,6 +7,7 @@ type Download = { url: string; name: string; exported: number; missing: number }
 const control = "rounded-xl border border-white/15 bg-neutral-950 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-400";
 
 export default function TeamLogoExportSelector({ teams }: { teams: TeamLogoExportChoice[] }) {
+  const filterId = useId();
   const [search, setSearch] = useState("");
   const [league, setLeague] = useState("");
   const [currentOnly, setCurrentOnly] = useState(true);
@@ -80,14 +80,16 @@ export default function TeamLogoExportSelector({ teams }: { teams: TeamLogoExpor
   return <div className="space-y-5">
     <section className="sticky top-3 z-10 space-y-4 rounded-2xl border border-emerald-400/25 bg-[#07140f] p-5 shadow-lg" aria-label="Logo export controls">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm text-white/70">Search teams
-          <input type="search" value={search} onChange={e => setSearch(e.target.value)} className={control} placeholder="Team name" disabled={pending} />
-        </label>
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm text-white/70">League
-          <select value={league} onChange={e => setLeague(e.target.value)} className={control} disabled={pending}>
+        <div className="flex min-w-48 flex-1 flex-col gap-1 text-sm text-white/70">
+          <label htmlFor={`${filterId}-search`}>Search teams</label>
+          <input id={`${filterId}-search`} type="search" value={search} onChange={e => setSearch(e.target.value)} className={control} placeholder="Team name" disabled={pending} />
+        </div>
+        <div className="flex min-w-48 flex-1 flex-col gap-1 text-sm text-white/70">
+          <label htmlFor={`${filterId}-league`}>League</label>
+          <select id={`${filterId}-league`} value={league} onChange={e => setLeague(e.target.value)} className={control} disabled={pending}>
             <option value="">All leagues</option>{leagues.map(([id,name]) => <option key={id} value={id}>{name}</option>)}
           </select>
-        </label>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
         <label className="flex items-center gap-2"><input type="checkbox" checked={currentOnly} onChange={e => setCurrentOnly(e.target.checked)} disabled={pending} />Current teams only</label>
