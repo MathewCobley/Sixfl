@@ -3,17 +3,17 @@ import MonthlyGoalsPanel from "@/components/goal-of-month/MonthlyGoalsPanel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const metadata = {
-  title: "Goal of the Month | SIXFL",
-  description: "Watch the nominated SIXFL TV goals, nominate your favourites and vote for the monthly winner.",
-};
+export const metadata = { title: "Goal of the Month | SIXFL", description: "Watch the nominated SIXFL TV goals, nominate your favourites and vote for the monthly winner." };
 
-type Query = { from?: string; teamId?: string; previewUserId?: string };
+type Query = { from?: string; teamId?: string; previewMembershipId?: string };
 export default async function GoalOfTheMonthPage({ searchParams }: { searchParams?: Promise<Query> }) {
   const query = (await searchParams) ?? {};
-  const teamId = typeof query.teamId === "string" && /^[A-Za-z0-9_-]{6,120}$/.test(query.teamId) ? query.teamId : "";
+  const safeId = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{6,120}$/.test(value) ? value : "";
+  const teamId = safeId(query.teamId);
   const from = query.from === "captain" || query.from === "player" ? query.from : "";
-  const backHref = teamId && from ? `/${from}/team/${teamId}` : null;
+  // Preview context only affects the back link, never the acting account.
+  const preview = from === "player" ? safeId(query.previewMembershipId) : "";
+  const backHref = teamId && from ? `/${from}/team/${teamId}${preview ? `?previewMembershipId=${encodeURIComponent(preview)}` : ""}` : null;
   return (
     <div className="min-h-screen bg-[#060d0a] text-white">
       <div className="mx-auto max-w-[1400px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">

@@ -49,9 +49,19 @@ jobs:
       - run: npm ci
       - run: npm run prebuild
       - run: npx prisma generate
-      - run: node --test tests/goal-of-month.test.cjs
+      - run: node --test tests/goal-of-month.test.cjs tests/goal-of-month-routes.test.cjs
       - run: node scripts/check-critical-feature-contracts.mjs
       - run: npx tsc --noEmit
+      - name: Install isolated browser driver
+        run: |
+          npm install --prefix "$RUNNER_TEMP/monthly-browser" --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          node "$RUNNER_TEMP/monthly-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Exercise the real nominee components with isolated network boundaries
+        env:
+          GOAL_MONTH_PLAYWRIGHT_MODULE: ${{ runner.temp }}/monthly-browser/node_modules/playwright
+        run: node --test tests/goal-of-month.browser.cjs
       - name: Verify monthly native owners after full prebuild
         run: |
           git grep -n 'goal-of-month\|Goal of the Month' -- src/components/goal-of-month src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx src/app/api/goal-of-month src/lib/goal-of-month
+          git grep -n 'getAwardTransition\|legacyGet\|legacyPost' -- src/app/api/goal-of-week
+          test ! -f .github/workflows/inspect-goal-month-once.yml
