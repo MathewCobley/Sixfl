@@ -8,9 +8,7 @@ function escape(value: string) {
  * URLs, unmatched markers, underscores and template tokens remain text.
  * All source text is HTML-escaped; raw HTML is never accepted. */
 export function renderEmailInlineFormatting(value: string): string {
-  return value.split("
-").map(renderLine).join("
-");
+  return value.split("\n").map(renderLine).join("\n");
 }
 function renderLine(value: string): string {
   const root: Emphasis = { marker: 1, closed: false, children: [] };
@@ -22,15 +20,15 @@ function renderLine(value: string): string {
     else children.push(text);
   };
   for (let i = 0; i < value.length;) {
-    const url = /^(?:https?://|www.)[^s<>]+/i.exec(value.slice(i));
+    const url = /^(?:https?:\/\/|www\.)[^\s<>]+/i.exec(value.slice(i));
     if (url) { append(url[0]); i += url[0].length; continue; }
     if (value[i] !== "*") { append(value[i++]); continue; }
     let end = i;
     while (value[end] === "*") end++;
     let remaining = end - i;
     if (remaining > 3) { append(value.slice(i, end)); i = end; continue; }
-    const canClose = i > 0 && !/s/.test(value[i - 1]);
-    const canOpen = end < value.length && !/s/.test(value[end]);
+    const canClose = i > 0 && !/\s/.test(value[i - 1]);
+    const canOpen = end < value.length && !/\s/.test(value[end]);
     if (canClose) {
       while (stack.length > 1 && remaining >= stack[stack.length - 1].marker) {
         const node = stack.pop()!;
