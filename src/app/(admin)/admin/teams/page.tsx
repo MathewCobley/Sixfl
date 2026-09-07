@@ -350,12 +350,15 @@ export default async function AdminTeamsPage({
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/admin/teams/logos" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20">Download team logos</Link>
         <Link
           href="/admin/teams/new"
           className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
         >
           Add team
         </Link>
+        </div>
       </div>
 
       {(deleted || regenerated || error) && (

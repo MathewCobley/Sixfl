@@ -1,0 +1,46 @@
+name: Selectable team logo export
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  logo-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_test_unused
+      NEXTAUTH_SECRET: logo-export-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_logo_export_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      CRON_SECRET: logo-export-ci-unused
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test real export service, route, asset guards and ZIP integrity
+        run: node --test tests/team-logo-export.test.cjs
+      - name: Install isolated browser tools
+        run: |
+          npm install --prefix /tmp/sixfl-logo-browser --no-package-lock playwright@1.58.2
+          /tmp/sixfl-logo-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Test real selector and download recovery
+        run: NODE_PATH=/tmp/sixfl-logo-browser/node_modules node scripts/check-team-logo-export-browser.mjs
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Check native entry point and no temporary integration tools
+        run: |
+          test ! -f .github/workflows/logo-export-integrate-once.yml
+          git grep -n 'Download team logos' -- src
+          git grep -nE 'buildTeamLogoExport|TeamLogoExportSelector|readTeamLogo' -- src
