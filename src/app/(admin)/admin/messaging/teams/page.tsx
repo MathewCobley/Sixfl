@@ -1,3 +1,4 @@
+import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
 // ========================================
 // File: src/app/(admin)/admin/messaging/teams/page.tsx
 // ========================================
@@ -58,6 +59,7 @@ function getNotice(params: SearchParams) {
 }
 
 function resolveTemplateCtaUrl(ctaUrlKey: string | null, input: { baseUrl: string; paymentUrl: string }) {
+  if (ctaUrlKey === REFERRAL_PAGE_CTA_KEY) return REFERRAL_PAGE_URL;
   switch (ctaUrlKey) {
     case "signupUrl":
       return `${input.baseUrl}/register-interest`;
