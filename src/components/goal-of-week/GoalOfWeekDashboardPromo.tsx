@@ -1,166 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import GoalNomineeCard from "@/components/goal-of-month/GoalNomineeCard";
+import { useMonthlyGoals } from "@/components/goal-of-month/useMonthlyGoals";
 
-type GoalCandidate = {
-  id: string;
-};
-
-type GoalPayload = {
-  nomination: {
-    closesAt: string;
-    fixtures: Array<{ id: string }>;
-  };
-  voting: {
-    closesAt: string;
-    open: boolean;
-    selectedCandidateId: string | null;
-    candidates: GoalCandidate[];
-  };
-  latestWinner: {
-    scorerName: string | null;
-    teamName: string;
-  } | null;
-};
-
-function formatDeadline(value: string) {
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      weekday: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Europe/London",
-    }).format(new Date(value));
-  } catch {
-    return null;
-  }
-}
-
-export default function GoalOfWeekDashboardPromo({
-  teamId,
-  href,
-}: {
-  teamId: string;
-  href: string;
-}) {
-  const [payload, setPayload] = useState<GoalPayload | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const response = await fetch("/api/goal-of-week/community", {
-          cache: "no-store",
-        });
-        const result = (await response.json().catch(() => null)) as
-          | GoalPayload
-          | { error?: string }
-          | null;
-
-        if (!cancelled && response.ok && result && "nomination" in result) {
-          setPayload(result);
-        }
-      } catch {
-        // Keep the generic Goal of the Week promotion visible even if the
-        // live ballot endpoint is temporarily unavailable.
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId]);
-
-  const content = useMemo(() => {
-    const ballotCount = payload?.voting.candidates.length ?? 0;
-    const nominationsAvailable = (payload?.nomination.fixtures.length ?? 0) > 0;
-    const votingOpen = Boolean(payload?.voting.open && ballotCount > 0);
-
-    if (votingOpen) {
-      const deadline = payload ? formatDeadline(payload.voting.closesAt) : null;
-      return {
-        eyebrow: "GOAL OF THE WEEK · VOTING OPEN",
-        title: "Six goals. One vote. Pick this week’s winner.",
-        body: payload?.voting.selectedCandidateId
-          ? `Your vote is saved${deadline ? ` — you can change it until ${deadline}` : ""}.`
-          : `${ballotCount} nominated goal${ballotCount === 1 ? " is" : "s are"} on the player ballot${deadline ? ` until ${deadline}` : ""}.`,
-        cta: payload?.voting.selectedCandidateId ? "View or change my vote" : "Vote now",
-        secondary: nominationsAvailable ? "You can also nominate goals from this week’s SIXFL TV matches." : null,
-      };
-    }
-
-    if (nominationsAvailable) {
-      const deadline = payload ? formatDeadline(payload.nomination.closesAt) : null;
-      return {
-        eyebrow: "GOAL OF THE WEEK · NOMINATIONS OPEN",
-        title: "Seen a worldie? Put it forward.",
-        body: `Nominate a goal from any completed SIXFL TV match${deadline ? ` before ${deadline}` : ""}. The six most-nominated goals make the Monday–Tuesday player vote.`,
-        cta: "Nominate a goal",
-        secondary: null,
-      };
-    }
-
-    if (payload?.latestWinner) {
-      const winnerName = payload.latestWinner.scorerName || payload.latestWinner.teamName;
-      return {
-        eyebrow: "SIXFL GOAL OF THE WEEK",
-        title: "Goal of the Week is chosen by SIXFL players.",
-        body: `${winnerName} is the latest player-voted winner. Open Goal of the Week to watch, nominate and vote when the next ballot is ready.`,
-        cta: "Open Goal of the Week",
-        secondary: null,
-      };
-    }
-
-    return {
-      eyebrow: "SIXFL GOAL OF THE WEEK",
-      title: "You choose the best goal.",
-      body: "SIXFL players can nominate goals from recorded matches, then vote on the six-goal weekly shortlist.",
-      cta: "See Goal of the Week",
-      secondary: null,
-    };
-  }, [payload]);
-
-  if (!loaded) {
-    return (
-      <section className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/[0.06] p-5 sm:p-6" aria-label="Loading Goal of the Week">
-        <div className="h-3 w-44 animate-pulse rounded-full bg-fuchsia-200/15" />
-        <div className="mt-4 h-7 w-3/4 animate-pulse rounded-xl bg-white/10" />
-        <div className="mt-3 h-4 w-full max-w-2xl animate-pulse rounded-xl bg-white/[0.06]" />
-      </section>
-    );
-  }
-
+// Keep the existing import contract for captain and player dashboard owners.
+// The content and data now come from the shared monthly competition, not a DOM
+// rewrite or a second dashboard-only calculation of nominations or winners.
+export default function GoalOfWeekDashboardPromo({ teamId, href }: { teamId: string; href: string }) {
+  const { data, error, loading, refresh } = useMonthlyGoals();
+  const target = href.startsWith("/goal-of-the-week")
+    ? href.replace("/goal-of-the-week", "/goal-of-the-month")
+    : `/goal-of-the-month?teamId=${encodeURIComponent(teamId)}`;
+  const voting = Boolean(data?.voting.open && data.voting.candidates.length);
+  const nominations = data?.nominations.flatMap(period => period.candidates) ?? [];
+  const clips = (voting ? data!.voting.candidates : nominations).slice(0, 3);
+  const latestWinner = data?.winners[0];
+  const title = voting ? `${data!.voting.label} — voting is open` : "Goal of the Month — current nominees";
   return (
-    <section className="overflow-hidden rounded-3xl border border-fuchsia-300/30 bg-[radial-gradient(circle_at_top_right,rgba(217,70,239,0.22),transparent_38%),linear-gradient(135deg,rgba(88,28,135,0.34),rgba(0,0,0,0.35))] p-5 shadow-[0_20px_70px_rgba(88,28,135,0.2)] sm:p-6" data-testid="goal-of-week-dashboard-promo">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-fuchsia-100/75">
-            {content.eyebrow}
-          </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-            {content.title}
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-fuchsia-50/75 sm:text-base">
-            {content.body}
-          </p>
-          {content.secondary ? (
-            <p className="mt-2 text-sm text-fuchsia-100/55">{content.secondary}</p>
-          ) : null}
-        </div>
-
-        <Link
-          href={href}
-          className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-300 px-5 py-3 text-sm font-black text-black shadow-lg shadow-fuchsia-500/20 transition hover:-translate-y-0.5 hover:bg-fuchsia-200"
-        >
-          {content.cta} →
-        </Link>
+    <section className="min-w-0 space-y-5 overflow-hidden rounded-3xl border border-fuchsia-300/25 bg-fuchsia-500/[0.06] p-5 sm:p-6" data-testid="goal-of-week-dashboard-promo" aria-label="Goal of the Month">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-widest text-fuchsia-100/70">SIXFL TV · Player chosen</p><h2 className="mt-2 text-2xl font-bold text-white">{title}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{voting ? "Watch the finalists and choose your winner. One vote per verified player." : "See a great goal? Nominate it here and its fixture footage joins the monthly contenders. Three nominations per player each month."}</p></div>
+        <Link href={target} className="inline-flex rounded-xl bg-fuchsia-200 px-4 py-3 text-sm font-bold text-black">{voting ? "Vote now" : "Nominate / view all goals"} →</Link>
       </div>
+      {loading && !data ? <p role="status" className="text-sm text-white/60">Loading nominated goals…</p> : null}
+      {error ? <p role="status" className="text-sm text-amber-100">{error} <button type="button" onClick={() => void refresh()} className="underline">Try again</button></p> : null}
+      {clips.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{clips.map(goal => <GoalNomineeCard key={goal.id} goal={goal} />)}</div> : data ? <p className="text-sm text-white/55">No current nominees yet. Be the first to put a goal forward.</p> : null}
+      {latestWinner ? <div className="rounded-2xl border border-amber-200/20 p-4"><p className="mb-3 text-sm font-bold text-amber-100">Latest monthly winner</p><div className="max-w-sm"><GoalNomineeCard goal={latestWinner} winner /></div></div> : null}
+      <p className="text-xs leading-5 text-white/45">Nominate through the month and until the 5th of the next month. Vote from the 6th–12th. Footage links may show match highlights; each card identifies the nominated goal number.</p>
     </section>
   );
 }

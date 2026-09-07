@@ -4,7 +4,8 @@
 
 import Image from "next/image";
 
-import GoalOfWeekHomepageFeature from "@/components/home/GoalOfWeekHomepageFeature";
+// Preserve the established homepage feature slot; the owner is now monthly.
+import GoalOfWeekHomepageFeature from "@/components/home/MonthlyGoalHomepageFeature";
 import HomepageSixflTvLatestLinks from "@/components/home/HomepageSixflTvLatestLinks";
 import sixflTvLogo from "../../../public/Sixfl-tv.png";
 
@@ -51,15 +52,15 @@ export default function SixflTvHomepageSection() {
               id="sixfl-tv-heading"
               className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl"
             >
-              Watch the Goal of the Week and every SIXFL highlight.
+              Watch the Goal of the Month and every SIXFL highlight.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
-              See the latest Goal of the Week, then open uploaded highlights, full matches and matchday moments from across SIXFL.
+              See this month’s nominated goals and the latest winner, then open uploaded highlights, full matches and matchday moments from across SIXFL.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
               {[
-                "Goal of the Week",
+                "Goal of the Month",
                 "Recorded matches",
                 "Highlights and goals",
                 "Matchday moments",

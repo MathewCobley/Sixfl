@@ -1,34 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const filePath = path.join(
-  process.cwd(),
-  "src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx",
-);
-
-if (!fs.existsSync(filePath)) {
-  console.log("Goal of the Week dashboard promo is not present; no payload narrowing patch needed.");
-  return;
+// Compatibility entry retained for the legacy prebuild chain. Monthly rendering
+// and payload validation now belong to the native component and shared hook.
+// Never overwrite them with the retired weekly setPayload patch.
+const root = process.cwd();
+const component = fs.readFileSync(path.join(root, "src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx"), "utf8");
+const hook = fs.readFileSync(path.join(root, "src/components/goal-of-month/useMonthlyGoals.ts"), "utf8");
+if (!component.includes("useMonthlyGoals") || !component.includes("GoalNomineeCard") || !hook.includes("/api/goal-of-month/community")) {
+  throw new Error("Native monthly goal dashboard contract is missing.");
 }
-
-let source = fs.readFileSync(filePath, "utf8");
-
-const unsafeCondition = 'if (!cancelled && response.ok && result && !("error" in result)) {';
-const safeCondition = 'if (!cancelled && response.ok && result && "nomination" in result) {';
-
-if (source.includes(unsafeCondition)) {
-  source = source.replace(unsafeCondition, safeCondition);
-  fs.writeFileSync(filePath, source, "utf8");
-  console.log("Fixed Goal of the Week dashboard promo payload type narrowing.");
-} else if (source.includes(safeCondition)) {
-  console.log("Goal of the Week dashboard promo payload type narrowing already fixed.");
-} else {
-  const unsafeSetPayload = "setPayload(result);";
-  if (source.includes(unsafeSetPayload) && source.includes("type GoalPayload")) {
-    source = source.replace(unsafeSetPayload, "setPayload(result as GoalPayload);");
-    fs.writeFileSync(filePath, source, "utf8");
-    console.log("Fixed Goal of the Week dashboard promo payload assignment with an explicit GoalPayload narrowing.");
-  } else {
-    throw new Error("Goal of the Week dashboard promo payload narrowing source anchor changed.");
-  }
-}
+console.log("Native Goal of the Month dashboard and nominee cards verified; no source rewriting required.");

@@ -85,7 +85,7 @@ async function assertHomepage(page, label) {
     /Find your league — or help build the next one\./i,
   ).waitFor({ state: "visible" });
   await page.getByRole("heading", {
-    name: /Watch the Goal of the Week and every SIXFL highlight/i,
+    name: /Watch the Goal of the Month and every SIXFL highlight/i,
   }).waitFor({ state: "visible" });
   await page.getByRole("heading", {
     name: /Match predictions, powered by SIXFL AI Predictor/i,
