@@ -1,0 +1,88 @@
+name: Integrate native fixture fees once
+on:
+  push:
+    branches: [fix/next-week-team-fees]
+    paths: ['.github/workflows/apply-native-fixture-fees-once.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/next-week-team-fees
+      - name: Apply reviewed changes to owning source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('.')
+          old_repair=(root/'scripts/apply-resilient-published-fee-repair.cjs').read_text()
+          repair_source=old_repair.split('const safeAction = `',1)[1].split('\n`;\n',1)[0].replace('\\`','`').replace('\\${','${')+'\n'
+          def change(path,fn):
+            p=root/path;s=p.read_text();out=fn(s);assert out!=s,path;p.write_text(out)
+          def one(s,b,a):
+            assert s.count(b)==1,(b[:150],s.count(b));return s.replace(b,a)
+          pub='src/app/(admin)/admin/fixtures/publish-actions.ts'
+          onepub='src/app/api/admin/fixtures/publish-one/route.ts'
+          helper='import { resolveFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";\nimport { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";\n'
+          def publishing(s,batch):
+            s=one(s,'import { prisma } from "@/lib/prisma";',helper+'import { prisma } from "@/lib/prisma";')
+            s=one(s,'const DEFAULT_MATCH_FEE_PENCE = 4000;\n','')
+            s=one(s,'  matchFeePence: number | null;','  matchFeePence: number | null;\n  homeMatchFeePence: number | null;\n  awayMatchFeePence: number | null;')
+            s=s.replace('logoUrl: string | null };','logoUrl: string | null; standardMatchFeePence: number | null };')
+            s=re.sub(r'(?m)^(\s*)matchFeePence: true,',r'\1matchFeePence: true,\n\1homeMatchFeePence: true,\n\1awayMatchFeePence: true,',s)
+            s=s.replace('logoUrl: true } },','logoUrl: true, standardMatchFeePence: true } },')
+            if batch:
+              s=one(s,'  const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));','  const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));\n  const placeholderTeamIds = await getFixturePlaceholderTeamIds(teamIds);')
+              s=one(s,'    const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;','    const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);')
+              s=one(s,'    for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {','    for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n      if (placeholderTeamIds.has(teamId)) continue;')
+            else:
+              s=one(s,'  const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;','  const placeholderTeamIds = await getFixturePlaceholderTeamIds([fixture.homeTeam.id, fixture.awayTeam.id]);\n  const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);')
+              s=one(s,'  for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {','  for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n    if (placeholderTeamIds.has(teamId)) continue;')
+            s=s.replace('homeMatchFeePence: matchFeePence,','homeMatchFeePence,').replace('awayMatchFeePence: matchFeePence,','awayMatchFeePence,')
+            if batch:
+              repair=repair_source.replace('logoUrl: true } },','logoUrl: true, standardMatchFeePence: true } },')
+              old='    const homeMatchFeePence = placeholderTeamIds.has(fixture.homeTeam.id)\n      ? null\n      : fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence = placeholderTeamIds.has(fixture.awayTeam.id)\n      ? null\n      : fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;'
+              repair=one(repair,old,'    const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);')
+              s=s.rstrip()+'\n\n'+repair
+            return s
+          change(pub,lambda s:publishing(s,True))
+          change(onepub,lambda s:publishing(s,False))
+          def nextweek(s):
+            s=one(s,'import { prisma } from "@/lib/prisma";','import { snapshotFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";\nimport { prisma } from "@/lib/prisma";')
+            s=one(s,'type TeamSeed = {\n  id: string;\n  name: string;','type TeamSeed = {\n  id: string;\n  name: string;\n  standardMatchFeePence: number | null;')
+            s=one(s,'        select: { id: true, name: true },','        select: { id: true, name: true, standardMatchFeePence: true },')
+            s=one(s,'    await prisma.fixture.createMany({','    const teamsById = new Map(teams.map((team) => [team.id, team]));\n\n    await prisma.fixture.createMany({')
+            s=one(s,'        const pitchNumber = (index % pitchCount) + 1;','        const pitchNumber = (index % pitchCount) + 1;\n        const homeTeam = teamsById.get(pair.homeTeamId);\n        const awayTeam = teamsById.get(pair.awayTeamId);\n        if (!homeTeam || !awayTeam) throw new Error("A selected fixture team is no longer available.");')
+            return one(s,'          status: FixtureStatus.SCHEDULED,','          status: FixtureStatus.SCHEDULED,\n          ...snapshotFixtureMatchFees(homeTeam, awayTeam),')
+          change('src/app/api/admin/fixtures/generate-next-week/route.ts',nextweek)
+          def feeover(s):
+            pattern=r'replace(?:Once|AllExact)\(\n  "(?:src/app/\(admin\)/admin/fixtures/publish-actions.ts|src/app/api/admin/fixtures/publish-one/route.ts)",.*?\n\);\n'
+            s,n=re.subn(pattern,'',s,flags=re.S);assert n==16,n
+            s=s.replace('// Publishing old drafts must also recover the team standard when the old draft\n// only contains the shared legacy fee.','// Publishing fee inheritance is native in fixture-fee-policy.ts and the two\n// publish routes. Do not rewrite their fee declarations here.')
+            return re.sub(r'\n{4,}','\n\n',s)
+          change('scripts/apply-fixture-team-fee-overrides.cjs',feeover)
+          change('scripts/apply-publish-tbc-fee-safety.cjs',lambda s:s[:s.index('// ---------------------------------------------------------------------------')]+'// TBC charge resolution and the resilient fee-repair action are native in the\n// publishing server source. This compatibility script only keeps the existing\n// repair controls on the fixtures page; it must never rewrite payment rules.\n\n'+s[s.index('// ---------------------------------------------------------------------------\n// Give admin a permanent'):])
+          change('scripts/apply-resilient-published-fee-repair.cjs',lambda s:s[:s.index('const file =')]+'// The resilient repair action is now native in publish-actions.ts. Only the\n// existing admin feedback presentation still needs compatibility preparation.\n'+s[s.index('const pageFile ='):])
+          change('scripts/fix-publish-tbc-fee-safety-compat.cjs',lambda s:'// Retired: publishing fee resolution and TBC protection are native server code.\n// Kept as a no-op for legacy prebuild callers; do not rewrite publishing rules.\n')
+          def guard(s):
+            start=s.index('  mustContain(\n    source,\n    "fixture.homeMatchFeePence');end=s.index('  mustNotMatch(',start)
+            s=s[:start]+'  mustContain(\n    source,\n    "resolveFixtureMatchFees(fixture, placeholderTeamIds)",\n    `${label} must use the shared explicit/team-standard/legacy fee policy.`,\n  );\n  mustContain(\n    source,\n    "standardMatchFeePence: true",\n    `${label} must load each team\'s configured standard fee.`,\n  );\n'+s[end:]
+            s=s.replace('const publishBatch = read(','const nextWeek = read("src/app/api/admin/fixtures/generate-next-week/route.ts");\nconst publishBatch = read(',1)
+            idx=s.index('mustContain(\n  singleFixture')
+            return s[:idx]+'mustContain(nextWeek, "standardMatchFeePence: true", "next-week generation must load team fees.");\nmustContain(nextWeek, "...snapshotFixtureMatchFees(homeTeam, awayTeam)", "next-week generation must snapshot separate fees.");\n\n'+s[idx:]
+          change('scripts/apply-team-specific-fixture-fee-final-guard.cjs',guard)
+          change('.github/workflows/critical-feature-contracts.yml',lambda s:one(s,'      - name: Check team confirmation workflow','      - name: Check fixture fee inheritance through real generation and publication\n        run: node --test tests/fixture-fee-inheritance.test.cjs\n\n      - name: Check team confirmation workflow'))
+          change('docs/critical-feature-contracts.md',lambda s:s+'\n## Fixture fee inheritance\n\n`src/lib/payments/fixture-fee-policy.ts` owns publishing fee inheritance. Generate next week snapshots each team\'s own standard fee. Single, week and batch publishing and the explicitly requested repair action use the same resolver: explicit side fee (including zero), then the team standard, then the legacy fallback. TBC placeholders remain uncharged. Stored fixture agreements and paid-charge protections are preserved.\n\n`tests/fixture-fee-inheritance.test.cjs` runs the real generator, publishers and charge-sync code with isolated I/O. The fixture-fee workflow runs it before and after the complete prebuild, checks retired publishing patches are idempotent, and proves both the missing-generation-fee and lost-team-fallback regressions fail tests. No test sends customer messages or accesses production data.\n')
+          PY
+          git diff --check
+          git diff --stat
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'maintenance@sixfl.co.uk'
+          git add 'src/app/(admin)/admin/fixtures/publish-actions.ts' src/app/api/admin/fixtures/publish-one/route.ts src/app/api/admin/fixtures/generate-next-week/route.ts scripts/apply-fixture-team-fee-overrides.cjs scripts/apply-publish-tbc-fee-safety.cjs scripts/apply-resilient-published-fee-repair.cjs scripts/fix-publish-tbc-fee-safety-compat.cjs scripts/apply-team-specific-fixture-fee-final-guard.cjs .github/workflows/critical-feature-contracts.yml docs/critical-feature-contracts.md
+          git rm .github/workflows/inspect-fixture-fees-once.yml .github/workflows/apply-native-fixture-fees-once.yml
+          git commit -m 'Preserve team fees natively from next-week generation through publishing'
+          git push origin HEAD:refs/heads/fix/next-week-team-fees
