@@ -4,6 +4,9 @@
 
 "use server";
 
+import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
+
+
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
 import { LeadStatus } from "@prisma/client";
@@ -61,6 +64,8 @@ function resolveLeadEmailCta(input: {
   if (!label || !urlKey) {
     return undefined;
   }
+
+  if (urlKey === REFERRAL_PAGE_CTA_KEY) return { label, url: REFERRAL_PAGE_URL };
 
   if (urlKey === "signupUrl") {
     const url = input.signupUrl?.trim() || "";

@@ -4,6 +4,9 @@
 
 "use server";
 
+import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
+
+
 // ========================================
 // Imports
 // ========================================
@@ -542,7 +545,9 @@ export async function sendBulkLeadEmailAction(
   }
 
   const resolvedCta: SIXFLEmailCta | undefined =
-    ctaUrlKey === "teamJoinUrl"
+    ctaUrlKey === REFERRAL_PAGE_CTA_KEY
+      ? ctaLabel ? { label: ctaLabel, url: REFERRAL_PAGE_URL } : undefined
+      : ctaUrlKey === "teamJoinUrl"
       ? targetManagedTeam?.joinSlug
         ? {
             label: ctaLabel || "Register to join",

@@ -1,0 +1,45 @@
+name: Email referral button and italics
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  editor:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_isolated_editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Native renderer, persistence, announcements and composer contracts
+        run: node --test tests/template-referral-italics.test.cjs
+      - name: Install isolated browser tooling without changing locked app dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sixfl-editor-tools" --no-package-lock playwright
+          "$RUNNER_TEMP/sixfl-editor-tools/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Real editor controls and save/reopen in Chromium
+        run: NODE_PATH="$RUNNER_TEMP/sixfl-editor-tools/node_modules" node tests/template-referral-italics.browser.cjs
+      - name: Prove missing italic rendering is detected
+        shell: bash
+        run: |
+          target=src/lib/email/inline-formatting.ts
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          sed -i 's/<em>/<span>/g; s#</em>#</span>#g' "$target"
+          if node --test --test-name-pattern='inline rendering' tests/template-referral-italics.test.cjs > negative-control.log 2>&1; then
+            echo 'The removed italic renderer was not detected'
+            exit 1
+          fi
+          grep -q AssertionError negative-control.log
+          echo 'Missing-italics negative control passed.'
+      - run: npx tsc --noEmit

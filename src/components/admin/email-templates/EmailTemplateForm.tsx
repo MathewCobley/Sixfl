@@ -15,6 +15,8 @@ import {
 import { useTemplateSave, TemplateSaveControls } from "@/components/admin/templates/useTemplateSave";
 
 import { buildSIXFLEmailHtml } from "@/lib/email/buildEmail";
+import { REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
+import { toggleItalicSelection } from "@/lib/email/editor-formatting";
 
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
@@ -28,7 +30,8 @@ type CtaUrlKeyValue =
   | "teamJoinUrl"
   | "squadActivationUrl"
   | "fixtureUrl"
-  | "fixturesUrl";
+  | "fixturesUrl"
+  | "referralPageUrl";
 
 type EmailTemplateFormValues = {
   id?: string;
@@ -148,6 +151,7 @@ const CTA_OPTIONS: Array<{
   previewUrl?: string;
 }> = [
   { value: "", label: "No button" },
+  { value: "referralPageUrl", label: "Referral page", previewUrl: REFERRAL_PAGE_URL },
   {
     value: "signupUrl",
     label: "Register interest",
@@ -392,6 +396,12 @@ export default function EmailTemplateForm({
     setBodyAndSelection(next, selectionStart, selectionEnd);
   }
 
+  function insertItalicText() {
+    const textarea = bodyRef.current;
+    const result = toggleItalicSelection(body, textarea?.selectionStart ?? body.length, textarea?.selectionEnd ?? body.length);
+    setBodyAndSelection(result.text, result.start, result.end);
+  }
+
   function insertBulletText() {
     const textarea = bodyRef.current;
     const fallbackText = "Bullet point";
@@ -485,6 +495,11 @@ export default function EmailTemplateForm({
   }
 
   function handleBodyKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "i") {
+      event.preventDefault();
+      insertItalicText();
+      return;
+    }
     if (event.key !== "Tab") return;
 
     event.preventDefault();
@@ -697,6 +712,15 @@ export default function EmailTemplateForm({
                     </button>
                     <button
                       type="button"
+                      onClick={insertItalicText}
+                      aria-label="Italics"
+                      title="Italicise selected text (Ctrl+I or Command+I)"
+                      className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm italic text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
+                    >
+                      Italics
+                    </button>
+                    <button
+                      type="button"
                       onClick={insertBulletText}
                       className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white transition hover:border-emerald-400/35 hover:bg-emerald-500/10 hover:text-emerald-100"
                     >
@@ -705,7 +729,7 @@ export default function EmailTemplateForm({
                   </div>
                 </div>
                 <p className="text-xs leading-5 text-neutral-400">
-                  Highlight text and click Bold or Bullet. Use Tab / Shift+Tab in the message box to indent or outdent bullet lines.
+                  Highlight text and click Bold, Italics or Bullet. Italics also supports Ctrl+I / Command+I. Use Tab / Shift+Tab in the message box to indent or outdent bullet lines.
                 </p>
                 <textarea
                   ref={bodyRef}
@@ -788,6 +812,9 @@ export default function EmailTemplateForm({
                     </button>
                   ))}
                 </div>
+                {ctaUrlKey === "referralPageUrl" ? (
+                  <p className="mt-3 text-xs leading-5 text-neutral-400">Opens the referral page, where each person signs in to get their own referral code and sharing link.</p>
+                ) : null}
                 {state?.errors?.ctaUrlKey?.[0] ? (
                   <p className="mt-3 text-sm text-red-400">
                     {state.errors.ctaUrlKey[0]}

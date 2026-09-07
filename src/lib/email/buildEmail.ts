@@ -2,6 +2,8 @@
 // File: src/lib/email/buildEmail.ts
 // ========================================
 
+import { renderEmailInlineFormatting } from "./inline-formatting";
+
 import {
   SIXFL_EMAIL_SIGNATURE_TEXT,
   buildSIXFLFooterHtml,
@@ -76,9 +78,7 @@ function escapeHtml(value: string) {
 }
 
 function renderInlineFormatting(value: string) {
-  return escapeHtml(value)
-    .replace(/\*{2,}([^*\n]+)\*{2,}/g, "<strong>$1</strong>")
-    .replace(/\*{2,}/g, "");
+  return renderEmailInlineFormatting(value);
 }
 
 function normalizeLineEndings(value: string) {

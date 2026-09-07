@@ -1,3 +1,4 @@
+import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
 // ========================================
 // File: src/app/(admin)/admin/messages/page.tsx
 // ========================================
@@ -347,7 +348,9 @@ export default async function AdminMessagesPage({
 
   const resolvedEmailTemplates = emailTemplates.map((template) => {
     const ctaUrl =
-      template.ctaUrlKey === "signupUrl"
+      template.ctaUrlKey === REFERRAL_PAGE_CTA_KEY
+        ? REFERRAL_PAGE_URL
+        : template.ctaUrlKey === "signupUrl"
         ? `${baseUrl}/register-interest`
         : template.ctaUrlKey === "manageTeamUrl"
           ? claimLink
