@@ -18,6 +18,7 @@ import { runRefereeEveningNotifications } from "@/lib/referees/evening-notificat
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
 import { reconcileTeamPaymentOrderCheckouts } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
+import { runPendingSquadActivationEmailJob } from "@/lib/squad/activation-emails";
 import {
   queueMissingReferralRecordedEmails,
   queueReadyReferralPayoutEmails,
@@ -123,6 +124,10 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(100),
   );
 
+  const pendingSquadActivations = await runCronStep(
+    "pending-squad-activation-emails", failures, runPendingSquadActivationEmailJob,
+  );
+
   const onboarding = await runCronStep(
     "captain-onboarding",
     failures,
@@ -218,6 +223,7 @@ export async function GET(request: NextRequest) {
         : `Cron completed with ${failures.length} failed step${failures.length === 1 ? "" : "s"}. See failedSteps for the exact component.`,
     failedSteps: failures,
     existingQueue,
+    pendingSquadActivations,
     onboarding,
     rulesOnboarding,
     playerPoolProfileSmsReminders,
