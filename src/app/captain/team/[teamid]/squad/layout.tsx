@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import PendingActivationEmailStatus from "@/components/admin/squad/PendingActivationEmailStatus";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { NotificationDispatchStatus } from "@prisma/client";
@@ -104,6 +105,7 @@ function ActivationForm({
   teamid,
   prospectId,
   action,
+  resend = false,
   disabled,
   children,
   tone = "emerald",
@@ -111,6 +113,7 @@ function ActivationForm({
   teamid: string;
   prospectId: string;
   action: "send-activation" | "send-activation-sms";
+  resend?: boolean;
   disabled?: boolean;
   children: ReactNode;
   tone?: "emerald" | "sky";
@@ -122,6 +125,7 @@ function ActivationForm({
 
   return (
     <form method="post" action={`/captain/team/${teamid}/squad/${action}`}>
+      {resend && action === "send-activation" ? <input type="hidden" name="resend" value="1" /> : null}
       <input type="hidden" name="prospectId" value={prospectId} />
       <button
         type="submit"
@@ -389,7 +393,7 @@ async function ActivationQuickSendPanel({ teamid }: { teamid: string }) {
 
               <div className="mt-4 grid gap-2">
                 <div className={`rounded-xl border px-3 py-2 text-xs ${getStatusClasses(emailDispatch)}`}>
-                  {getDispatchStatusText({ label: "Activation email", dispatch: emailDispatch })}
+                  {emailDispatch ? getDispatchStatusText({ label: "Activation email", dispatch: emailDispatch }) : <PendingActivationEmailStatus prospectId={prospect.id} />}
                 </div>
                 <div className={`rounded-xl border px-3 py-2 text-xs ${getStatusClasses(smsDispatch)}`}>
                   {getDispatchStatusText({ label: "Activation SMS", dispatch: smsDispatch })}
@@ -401,6 +405,7 @@ async function ActivationQuickSendPanel({ teamid }: { teamid: string }) {
                   teamid={teamid}
                   prospectId={prospect.id}
                   action="send-activation"
+                  resend={Boolean(emailDispatch)}
                   disabled={!hasEmail}
                 >
                   {emailDispatch ? "Resend activation email" : "Send activation email"}

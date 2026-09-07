@@ -15,6 +15,7 @@ import {
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
 import { prisma } from "@/lib/prisma";
+import { getSquadActivationEmailDeliveryBlock } from "@/lib/squad/activation-emails";
 import { getPlayerPoolProfileSmsDeliveryBlock } from "@/lib/player-pool/profile-sms-reminders";
 import { refereeEveningDeliveryBlock } from "@/lib/referees/evening-notifications";
 import { isLegacyRefereeNotice, LEGACY_REFEREE_REASON } from "@/lib/referees/evening-policy";
@@ -353,6 +354,7 @@ export async function processNotificationQueue(limit = 25) {
       const cancellationReason =
         getUnresolvedEmailPlaceholderReason(dispatch) ??
         unpublishedFixtureBlockReason ??
+        (await getSquadActivationEmailDeliveryBlock(dispatch)) ??
         (await refereeEveningDeliveryBlock(dispatch)) ??
         (await getQueuedMatchFeeCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId })) ??
         (await getQueuedFixtureReminderCancellationReason({ sourceType: dispatch.sourceType, sourceId: dispatch.sourceId, metadata, createdAt: dispatch.createdAt })) ??

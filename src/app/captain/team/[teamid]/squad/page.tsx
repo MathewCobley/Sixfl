@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import PendingActivationEmailStatus from "@/components/admin/squad/PendingActivationEmailStatus";
 import { notFound } from "next/navigation";
 import { NotificationDispatchStatus, TeamMode, TeamRole } from "@prisma/client";
 
@@ -760,9 +761,7 @@ export default async function CaptainSquadPage({
                                   {getActivationStatusText({ label: "Activation email", ...latestActivationDispatch })}
                                 </div>
                               ) : (
-                                <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-white/50">
-                                  No activation account email sent yet.
-                                </div>
+                                <PendingActivationEmailStatus prospectId={prospect.id} />
                               )}
 
                               {latestActivationSmsDispatch ? (
