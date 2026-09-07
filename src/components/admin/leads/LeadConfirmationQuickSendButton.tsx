@@ -6,20 +6,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import LeadSmsStatusLines, { type LeadSmsStatusLine } from "@/components/admin/leads/LeadSmsStatusLines";
 
 import { sendTeamCommitmentEmailAction } from "@/app/(admin)/admin/leads/team-commitment-email-actions";
 import { sendLeadReassuranceEmailAction } from "@/app/(admin)/admin/leads/reassurance-email-actions";
 
-type SmsStatusTone = "muted" | "info" | "success" | "warning" | "danger";
-
-type SmsStatusLine = {
-  text: string;
-  tone: SmsStatusTone;
-  title?: string | null;
-};
-
 type TeamLeadSmsStatus = {
-  lines: SmsStatusLine[];
+  lines: LeadSmsStatusLine[];
 };
 
 type TeamLeadSmsStatusResponse = {
@@ -28,11 +21,13 @@ type TeamLeadSmsStatusResponse = {
 };
 
 let sharedStatusRequest: Promise<Record<string, TeamLeadSmsStatus>> | null = null;
+let sharedStatusRequestedAt = 0;
 
 async function loadTeamLeadSmsStatuses(force = false) {
-  if (force) sharedStatusRequest = null;
+  if (force || Date.now() - sharedStatusRequestedAt > 30_000) sharedStatusRequest = null;
 
   if (!sharedStatusRequest) {
+    sharedStatusRequestedAt = Date.now();
     sharedStatusRequest = fetch("/api/admin/leads/team-confirmation-sms-status", {
       cache: "no-store",
       credentials: "same-origin",
@@ -56,14 +51,6 @@ async function loadTeamLeadSmsStatuses(force = false) {
   }
 
   return sharedStatusRequest;
-}
-
-function statusToneClass(tone: SmsStatusTone) {
-  if (tone === "success") return "text-emerald-200/90";
-  if (tone === "danger") return "text-rose-200/90";
-  if (tone === "warning") return "text-amber-200/90";
-  if (tone === "info") return "text-sky-200/85";
-  return "text-white/45";
 }
 
 export default function LeadConfirmationQuickSendButton({
@@ -225,17 +212,8 @@ export default function LeadConfirmationQuickSendButton({
           <div className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">
             Automatic SMS
           </div>
-          <div className="mt-1 space-y-0.5 text-[11px] leading-4">
-            {smsStatus.lines.map((line, index) => (
-              <div
-                key={`${line.text}-${index}`}
-                className={statusToneClass(line.tone)}
-                title={line.title || undefined}
-              >
-                {line.text}
-              </div>
-            ))}
-          </div>
+          <LeadSmsStatusLines lines={smsStatus.lines} />
+          {smsStatusFailed ? <p className="mt-2 text-[11px] text-amber-100">Refresh failed; these details may be out of date.</p> : null}
         </div>
       ) : smsStatusFailed ? (
         <div className="max-w-[190px] text-right text-[11px] leading-4 text-amber-200/70">
@@ -243,6 +221,7 @@ export default function LeadConfirmationQuickSendButton({
           <div className="text-white/35">This does not mean SMS is disabled.</div>
         </div>
       ) : null}
+      <button type="button" onClick={() => void refreshSmsStatus(true)} disabled={pending} className="rounded px-2 py-1 text-[11px] text-white/60 underline underline-offset-4 hover:text-white">Refresh status</button>
     </div>
   );
 }

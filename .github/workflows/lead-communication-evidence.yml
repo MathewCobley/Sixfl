@@ -32,7 +32,7 @@ jobs:
       - run: npm run prebuild
       - run: npx prisma generate
       - name: Test actual query, reply presentation, status endpoint and reminder holds
-        run: node --test tests/lead-communication-evidence.test.cjs
+        run: node --test tests/lead-communication-evidence.test.cjs tests/lead-sms-status-links.test.cjs
       - name: Prove an outbound-only regression is caught
         shell: bash
         run: |
