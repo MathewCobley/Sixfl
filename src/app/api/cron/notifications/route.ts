@@ -3,6 +3,7 @@
 // ========================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { runManagedSquadRegistrationReminderJob } from "@/lib/managed-squad/registration-reminders";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
 import { runCaptainRulesOnboardingEmailJob } from "@/lib/captain/rules-onboarding-emails";
 import { repairUpcomingAiPredictionIntegrity } from "@/lib/fixtures/aiPredictionIntegrity";
@@ -148,6 +149,11 @@ export async function GET(request: NextRequest) {
     failures,
     runTeamLeadConfirmationSmsReminderJob,
   );
+  const managedSquadRegistrationReminders = await runCronStep(
+    "managed-squad-registration-reminders",
+    failures,
+    runManagedSquadRegistrationReminderJob,
+  );
   const fixtureConfirmations = await runCronStep(
     "fixture-confirmation-reminders",
     failures,
@@ -228,6 +234,7 @@ export async function GET(request: NextRequest) {
     rulesOnboarding,
     playerPoolProfileSmsReminders,
     teamLeadConfirmationSmsReminders,
+    managedSquadRegistrationReminders,
     fixtureConfirmations,
     fixtureConfirmationEmails,
     fixtureConfirmationWarnings,
