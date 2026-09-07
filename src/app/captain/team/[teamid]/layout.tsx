@@ -381,8 +381,8 @@ export default async function CaptainTeamLayout({
           logoSrc: "/Sixfl-tv.png",
         },
         {
-          href: `/goal-of-the-week?from=captain&teamId=${encodeURIComponent(teamid)}`,
-          label: "Goal of the Week",
+          href: `/goal-of-the-month?from=captain&teamId=${encodeURIComponent(teamid)}`,
+          label: "Goal of the Month",
         },
       ],
     },
