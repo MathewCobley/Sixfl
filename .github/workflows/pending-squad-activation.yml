@@ -1,0 +1,51 @@
+name: Automatic pending squad activation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_activation_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_activation_test
+      NEXTAUTH_SECRET: activation-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      SIXFL_ISOLATED_ACTIVATION_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx tsc --noEmit
+      - name: Create disposable local schema
+        run: npx prisma db push --skip-generate
+      - name: Test real queue, PostgreSQL concurrency, state sweep and delivery guard
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/pending-squad-activation.test.ts"],outfile:".activation-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .activation-tests.cjs
+      - run: npx next build
+      - name: Verify native shared callsites and no temporary workflow
+        run: |
+          test ! -f .github/workflows/activation-integrate-once.yml
+          git grep -nE 'queuePendingSquadActivationEmail|runPendingSquadActivationEmailJob|getSquadActivationEmailDeliveryBlock|PendingActivationEmailStatus' -- src
