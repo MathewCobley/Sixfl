@@ -8,7 +8,7 @@ import { playerNamesMatch } from "@/lib/players/player-identity-safety";
 import { createSquadActivationToken } from "@/lib/squad/activationToken";
 
 export const SQUAD_ACTIVATION_EMAIL_KEY = "squad-activation-email";
-type Db = Prisma.TransactionClient;
+type Db = Pick<typeof prisma, "$queryRaw" | "teamPlayerProspect" | "user" | "notificationRecipient" | "notificationTemplate">;
 type Mode = "automatic" | "initial" | "resend";
 const RECENT_SEND_MS = 5 * 60 * 1000;
 const normaliseEmail = (value?: string | null) => value?.trim().toLowerCase() || "";
