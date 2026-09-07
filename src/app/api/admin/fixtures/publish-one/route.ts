@@ -9,6 +9,8 @@ import {
   queueFixtureMatchFeeEmails,
   syncFixtureMatchFeeCharges,
 } from "@/lib/payments/fixture-match-fees";
+import { resolveFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getEmailReplyDomain } from "@/lib/resend/client";
@@ -16,7 +18,6 @@ import { getEmailReplyDomain } from "@/lib/resend/client";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const DEFAULT_MATCH_FEE_PENCE = 4000;
 
 type PublishFixtureRecord = {
   id: string;
@@ -24,8 +25,10 @@ type PublishFixtureRecord = {
   kickoffAt: Date;
   pitch: string | null;
   matchFeePence: number | null;
-  homeTeam: { id: string; name: string; logoUrl: string | null };
-  awayTeam: { id: string; name: string; logoUrl: string | null };
+  homeMatchFeePence: number | null;
+  awayMatchFeePence: number | null;
+  homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };
+  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };
   venue: { name: string } | null;
 };
 
@@ -124,10 +127,12 @@ async function getPublishFixtureRecord(fixtureId: string) {
       kickoffAt: true,
       pitch: true,
       matchFeePence: true,
+      homeMatchFeePence: true,
+      awayMatchFeePence: true,
       publishedAt: true,
       league: { select: { id: true, name: true, slug: true, season: true } },
-      homeTeam: { select: { id: true, name: true, logoUrl: true } },
-      awayTeam: { select: { id: true, name: true, logoUrl: true } },
+      homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
+      awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
       venue: { select: { name: true } },
     },
   });
@@ -144,9 +149,11 @@ async function publishFixtureOrNull(fixtureId: string) {
           kickoffAt: true,
           pitch: true,
           matchFeePence: true,
+          homeMatchFeePence: true,
+          awayMatchFeePence: true,
           publishedAt: true,
-          homeTeam: { select: { id: true, name: true, logoUrl: true } },
-          awayTeam: { select: { id: true, name: true, logoUrl: true } },
+          homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
+          awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
           venue: { select: { name: true } },
         },
       });
@@ -171,7 +178,8 @@ async function queueEverythingForPublishedFixture(input: {
   league: { id: string; name: string; slug: string | null; season: string | null };
 }) {
   const { fixture, league } = input;
-  const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds([fixture.homeTeam.id, fixture.awayTeam.id]);
+  const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);
   const leagueDisplayName = getLeagueDisplayName(league);
   const fixturesUrl = league.slug
     ? buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`)
@@ -185,8 +193,8 @@ async function queueEverythingForPublishedFixture(input: {
     kickoffAt: fixture.kickoffAt,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
-    homeMatchFeePence: matchFeePence,
-    awayMatchFeePence: matchFeePence,
+    homeMatchFeePence,
+    awayMatchFeePence,
   });
 
   const paymentResult = await queueFixtureMatchFeeEmails({
@@ -197,8 +205,8 @@ async function queueEverythingForPublishedFixture(input: {
     kickoffAt: fixture.kickoffAt,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
-    homeMatchFeePence: matchFeePence,
-    awayMatchFeePence: matchFeePence,
+    homeMatchFeePence,
+    awayMatchFeePence,
     charges: chargeResult.activeCharges,
   });
 
@@ -208,6 +216,7 @@ async function queueEverythingForPublishedFixture(input: {
   let reminderSkipped = 0;
 
   for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
+    if (placeholderTeamIds.has(teamId)) continue;
     const { recipient } = await upsertTeamNotificationRecipient(teamId);
     const teamDetails = getTeamDetailsForFixture(fixture, teamId);
     const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;

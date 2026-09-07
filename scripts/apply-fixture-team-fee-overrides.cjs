@@ -71,62 +71,6 @@ replaceOnce(
 );
 
 replaceOnce(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '  matchFeePence: number | null;\n  homeTeam:',
-  '  matchFeePence: number | null;\n  homeMatchFeePence: number | null;\n  awayMatchFeePence: number | null;\n  homeTeam:',
-);
-
-replaceOnce(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '      pitch: true,\n      matchFeePence: true,\n      publishedAt: true,',
-  '      pitch: true,\n      matchFeePence: true,\n      homeMatchFeePence: true,\n      awayMatchFeePence: true,\n      publishedAt: true,',
-);
-
-replaceOnce(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '          pitch: true,\n          matchFeePence: true,\n          publishedAt: true,',
-  '          pitch: true,\n          matchFeePence: true,\n          homeMatchFeePence: true,\n          awayMatchFeePence: true,\n          publishedAt: true,',
-);
-
-replaceOnce(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '  const { fixture, league } = input;\n  const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-  '  const { fixture, league } = input;\n  const homeMatchFeePence =\n    fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-);
-
-replaceAllExact(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '    homeMatchFeePence: matchFeePence,\n    awayMatchFeePence: matchFeePence,',
-  '    homeMatchFeePence,\n    awayMatchFeePence,',
-  2,
-);
-
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  '  matchFeePence: number | null;\n  homeTeam:',
-  '  matchFeePence: number | null;\n  homeMatchFeePence: number | null;\n  awayMatchFeePence: number | null;\n  homeTeam:',
-);
-
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  '            pitch: true,\n            matchFeePence: true,\n            homeTeam:',
-  '            pitch: true,\n            matchFeePence: true,\n            homeMatchFeePence: true,\n            awayMatchFeePence: true,\n            homeTeam:',
-);
-
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  '  for (const fixture of unpublishedFixtures) {\n    const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-  '  for (const fixture of unpublishedFixtures) {\n    const homeMatchFeePence =\n      fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-);
-
-replaceAllExact(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  '      homeMatchFeePence: matchFeePence,\n      awayMatchFeePence: matchFeePence,',
-  '      homeMatchFeePence,\n      awayMatchFeePence,',
-  2,
-);
-
-replaceOnce(
   "src/app/api/admin/night-board/update-match/route.ts",
   'function getExistingTeamFee(input: {\n  fixtureMatchFeePence: number | null;\n  teamId: string;',
   'function getExistingTeamFee(input: {\n  fixtureMatchFeePence: number | null;\n  fixtureTeamMatchFeePence: number | null;\n  teamId: string;',
@@ -232,54 +176,8 @@ replaceOnce(
   '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n          homeMatchFeePence: fixtureData.homeMatchFeePence,\n          awayMatchFeePence: fixtureData.awayMatchFeePence,\n        },',
 );
 
-// Publishing old drafts must also recover the team standard when the old draft
-// only contains the shared legacy fee.
-replaceAllExact(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  'homeTeam: { id: string; name: string; logoUrl: string | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null };',
-  'homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };',
-  1,
-);
-
-replaceAllExact(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n      awayTeam: { select: { id: true, name: true, logoUrl: true } },',
-  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n      awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
-  1,
-);
-
-replaceAllExact(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n          awayTeam: { select: { id: true, name: true, logoUrl: true } },',
-  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n          awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
-  1,
-);
-
-replaceOnce(
-  "src/app/api/admin/fixtures/publish-one/route.ts",
-  '    fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-  '    fixture.homeMatchFeePence ??\n    fixture.homeTeam.standardMatchFeePence ??\n    fixture.matchFeePence ??\n    DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ??\n    fixture.awayTeam.standardMatchFeePence ??\n    fixture.matchFeePence ??\n    DEFAULT_MATCH_FEE_PENCE;',
-);
-
-replaceAllExact(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  'homeTeam: { id: string; name: string; logoUrl: string | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null };',
-  'homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };\n  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };',
-  1,
-);
-
-replaceAllExact(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  'homeTeam: { select: { id: true, name: true, logoUrl: true } },\n            awayTeam: { select: { id: true, name: true, logoUrl: true } },',
-  'homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },\n            awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },',
-  1,
-);
-
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/publish-actions.ts",
-  '      fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;',
-  '      fixture.homeMatchFeePence ??\n      fixture.homeTeam.standardMatchFeePence ??\n      fixture.matchFeePence ??\n      DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ??\n      fixture.awayTeam.standardMatchFeePence ??\n      fixture.matchFeePence ??\n      DEFAULT_MATCH_FEE_PENCE;',
-);
+// Publishing fee inheritance is native in fixture-fee-policy.ts and the two
+// publish routes. Do not rewrite their fee declarations here.
 
 // The standard-fee backfill should write the per-team values as well as the
 // legacy display amount, so running it cannot recreate a shared £40/£40 fee.

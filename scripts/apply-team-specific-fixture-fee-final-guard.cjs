@@ -36,6 +36,7 @@ function mustNotContainBefore(source, needle, boundary, message) {
   }
 }
 
+const nextWeek = read("src/app/api/admin/fixtures/generate-next-week/route.ts");
 const publishBatch = read("src/app/(admin)/admin/fixtures/publish-actions.ts");
 const publishOne = read("src/app/api/admin/fixtures/publish-one/route.ts");
 const singleFixture = read("src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts");
@@ -59,13 +60,13 @@ for (const [label, source] of [
   );
   mustContain(
     source,
-    "fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE",
-    `${label} must resolve the home fee independently.`,
+    "resolveFixtureMatchFees(fixture, placeholderTeamIds)",
+    `${label} must use the shared explicit/team-standard/legacy fee policy.`,
   );
   mustContain(
     source,
-    "fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE",
-    `${label} must resolve the away fee independently.`,
+    "standardMatchFeePence: true",
+    `${label} must load each team's configured standard fee.`,
   );
   mustNotMatch(
     source,
@@ -73,6 +74,9 @@ for (const [label, source] of [
     `${label} must never copy one shared fixture fee to both teams. A £36 team playing a £40 team must remain £36.`,
   );
 }
+
+mustContain(nextWeek, "standardMatchFeePence: true", "next-week generation must load team fees.");
+mustContain(nextWeek, "...snapshotFixtureMatchFees(homeTeam, awayTeam)", "next-week generation must snapshot separate fees.");
 
 mustContain(
   singleFixture,
