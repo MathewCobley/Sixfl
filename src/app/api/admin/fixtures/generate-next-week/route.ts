@@ -8,12 +8,14 @@ import { NextResponse } from "next/server";
 import { FixtureStatus, Prisma } from "@prisma/client";
 
 import { refreshStoredAiPreviewsForLeague } from "@/lib/fixtures/storedAiPredictions";
+import { snapshotFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type TeamSeed = {
   id: string;
   name: string;
+  standardMatchFeePence: number | null;
 };
 
 type Pair = {
@@ -226,7 +228,7 @@ export async function POST(request: Request) {
       prisma.team.findMany({
         where: { leagueId },
         orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, standardMatchFeePence: true },
       }),
       prisma.fixture.findMany({
         where: { leagueId },
@@ -293,10 +295,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const teamsById = new Map(teams.map((team) => [team.id, team]));
+
     await prisma.fixture.createMany({
       data: pairs.map((pair, index) => {
         const batch = Math.floor(index / pitchCount);
         const pitchNumber = (index % pitchCount) + 1;
+        const homeTeam = teamsById.get(pair.homeTeamId);
+        const awayTeam = teamsById.get(pair.awayTeamId);
+        if (!homeTeam || !awayTeam) throw new Error("A selected fixture team is no longer available.");
 
         return {
           leagueId,
@@ -308,6 +315,7 @@ export async function POST(request: Request) {
           position: index + 1,
           pitch: `Pitch ${pitchNumber}`,
           status: FixtureStatus.SCHEDULED,
+          ...snapshotFixtureMatchFees(homeTeam, awayTeam),
         };
       }),
     });

@@ -113,3 +113,8 @@ When fixing a regression or adding an important invariant:
 7. only then merge.
 
 Every regression that reaches production should, where practical, leave behind a permanent automated check so the same failure cannot recur silently.
+## Fixture fee inheritance
+
+`src/lib/payments/fixture-fee-policy.ts` owns publishing fee inheritance. Generate next week snapshots each team's own standard fee. Single, week and batch publishing and the explicitly requested repair action use the same resolver: explicit side fee (including zero), then the team standard, then the legacy fallback. TBC placeholders remain uncharged. Stored fixture agreements and paid-charge protections are preserved.
+
+`tests/fixture-fee-inheritance.test.cjs` runs the real generator, publishers and charge-sync code with isolated I/O. The fixture-fee workflow runs it before and after the complete prebuild, checks retired publishing patches are idempotent, and proves both the missing-generation-fee and lost-team-fallback regressions fail tests. No test sends customer messages or accesses production data.

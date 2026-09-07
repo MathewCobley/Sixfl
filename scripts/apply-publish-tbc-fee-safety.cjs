@@ -19,80 +19,9 @@ function replaceRequired(source, before, after, label) {
   return source.replace(before, after);
 }
 
-// ---------------------------------------------------------------------------
-// Publishing a week containing TBC must never try to create a payment charge
-// or notification for the hidden placeholder. The real opponent still gets its
-// normal team fee and notifications.
-// ---------------------------------------------------------------------------
-{
-  const file = "src/app/(admin)/admin/fixtures/publish-actions.ts";
-  let source = read(file);
-
-  if (!source.includes('getFixturePlaceholderTeamIds')) {
-    source = source.replace(
-      'import { requireAdmin } from "@/lib/requireAdmin";',
-      'import { requireAdmin } from "@/lib/requireAdmin";\nimport { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";',
-    );
-  }
-
-  source = replaceRequired(
-    source,
-    `  const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));\n  const fixturesUrl =`,
-    `  const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));\n  const placeholderTeamIds = await getFixturePlaceholderTeamIds(teamIds);\n  const fixturesUrl =`,
-    "week publish placeholder ids",
-  );
-
-  source = replaceRequired(
-    source,
-    `  for (const fixture of unpublishedFixtures) {\n    const homeMatchFeePence =\n      fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence =\n      fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;`,
-    `  for (const fixture of unpublishedFixtures) {\n    const homeMatchFeePence = placeholderTeamIds.has(fixture.homeTeam.id)\n      ? null\n      : fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence = placeholderTeamIds.has(fixture.awayTeam.id)\n      ? null\n      : fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;`,
-    "week publish TBC fee resolution",
-  );
-
-  source = replaceRequired(
-    source,
-    `  for (const fixture of unpublishedFixtures) {\n    for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n      const { recipient } = await upsertTeamNotificationRecipient(teamId);`,
-    `  for (const fixture of unpublishedFixtures) {\n    for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n      if (placeholderTeamIds.has(teamId)) continue;\n      const { recipient } = await upsertTeamNotificationRecipient(teamId);`,
-    "week publish TBC reminder skip",
-  );
-
-  if (!source.includes("export async function repairPublishedLeagueFixtureFeesAction")) {
-    source += `\n\nexport async function repairPublishedLeagueFixtureFeesAction(formData: FormData) {\n  await requireAdmin();\n\n  const leagueId = parseRequiredString(formData.get(\"leagueId\"), \"League\");\n  const divisionId = parseOptionalString(formData.get(\"divisionId\"));\n\n  await assertDivisionBelongsToLeague({ leagueId, divisionId });\n\n  const league = await prisma.league.findUnique({\n    where: { id: leagueId },\n    select: { id: true, name: true, slug: true, season: true },\n  });\n\n  if (!league) throw new Error(\"League not found.\");\n\n  const fixtures = await prisma.fixture.findMany({\n    where: {\n      leagueId,\n      publishedAt: { not: null },\n      status: \"SCHEDULED\",\n      ...(divisionId ? { divisionId } : {}),\n    },\n    orderBy: [{ kickoffAt: \"asc\" }, { position: \"asc\" }],\n    select: {\n      id: true,\n      kickoffAt: true,\n      pitch: true,\n      matchFeePence: true,\n      homeMatchFeePence: true,\n      awayMatchFeePence: true,\n      homeTeam: { select: { id: true, name: true, logoUrl: true } },\n      awayTeam: { select: { id: true, name: true, logoUrl: true } },\n      venue: { select: { name: true } },\n    },\n  });\n\n  const teamIds = unique(\n    fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),\n  );\n  const placeholderTeamIds = await getFixturePlaceholderTeamIds(teamIds);\n\n  let activeCharges = 0;\n  let paymentMessagesQueued = 0;\n  let paymentMessagesSkipped = 0;\n\n  for (const fixture of fixtures) {\n    const homeMatchFeePence = placeholderTeamIds.has(fixture.homeTeam.id)\n      ? null\n      : fixture.homeMatchFeePence ??\n        fixture.matchFeePence ??\n        DEFAULT_MATCH_FEE_PENCE;\n    const awayMatchFeePence = placeholderTeamIds.has(fixture.awayTeam.id)\n      ? null\n      : fixture.awayMatchFeePence ??\n        fixture.matchFeePence ??\n        DEFAULT_MATCH_FEE_PENCE;\n\n    const chargeResult = await syncFixtureMatchFeeCharges({\n      fixtureId: fixture.id,\n      leagueId: league.id,\n      leagueName: league.name,\n      leagueSeason: league.season,\n      kickoffAt: fixture.kickoffAt,\n      homeTeam: fixture.homeTeam,\n      awayTeam: fixture.awayTeam,\n      homeMatchFeePence,\n      awayMatchFeePence,\n    });\n\n    activeCharges += chargeResult.activeCharges.length;\n\n    if (chargeResult.activeCharges.length > 0) {\n      const messageResult = await queueFixtureMatchFeeEmails({\n        fixtureId: fixture.id,\n        leagueId: league.id,\n        leagueName: league.name,\n        leagueSeason: league.season,\n        kickoffAt: fixture.kickoffAt,\n        homeTeam: fixture.homeTeam,\n        awayTeam: fixture.awayTeam,\n        homeMatchFeePence,\n        awayMatchFeePence,\n        charges: chargeResult.activeCharges,\n      });\n\n      paymentMessagesQueued += messageResult.queued;\n      paymentMessagesSkipped += messageResult.skipped;\n    }\n  }\n\n  revalidatePath(\"/admin/fixtures\");\n  revalidatePath(\"/admin/payments\");\n  revalidatePath(\"/admin/night-board\");\n  revalidatePath(\`/admin/leagues/\${leagueId}\`);\n  revalidatePath(\`/admin/leagues/\${leagueId}/fixtures\`);\n  if (league.slug) {\n    revalidatePath(\`/leagues/\${league.slug}\`);\n    revalidatePath(\`/leagues/\${league.slug}/fixtures\`);\n  }\n\n  const params = new URLSearchParams();\n  params.set(\"leagueId\", leagueId);\n  if (divisionId) params.set(\"divisionId\", divisionId);\n  params.set(\"feeRepair\", \"success\");\n  params.set(\"feeRepairFixtures\", String(fixtures.length));\n  params.set(\"feeRepairCharges\", String(activeCharges));\n  params.set(\"feeRepairQueued\", String(paymentMessagesQueued));\n  params.set(\"feeRepairSkipped\", String(paymentMessagesSkipped));\n  redirect(\`/admin/fixtures?\${params.toString()}\`);\n}\n`;
-  }
-
-  write(file, source);
-}
-
-// ---------------------------------------------------------------------------
-// The single-fixture publish endpoint needs the same TBC protection.
-// ---------------------------------------------------------------------------
-{
-  const file = "src/app/api/admin/fixtures/publish-one/route.ts";
-  let source = read(file);
-
-  if (!source.includes('getFixturePlaceholderTeamIds')) {
-    source = source.replace(
-      'import { requireAdmin } from "@/lib/requireAdmin";',
-      'import { requireAdmin } from "@/lib/requireAdmin";\nimport { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";',
-    );
-  }
-
-  source = replaceRequired(
-    source,
-    `  const { fixture, league } = input;\n  const homeMatchFeePence =\n    fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence =\n    fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;`,
-    `  const { fixture, league } = input;\n  const placeholderTeamIds = await getFixturePlaceholderTeamIds([\n    fixture.homeTeam.id,\n    fixture.awayTeam.id,\n  ]);\n  const homeMatchFeePence = placeholderTeamIds.has(fixture.homeTeam.id)\n    ? null\n    : fixture.homeMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;\n  const awayMatchFeePence = placeholderTeamIds.has(fixture.awayTeam.id)\n    ? null\n    : fixture.awayMatchFeePence ?? fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;`,
-    "single publish TBC fee resolution",
-  );
-
-  source = replaceRequired(
-    source,
-    `  for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n    const { recipient } = await upsertTeamNotificationRecipient(teamId);`,
-    `  for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {\n    if (placeholderTeamIds.has(teamId)) continue;\n    const { recipient } = await upsertTeamNotificationRecipient(teamId);`,
-    "single publish TBC reminder skip",
-  );
-
-  write(file, source);
-}
+// TBC charge resolution and the resilient fee-repair action are native in the
+// publishing server source. This compatibility script only keeps the existing
+// repair controls on the fixtures page; it must never rewrite payment rules.
 
 // ---------------------------------------------------------------------------
 // Give admin a permanent, explicit repair button. This is deliberately

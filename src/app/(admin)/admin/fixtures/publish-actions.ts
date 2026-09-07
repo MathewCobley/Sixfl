@@ -15,6 +15,8 @@ import {
   queueFixtureMatchFeeEmails,
   syncFixtureMatchFeeCharges,
 } from "@/lib/payments/fixture-match-fees";
+import { resolveFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getEmailReplyDomain } from "@/lib/resend/client";
@@ -24,8 +26,10 @@ type PublishFixtureRecord = {
   kickoffAt: Date;
   pitch: string | null;
   matchFeePence: number | null;
-  homeTeam: { id: string; name: string; logoUrl: string | null };
-  awayTeam: { id: string; name: string; logoUrl: string | null };
+  homeMatchFeePence: number | null;
+  awayMatchFeePence: number | null;
+  homeTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };
+  awayTeam: { id: string; name: string; logoUrl: string | null; standardMatchFeePence: number | null };
   venue: { name: string } | null;
 };
 
@@ -37,7 +41,6 @@ type PublishScope = {
 
 const SERIALIZABLE_RETRY_LIMIT = 3;
 const PUBLISH_RETRY_ERROR = "fixture_publish_retry_conflict";
-const DEFAULT_MATCH_FEE_PENCE = 4000;
 
 function parseRequiredString(value: FormDataEntryValue | null, fieldName: string) {
   const str = String(value ?? "").trim();
@@ -182,8 +185,10 @@ async function claimUnpublishedLeagueFixtures(input: PublishScope): Promise<Publ
             kickoffAt: true,
             pitch: true,
             matchFeePence: true,
-            homeTeam: { select: { id: true, name: true, logoUrl: true } },
-            awayTeam: { select: { id: true, name: true, logoUrl: true } },
+            homeMatchFeePence: true,
+            awayMatchFeePence: true,
+            homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
+            awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
             venue: { select: { name: true } },
           },
         });
@@ -280,6 +285,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   }
 
   const teamIds = unique(unpublishedFixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]));
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds(teamIds);
   const fixturesUrl = league.slug ? buildAbsoluteUrl(`/leagues/${league.slug}/fixtures`) : buildAbsoluteUrl("/leagues");
   const leagueDisplayName = getLeagueDisplayName(league);
   let digestQueued = 0;
@@ -291,7 +297,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   let paymentMessagesSkipped = 0;
 
   for (const fixture of unpublishedFixtures) {
-    const matchFeePence = fixture.matchFeePence ?? DEFAULT_MATCH_FEE_PENCE;
+    const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);
     const chargeResult = await syncFixtureMatchFeeCharges({
       fixtureId: fixture.id,
       leagueId: league.id,
@@ -300,8 +306,8 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
       kickoffAt: fixture.kickoffAt,
       homeTeam: fixture.homeTeam,
       awayTeam: fixture.awayTeam,
-      homeMatchFeePence: matchFeePence,
-      awayMatchFeePence: matchFeePence,
+      homeMatchFeePence,
+      awayMatchFeePence,
     });
 
     paymentChargesCreated += chargeResult.activeCharges.length;
@@ -314,8 +320,8 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
       kickoffAt: fixture.kickoffAt,
       homeTeam: fixture.homeTeam,
       awayTeam: fixture.awayTeam,
-      homeMatchFeePence: matchFeePence,
-      awayMatchFeePence: matchFeePence,
+      homeMatchFeePence,
+      awayMatchFeePence,
       charges: chargeResult.activeCharges,
     });
 
@@ -325,6 +331,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
 
   for (const fixture of unpublishedFixtures) {
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
+      if (placeholderTeamIds.has(teamId)) continue;
       const { recipient } = await upsertTeamNotificationRecipient(teamId);
       const teamDetails = getTeamDetailsForFixture(fixture, teamId);
       const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
@@ -405,4 +412,138 @@ export async function publishAndEmailLeagueFixtureWeekAction(formData: FormData)
   const round = parseRequiredPositiveInt(formData.get("round"), "Week");
   const divisionId = parseOptionalString(formData.get("divisionId"));
   await publishAndEmailFixtureBatch({ leagueId, round, divisionId });
+}
+
+export async function repairPublishedLeagueFixtureFeesAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = parseRequiredString(formData.get("leagueId"), "League");
+  const divisionId = parseOptionalString(formData.get("divisionId"));
+
+  await assertDivisionBelongsToLeague({ leagueId, divisionId });
+
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { id: true, name: true, slug: true, season: true },
+  });
+
+  if (!league) {
+    redirect(buildAdminFixturesHref({
+      publish: "error",
+      leagueId,
+      divisionId,
+      publishError: "fee_repair_league_missing",
+    }));
+  }
+
+  const fixtures = await prisma.fixture.findMany({
+    where: {
+      leagueId,
+      publishedAt: { not: null },
+      status: "SCHEDULED",
+      ...(divisionId ? { divisionId } : {}),
+    },
+    orderBy: [{ kickoffAt: "asc" }, { position: "asc" }],
+    select: {
+      id: true,
+      kickoffAt: true,
+      matchFeePence: true,
+      homeMatchFeePence: true,
+      awayMatchFeePence: true,
+      homeTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
+      awayTeam: { select: { id: true, name: true, logoUrl: true, standardMatchFeePence: true } },
+    },
+  });
+
+  const teamIds = unique(
+    fixtures.flatMap((fixture) => [fixture.homeTeam.id, fixture.awayTeam.id]),
+  );
+  const placeholderTeamIds = await getFixturePlaceholderTeamIds(teamIds);
+
+  let repairedFixtures = 0;
+  let failedFixtures = 0;
+  let activeCharges = 0;
+  let paymentMessagesQueued = 0;
+  let paymentMessagesSkipped = 0;
+  let paymentMessageFailures = 0;
+
+  for (const fixture of fixtures) {
+    const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);
+
+    try {
+      const chargeResult = await syncFixtureMatchFeeCharges({
+        fixtureId: fixture.id,
+        leagueId: league.id,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: fixture.kickoffAt,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        homeMatchFeePence,
+        awayMatchFeePence,
+      });
+
+      repairedFixtures += 1;
+      activeCharges += chargeResult.activeCharges.length;
+
+      if (chargeResult.activeCharges.length > 0) {
+        try {
+          const messageResult = await queueFixtureMatchFeeEmails({
+            fixtureId: fixture.id,
+            leagueId: league.id,
+            leagueName: league.name,
+            leagueSeason: league.season,
+            kickoffAt: fixture.kickoffAt,
+            homeTeam: fixture.homeTeam,
+            awayTeam: fixture.awayTeam,
+            homeMatchFeePence,
+            awayMatchFeePence,
+            charges: chargeResult.activeCharges,
+          });
+
+          paymentMessagesQueued += messageResult.queued;
+          paymentMessagesSkipped += messageResult.skipped;
+        } catch (error) {
+          paymentMessageFailures += 1;
+          console.error("Published fixture fee repair could not queue payment messages", {
+            fixtureId: fixture.id,
+            error,
+          });
+        }
+      }
+    } catch (error) {
+      failedFixtures += 1;
+      console.error("Published fixture fee repair failed for fixture", {
+        fixtureId: fixture.id,
+        homeTeamId: fixture.homeTeam.id,
+        awayTeamId: fixture.awayTeam.id,
+        homeIsPlaceholder: placeholderTeamIds.has(fixture.homeTeam.id),
+        awayIsPlaceholder: placeholderTeamIds.has(fixture.awayTeam.id),
+        error,
+      });
+    }
+  }
+
+  revalidatePath("/admin/fixtures");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/night-board");
+  revalidatePath(`/admin/leagues/${leagueId}`);
+  revalidatePath(`/admin/leagues/${leagueId}/fixtures`);
+  if (league.slug) {
+    revalidatePath(`/leagues/${league.slug}`);
+    revalidatePath(`/leagues/${league.slug}/fixtures`);
+  }
+
+  const params = new URLSearchParams();
+  params.set("leagueId", leagueId);
+  if (divisionId) params.set("divisionId", divisionId);
+  params.set("feeRepair", failedFixtures > 0 ? "partial" : "success");
+  params.set("feeRepairFixtures", String(fixtures.length));
+  params.set("feeRepairRepaired", String(repairedFixtures));
+  params.set("feeRepairFailed", String(failedFixtures));
+  params.set("feeRepairCharges", String(activeCharges));
+  params.set("feeRepairQueued", String(paymentMessagesQueued));
+  params.set("feeRepairSkipped", String(paymentMessagesSkipped));
+  params.set("feeRepairMessageFailures", String(paymentMessageFailures));
+  redirect(`/admin/fixtures?${params.toString()}`);
 }
