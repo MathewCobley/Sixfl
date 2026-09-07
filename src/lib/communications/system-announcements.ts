@@ -1,4 +1,6 @@
 import { createHash } from "crypto";
+import { getStaticEmailCtaUrl } from "@/lib/email/template-cta";
+
 import {
   NotificationAudience,
   NotificationRecipientSourceType,
@@ -197,7 +199,8 @@ export function getAnnouncementTemplateCompatibility(input: {
   const unsupportedCta =
     input.ctaLabel &&
     input.ctaUrlKey &&
-    !["captainDashboardUrl", "signupUrl"].includes(input.ctaUrlKey)
+    !["captainDashboardUrl", "signupUrl"].includes(input.ctaUrlKey) &&
+    !getStaticEmailCtaUrl(input.ctaUrlKey)
       ? input.ctaUrlKey
       : null;
 
@@ -261,6 +264,8 @@ export function resolveAnnouncementCta(input: {
   const label = input.label?.trim() || "";
   const key = input.urlKey?.trim() || "";
   if (!label || !key) return undefined;
+  const staticUrl = getStaticEmailCtaUrl(key);
+  if (staticUrl) return { label, url: staticUrl };
 
   if (key === "captainDashboardUrl") {
     return { label, url: input.dashboardUrl };

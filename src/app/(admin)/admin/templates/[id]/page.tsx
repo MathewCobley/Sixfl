@@ -31,7 +31,8 @@ type EmailCtaUrlKey =
   | "teamJoinUrl"
   | "squadActivationUrl"
   | "fixtureUrl"
-  | "fixturesUrl";
+  | "fixturesUrl"
+  | "referralPageUrl";
 
 type SmsTemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "GENERAL" | "REFEREE";
 type SmsCtaUrlKey =
@@ -51,7 +52,8 @@ function getEmailCtaUrlKey(value: string | null): EmailCtaUrlKey | undefined {
     value === "teamJoinUrl" ||
     value === "squadActivationUrl" ||
     value === "fixtureUrl" ||
-    value === "fixturesUrl"
+    value === "fixturesUrl" ||
+    value === "referralPageUrl"
   ) {
     return value;
   }

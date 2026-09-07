@@ -19,6 +19,7 @@ import {
   type SIXFLEmailBranding,
   type SIXFLPaymentSummary,
 } from "@/lib/email/buildEmail";
+import { getStaticEmailCtaUrl } from "@/lib/email/template-cta";
 import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
 import { prisma } from "@/lib/prisma";
 import { cancelClosedReplacementSms, getReplacementSmsCancellationReason } from "@/lib/fixtures/replacement-sms-lifecycle";
@@ -240,6 +241,9 @@ function resolveEmailCtaUrl(input: {
 }) {
   const key = input.ctaUrlKey?.trim();
   if (!key) return null;
+
+  const staticUrl = getStaticEmailCtaUrl(key);
+  if (staticUrl) return staticUrl;
 
   const rawValue = input.variables?.[key];
   if (!rawValue) return null;
