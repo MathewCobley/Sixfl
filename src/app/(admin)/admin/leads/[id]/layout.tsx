@@ -11,6 +11,8 @@ import CommunicationStatusBadge, {
   CommunicationStatusExplanation,
 } from "@/components/admin/communications/CommunicationStatusBadge";
 import CancelQueuedSmsButton from "@/components/admin/messages/CancelQueuedSmsButton";
+import LeadReplyEvidence from "@/components/admin/leads/LeadReplyEvidence";
+import { emptyLeadEvidence, leadConversationHref, loadLeadCommunicationEvidence } from "@/lib/leads/communication-evidence";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -26,6 +28,7 @@ function formatDateTime(value: Date | null | undefined) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/London",
   }).format(value);
 }
 
@@ -80,6 +83,7 @@ export default async function AdminLeadLayout({
   await requireAdmin();
 
   const { id } = await params;
+  const evidence = (await loadLeadCommunicationEvidence([id])).get(id) ?? emptyLeadEvidence();
 
   const leadForHistory = await prisma.interestLead.findUnique({
     where: { id },
@@ -197,10 +201,7 @@ export default async function AdminLeadLayout({
   );
 
   const threads = await prisma.messageThread.findMany({
-    where: {
-      sourceType: "LEAD",
-      sourceId: id,
-    },
+    where: { id: { in: evidence.threadIds } },
     include: {
       messages: {
         orderBy: [{ createdAt: "desc" }],
@@ -253,7 +254,9 @@ export default async function AdminLeadLayout({
           templateName: message.dispatch?.template?.name ?? null,
           templateKey: message.dispatch?.template?.key ?? null,
           originLabel: message.dispatch ? getOriginLabel(message.dispatch.metadata) : "Inbox thread",
-          contactValue: message.toEmail || message.toNumber || message.fromEmail || message.fromNumber || null,
+          contactValue: message.direction === "INBOUND"
+            ? message.fromEmail || message.fromNumber || null
+            : message.toEmail || message.toNumber || null,
           occurredAt: message.receivedAt ?? message.sentAt ?? message.createdAt,
           scheduledFor: message.dispatch?.scheduledFor ?? null,
           canCancelQueuedSms,
@@ -266,6 +269,7 @@ export default async function AdminLeadLayout({
 
   return (
     <div className="space-y-8">
+      <LeadReplyEvidence evidence={evidence} />
       <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -326,7 +330,7 @@ export default async function AdminLeadLayout({
                     {email.subject}
                   </div>
                   <div className="mt-1 text-xs text-white/45">
-                    {formatDateTime(email.occurredAt)}
+                    {formatDateTime(email.occurredAt)} (UK)
                     {email.scheduledFor ? ` · Scheduled ${formatDateTime(email.scheduledFor)}` : ""}
                     {email.sentTo ? ` · To ${email.sentTo}` : ""}
                     {email.statusLabel ? ` · ${email.statusLabel}` : ""}
@@ -358,7 +362,7 @@ export default async function AdminLeadLayout({
               Lead communication timeline
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              SMS and central dispatch messages for this lead now appear here, using the same queued, skipped, sent, failed and cancelled rules as the rest of Communications.
+              Incoming and outgoing messages from this lead's linked conversations, including older automatic SMS threads and archived conversations. Shows up to 100 recent messages per conversation; the latest incoming reply is always shown above, even when older than that window.
             </p>
           </div>
 
@@ -395,7 +399,7 @@ export default async function AdminLeadLayout({
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-white/70">
                     {item.direction}
                   </span>
-                  <CommunicationStatusBadge status={String(item.providerStatus)} />
+                  {item.direction === "INBOUND" ? <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">RECEIVED</span> : <CommunicationStatusBadge status={String(item.providerStatus)} />}
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
                     {item.originLabel}
                   </span>
@@ -416,9 +420,9 @@ export default async function AdminLeadLayout({
                     {item.subject || `${item.channel} message`}
                   </div>
                   <div className="mt-1 text-xs text-white/45">
-                    {formatDateTime(item.occurredAt)}
+                    {formatDateTime(item.occurredAt)} (UK)
                     {item.scheduledFor ? ` · Scheduled ${formatDateTime(item.scheduledFor)}` : ""}
-                    {item.contactValue ? ` · ${item.contactValue}` : ""}
+                    {item.contactValue ? ` · ${item.direction === "INBOUND" ? "From" : "To"} ${item.contactValue}` : ""}
                   </div>
                 </div>
 
@@ -433,10 +437,12 @@ export default async function AdminLeadLayout({
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CommunicationStatusExplanation status={String(item.providerStatus)}>
-                    {item.failureReason ? `Reason: ${item.failureReason}` : undefined}
-                  </CommunicationStatusExplanation>
-
+                  {item.direction === "INBOUND" ? <p className="text-xs text-emerald-100">Incoming message received from the contact.</p> : (
+                    <CommunicationStatusExplanation status={String(item.providerStatus)}>
+                      {item.failureReason ? `Reason: ${item.failureReason}` : undefined}
+                    </CommunicationStatusExplanation>
+                  )}
+                  <Link href={leadConversationHref(item.threadId)} className="text-sm font-semibold text-emerald-200 underline underline-offset-4">View conversation</Link>
                   {item.canCancelQueuedSms ? (
                     <CancelQueuedSmsButton
                       messageId={item.id}
