@@ -5,21 +5,81 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: registration-reminders-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   registration-reminders:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_registration_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_registration_test
+      NEXTAUTH_SECRET: registration-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      CRON_SECRET: registration-test-only
+      SIXFL_ISOLATED_REGISTRATION_TEST: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Inventory all invitation, chase, response and activation callsites
-        run: |
-          git grep -n -E 'queueManagedSquadJoin|MANAGED_SQUAD_JOIN_|Send activation reminder|PlayerInterestResponse|ProspectInterestChaseCard' -- src scripts prisma > registration-inventory.txt || true
-          cat registration-inventory.txt
-          tar -czf registration-source.tgz src scripts prisma tests docs config .github package.json package-lock.json tsconfig.json next.config.ts AGENTS.md ENGINEERING.md DEV_RULES.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: registration-source-inventory
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare the actual production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Type check and protect existing critical features
+        run: |
+          npx tsc --noEmit
+          node scripts/check-critical-feature-contracts.mjs
+          node scripts/check-squad-invite-placeholders.mjs
+      - name: Create disposable local schema only
+        run: npx prisma db push --skip-generate
+      - name: Exercise real PostgreSQL worker, outbox, provider gates and native status display
+        run: node --test tests/managed-squad-registration-reminders.test.cjs | tee registration-test.log
+      - name: Prove removing the provider guard fails the regression tests
+        run: |
+          cp src/lib/notifications/processor.ts /tmp/registration-processor.ts
+          trap 'cp /tmp/registration-processor.ts src/lib/notifications/processor.ts' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/notifications/processor.ts')
+          p.write_text(p.read_text().replace('await applyRegistrationDeliveryGate(dispatch)', 'null'))
+          PY
+          if node --test tests/managed-squad-registration-reminders.test.cjs > registration-negative.log 2>&1; then
+            echo 'ERROR: missing delivery guards were not detected'
+            exit 1
+          fi
+          grep -E 'not ok|fail' registration-negative.log
+      - name: Production build
+        run: npx next build
+      - name: Verify all native routes and template-owned messages
+        run: |
+          git grep -n -E 'queueManagedSquadJoin|MANAGED_SQUAD_JOIN_|Send activation reminder|PlayerInterestResponse|RegistrationReminderPanel|applyRegistrationDeliveryGate|runManagedSquadRegistrationReminderJob' -- src scripts > registration-inventory.txt
+          cat registration-inventory.txt
+          git diff -- src/lib/managed-squad/registration-reminders.ts src/lib/managed-squad/registration-reminder-policy.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: registration-reminder-verification
           path: |
+            registration-test.log
+            registration-negative.log
             registration-inventory.txt
-            registration-source.tgz
-          retention-days: 3
+          retention-days: 14

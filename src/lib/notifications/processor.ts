@@ -3,6 +3,7 @@
 // ========================================
 
 import { NotificationChannel } from "@prisma/client";
+import { applyRegistrationDeliveryGate } from "@/lib/managed-squad/registration-reminders";
 import { cancelOwnedReplacementSms, getReplacementSmsCancellationReason } from "@/lib/fixtures/replacement-sms-lifecycle";
 import { getUnresolvedEmailPlaceholderReason } from "./renderer";
 import { getUnpublishedFixtureBlockReason } from "@/lib/fixtures/publishing";
@@ -388,6 +389,12 @@ export async function processNotificationQueue(limit = 25) {
         const replyTo = thread.replyAddress?.trim();
         if (!replyTo) throw new Error("Email thread reply address is missing.");
 
+        const registrationBlock = await applyRegistrationDeliveryGate(dispatch);
+        if (registrationBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
+          continue;
+        }
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
           subject: dispatch.subject,
@@ -449,6 +456,12 @@ export async function processNotificationQueue(limit = 25) {
           await cancelOwnedReplacementSms(dispatch.id, replacementSmsBlock);
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: replacementSmsBlock });
+          continue;
+        }
+        const registrationBlock = await applyRegistrationDeliveryGate(dispatch);
+        if (registrationBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
           continue;
         }
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });
