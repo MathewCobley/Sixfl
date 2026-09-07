@@ -7,6 +7,8 @@ const React = require('react');
 const {renderToStaticMarkup} = require('react-dom/server');
 const root = path.resolve(__dirname,'..');
 function load(file,mocks) {
+  // Match the ES-module default export shape used by real Next/React imports.
+  for(const mock of Object.values(mocks)) if(mock && typeof mock==='object' && Object.hasOwn(mock,'default')) Object.defineProperty(mock,'__esModule',{value:true});
   const code=ts.transpileModule(fs.readFileSync(path.join(root,file),'utf8'),{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
   const module={exports:{}};
   new Function('require','module','exports',code)(id=>Object.hasOwn(mocks,id)?mocks[id]:require(id),module,module.exports);
