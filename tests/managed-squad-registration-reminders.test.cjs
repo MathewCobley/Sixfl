@@ -254,10 +254,10 @@ test('failed sends require queue review, not endless automatic re-creation', asy
 test('late queue delivery defers both channels overnight and disabling automation cancels unsent reminders', async () => {
   for (const channel of ['SMS', 'EMAIL']) {
     const t = channel === 'EMAIL' ? await eligibleEmail() : await target(); const q = await queue(t);
-    test.mock.timers.setTime(new Date('2026-09-08T20:00:00Z'));
+    test.mock.timers.setTime(new Date('2026-09-08T20:00:00Z').getTime());
     await processor.processNotificationQueue(100); assert.equal(providerCalls.length, 0);
     assert.equal((await get(q.dispatch.id)).scheduledFor.toISOString(), '2026-09-09T08:00:00.000Z');
-    test.mock.timers.setTime(baseNow);
+    test.mock.timers.setTime(baseNow.getTime());
   }
   const t = await target(); const q = await queue(t); process.env.MANAGED_SQUAD_REGISTRATION_REMINDERS_ENABLED = 'false';
   await processor.processNotificationQueue(100); assert.equal((await get(q.dispatch.id)).status, 'CANCELLED');
