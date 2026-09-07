@@ -18,7 +18,7 @@ jobs:
           POSTGRES_DB: sixfl_activation_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd "pg_isready -U postgres -d sixfl_activation_test" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_activation_test
@@ -26,6 +26,9 @@ jobs:
       NEXTAUTH_URL: http://localhost:3000
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       EMAIL_REPLY_DOMAIN: example.invalid
+      RESEND_API_KEY: re_activation_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      CRON_SECRET: activation-ci-unused
       SIXFL_ISOLATED_ACTIVATION_TEST: '1'
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +47,18 @@ jobs:
         run: |
           node -e 'require("esbuild").buildSync({entryPoints:["tests/pending-squad-activation.test.ts"],outfile:".activation-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .activation-tests.cjs
+      - name: Verify delivery hook exists before the provider and detects removal
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('src/lib/notifications/processor.ts').read_text()
+          guard='await getSquadActivationEmailDeliveryBlock(dispatch)'
+          provider='const sendResult = await sendEmailWithResend'
+          def guarded(text):
+            return 0 <= text.find(guard) < text.find(provider)
+          assert guarded(source), 'Activation must be checked before email delivery'
+          assert not guarded(source.replace(guard, 'null')), 'Missing delivery check must be detected'
+          PY
       - run: npx next build
       - name: Verify native shared callsites and no temporary workflow
         run: |
