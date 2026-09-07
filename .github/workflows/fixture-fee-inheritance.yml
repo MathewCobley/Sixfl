@@ -1,0 +1,68 @@
+name: Fixture fee inheritance
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fee-inheritance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_unused
+      NEXTAUTH_SECRET: fixture-fee-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_fixture_fee_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      CRON_SECRET: fixture-fee-ci-unused
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check native generation, publication and real charge-sync logic
+        run: node --test tests/fixture-fee-inheritance.test.cjs
+      - run: npm run prebuild
+      - name: Check final prepared generation, publication and real charge-sync logic
+        run: node --test tests/fixture-fee-inheritance.test.cjs
+      - name: Verify retired compatibility cannot rewrite publishing fees
+        run: |
+          sha256sum 'src/app/(admin)/admin/fixtures/publish-actions.ts' src/app/api/admin/fixtures/publish-one/route.ts > /tmp/fees-before
+          node scripts/apply-publish-tbc-fee-safety.cjs
+          node scripts/apply-resilient-published-fee-repair.cjs
+          node scripts/fix-publish-tbc-fee-safety-compat.cjs
+          sha256sum 'src/app/(admin)/admin/fixtures/publish-actions.ts' src/app/api/admin/fixtures/publish-one/route.ts > /tmp/fees-after
+          diff -u /tmp/fees-before /tmp/fees-after
+      - name: Prove both original failure modes are detected
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          cases = [
+            ('src/lib/payments/fixture-fee-policy.ts', 'fixtureSideFee ?? standardFee ?? legacyFee', 'fixtureSideFee ?? legacyFee ?? standardFee'),
+            ('src/app/api/admin/fixtures/generate-next-week/route.ts', 'select: { id: true, name: true, standardMatchFeePence: true }', 'select: { id: true, name: true }'),
+          ]
+          for name, before, after in cases:
+            p=Path(name); original=p.read_text(); assert before in original
+            try:
+              p.write_text(original.replace(before,after))
+              run=subprocess.run(['node','--test','tests/fixture-fee-inheritance.test.cjs'],capture_output=True,text=True)
+              assert run.returncode != 0, 'Regression test did not detect '+name
+              print('Negative control detected:',name)
+            finally: p.write_text(original)
+          PY
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Verify final shared source and absence of temporary workflows
+        run: |
+          test ! -f .github/workflows/inspect-fixture-fees-once.yml
+          test ! -f .github/workflows/apply-native-fixture-fees-once.yml
+          git grep -nE 'snapshotFixtureMatchFees|resolveFixtureMatchFees' -- src
+          node --test tests/fixture-fee-inheritance.test.cjs
