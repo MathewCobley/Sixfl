@@ -1,0 +1,25 @@
+name: Managed squad registration reminders
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  registration-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory all invitation, chase, response and activation callsites
+        run: |
+          git grep -n -E 'queueManagedSquadJoin|MANAGED_SQUAD_JOIN_|Send activation reminder|PlayerInterestResponse|ProspectInterestChaseCard' -- src scripts prisma > registration-inventory.txt || true
+          cat registration-inventory.txt
+          tar -czf registration-source.tgz src scripts prisma tests docs config .github package.json package-lock.json tsconfig.json next.config.ts AGENTS.md ENGINEERING.md DEV_RULES.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: registration-source-inventory
+          path: |
+            registration-inventory.txt
+            registration-source.tgz
+          retention-days: 3
