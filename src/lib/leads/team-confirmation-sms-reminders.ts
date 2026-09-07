@@ -7,6 +7,7 @@ import {
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { getTeamPlaceConfirmationUrl } from "@/lib/leads/teamPlaceConfirmation";
+import { loadLeadCommunicationEvidence } from "@/lib/leads/communication-evidence";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
@@ -88,7 +89,7 @@ function hasRepliedSinceLatestEmail(lead: AwaitingTeamLeadDecisionRow) {
 }
 
 async function getAwaitingTeamLeadDecisions() {
-  return prisma.$queryRaw<AwaitingTeamLeadDecisionRow[]>(Prisma.sql`
+  const rows = await prisma.$queryRaw<AwaitingTeamLeadDecisionRow[]>(Prisma.sql`
     SELECT
       lead."id" AS "leadId",
       lead."contactName",
@@ -116,20 +117,7 @@ async function getAwaitingTeamLeadDecisions() {
           AND dispatch."createdAt" >=
             COALESCE(confirmation."sentAt", confirmation."createdAt") - INTERVAL '5 minutes'
       ) AS "latestRelevantEmailSentAt",
-      (
-        SELECT MAX(thread."latestInboundAt")
-        FROM "MessageThread" thread
-        WHERE thread."latestInboundAt" IS NOT NULL
-          AND (
-            thread."sourceId" = lead."id"
-            OR thread."recipientId" IN (
-              SELECT recipient."id"
-              FROM "NotificationRecipient" recipient
-              WHERE recipient."sourceType"::text = 'LEAD'
-                AND recipient."sourceId" = lead."id"
-            )
-          )
-      ) AS "latestInboundAt",
+      NULL::timestamp AS "latestInboundAt",
       (
         SELECT MAX(dispatch."createdAt")
         FROM "NotificationDispatch" dispatch
@@ -168,6 +156,10 @@ async function getAwaitingTeamLeadDecisions() {
     ORDER BY confirmation."sentAt" ASC NULLS LAST
     LIMIT 500
   `);
+  const evidence = await loadLeadCommunicationEvidence(rows.map((row) => row.leadId));
+  // Share the timeline/status scope, retaining unsupported historical holds for review.
+  // Never turn a missing/ambiguous message into permission to restart a chase.
+  return rows.map((row) => ({ ...row, latestInboundAt: evidence.get(row.leadId)?.automationHoldAt ?? null }));
 }
 
 async function queueTeamLeadSms(input: {
@@ -307,8 +299,8 @@ export async function runTeamLeadConfirmationSmsReminderJob(): Promise<TeamLeadC
       continue;
     }
 
-    // Any inbound email or SMS received after the latest relevant email counts
-    // as a reply. A later newly-sent decision email can begin the clock again.
+    // Real replies and unresolved historical reply records both retain the hold.
+    // The admin status distinguishes proven replies from records needing review.
     if (hasRepliedSinceLatestEmail(lead)) {
       summary.skippedReplied += 1;
       continue;
