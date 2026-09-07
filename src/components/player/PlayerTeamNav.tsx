@@ -41,12 +41,12 @@ const tabs = (teamId: string, previewMembershipId: string | null) => [
     exact: false,
   },
   {
-    href: `/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamId)}${
+    href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
       previewMembershipId
         ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
         : ""
     }`,
-    label: "Goal of the Week",
+    label: "Goal of the Month",
     exact: false,
   },
   {
