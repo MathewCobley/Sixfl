@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import FirstMatchReadyStatus from "@/components/admin/teams/FirstMatchReadyStatus";
 
 import { getTeamOnboardingSummaries } from "@/lib/captain/onboarding";
 import {
@@ -232,7 +233,7 @@ export default async function AdminCaptainOnboardingPage({
 
                 <div className="space-y-1 text-xs text-white/55">
                   <div>Welcome: {formatDate(onboarding?.onboardingWelcomeEmailSentAt ?? null)}</div>
-                  <div>First fixture: {formatDate(onboarding?.onboardingFirstFixtureEmailSentAt ?? null)}</div>
+                  <FirstMatchReadyStatus teamId={team.id} />
                   <div>Post match: {formatDate(onboarding?.onboardingPostFirstMatchEmailSentAt ?? null)}</div>
                 </div>
 
