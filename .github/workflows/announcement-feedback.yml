@@ -1,0 +1,82 @@
+name: Announcement queue feedback
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  announcements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_announcement_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_announcement_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_announcement_test
+      ANNOUNCEMENT_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_announcement_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Create only the isolated local test schema
+        run: |
+          node -e 'const u=new URL(process.env.DATABASE_URL);if(u.hostname!=="127.0.0.1"||u.pathname!=="/sixfl_announcement_test")throw Error("Local test database required")'
+          npx prisma db push --skip-generate
+          node - <<'JS'
+          const { PrismaClient } = require('@prisma/client');
+          const u = new URL(process.env.DATABASE_URL);
+          if (u.hostname !== '127.0.0.1' || u.pathname !== '/sixfl_announcement_test') throw Error('Local test database required');
+          const db = new PrismaClient();
+          // PlayerPoolProfile is migration-owned, not a Prisma model. Provide the
+          // column read by the real audience SQL; never alter production schema.
+          db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "PlayerPoolProfile" ("emailNormalized" TEXT)')
+            .catch(error => { console.error(error); process.exitCode = 1; })
+            .finally(() => db.$disconnect());
+          JS
+      - name: Real SQL, queue transactions, concurrent deduplication and read-only status
+        run: node --test tests/announcement-queue.test.cjs
+      - name: Prove removing persisted deduplication is detected
+        shell: bash
+        run: |
+          target=src/lib/communications/announcement-queue.ts
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          node - <<'JS'
+          const fs = require('node:fs');
+          const p = 'src/lib/communications/announcement-queue.ts';
+          const text = fs.readFileSync(p, 'utf8');
+          const anchor = 'if (existing.length) return "EXISTING";';
+          if (text.split(anchor).length !== 2) throw new Error('Missing deduplication guard');
+          fs.writeFileSync(p, text.replace(anchor, '// negative control: persisted guard removed'));
+          JS
+          if node --test --test-name-pattern='same revision is not queued twice' tests/announcement-queue.test.cjs > negative-control.log 2>&1; then
+            cat negative-control.log
+            exit 1
+          fi
+          grep -q AssertionError negative-control.log
+          echo 'Missing persisted deduplication was detected.'
+      - name: Install isolated browser tooling
+        run: |
+          mkdir -p "$RUNNER_TEMP/announcement-browser-tools"
+          npm install --prefix "$RUNNER_TEMP/announcement-browser-tools" --package-lock=false playwright esbuild
+          node "$RUNNER_TEMP/announcement-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real native pending, progress and recovery controls
+        env:
+          NODE_PATH: ${{ runner.temp }}/announcement-browser-tools/node_modules
+        run: node tests/announcement-feedback.browser.cjs
+      - run: npx tsc --noEmit
+      - run: node scripts/check-critical-feature-contracts.mjs
