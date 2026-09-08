@@ -1,3 +1,4 @@
+import TeamLeadDecisionControls from "@/components/admin/leads/TeamLeadDecisionControls";
 // ========================================
 // File: src/app/(admin)/admin/leads/page.tsx
 // ========================================
@@ -467,7 +468,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                   const prospectiveLeague = formatProspectiveLeague(lead.league);
                   const confirmation = confirmationByLeadId.get(lead.id) ?? null;
                   const confirmationMeta = getConfirmationMeta(confirmation);
-                  const canSendConfirmation = lead.interestType === "TEAM" && Boolean(lead.email?.trim()) && Boolean(lead.league);
+                  const canSendConfirmation = lead.interestType === "TEAM" && lead.status !== "CLOSED" && confirmation?.status !== "DECLINED" && !lead.convertedTeamId && Boolean(lead.email?.trim()) && Boolean(lead.league);
                   const managedTeamsForLeague = lead.leagueId
                     ? managedTeams.filter((team) => team.leagueId === lead.leagueId)
                     : [];
@@ -516,7 +517,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                         <Badge className={typeClasses(lead.interestType)}>{formatInterestType(lead.interestType)}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge className={statusClasses(lead.status)}>{formatLeadStatus(lead.status)}</Badge>
+                        <Badge className={statusClasses(lead.status)}>{confirmation?.status === "DECLINED" ? "Not interested" : formatLeadStatus(lead.status)}</Badge>
                       </td>
                       <td className="max-w-[260px] px-4 py-3">
                         <div className="truncate text-white/80">{contactLine || "—"}</div>
@@ -536,6 +537,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                       <td className="px-4 py-3 text-white/55">{formatDate(lead.createdAt)}</td>
                       <td className="px-4 py-3">
                         <LeadCallNotesCell leadId={lead.id} />
+                        {lead.interestType === "TEAM" ? <div className="mt-3"><TeamLeadDecisionControls leadId={lead.id} leadName={leadTitle} declined={confirmation?.status === "DECLINED"} declinedAt={confirmation?.declinedAt?.toISOString() ?? null} converted={Boolean(lead.convertedTeamId)} /></div> : null}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-2">

@@ -1,3 +1,4 @@
+import { applyTeamLeadChaseDeliveryGate } from "@/lib/leads/team-lead-chases";
 // ========================================
 // File: src/lib/notifications/processor.ts
 // ========================================
@@ -397,6 +398,12 @@ export async function processNotificationQueue(limit = 25) {
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
           continue;
         }
+        const leadChaseBlock = await applyTeamLeadChaseDeliveryGate(dispatch);
+        if (leadChaseBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: leadChaseBlock });
+          continue;
+        }
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
           subject: dispatch.subject,
@@ -464,6 +471,12 @@ export async function processNotificationQueue(limit = 25) {
         if (registrationBlock) {
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
+          continue;
+        }
+        const leadChaseBlock = await applyTeamLeadChaseDeliveryGate(dispatch);
+        if (leadChaseBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: leadChaseBlock });
           continue;
         }
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });

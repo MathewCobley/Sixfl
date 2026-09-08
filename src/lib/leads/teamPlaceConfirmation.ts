@@ -1,3 +1,5 @@
+import { getTeamLeadChaseBlockReason } from "./team-lead-chases";
+import { recordTeamLeadDecline, type TeamLeadDeclineAudit } from "./team-lead-decisions";
 // ========================================
 // File: src/lib/leads/teamPlaceConfirmation.ts
 // ========================================
@@ -74,6 +76,8 @@ export function getTeamPlaceConfirmationUrl(leadId: string) {
 
 export async function ensureTeamPlaceConfirmationRecord(leadId: string) {
   const cleanLeadId = leadId.trim();
+  const stop = await getTeamLeadChaseBlockReason({ sourceType: "LEAD_TEAM_CONFIRMATION", sourceId: cleanLeadId });
+  if (stop) throw new Error(stop);
   const token = createTeamPlaceConfirmationToken(cleanLeadId);
 
   await prisma.$executeRaw(Prisma.sql`
@@ -85,7 +89,7 @@ export async function ensureTeamPlaceConfirmationRecord(leadId: string) {
     ON CONFLICT ("leadId") DO UPDATE SET
       "token" = EXCLUDED."token",
       "status" = CASE
-        WHEN "LeadTeamConfirmation"."status" = 'CONFIRMED'::"LeadTeamConfirmationStatus" THEN "LeadTeamConfirmation"."status"
+        WHEN "LeadTeamConfirmation"."status" IN ('CONFIRMED'::"LeadTeamConfirmationStatus", 'DECLINED'::"LeadTeamConfirmationStatus") THEN "LeadTeamConfirmation"."status"
         ELSE 'PENDING'::"LeadTeamConfirmationStatus"
       END,
       "sentAt" = NOW(),
@@ -128,33 +132,9 @@ export async function confirmTeamPlaceFromLead(leadId: string) {
   });
 }
 
-export async function declineTeamPlaceFromLead(leadId: string) {
+export async function declineTeamPlaceFromLead(leadId: string, audit: TeamLeadDeclineAudit = {}) {
   const cleanLeadId = leadId.trim();
-  const token = createTeamPlaceConfirmationToken(cleanLeadId);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "LeadTeamConfirmation" (
-        "id", "leadId", "token", "status", "declinedAt", "createdAt", "updatedAt"
-      ) VALUES (
-        ${cryptoRandomId()}, ${cleanLeadId}, ${token}, 'DECLINED'::"LeadTeamConfirmationStatus", NOW(), NOW(), NOW()
-      )
-      ON CONFLICT ("leadId") DO UPDATE SET
-        "token" = EXCLUDED."token",
-        "status" = 'DECLINED'::"LeadTeamConfirmationStatus",
-        "declinedAt" = NOW(),
-        "confirmedAt" = NULL,
-        "updatedAt" = NOW()
-    `);
-
-    await tx.interestLead.update({
-      where: { id: cleanLeadId },
-      data: {
-        status: LeadStatus.CLOSED,
-        closedAt: new Date(),
-      },
-    });
-  });
+  return recordTeamLeadDecline(cleanLeadId, createTeamPlaceConfirmationToken(cleanLeadId), audit);
 }
 
 export async function getTeamPlaceConfirmationStatus(leadId: string) {

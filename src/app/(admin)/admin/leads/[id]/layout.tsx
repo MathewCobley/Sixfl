@@ -1,3 +1,4 @@
+import TeamLeadDecisionPanel from "@/components/admin/leads/TeamLeadDecisionPanel";
 // ========================================
 // File: src/app/(admin)/admin/leads/[id]/layout.tsx
 // ========================================
@@ -269,6 +270,7 @@ export default async function AdminLeadLayout({
 
   return (
     <div className="space-y-8">
+      <TeamLeadDecisionPanel leadId={id} />
       <LeadReplyEvidence evidence={evidence} />
       <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.06] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

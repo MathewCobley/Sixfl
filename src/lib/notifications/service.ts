@@ -1,3 +1,4 @@
+import { getTeamLeadChaseBlockReason, cancelStoppedTeamLeadChases } from "@/lib/leads/team-lead-chases";
 // ========================================
 // File: src/lib/notifications/service.ts
 // ========================================
@@ -35,7 +36,7 @@ import { shortenSmsBodyLinks } from "./sms-short-links";
 
 // Preserve the application's extended Prisma delegates in root and transactional calls.
 type NotificationDb = Pick<typeof prisma,
-  "notificationDispatch" | "notificationTemplate" | "notificationRecipient">;
+  "notificationDispatch" | "notificationTemplate" | "notificationRecipient" | "$queryRaw">;
 
 const DISPATCH_STATUS = {
   QUEUED: "QUEUED",
@@ -525,15 +526,16 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
     metadata: input.metadata,
   });
 
+  const leadChaseBlock = await getTeamLeadChaseBlockReason({ ...input, template }, db);
   const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: template.channel, metadata: input.metadata });
-  if (replacementSmsBlock || fixtureBlockReason) {
+  if (leadChaseBlock || replacementSmsBlock || fixtureBlockReason) {
     return createNonQueuedTemplateDispatch({
       template,
       recipient,
       isTransactional,
       rendered,
       status: DISPATCH_STATUS.CANCELLED,
-      reason: replacementSmsBlock || fixtureBlockReason!,
+      reason: leadChaseBlock || replacementSmsBlock || fixtureBlockReason!,
       variables: input.variables,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
@@ -610,8 +612,9 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     metadata: input.metadata,
   });
 
+  const leadChaseBlock = await getTeamLeadChaseBlockReason(input);
   const replacementSmsBlock = await getReplacementSmsCancellationReason({ channel: input.channel, metadata: input.metadata });
-  if (replacementSmsBlock || fixtureBlockReason) {
+  if (leadChaseBlock || replacementSmsBlock || fixtureBlockReason) {
     return createNonQueuedDirectDispatch({
       recipient,
       channel: input.channel,
@@ -619,7 +622,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       isTransactional,
       rendered,
       status: DISPATCH_STATUS.CANCELLED,
-      reason: replacementSmsBlock || fixtureBlockReason!,
+      reason: leadChaseBlock || replacementSmsBlock || fixtureBlockReason!,
       variables: input.variables,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
@@ -673,6 +676,8 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
 }
 
 export async function getDueNotificationDispatches(limit = 50) {
+  try { await cancelStoppedTeamLeadChases(); }
+  catch { console.error("[team-lead-chases] Queue cleanup failed; final delivery checks remain active."); }
   // Includes future quiet-hours SMS. A failed cleanup must not strand unrelated
   // email/SMS; the per-message provider gate still fails closed for these SMS.
   try {
