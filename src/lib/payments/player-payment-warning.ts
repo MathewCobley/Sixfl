@@ -40,9 +40,9 @@ export async function loadPlayerPaymentWarningTarget(feeId: string, db: Db = pri
     if (saved.pathname !== expected.pathname || saved.search || saved.hash || saved.username || saved.password || saved.protocol !== expected.protocol || saved.host.replace(/^www\./, "") !== expected.host.replace(/^www\./, "")) throw new Error("mismatch");
   } catch { throw new PaymentWarningError("The saved payment link needs review; no warning was prepared."); }
   const profile = fee.teamMemberId ? (await db.$queryRaw<Array<{ phone: string | null }>>(Prisma.sql`SELECT "phone" FROM "TeamMemberProfile" WHERE "teamMemberId" = ${fee.teamMemberId} LIMIT 1`))[0] : null;
-  const email = emailAddress(fee.teamMember?.user.email ?? fee.prospect?.email);
+  const email = emailAddress(fee.teamMember ? fee.teamMember.user.email : fee.prospect?.email);
   const phone = normalizePhoneNumber(fee.teamMember ? profile?.phone : fee.prospect?.phone);
-  const playerName = fee.teamMember?.user.name?.trim() || [fee.prospect?.firstName, fee.prospect?.lastName].filter(Boolean).join(" ").trim();
+  const playerName = fee.teamMember ? fee.teamMember.user.name?.trim() : [fee.prospect?.firstName, fee.prospect?.lastName].filter(Boolean).join(" ").trim();
   if (!playerName) throw new PaymentWarningError("Save the player's name before sending a payment warning.");
   const recipientSourceId = `player-match-fee:${fee.id}`;
   // Opt-outs on another record for the same contact are not bypassed by making
@@ -155,7 +155,9 @@ export async function applyPlayerPaymentWarningDeliveryGate(dispatch: WarningDis
     if (prepared.fingerprint !== meta.warningFingerprint || channel !== meta.warningChannel) throw new PaymentWarningError("The fee, player contact, link or warning template changed; stale warning cancelled.");
     const recipient = await prisma.notificationRecipient.findUnique({ where: { id: dispatch.recipientId }, include: { preferences: true } });
     if (!recipient || recipient.isSuppressed || (channel === "EMAIL" ? !recipient.transactionalEmailOptIn || recipient.preferences?.emailEnabled !== true || prepared.email !== emailAddress(recipient.email) || prepared.email !== emailAddress(dispatch.recipient.email) : !recipient.transactionalSmsOptIn || recipient.preferences?.smsEnabled !== true || prepared.phone !== normalizePhoneNumber(recipient.phone) || prepared.phone !== normalizePhoneNumber(dispatch.recipient.phone))) throw new PaymentWarningError("Warning recipient changed or opted out; warning cancelled.");
-    const expectedText = channel === "SMS" ? shortenSmsBodyLinks({ dispatchId: dispatch.id, bodyText: prepared.content.bodyText, normaliseSmsText: value => value.trim() }).bodyText : prepared.content.bodyText;
+    const shortened = channel === "SMS" ? shortenSmsBodyLinks({ dispatchId: dispatch.id, bodyText: prepared.content.bodyText, normaliseSmsText: value => value.trim() }) : null;
+    const expectedText = shortened?.bodyText ?? prepared.content.bodyText;
+    if (shortened && warningFingerprint(shortened.links) !== warningFingerprint(meta.smsShortLinks ?? [])) throw new PaymentWarningError("Queued warning payment destination changed; preview again.");
     if (expectedText !== dispatch.bodyText || prepared.content.bodyHtml !== dispatch.bodyHtml || prepared.content.subject !== dispatch.subject) throw new PaymentWarningError("Queued warning content changed after confirmation; preview again.");
     const scheduledFor = resolveScheduledFor({ channel, scheduledFor: now });
     if (scheduledFor > now) {
