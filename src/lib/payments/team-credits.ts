@@ -189,6 +189,7 @@ export async function syncPlayerOverpaymentCreditsForTeams(
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
+        AND POSITION('[SIXFL_PLAYER_LEDGER_RECEIPTS]' IN COALESCE(pmf."note",''))=0
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
     direct_totals AS (
@@ -282,6 +283,7 @@ export async function syncPlayerOverpaymentCreditsForTeams(
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
+        AND POSITION('[SIXFL_PLAYER_LEDGER_RECEIPTS]' IN COALESCE(pmf."note",''))=0
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
     direct_totals AS (
@@ -453,7 +455,7 @@ async function getChargeSummary(chargeId: string, db: ChargeSummaryDb) {
           fixtureId: charge.fixtureId,
           status: "PAID",
         },
-        select: { fixtureId: true, amountPence: true },
+        select: { fixtureId: true, amountPence: true, note: true },
       })
     : [];
 

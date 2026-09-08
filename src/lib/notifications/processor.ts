@@ -2,6 +2,8 @@
 // File: src/lib/notifications/processor.ts
 // ========================================
 
+import { playerLedgerNotificationBlock } from "@/lib/payments/player-ledger";
+import { playerRepaymentReminderDeliveryBlock } from "@/lib/payments/player-repayment-reminders";
 import { applyPlayerPaymentWarningDeliveryGate } from "@/lib/payments/player-payment-warning";
 import { NotificationChannel } from "@prisma/client";
 import { applyRegistrationDeliveryGate } from "@/lib/managed-squad/registration-reminders";
@@ -355,6 +357,8 @@ export async function processNotificationQueue(limit = 25) {
         metadata: dispatch.metadata,
       });
       const cancellationReason =
+        (await playerLedgerNotificationBlock(dispatch)) ??
+        (await playerRepaymentReminderDeliveryBlock(dispatch)) ??
         getUnresolvedEmailPlaceholderReason(dispatch) ??
         unpublishedFixtureBlockReason ??
         (await getFirstMatchReadyDeliveryBlock(dispatch)) ??

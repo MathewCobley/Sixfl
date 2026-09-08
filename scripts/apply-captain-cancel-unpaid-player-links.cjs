@@ -19,37 +19,7 @@ function replaceRequired(before, after, label) {
 // Previously this action was restricted to fixtures whose team charge was already
 // fully paid, which is why an open £36 fixture with £48 of unpaid links had no
 // usable cancellation path.
-replaceRequired(
-  [
-    '    !entry.fixtureId ||',
-    '    entry.displayStatus !== "PAID" ||',
-    '    entry.playerOpenPence <= 0',
-  ].join("\n"),
-  [
-    '    !entry.fixtureId ||',
-    '    entry.playerOpenPence <= 0',
-  ].join("\n"),
-  "unpaid player-link cancellation eligibility",
-);
-
-replaceRequired(
-  [
-    '    data: {',
-    '      status: "CANCELLED",',
-    '      note: "Cancelled by captain because the team fixture charge was already fully covered.",',
-    '    },',
-  ].join("\n"),
-  [
-    '    data: {',
-    '      status: "CANCELLED",',
-    '      cancelledAt: new Date(),',
-    '      paymentUrl: null,',
-    '      paymentToken: null,',
-    '      note: "Cancelled by captain from team payments. Existing completed player payments were preserved.",',
-    '    },',
-  ].join("\n"),
-  "unpaid player-link cancellation data",
-);
+// Native pausePlayerFeeCollection now preserves the debt. No action rewriting.
 
 source = source.replace(
   "Those player links could not be changed. Refresh the page and check that the charge is fully paid.",
@@ -111,8 +81,7 @@ if (source.includes(duplicatePaidControls)) {
 
 if (
   !source.includes("Cancel all unpaid player links") ||
-  !source.includes("cancelledAt: new Date()") ||
-  !source.includes("paymentToken: null") ||
+  !source.includes("pausePlayerFeeCollection") ||
   !source.includes("Each payment will reduce that balance") ||
   source.includes(
     '    !entry.fixtureId ||\n    entry.displayStatus !== "PAID" ||\n    entry.playerOpenPence <= 0',

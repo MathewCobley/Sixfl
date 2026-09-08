@@ -2,6 +2,8 @@
 // File: src/app/pay/player-match-fee/[token]/page.tsx
 // ========================================
 
+import PlayerRepaymentPanel from "@/components/payments/PlayerRepaymentPanel";
+import { readPlayerLedgerState } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlayerMatchFeeStatus } from "@prisma/client";
@@ -48,8 +50,10 @@ function getPlayerName(input: {
 
 export default async function PayPlayerMatchFeePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{error?:string;payment?:string}>;
 }) {
   const { token } = await params;
 
@@ -108,6 +112,8 @@ export default async function PayPlayerMatchFeePage({
   if (!fee) {
     notFound();
   }
+  const ledgerState = await readPlayerLedgerState(fee.id);
+  if(ledgerState?.controlled || ledgerState?.collectionPaused) return <PlayerRepaymentPanel feeToken={token} message={(await searchParams)?.error} />;
 
   const outstandingFees = fee.teamMemberId
     ? await prisma.playerMatchFee.findMany({

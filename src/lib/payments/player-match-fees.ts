@@ -2,6 +2,7 @@
 // File: src/lib/payments/player-match-fees.ts
 // ========================================
 
+import { playerFeeCollectionHold } from "./player-ledger";
 import { randomBytes } from "node:crypto";
 import {
   NotificationAudience,
@@ -244,7 +245,7 @@ export async function ensurePlayerMatchFeePaymentDetails(feeId: string) {
 
   if (!fee) return null;
 
-  if (fee.status !== PlayerMatchFeeStatus.OPEN) {
+  if (fee.status !== PlayerMatchFeeStatus.OPEN || await playerFeeCollectionHold(fee.id)) {
     return fee;
   }
 
@@ -425,6 +426,7 @@ export async function queuePlayerMatchFeeReminder(input: {
   channels?: ReminderChannel[];
   force?: boolean;
 }) {
+  if (await playerFeeCollectionHold(input.feeId)) return { queued: 0, skipped: 1, status: "collection_held" as const };
   await ensurePlayerMatchFeeReminderTemplates();
   const ensured = await ensurePlayerMatchFeePaymentDetails(input.feeId);
 

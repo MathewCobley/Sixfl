@@ -2,6 +2,7 @@
 // File: src/app/api/cron/notifications/route.ts
 // ========================================
 
+import { runPlayerRepaymentReminderJob } from "@/lib/payments/player-repayment-reminders";
 import { NextRequest, NextResponse } from "next/server";
 import { runManagedSquadRegistrationReminderJob } from "@/lib/managed-squad/registration-reminders";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
@@ -129,6 +130,8 @@ export async function GET(request: NextRequest) {
     "pending-squad-activation-emails", failures, runPendingSquadActivationEmailJob,
   );
 
+  const playerRepaymentReminders = await runCronStep("player-repayment-instalments", failures, runPlayerRepaymentReminderJob);
+
   const onboarding = await runCronStep(
     "captain-onboarding",
     failures,
@@ -229,6 +232,7 @@ export async function GET(request: NextRequest) {
         : `Cron completed with ${failures.length} failed step${failures.length === 1 ? "" : "s"}. See failedSteps for the exact component.`,
     failedSteps: failures,
     existingQueue,
+    playerRepaymentReminders,
     pendingSquadActivations,
     onboarding,
     rulesOnboarding,

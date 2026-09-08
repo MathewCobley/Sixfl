@@ -2,6 +2,7 @@
 // File: src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx
 // ========================================
 
+import { prisma as ledgerPrisma } from "@/lib/prisma";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -465,8 +466,11 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           : null;
   }
 
+  const ledgerStates=await ledgerPrisma.playerFeeLedgerState.findMany({where:{teamId:{in:relatedTeamIds}}});
+  const ledgerByFee=new Map(ledgerStates.map(state=>[state.feeId,state]));
   return (
     <div className="space-y-8">
+      {sp.saved==="collection_paused" ? <p role="status" className="rounded-xl border border-emerald-300/25 p-4">Payment links paused. Player debts remain recorded; use Player account to resume collection or record a genuine reduction.</p>:null}
       <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6 lg:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
           Squad payments
@@ -480,6 +484,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           that fixture.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
+          <Link href={`/captain/team/${teamid}/player-payments/accounts`} className="rounded-full border border-white/10 px-5 py-3 text-sm text-emerald-200">Player balances and smaller payments</Link>
           <Link
             href={`/captain/team/${team.id}`}
             className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80"
@@ -701,6 +706,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-white">Players</div>
                 {playersForForm.map((player) => {
+                  const ledgerControlled=Boolean(player.fee && ledgerByFee.get(player.fee.id)?.controlled);
                   const amountName = `amount_${player.kind}_${player.id}`;
                   const collectionName = `collection_${player.kind}_${player.id}`;
                   const method = collectionMethod(
@@ -718,7 +724,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                         <input
                           type="checkbox"
                           name="player"
-                          disabled={player.emailRequired && !player.fee}
+                          disabled={ledgerControlled || (player.emailRequired && !player.fee)}
                           value={player.value}
                           defaultChecked={player.checked}
                           className="mt-1"
@@ -734,6 +740,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                           </span>
                         </span>
                       </label>
+                      {player.fee && ledgerControlled ? <p className="mt-2 text-xs text-white/60">Repayment balance protected. <Link className="text-emerald-200 underline" href={`/captain/team/${teamid}/player-payments/account/${player.fee.id}`}>Player account</Link></p>:null}
                       <div className="mt-3 grid gap-3 md:grid-cols-[150px_1fr]">
                         <div className="relative">
                           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-white/45">
@@ -742,6 +749,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                           <input
                             type="number"
                             name={amountName}
+                            disabled={ledgerControlled}
                             min="0"
                             step="0.01"
                             defaultValue={
@@ -766,6 +774,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                               <input
                                 type="radio"
                                 name={collectionName}
+                                disabled={ledgerControlled}
                                 value={value}
                                 defaultChecked={method === value}
                               />
@@ -830,7 +839,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     >
                       {statusLabel(fee.status, fee.note)}
                     </span>
-                    {canResend ? (
+                    <Link href={`/captain/team/${teamid}/player-payments/account/${fee.id}`} className="rounded-full border border-white/10 px-3 py-1 text-xs text-emerald-200">Player account</Link>
+                    {ledgerByFee.get(fee.id)?.collectionPaused ? <span className="text-xs text-amber-100">Collection paused — debt remains</span> : null}
+                    {canResend && !ledgerByFee.get(fee.id)?.controlled && !ledgerByFee.get(fee.id)?.collectionPaused ? (
                       <form action={resendCaptainPlayerPaymentLinkAction}>
                         <input type="hidden" name="teamId" value={teamid} />
                         <input type="hidden" name="fixtureId" value={fee.fixtureId} />

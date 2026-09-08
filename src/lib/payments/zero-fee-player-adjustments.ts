@@ -108,6 +108,7 @@ export async function repairFixedFixtureChargesForTeamIds(teamIds: string[]) {
           WHERE fee."teamId" = charge."teamId"
             AND fee."fixtureId" = charge."fixtureId"
             AND fee."status" = 'PAID'
+            AND POSITION('[SIXFL_PLAYER_LEDGER_RECEIPTS]' IN COALESCE(fee."note",''))=0
         ), 0) AS "paidAmountPence"
       FROM "PaymentCharge" charge
       INNER JOIN "Fixture" fixture ON fixture."id" = charge."fixtureId"

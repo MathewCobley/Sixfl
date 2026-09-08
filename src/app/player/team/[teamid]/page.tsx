@@ -1,3 +1,4 @@
+import { getPlayerLedgerSummaryForUser } from "@/lib/payments/player-ledger";
 // ========================================
 // File: src/app/player/team/[teamid]/page.tsx
 // ========================================
@@ -305,7 +306,6 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             },
           },
           orderBy: [{ createdAt: "desc" }],
-          take: 50,
           select: {
             id: true,
             fixtureId: true,
@@ -339,7 +339,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
   const paidFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.PAID);
   const waivedFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.WAIVED);
-  const outstandingPence = openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  const playerLedgerSummary=membership?await getPlayerLedgerSummaryForUser(teamid,membership.userId):null;
+  const outstandingPence = playerLedgerSummary?.balancePence ?? openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const waivedPence = waivedFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const nextOpenFee = openFees
@@ -350,6 +351,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
+      {membership ? <div className="mx-auto mb-4 max-w-6xl"><Link className="text-emerald-200 underline" href={`/player/team/${teamid}/ledger`}>Your balance, repayment arrangements and payment history</Link></div> : null}
       <div className="mx-auto max-w-6xl space-y-8">
         <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">

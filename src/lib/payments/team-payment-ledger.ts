@@ -2,6 +2,7 @@
 // File: src/lib/payments/team-payment-ledger.ts
 // ========================================
 
+import { getPlayerLedgerTransactionTotal } from "./player-ledger-markers";
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
@@ -17,6 +18,7 @@ import {
   getPlayerFeeSubsidyPence,
 } from "@/lib/payments/player-fee-coverage";
 import { prisma } from "@/lib/prisma";
+import { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";
 
 type RelatedTeamRow = {
   id: string;
@@ -153,8 +155,8 @@ function sortLedgerEntriesForCaptain(entries: TeamPaymentLedgerEntry[]) {
   });
 }
 
-export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
-  const [team] = await prisma.$queryRaw<PaymentLedgerTeamRow[]>(Prisma.sql`
+export async function getRelatedTeamIdsForPaymentLedger(teamId: string, db: Pick<typeof prisma,"$queryRaw"> = prisma) {
+  const [team] = await db.$queryRaw<PaymentLedgerTeamRow[]>(Prisma.sql`
     SELECT
       "id",
       "name",
@@ -181,7 +183,7 @@ export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
   // same-name team rows are the only reliable way to keep old unpaid fixture charges visible
   // to the same captain/admin team view after season/division moves.
   // Never bridge STANDARD and MANAGED records: the two modes have different payment models.
-  const rows = await prisma.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
+  const rows = await db.$queryRaw<RelatedTeamRow[]>(Prisma.sql`
     SELECT DISTINCT "id"
     FROM "Team"
     WHERE LOWER(TRIM("name")) = LOWER(TRIM(${team.name}))
@@ -194,14 +196,14 @@ export async function getRelatedTeamIdsForPaymentLedger(teamId: string) {
   };
 }
 
-export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentLedger | null> {
-  const identity = await getRelatedTeamIdsForPaymentLedger(teamId);
+export async function getTeamPaymentLedger(teamId: string, db: Pick<typeof prisma,"$queryRaw"|"paymentCharge"|"playerMatchFee"> = prisma): Promise<TeamPaymentLedger | null> {
+  const identity = await getRelatedTeamIdsForPaymentLedger(teamId, db);
   if (!identity) return null;
 
   const { team, relatedTeamIds } = identity;
 
   const [charges, coveredPlayerFees, openPlayerFees] = await Promise.all([
-    prisma.paymentCharge.findMany({
+    db.paymentCharge.findMany({
       where: {
         teamId: { in: relatedTeamIds },
         status: { not: "VOID" },
@@ -223,12 +225,13 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
         },
       },
     }),
-    prisma.playerMatchFee.findMany({
+    db.playerMatchFee.findMany({
       where: {
         teamId: { in: relatedTeamIds },
         status: { in: ["PAID", "WAIVED"] },
       },
       select: {
+        id: true,
         teamId: true,
         fixtureId: true,
         amountPence: true,
@@ -236,12 +239,13 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
         note: true,
       },
     }),
-    prisma.playerMatchFee.findMany({
+    db.playerMatchFee.findMany({
       where: {
         teamId: { in: relatedTeamIds },
         status: "OPEN",
       },
       select: {
+        id: true,
         teamId: true,
         fixtureId: true,
         amountPence: true,
@@ -250,6 +254,8 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       },
     }),
   ]);
+
+  const coveredPlayerFeesWithAssignedShares = await hydrateCaptainAssignedPlayerFees(coveredPlayerFees, db);
 
   // Older/manual charge rows can legitimately exist without a checkout token.
   // Captains used to always have a direct Pay now route for an active unpaid charge,
@@ -260,7 +266,7 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
       if (charge.paymentToken || charge.status === "PAID") return;
 
       const paymentToken = createPaymentToken();
-      await prisma.paymentCharge.update({
+      await db.paymentCharge.update({
         where: { id: charge.id },
         data: { paymentToken },
       });
@@ -268,14 +274,15 @@ export async function getTeamPaymentLedger(teamId: string): Promise<TeamPaymentL
     }),
   );
 
-  const coverageByTeamFixture = buildPlayerFeeCoverageByTeamFixture(coveredPlayerFees);
+  const coverageByTeamFixture = buildPlayerFeeCoverageByTeamFixture(coveredPlayerFeesWithAssignedShares);
   const openByTeamFixture = buildPlayerFeeTotalsByTeamFixture(openPlayerFees);
 
   const unsortedEntries = charges.map<TeamPaymentLedgerEntry>((charge) => {
     const fixtureKey = charge.fixtureId ? playerFeeKey(charge.teamId, charge.fixtureId) : null;
-    const directPaidPence = getDirectChargePaidTotal(charge.transactions);
+    const ledgerPlayerPaidPence = getPlayerLedgerTransactionTotal(charge.transactions);
+    const directPaidPence = getDirectChargePaidTotal(charge.transactions) - ledgerPlayerPaidPence;
     const playerCoverage = fixtureKey ? coverageByTeamFixture.get(fixtureKey) : null;
-    const playerPaidPence = playerCoverage?.cashPence ?? 0;
+    const playerPaidPence = (playerCoverage?.cashPence ?? 0) + ledgerPlayerPaidPence;
     const playerSubsidyPence = playerCoverage?.subsidyPence ?? 0;
     const playerOpenPence = fixtureKey ? openByTeamFixture.get(fixtureKey) ?? 0 : 0;
     const paidPence = directPaidPence + playerPaidPence;

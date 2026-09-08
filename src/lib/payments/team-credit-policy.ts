@@ -23,11 +23,11 @@ function positivePence(value: number | null | undefined) {
 export async function getTeamCreditPolicySnapshot(input: {
   teamId: string;
   fixtureFeePence: number;
-}): Promise<TeamCreditPolicySnapshot> {
+}, db: Pick<typeof prisma,"$queryRaw"|"$executeRaw"|"team"> = prisma): Promise<TeamCreditPolicySnapshot> {
   const fixtureFeePence = positivePence(input.fixtureFeePence);
-  const identity = await getRelatedTeamIdsForPaymentLedger(input.teamId);
+  const identity = await getRelatedTeamIdsForPaymentLedger(input.teamId, db);
   const relatedTeamIds = identity?.relatedTeamIds ?? [input.teamId];
-  const team = await prisma.team.findUnique({
+  const team = await db.team.findUnique({
     where: { id: input.teamId },
     select: { id: true, teamMode: true, standardMatchFeePence: true },
   });
@@ -37,7 +37,7 @@ export async function getTeamCreditPolicySnapshot(input: {
       creditCapPence: 0, creditBalancePence: 0, creditHeadroomPence: 0 };
   }
 
-  const creditLedger = await getTeamCreditLedger(relatedTeamIds);
+  const creditLedger = await getTeamCreditLedger(relatedTeamIds, db);
   const creditBalancePence = Math.max(creditLedger.balancePence, 0);
   const creditCapPence = positivePence(team.standardMatchFeePence) || fixtureFeePence;
   return { teamId: team.id, relatedTeamIds, enabled: creditCapPence > 0, fixtureFeePence,

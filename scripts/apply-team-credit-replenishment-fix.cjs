@@ -27,6 +27,7 @@ if (!source.includes("credit_used_totals_policy")) {
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (\${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
+        AND POSITION('[SIXFL_PLAYER_LEDGER_RECEIPTS]' IN COALESCE(pmf."note",''))=0
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
     real_team_totals AS (
@@ -144,6 +145,7 @@ if (!source.includes("credit_used_totals_policy")) {
       FROM "PlayerMatchFee" pmf
       WHERE pmf."teamId" IN (\${Prisma.join(teamIds)})
         AND pmf."status" = 'PAID'
+        AND POSITION('[SIXFL_PLAYER_LEDGER_RECEIPTS]' IN COALESCE(pmf."note",''))=0
       GROUP BY pmf."teamId", pmf."fixtureId"
     ),
     real_team_totals AS (

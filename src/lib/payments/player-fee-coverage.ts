@@ -1,3 +1,4 @@
+import { hasPlayerLedgerReceipts } from "./player-ledger-markers";
 // ========================================
 // File: src/lib/payments/player-fee-coverage.ts
 // ========================================
@@ -29,6 +30,8 @@ export function getPlayerFeeSubsidyPence(input: {
   status: string;
   note?: string | null;
 }) {
+  if (hasPlayerLedgerReceipts(input.note)) return 0;
+
   if (
     input.status === "WAIVED" &&
     Boolean(input.note?.includes(ZERO_FEE_WAIVER_NOTE))
@@ -52,7 +55,9 @@ export function getPlayerFeeSubsidyPence(input: {
 export function getPlayerFeeCashReceivedPence(input: {
   amountPence: number;
   status: string;
+  note?: string | null;
 }) {
+  if (hasPlayerLedgerReceipts(input.note)) return 0;
   return input.status === "PAID" ? input.amountPence : 0;
 }
 

@@ -271,7 +271,7 @@ async function getChargeSummaryWithPlayerPayments(chargeId: string) {
           fixtureId: charge.fixtureId,
           status: PlayerMatchFeeStatus.PAID,
         },
-        select: { fixtureId: true, amountPence: true },
+        select: { fixtureId: true, amountPence: true, note: true },
       })
     : [];
 
@@ -420,7 +420,7 @@ async function sendTeamChargeReminderAction(formData: FormData) {
           fixtureId: charge.fixtureId,
           status: PlayerMatchFeeStatus.PAID,
         },
-        select: { fixtureId: true, amountPence: true },
+        select: { fixtureId: true, amountPence: true, note: true },
       })
     : [];
   const [summary] = summariseChargesWithPlayerMatchFees([charge], paidPlayerMatchFees);
@@ -587,6 +587,7 @@ export default async function AdminPaymentsPage({
         teamId: true,
         fixtureId: true,
         amountPence: true,
+        note: true,
       },
     }),
   ]);
