@@ -1,21 +1,74 @@
 name: Player payment warning history
 on:
   pull_request:
+  push:
+    branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: warning-history-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   history:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: history-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_history_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect source without production data or secrets
-        run: |
-          git grep -nE 'PLAYER_MATCH_FEE_WARNING|player-payment-warning|Last request/chase|formatLastChasedLabel|Chase player' -- src scripts tests > warning-history-inventory.txt
-          git archive --format=tar.gz HEAD src scripts tests prisma docs config .github package.json package-lock.json tsconfig.json next.config.ts next-env.d.ts postcss.config.mjs AGENTS.md DEV_RULES.md ENGINEERING.md > warning-history-source.tgz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: warning-history-source
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: node --test tests/player-payment-warning-history.test.cjs | tee warning-history-tests.log
+      - name: Prove the original missing-card regression is detected
+        run: |
+          cp 'src/app/(admin)/admin/payments/page.tsx' /tmp/warning-history-page.tsx
+          trap 'cp /tmp/warning-history-page.tsx "src/app/(admin)/admin/payments/page.tsx"' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/(admin)/admin/payments/page.tsx')
+          s=p.read_text()
+          anchor='<PlayerPaymentWarningStatus feeId={fee.id} warning={latestPlayerWarnings.get(fee.id)} showHistoryLink />'
+          assert s.count(anchor)==1
+          p.write_text(s.replace(anchor,''))
+          PY
+          if node --test tests/player-payment-warning-history.test.cjs > warning-history-negative.log 2>&1; then
+            echo 'Missing warning status on the main list was not detected'; exit 1
+          fi
+          grep -E 'fail' warning-history-negative.log
+      - run: npx next build
+      - name: Exercise actual history and refresh controls at mobile and desktop widths
+        run: |
+          npm install --prefix /tmp/history-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/history-browser/node_modules/.bin/playwright install --with-deps chromium
+          WARNING_PLAYWRIGHT_MODULE=/tmp/history-browser/node_modules/playwright node --test tests/player-payment-warning-history.browser.cjs
+      - name: Verify shared reads, preserved chases and absence of integration machinery
+        run: |
+          test ! -f .github/workflows/integrate-warning-history-once.yml
+          git grep -nE 'getLatestPlayerPaymentWarnings|getPlayerPaymentWarningHistory|PlayerPaymentWarningStatus|Chase player|Send payment warning' -- src > warning-history-inventory.txt
+          git diff --exit-code -- src/lib/payments/player-payment-warning-history.ts src/components/admin/payments/PlayerPaymentWarningStatus.tsx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warning-history-verification
           path: |
-            warning-history-source.tgz
+            warning-history-tests.log
+            warning-history-negative.log
             warning-history-inventory.txt
-          retention-days: 2
+            artifacts/warning-history/
+          retention-days: 14

@@ -24,6 +24,7 @@ export async function sendPlayerWarningAction(previewToken: string) {
   const actorId = await adminId();
   try {
     const receipt = await sendPlayerPaymentWarning({ previewToken, actorId });
+    revalidatePath("/admin/payments");
     revalidatePath("/admin/payments/player-warning");
     return { ok: true as const, receipt };
   } catch (error) { return { ok: false as const, error: message(error) }; }
