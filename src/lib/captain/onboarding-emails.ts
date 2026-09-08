@@ -4,14 +4,13 @@
 
 import {
   NotificationAudience,
-  NotificationChannel,
   NotificationRecipientSourceType,
   Prisma,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { queueDirectNotification } from "@/lib/notifications/service";
+import { queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { queueFirstMatchReadyEmail } from "./first-match-ready";
 
 type CaptainOnboardingEmailRow = {
   id: string;
@@ -25,7 +24,6 @@ type CaptainOnboardingEmailRow = {
   onboardingWelcomeEmailSentAt: Date | null;
   onboardingFirstFixtureEmailSentAt: Date | null;
   onboardingPostFirstMatchEmailSentAt: Date | null;
-  nextFixtureAt: Date | null;
   hasCompletedMatch: boolean;
 };
 
@@ -46,56 +44,10 @@ export const CAPTAIN_ONBOARDING_EMAIL_STAGE_LABELS: Record<CaptainOnboardingEmai
   postFirstMatch: "Post-match",
 };
 
-const STAGE_CONTENT: Record<
-  CaptainOnboardingEmailStage,
-  {
-    subject: string;
-    body: (input: { captainName: string }) => string;
-    ctaLabel: string;
-  }
-> = {
-  welcome: {
-    subject: "Welcome to SIXFL - complete your team setup",
-    ctaLabel: "Open captain area",
-    body: ({ captainName }) => [
-      `Hi ${captainName},`,
-      "",
-      "Welcome to SIXFL. Your team is now set up.",
-      "",
-      "Please log in to your captain area and complete the team setup checklist before your first fixture. It only takes a few minutes and covers your squad, availability, payments and matchday responsibilities.",
-      "",
-      "Thanks,",
-      "SIXFL",
-    ].join("\n"),
-  },
-  firstFixture: {
-    subject: "Your first SIXFL fixture is coming up",
-    ctaLabel: "Open captain area",
-    body: ({ captainName }) => [
-      `Hi ${captainName},`,
-      "",
-      "Your first SIXFL fixture is coming up. Please confirm availability, check your squad details and make sure payment arrangements are sorted before matchday.",
-      "",
-      "You can use the captain checklist and guide in your dashboard if you need a reminder.",
-      "",
-      "Thanks,",
-      "SIXFL",
-    ].join("\n"),
-  },
-  postFirstMatch: {
-    subject: "Thanks for your first SIXFL game",
-    ctaLabel: "Open captain area",
-    body: ({ captainName }) => [
-      `Hi ${captainName},`,
-      "",
-      "Hope you enjoyed your first SIXFL game.",
-      "",
-      "Your captain area is where you can find fixtures, squad details, payments, results and support. The Captain Guide is also there if you need a quick reminder of weekly responsibilities.",
-      "",
-      "Thanks,",
-      "SIXFL",
-    ].join("\n"),
-  },
+const STAGE_TEMPLATE_KEYS: Record<CaptainOnboardingEmailStage, string> = {
+  welcome: "captain-onboarding-welcome",
+  firstFixture: "captain-first-fixture-reminder",
+  postFirstMatch: "captain-post-first-match",
 };
 
 function getSiteUrl() {
@@ -137,17 +89,13 @@ function shouldQueueStage(input: {
   stage: CaptainOnboardingEmailStage;
   now: Date;
 }) {
-  const sevenDaysFromNow = new Date(input.now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   switch (input.stage) {
     case "welcome":
       return !input.row.onboardingWelcomeEmailSentAt;
     case "firstFixture":
-      return Boolean(
-        input.row.nextFixtureAt &&
-          input.row.nextFixtureAt <= sevenDaysFromNow &&
-          !input.row.onboardingFirstFixtureEmailSentAt,
-      );
+      // Shared service checks first-match history, publication and same-day catch-up.
+      return true;
     case "postFirstMatch":
       return input.row.hasCompletedMatch && !input.row.onboardingPostFirstMatchEmailSentAt;
     default:
@@ -213,13 +161,6 @@ function selectCaptainOnboardingEmailRow() {
     t."onboardingWelcomeEmailSentAt",
     t."onboardingFirstFixtureEmailSentAt",
     t."onboardingPostFirstMatchEmailSentAt",
-    (
-      SELECT MIN(f."kickoffAt")
-      FROM "Fixture" f
-      WHERE (f."homeTeamId" = t."id" OR f."awayTeamId" = t."id")
-        AND f."status" = 'SCHEDULED'
-        AND f."kickoffAt" > NOW()
-    ) AS "nextFixtureAt",
     EXISTS (
       SELECT 1
       FROM "Fixture" f
@@ -233,7 +174,8 @@ async function getCandidateTeams() {
   return prisma.$queryRaw<CaptainOnboardingEmailRow[]>`
     SELECT ${selectCaptainOnboardingEmailRow()}
     FROM "Team" t
-    WHERE t."captainUserId" IS NOT NULL
+    WHERE t."secondaryContactEmail" IS NOT NULL
+       OR t."captainUserId" IS NOT NULL
        OR t."contactEmail" IS NOT NULL
        OR EXISTS (
         SELECT 1
@@ -261,6 +203,23 @@ async function queueStage(input: {
   stage: CaptainOnboardingEmailStage;
   manual?: boolean;
 }) {
+  if (input.stage === "firstFixture") {
+    return queueFirstMatchReadyEmail({ teamId: input.row.id, manual: input.manual });
+  }
+
+  if (!input.manual) {
+  const previousAttempt = await prisma.notificationDispatch.findFirst({
+    where: { sourceType: "TEAM", sourceId: input.row.id, channel: "EMAIL", OR: [
+      { template: { is: { key: STAGE_TEMPLATE_KEYS[input.stage] } } },
+      { AND: [
+        { metadata: { path: ["type"], equals: "captain_onboarding" } },
+        { metadata: { path: ["stage"], equals: input.stage } },
+      ] },
+    ] }, select: { id: true },
+  });
+  if (previousAttempt) return "not_due" as const;
+}
+
   const captainEmail = getCaptainEmail(input.row);
 
   if (!captainEmail) {
@@ -269,33 +228,23 @@ async function queueStage(input: {
 
   const siteUrl = getSiteUrl();
   const captainDashboardUrl = `${siteUrl}/captain/team/${input.row.id}`;
-  const recipient = await upsertNotificationRecipient({
-    sourceType: NotificationRecipientSourceType.TEAM,
-    sourceId: input.row.id,
-    audience: NotificationAudience.TEAM,
-    displayName: getCaptainName(input.row),
-    email: captainEmail,
-    transactionalEmailOptIn: true,
-    metadata: {
-      teamId: input.row.id,
-      source: "captain_onboarding",
-    },
+  const email = captainEmail.trim().toLowerCase();
+  const contact = { displayName: getCaptainName(input.row), email, emailNormalized: email, lastSyncedAt: new Date() };
+  const recipient = await prisma.notificationRecipient.upsert({
+    where: { sourceType_sourceId: { sourceType: NotificationRecipientSourceType.TEAM, sourceId: input.row.id } },
+    update: contact,
+    create: { ...contact, sourceType: NotificationRecipientSourceType.TEAM, sourceId: input.row.id,
+      audience: NotificationAudience.TEAM, transactionalEmailOptIn: true,
+      metadata: { teamId: input.row.id, source: "captain_onboarding" } },
   });
-  const content = STAGE_CONTENT[input.stage];
+  await prisma.notificationPreference.upsert({ where: { recipientId: recipient.id }, update: {}, create: { recipientId: recipient.id } });
   const captainName = getCaptainName(input.row);
 
-  await queueDirectNotification({
+  const dispatch = await queueNotificationFromTemplate({
+    templateKey: STAGE_TEMPLATE_KEYS[input.stage],
     recipientId: recipient.id,
-    channel: NotificationChannel.EMAIL,
-    audience: NotificationAudience.TEAM,
-    subject: content.subject,
-    body: content.body({ captainName }),
     sourceType: "TEAM",
     sourceId: input.row.id,
-    emailCta: {
-      label: content.ctaLabel,
-      url: captainDashboardUrl,
-    },
     variables: {
       captainName,
       teamName: input.row.name,
@@ -309,6 +258,7 @@ async function queueStage(input: {
     } satisfies Prisma.InputJsonValue,
   });
 
+  if (dispatch.status !== "QUEUED") return "not_due" as const;
   await markStageQueued({ teamId: input.row.id, stage: input.stage });
 
   return "queued" as const;
@@ -359,7 +309,7 @@ export async function runCaptainOnboardingEmailJob(): Promise<CaptainOnboardingE
   const now = new Date();
 
   for (const row of rows) {
-    for (const stage of Object.keys(STAGE_CONTENT) as CaptainOnboardingEmailStage[]) {
+    for (const stage of Object.keys(STAGE_TEMPLATE_KEYS) as CaptainOnboardingEmailStage[]) {
       if (!shouldQueueStage({ row, stage, now })) {
         summary.alreadySentOrNotDue += 1;
         continue;
@@ -370,8 +320,10 @@ export async function runCaptainOnboardingEmailJob(): Promise<CaptainOnboardingE
 
         if (result === "queued") {
           summary.queuedDispatches += 1;
-        } else {
+        } else if (result === "missing_email") {
           summary.skippedNoEmail += 1;
+        } else {
+          summary.alreadySentOrNotDue += 1;
         }
       } catch (error) {
         if (summary.errors.length < 10) {

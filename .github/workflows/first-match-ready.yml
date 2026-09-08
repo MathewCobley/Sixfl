@@ -1,0 +1,55 @@
+name: First-match readiness briefing
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  first-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_first_match_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_first_match_test" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_first_match_test
+      NEXTAUTH_SECRET: first-match-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      RESEND_API_KEY: re_first_match_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      CRON_SECRET: first-match-ci-unused
+      SIXFL_FIRST_MATCH_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx tsc --noEmit
+      - name: Create disposable local schema
+        run: npx prisma db push --skip-generate
+      - name: Test real first-match queue, migration, concurrency and same-day catch-up
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/first-match-ready.test.ts"],outfile:".first-match-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .first-match-tests.cjs
+      - run: npx next build
+      - name: Verify final native sources and removed temporary workflow
+        run: |
+          test ! -f .github/workflows/inspect-first-match-once.yml
+          test ! -f .github/workflows/integrate-first-match-once.yml
+          git grep -nE 'queueFirstMatchReadyEmail|getFirstMatchReadyDeliveryBlock|FirstMatchReadyStatus' -- src
