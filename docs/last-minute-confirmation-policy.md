@@ -1,0 +1,9 @@
+# Last-minute replacement confirmation requests
+
+The fixture edit hook and notification cron could treat an allocated last-minute replacement as a normal newly scheduled team. They queued a further confirmation request even though the replacement flow already issued its own match-details message, sometimes pointing at a response window that had closed 72 hours earlier.
+
+`src/lib/fixtures/replacement-confirmation-policy.ts` is the shared read-only authority. It matches the latest real replacement alert to the saved fixture: the dropped team is absent, the original opponent remains, the selected team is the replacement, and kick-off is unchanged. New alerts also snapshot league, venue and pitch. A resolved cycle belonging to another replacement cannot suppress normal requests, nor can a stale legacy resolution after another fixture edit. Merely sending the availability offer, a zero-price fixture, or replacing on another fixture never qualifies.
+
+Both initial and automatic confirmation emails, manual/automatic confirmation SMS and confirmation-warning email creation use that authority. The real queue worker rechecks immediately before both providers, protecting the interval before replacement reconciliation and stale/retried queue records. The existing replacement-resolution routine cancels only unsent redundant confirmation requests, including future scheduled ones. It never sweeps PROCESSING, SENT or provider-accepted records. Existing match-details emails, other teams, ordinary fixtures, player availability and all payment operations are untouched. No captain response is fabricated or overwritten; the existing replacement-resolution audit/control remains the record of allocation.
+
+Tests run with disposable localhost PostgreSQL, stub external message providers and blocked network requests. No customer messages or production database edits are used in verification. A missing-guard negative control must fail.
