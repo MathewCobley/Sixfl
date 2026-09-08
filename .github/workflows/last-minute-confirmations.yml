@@ -1,17 +1,87 @@
 name: Last-minute replacement confirmations
 on:
   pull_request:
+  push:
+    branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: last-minute-confirmations-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
-  inspect:
+  confirmations:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_replacement_confirmation_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_replacement_confirmation_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_replacement_confirmation_test
+      SIXFL_ISOLATED_REPLACEMENT_TEST: '1'
+      NEXTAUTH_SECRET: replacement-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      RESEND_API_KEY: re_replacement_ci_placeholder
     steps:
       - uses: actions/checkout@v4
-      - run: tar -czf replacement-source.tgz src prisma scripts tests docs config .github package.json package-lock.json tsconfig.json next.config.ts next-env.d.ts postcss.config.mjs AGENTS.md ENGINEERING.md DEV_RULES.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: replacement-source
-          path: replacement-source.tgz
-          retention-days: 2
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: |
+          node scripts/check-critical-feature-contracts.mjs
+          node scripts/check-last-minute-replacement-resolution.mjs
+          node scripts/check-night-board-fixture-notifications.mjs
+          node scripts/check-fixture-team-change-notifications.mjs
+      - run: npx prisma db push --skip-generate
+      - name: Real allocation queries, all creation routes and pre-provider race checks
+        run: node --test --test-reporter=tap tests/last-minute-confirmations.test.cjs | tee replacement-tests.log
+      - name: Prove missing email and SMS guards fail tests
+        run: |
+          cp src/lib/notifications/processor.ts /tmp/replacement-processor.ts
+          trap 'cp /tmp/replacement-processor.ts src/lib/notifications/processor.ts' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/lib/notifications/processor.ts')
+          s=p.read_text()
+          assert s.count('await getFixtureConfirmationDeliveryBlock(dispatch)') == 2
+          p.write_text(s.replace('await getFixtureConfirmationDeliveryBlock(dispatch)', 'null'))
+          PY
+          if node --test --test-reporter=tap tests/last-minute-confirmations.test.cjs > replacement-negative.log 2>&1; then
+            echo 'Missing final delivery guards were not detected'; exit 1
+          fi
+          grep -E 'not ok.*real EMAIL processor' replacement-negative.log
+          grep -E 'not ok.*real SMS processor' replacement-negative.log
+      - run: npx next build
+      - name: Verify committed native sources and preserve ordinary confirmation entry points
+        run: |
+          test ! -f .github/workflows/integrate-last-minute-once.yml
+          git grep -nE 'getAllocatedReplacementConfirmationBlock|getFixtureConfirmationDeliveryBlock|cancelAllocatedReplacementConfirmationRequests|queueInitialFixtureConfirmationEmailForTeam|reconcileLastMinuteReplacement' -- src > replacement-inventory.txt
+          git diff --exit-code -- src/lib/fixtures/replacement-confirmation-policy.ts
+          git diff --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: last-minute-confirmation-verification
+          path: |
+            replacement-tests.log
+            replacement-negative.log
+            replacement-inventory.txt
+          retention-days: 14
