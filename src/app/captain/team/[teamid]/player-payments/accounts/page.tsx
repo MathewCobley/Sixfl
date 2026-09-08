@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { money } from "@/lib/payments/player-ledger";
+import { money, visiblePlayerLedgerStateSql } from "@/lib/payments/player-ledger";
 export const dynamic="force-dynamic";
 export default async function Page({params}:{params:Promise<{teamid:string}>}){
   const {teamid}=await params;await requireCaptain(teamid);
@@ -11,7 +11,7 @@ export default async function Page({params}:{params:Promise<{teamid:string}>}){
       SELECT CASE WHEN COUNT(DISTINCT m."userId")=1 THEN MIN(m."userId") ELSE NULL END FROM "TeamMemberProfile" p JOIN "TeamMember" m ON m.id=p."teamMemberId"
       WHERE p."sourceProspectId"=s."prospectId" AND m."teamId"=s."teamId"),
       'member:'||s."teamMemberId",'prospect:'||s."prospectId",'fee:'||s."feeId") AS owner
-    FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamid} ORDER BY s."createdAt"`);
+    FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamid} AND ${visiblePlayerLedgerStateSql()} ORDER BY s."createdAt"`);
   const accounts=new Map<string,{feeId:string;name:string;balance:number}>();
   for(const r of rows){const a=accounts.get(r.owner)??{feeId:r.feeId,name:r.playerName||"Historical player",balance:0};a.balance+=r.balancePence;accounts.set(r.owner,a);}
   const list=[...accounts.values()].sort((a,b)=>b.balance-a.balance||a.name.localeCompare(b.name));

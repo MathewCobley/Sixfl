@@ -123,12 +123,12 @@ test("unpaid sessions and cancelled/expired checkouts never alter the obligation
 });
 test("old full-size checkout is redirected to the ledger; stale excess is refunded, not silently credited as repayment",async()=>{
  const t=await target(),p=await plan(t);await pay(t,p);assert.equal((await state(t)).balancePence,400);
- const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as Stripe.Checkout.Session;
+ const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
  provider.sessions.set(s.id,s);assert.equal(await settlePlayerRepaymentSession(s,provider.api),true);assert.equal(provider.refundCalls,1);assert.equal((await state(t)).balancePence,400);
  await settlePlayerRepaymentSession(s,provider.api);assert.equal(provider.refundCalls,1);assert.equal((await state(t)).receivedPence,800);
 });
 test("old legitimate £12 checkout paid before any instalment settles the debt once",async()=>{
- const t=await target();await plan(t);const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as Stripe.Checkout.Session;
+ const t=await target();await plan(t);const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
  provider.sessions.set(s.id,s);await settlePlayerRepaymentSession(s,provider.api);assert.equal((await state(t)).balancePence,0);assert.equal((await state(t)).receivedPence,1200);
 });
 test("genuine reductions and captain receipts are explicit, idempotent and do not fabricate SIXFL cash",async()=>{
@@ -182,7 +182,7 @@ test("one due email follows the optional plan; original fee chases hold, and tem
  await prisma.notificationTemplate.update({where:{key:"player-repayment-instalment-email"},data:{subject:"My edited agreement {{amount}}",isActive:false}});migrate(migration);assert.equal((await prisma.notificationTemplate.findUniqueOrThrow({where:{key:"player-repayment-instalment-email"}})).isActive,false);
 });
 test("simple player panel has one Pay £8 button and states full £12 debt without affecting it",async()=>{
- const t=await target(),p=await plan(t);const html=renderToStaticMarkup(await PlayerRepaymentPanel({planToken:p.token}));assert.match(html,/£12.00/);assert.match(html,/Pay £8.00/);assert.match(html,/£4.00/);assert.equal((html.match(/<button/g)||[]).length,1);assert.equal((await account(t)).balancePence,1200);
+ const t=await target(),p=await plan(t);const html=renderToStaticMarkup(await PlayerRepaymentPanel({planToken:p.token}));assert.match(html,/£12.00/);assert.match(html.replace(/<!--.*?-->/g,""),/Pay £8.00/);assert.match(html,/£4.00/);assert.equal((html.match(/<button/g)||[]).length,1);assert.equal((await account(t)).balancePence,1200);
 });
 test("money and small residual policy do not round debt away or silently increase the instalment",()=>{
  assert.equal(parseLedgerMoney("8"),800);assert.equal(parseLedgerMoney("£8.01"),801);assert.throws(()=>parseLedgerMoney("8.001"));assert.throws(()=>parseLedgerMoney("-8"));
@@ -195,4 +195,12 @@ test("prepared sources retain normal guards, optional native controls and a sing
  assert.match(read("src/app/captain/team/[teamid]/player-payments/actions.ts"),/pausePlayerFeeCollection/);
  const normal=getPlayerFeeCashReceivedPence({status:"PAID",amountPence:1200,note:null});const controlled=getPlayerFeeCashReceivedPence({status:"PAID",amountPence:1200,note:"[SIXFL_PLAYER_LEDGER_RECEIPTS]"});assert.equal(normal,1200);assert.equal(controlled,0);
  const summary=summariseChargesWithPlayerMatchFees([{amountPence:4000,fixtureId:"f",status:"OPEN",transactions:[{amountPence:1200,notes:"Player ledger repayment. Request x."}]}],[{fixtureId:"f",amountPence:1200,status:"PAID",note:"[SIXFL_PLAYER_LEDGER_RECEIPTS]"}]);assert.equal(summary[0].paidPence,1200);assert.equal(summary[0].outstandingPence,2800);
+});
+
+
+test("unpublished ordinary charges are not exposed in player balances; real controlled debt survives unpublishing",async()=>{
+ const t=await target(); await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:null}});
+ assert.equal((await account(t)).balancePence,0); assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id)).balancePence,0);
+ await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:new Date()}}); await plan(t);
+ await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:null}}); assert.equal((await account(t)).balancePence,1200);
 });

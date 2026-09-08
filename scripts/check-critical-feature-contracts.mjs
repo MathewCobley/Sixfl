@@ -99,7 +99,7 @@ expectText("payments", playerPaymentActionPath, playerPaymentAction, "selectedMe
 expectText("payments", playerPaymentActionPath, playerPaymentAction, 'method === "link" && !email', "a payment-link collection must be rejected when the player has no email");
 expectText("payments", playerPaymentActionPath, playerPaymentAction, 'error=missing_player_email', "missing-email payment attempts must return the dedicated error state");
 expectText("payments", playerPaymentPagePath, playerPaymentPage, "emailRequired:", "captain payment rows must expose missing-email state");
-expectText("payments", playerPaymentPagePath, playerPaymentPage, "disabled={player.emailRequired && !player.fee}", "players without email must not be newly selected for payment links");
+expectText("payments", playerPaymentPagePath, playerPaymentPage, "disabled={ledgerControlled || (player.emailRequired && !player.fee)}", "players without email must not be newly selected for payment links");
 expectText("payments", playerPaymentPagePath, playerPaymentPage, "Email required — add an email before sending a payment link", "missing-email reason must remain visible to captains");
 
 expectText("payments", squadEditActionPath, squadEditAction, "const nextPlayerMatchFeeOverride = access.isAdmin", "captains must not be able to change player fee overrides server-side");

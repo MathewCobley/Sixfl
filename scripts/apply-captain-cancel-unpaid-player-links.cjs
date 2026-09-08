@@ -42,7 +42,7 @@ const newOpenLinksCopy = [
   '                                type="submit"',
   '                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-red-300/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/25"',
   '                              >',
-  '                                Cancel all unpaid player links',
+  '                                Pause unpaid player links — keep debt',
   '                              </button>',
   '                            </form>',
 ].join("\n");
@@ -80,7 +80,7 @@ if (source.includes(duplicatePaidControls)) {
 }
 
 if (
-  !source.includes("Cancel all unpaid player links") ||
+  !source.includes("Pause unpaid player links — keep debt") ||
   !source.includes("pausePlayerFeeCollection") ||
   !source.includes("Each payment will reduce that balance") ||
   source.includes(

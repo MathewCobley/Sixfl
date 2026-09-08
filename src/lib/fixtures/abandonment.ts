@@ -122,7 +122,6 @@ function getPlayerPaidPence(input: {
           amountPence: fee.amountPence,
           status: fee.status,
           note: fee.note,
-          note: fee.note,
         }),
       0,
     );

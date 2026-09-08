@@ -88,7 +88,7 @@ BEGIN
      (ctx->>'feeId' IS DISTINCT FROM NEW.id) THEN
     RAISE EXCEPTION 'This fee has a player repayment ledger. Use Player account to record payments or reduce its balance; editing a link cannot change the debt.';
   END IF;
-  IF TG_OP='UPDATE' AND COALESCE(s."balancePence",0)>0 AND NEW."teamId" IS DISTINCT FROM OLD."teamId" THEN
+  IF TG_OP='UPDATE' AND s."feeId" IS NOT NULL AND NEW."teamId" IS DISTINCT FROM OLD."teamId" THEN
     RAISE EXCEPTION 'An unpaid player balance must stay with its original team. Resolve the balance before moving the charge.';
   END IF;
   IF s."controlled" THEN

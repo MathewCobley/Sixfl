@@ -3,7 +3,7 @@
 // ========================================
 
 import { getPlayerLedgerTransactionTotal } from "./player-ledger-markers";
-import { getDirectChargePaidTotal } from "./charge-summary";
+import { getDirectChargePaidTotal } from "@/lib/payments/charge-summary";
 import { PaymentChargeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";

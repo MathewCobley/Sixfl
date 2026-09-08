@@ -36,6 +36,7 @@ function getPaidPence(input: {
     teamId: string;
     amountPence: number;
     status: string;
+    note?: string | null;
   }>;
 }) {
   const directPaidPence = input.charge

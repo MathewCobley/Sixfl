@@ -1,3 +1,4 @@
+import { hasPlayerLedgerReceipts } from "@/lib/payments/player-ledger-markers";
 import { getPlayerLedgerSummaryForUser } from "@/lib/payments/player-ledger";
 // ========================================
 // File: src/app/player/team/[teamid]/page.tsx
@@ -312,6 +313,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             teamMemberId: true,
             prospectId: true,
             amountPence: true,
+            note: true,
             status: true,
             paymentUrl: true,
             createdAt: true,
@@ -341,7 +343,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const waivedFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.WAIVED);
   const playerLedgerSummary=membership?await getPlayerLedgerSummaryForUser(teamid,membership.userId):null;
   const outstandingPence = playerLedgerSummary?.balancePence ?? openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
-  const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);
+  const paidPence = paidFees.filter(fee=>!hasPlayerLedgerReceipts(fee.note)).reduce((sum, fee) => sum + fee.amountPence, 0) + (playerLedgerSummary?.receivedPence ?? 0);
   const waivedPence = waivedFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const nextOpenFee = openFees
     .slice()

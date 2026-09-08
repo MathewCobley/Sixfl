@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 export { PLAYER_LEDGER_RECEIPT_MARKER } from "./player-ledger-markers";
 export class PlayerLedgerError extends Error {}
 export type LedgerDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "playerFeeLedgerState" | "playerLedgerEntry" | "playerRepaymentPlan" | "playerRepaymentRequest" | "playerMatchFee" | "notificationDispatch" | "teamMember" | "user" | "paymentCharge" | "team">;
+
+export function visiblePlayerLedgerStateSql() {
+  return Prisma.sql`(s.controlled OR s."deletedAt" IS NOT NULL OR EXISTS (
+    SELECT 1 FROM "Fixture" visible_fixture WHERE visible_fixture.id=s."fixtureId" AND visible_fixture."publishedAt" IS NOT NULL))`;
+}
+
 export type LedgerState = Awaited<ReturnType<typeof prisma.playerFeeLedgerState.findUniqueOrThrow>>;
 export const money = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 
@@ -54,13 +60,13 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     const identities = [...new Set(linked.map(x => x.userId))];
     if (identities.length === 1) userId = identities[0];
   }
-  const owner = userId ? Prisma.sql`(s."userId"=${userId} OR s."prospectId" IN (
+  const owner = userId ? Prisma.sql`(s."userId"=${userId} OR (s."userId" IS NULL AND s."prospectId" IN (
       SELECT p."sourceProspectId" FROM "TeamMemberProfile" p JOIN "TeamMember" m ON m.id=p."teamMemberId"
       WHERE m."teamId"=${teamId} AND p."sourceProspectId" IS NOT NULL
-      GROUP BY p."sourceProspectId" HAVING COUNT(DISTINCT m."userId")=1 AND MIN(m."userId")=${userId}))`
+      GROUP BY p."sourceProspectId" HAVING COUNT(DISTINCT m."userId")=1 AND MIN(m."userId")=${userId})))`
     : anchor.teamMemberId ? Prisma.sql`s."teamMemberId"=${anchor.teamMemberId}`
     : anchor.prospectId ? Prisma.sql`s."prospectId"=${anchor.prospectId}` : Prisma.sql`s."feeId"=${anchorFeeId}`;
-  const states = await db.$queryRaw<LedgerState[]>(Prisma.sql`SELECT s.* FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${owner} ORDER BY s."createdAt",s."feeId"`);
+  const states = await db.$queryRaw<LedgerState[]>(Prisma.sql`SELECT s.* FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND ${owner} ORDER BY s."createdAt",s."feeId"`);
   const ids = states.map(s => s.feeId);
   const [fees, entries, plans] = await Promise.all([
     db.playerMatchFee.findMany({ where: { id: { in: ids }, teamId }, orderBy: [{ fixture: { kickoffAt: "asc" } }, { id: "asc" }],
@@ -200,9 +206,16 @@ export async function pausePlayerFeeCollection(input:{teamId:string;feeIds:strin
 
 /** At the shared provider boundary, suppress old demands while a plan is in
  * force even if a message was already queued before the captain saved it. */
-export async function playerLedgerNotificationBlock(dispatch:{sourceType:string|null;sourceId:string|null}){
+export async function playerLedgerNotificationBlock(dispatch:{sourceType:string|null;sourceId:string|null;createdAt?:Date}){
   if(!dispatch.sourceId||!["PLAYER_MATCH_FEE_REQUEST","PLAYER_MATCH_FEE_CHASE_24H","PLAYER_MATCH_FEE_CHASE_72H","PLAYER_MATCH_FEE_WARNING","TEMPORARY_PLAYER_MATCH_FEE_REQUEST"].includes(dispatch.sourceType??"")) return null;
-  return playerFeeCollectionHold(dispatch.sourceId);
+  const hold=await playerFeeCollectionHold(dispatch.sourceId);
+  if(hold)return hold;
+  const state=await readPlayerLedgerState(dispatch.sourceId);
+  if(state?.controlled){
+    if(!state.balancePence)return "This player balance is settled.";
+    if(dispatch.createdAt && await prisma.playerLedgerEntry.findFirst({where:{feeId:state.feeId,amountPence:{not:0},createdAt:{gt:dispatch.createdAt}},select:{id:true}}))return "Player balance changed after this demand was queued. Use the current account amount.";
+  }
+  return null;
 }
 
 export const newLedgerActionKey=()=>randomUUID();
@@ -234,9 +247,9 @@ export async function getPlayerLedgerSummaryForUser(teamId:string,userId:string)
   const rows=await prisma.$queryRaw<Array<{anchorFeeId:string|null;balancePence:number;receivedPence:number}>>(Prisma.sql`
     SELECT MIN(s."feeId") AS "anchorFeeId",COALESCE(SUM(s."balancePence"),0)::int AS "balancePence",
       COALESCE(SUM(s."receivedPence"+s."captainReceivedPence"),0)::int AS "receivedPence"
-    FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND (s."userId"=${userId} OR s."prospectId" IN (
+    FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND (s."userId"=${userId} OR (s."userId" IS NULL AND s."prospectId" IN (
       SELECT p."sourceProspectId" FROM "TeamMemberProfile" p JOIN "TeamMember" m ON m.id=p."teamMemberId"
       WHERE m."teamId"=${teamId} AND p."sourceProspectId" IS NOT NULL GROUP BY p."sourceProspectId"
-      HAVING COUNT(DISTINCT m."userId")=1 AND MIN(m."userId")=${userId}))`);
+      HAVING COUNT(DISTINCT m."userId")=1 AND MIN(m."userId")=${userId})))`);
   return rows[0]??{anchorFeeId:null,balancePence:0,receivedPence:0};
 }
