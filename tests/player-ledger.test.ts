@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, before, after, mock } from "node:test";
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID, randomBytes, createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import type Stripe from "stripe";
@@ -26,6 +26,10 @@ assert.ok(process.env.SIXFL_PLAYER_LEDGER_TEST==="1"&&database.hostname==="127.0
 globalThis.fetch=async()=>{throw Error("External provider/network calls are forbidden in ledger tests");};
 const migration="prisma/migrations/20260908140000_player_ledger_and_repayments/migration.sql";
 const migrate=(path:string)=>execFileSync("psql",[process.env.DATABASE_URL!,"-v","ON_ERROR_STOP=1","-f",path],{stdio:"pipe"});
+function signedTestHeader(payload: string, secret: string) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  return `t=${timestamp},v1=${createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex")}`;
+}
 const past=()=>new Date(Date.now()-3600_000);
 let legacyId:string;
 before(async()=>{
@@ -349,7 +353,7 @@ test("actual signature-verified webhook routes an ordinary underpayment through 
   const secret="whsec_local_ordinary_receipt_test";process.env.STRIPE_WEBHOOK_SECRET=secret;
   try {
     const send=async(type:string,object:unknown)=>{const payload=JSON.stringify({id:`evt_${randomUUID()}`,object:"event",type,data:{object}});
-      return stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":stripe.webhooks.generateTestHeaderString({payload,secret})}}));};
+      return stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":signedTestHeader(payload,secret)}}));};
     const response=await send("checkout.session.completed",session);assert.equal(response.status,200,await response.text());assert.equal((await state(t)).balancePence,400);
     const late=await send("checkout.session.async_payment_failed",session);assert.equal(late.status,200);assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
     assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);
@@ -360,7 +364,7 @@ test("actual team webhook keeps £10 of £40 part-paid, preserves the charge and
   const stripe=getStripeServerClient();const m=mock.method(stripe.paymentIntents,"retrieve",provider.api.paymentIntents.retrieve);
   const secret="whsec_local_team_receipt_test";process.env.STRIPE_WEBHOOK_SECRET=secret;
   try {const payload=JSON.stringify({id:`evt_${randomUUID()}`,object:"event",type:"checkout.session.completed",data:{object:session}});
-    const response=await stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":stripe.webhooks.generateTestHeaderString({payload,secret})}}));
+    const response=await stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":signedTestHeader(payload,secret)}}));
     assert.equal(response.status,200,await response.text());const charge=await prisma.paymentCharge.findUniqueOrThrow({where:{id:t.charge.id}});
     assert.equal(charge.amountPence,4000);assert.equal(charge.status,"PART_PAID");assert.equal(getChargeStatusFromAmounts(4000,1000),"PART_PAID");
     assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].outstandingPence,3000);
