@@ -12,6 +12,9 @@ jobs:
   warning:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     services:
       postgres:
         image: postgres:16
