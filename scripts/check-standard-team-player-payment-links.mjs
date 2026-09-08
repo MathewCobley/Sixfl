@@ -50,7 +50,7 @@ expect(
 );
 expect(
   page.includes("emailRequired:") &&
-    page.includes("disabled={player.emailRequired && !player.fee}") &&
+    page.includes("disabled={ledgerControlled || (player.emailRequired && !player.fee)}") &&
     page.includes("Send payment link again"),
   "captain payment page must expose missing-email state and a resend control for open requests",
 );

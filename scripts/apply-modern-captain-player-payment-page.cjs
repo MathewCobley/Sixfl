@@ -161,14 +161,14 @@ replaceOnce(
     '              <h2 className="text-lg font-semibold text-amber-50">Close the current unpaid collection</h2>',
     '              <p className="mt-1 max-w-3xl text-sm leading-6 text-amber-100/70">',
     "                This cancels every unpaid or no-link row for this fixture, invalidates its",
-    "                player payment links and preserves any payment already completed.",
+    "                player payment links without reducing the player debt. Existing completed payments are preserved.",
     "              </p>",
     "            </div>",
     "            <form action={closeCaptainSquadPaymentCollectionAction}>",
     '              <input type="hidden" name="teamId" value={team.id} />',
     '              <input type="hidden" name="fixtureId" value={selectedFixture.id} />',
     '              <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-300 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-200">',
-    "                Close unpaid links",
+    "                Pause unpaid links — keep debt",
     "              </button>",
     "            </form>",
     "          </div>",
@@ -185,7 +185,7 @@ if (
   !source.includes("selectedFixtureTeamFeePence") ||
   !source.includes("playerPaidWithoutLedgerPence") ||
   !source.includes("playerOpenWithoutLedgerPence") ||
-  !source.includes("Close unpaid links") ||
+  !source.includes("Pause unpaid links — keep debt") ||
   !source.includes("team credit pot")
 ) {
   throw new Error("Modern squad-payment compatibility patch did not complete.");

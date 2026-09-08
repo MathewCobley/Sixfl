@@ -2,6 +2,8 @@
 // File: src/app/pay/player-match-fee/[token]/start/route.ts
 // ========================================
 
+import { readPlayerLedgerState, PlayerLedgerError } from "@/lib/payments/player-ledger";
+import { startPlayerRepaymentCheckout } from "@/lib/payments/player-repayment-checkout";
 import { NextResponse } from "next/server";
 import { PlayerMatchFeeStatus } from "@prisma/client";
 
@@ -71,6 +73,12 @@ export async function POST(
 
   if (!fee?.paymentToken) {
     return NextResponse.redirect(new URL("/", `${getPublicSiteUrl()}/`), 303);
+  }
+
+  const ledgerState=await readPlayerLedgerState(fee.id);
+  if(ledgerState?.controlled || ledgerState?.collectionPaused) {
+    try { return NextResponse.redirect(await startPlayerRepaymentCheckout({feeToken:token}),303); }
+    catch(error) {return NextResponse.redirect(new URL(`/pay/player-match-fee/${encodeURIComponent(token)}?error=${encodeURIComponent(error instanceof PlayerLedgerError?error.message:"The payment could not be started. Check your account before retrying.")}`,`${getPublicSiteUrl()}/`),303);}
   }
 
   if (fee.status === PlayerMatchFeeStatus.PAID) {

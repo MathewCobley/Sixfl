@@ -121,7 +121,7 @@ if (!page.includes("emailRequired:")) {
 }
 
 // Disable the player checkbox for SMS-only/no-email players and make the reason explicit.
-if (!page.includes('disabled={player.emailRequired')) {
+if (!page.includes('disabled={player.emailRequired') && !page.includes('disabled={ledgerControlled || (player.emailRequired && !player.fee)}')) {
   const checkboxAnchor = 'name="player"';
   const checkboxIndex = page.indexOf(checkboxAnchor);
   if (checkboxIndex < 0) throw new Error("Player payment checkbox not found.");
@@ -129,7 +129,7 @@ if (!page.includes('disabled={player.emailRequired')) {
   const inputEnd = page.indexOf("/>", checkboxIndex);
   if (inputStart < 0 || inputEnd < 0) throw new Error("Player payment checkbox element not found.");
   let input = page.slice(inputStart, inputEnd + 2);
-  if (!input.includes("disabled={player.emailRequired")) {
+  if (!input.includes("disabled={player.emailRequired") && !input.includes("disabled={ledgerControlled || (player.emailRequired && !player.fee)}")) {
     input = input.replace('name="player"', 'name="player"\n                              disabled={player.emailRequired && !player.fee}');
     page = page.slice(0, inputStart) + input + page.slice(inputEnd + 2);
   }

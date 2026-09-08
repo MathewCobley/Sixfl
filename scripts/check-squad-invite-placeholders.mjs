@@ -51,7 +51,10 @@ const db = {
 globalThis.__squadInviteTest = { db, recipient, rows, delivered: [] };
 const baseMocks = {
   "@/lib/prisma": "export const prisma = globalThis.__squadInviteTest.db;",
-  "@/lib/notifications/recipients": "export async function upsertNotificationRecipient() { return globalThis.__squadInviteTest.recipient; } export async function getNotificationRecipientById() { return globalThis.__squadInviteTest.recipient; }",
+  // Repayment guards now bring team-contacts into the processor import graph.
+  // Supply its recipient export without bypassing any real delivery guard.
+  // Invite-only processing must not attempt a payment/team recipient lookup.
+  "@/lib/notifications/recipients": "export async function upsertNotificationRecipient() { return globalThis.__squadInviteTest.recipient; } export async function getNotificationRecipientById() { return globalThis.__squadInviteTest.recipient; } export async function getNotificationRecipientBySource() { throw new Error('Unexpected payment/team recipient lookup in invite-only test.'); }",
   "./recipients": "export async function getNotificationRecipientById() { return globalThis.__squadInviteTest.recipient; }",
   "@/lib/resend/client": "export function getEmailReplyDomain() { return 'replies.example.invalid'; }",
   "@/lib/fixtures/publishing": "export async function getUnpublishedFixtureBlockReason() { return null; }",

@@ -9,21 +9,7 @@ const root = process.cwd();
 const servicePath = path.join(root, "src", "lib", "fixtures", "abandonment.ts");
 let service = fs.readFileSync(servicePath, "utf8");
 
-service = service.replace(
-  [
-    "        getPlayerFeeCashReceivedPence({",
-    "          amountPence: fee.amountPence,",
-    "          status: fee.status,",
-    "          note: fee.note,",
-    "        }),",
-  ].join("\n"),
-  [
-    "        getPlayerFeeCashReceivedPence({",
-    "          amountPence: fee.amountPence,",
-    "          status: fee.status,",
-    "        }),",
-  ].join("\n"),
-);
+// Cash helper accepts the native note; preserve the ledger receipt distinction.
 
 if (!service.includes("const finalResponsibleCharge = responsibleTeam")) {
   const before = [

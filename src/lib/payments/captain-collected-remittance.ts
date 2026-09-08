@@ -144,7 +144,7 @@ export async function getCaptainCollectedRemittanceSnapshots(
   const fixtureIds = Array.from(new Set(uniqueEntries.map((entry) => entry.fixtureId)));
   const chargeIds = uniqueEntries.map((entry) => entry.chargeId);
 
-  const [collectedFees, remittanceRows] = await Promise.all([
+  const [collectedFees, remittanceRows, ledgerReceipts] = await Promise.all([
     prisma.playerMatchFee.findMany({
       where: {
         teamId: { in: teamIds },
@@ -183,6 +183,10 @@ export async function getCaptainCollectedRemittanceSnapshots(
       WHERE remittance."chargeId" IN (${Prisma.join(chargeIds)})
       GROUP BY remittance."chargeId"
     `),
+    prisma.$queryRaw<Array<{teamId:string;fixtureId:string;amountPence:number;playerCount:number}>>(Prisma.sql`
+      SELECT "teamId","fixtureId",SUM("captainReceivedPence")::int AS "amountPence",COUNT(*)::int AS "playerCount"
+      FROM "PlayerFeeLedgerState" WHERE "teamId" IN (${Prisma.join(teamIds)}) AND "fixtureId" IN (${Prisma.join(fixtureIds)}) AND "captainReceivedPence">0
+      GROUP BY "teamId","fixtureId"`),
   ]);
 
   const collectedByTeamFixture = new Map<
@@ -222,6 +226,13 @@ export async function getCaptainCollectedRemittanceSnapshots(
       }
       removedByTeamFixture.set(feeKey, current);
     }
+  }
+
+  for(const receipt of ledgerReceipts) {
+    const feeKey=key(receipt.teamId,receipt.fixtureId);
+    const current=collectedByTeamFixture.get(feeKey)??{amountPence:0,playerCount:0};
+    current.amountPence+=Number(receipt.amountPence); current.playerCount+=Number(receipt.playerCount);
+    collectedByTeamFixture.set(feeKey,current);
   }
 
   const remittanceByCharge = new Map(

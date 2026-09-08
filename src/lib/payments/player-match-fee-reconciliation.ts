@@ -2,6 +2,8 @@
 // File: src/lib/payments/player-match-fee-reconciliation.ts
 // ========================================
 
+import { getPlayerLedgerTransactionTotal } from "./player-ledger-markers";
+import { getDirectChargePaidTotal } from "@/lib/payments/charge-summary";
 import { PaymentChargeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -108,7 +110,7 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   );
   const coveredTotalPence = paidTotalPence + subsidyPence;
 
-  if (coveredTotalPence <= 0) return null;
+  // Direct repayment receipts may exist while the individual fee is still OPEN.
 
   const fixtureDateKey = getLondonDateKey(fixture.kickoffAt);
   const chargeStatuses = Object.values(PaymentChargeStatus).filter(
@@ -169,7 +171,11 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
     chargeAmountPence: matchingCharge.amountPence,
   });
 
-  if (coveredTotalPence < matchingCharge.amountPence) {
+  const repaymentTransactions = await prisma.paymentTransaction.findMany({
+    where: {chargeId:matchingCharge.id,teamId:input.teamId}, select:{amountPence:true,notes:true},
+  });
+  const allCoveredPence = coveredTotalPence + getDirectChargePaidTotal(repaymentTransactions);
+  if (allCoveredPence < matchingCharge.amountPence) {
     return {
       chargeId: matchingCharge.id,
       paidTotalPence,

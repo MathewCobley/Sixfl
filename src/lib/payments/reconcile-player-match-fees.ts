@@ -1,3 +1,4 @@
+import { isPlayerFeeLedgerControlled } from "./player-ledger";
 // ========================================
 // File: src/lib/payments/reconcile-player-match-fees.ts
 // ========================================
@@ -22,6 +23,7 @@ export async function reconcileOpenPlayerMatchFeesFromTransactions() {
   let reconciled = 0;
 
   for (const fee of openFees) {
+    if (await isPlayerFeeLedgerControlled(fee.id)) continue;
     const payment = await prisma.paymentTransaction.findFirst({
       where: {
         amountPence: { gte: fee.amountPence },

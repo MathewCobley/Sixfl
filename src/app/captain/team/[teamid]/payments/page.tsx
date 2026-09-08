@@ -2,6 +2,7 @@
 // File: src/app/captain/team/[teamid]/payments/page.tsx
 // ========================================
 
+import { pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
@@ -275,6 +276,21 @@ async function useTeamCreditAction(formData: FormData) {
   }
 
   redirect(`/captain/team/${teamId}/payments?credit=used&amount=${result.amountUsedPence}`);
+}
+
+async function closeSettledChargePlayerLinksAction(formData: FormData) {
+  "use server";
+  const teamId=String(formData.get("teamId")??"").trim(),chargeId=String(formData.get("chargeId")??"").trim();
+  const access=await requireCaptain(teamId);
+  if(!access.user)redirect("/login");
+  const ledger=await getTeamPaymentLedger(teamId);
+  const entry=ledger?.entries.find(e=>e.chargeId===chargeId);
+  if(!entry?.fixtureId||!ledger?.relatedTeamIds.includes(entry.teamId))redirect(`/captain/team/${teamId}/payments?links=invalid`);
+  const fees=await prisma.playerMatchFee.findMany({where:{teamId:entry.teamId,fixtureId:entry.fixtureId,status:"OPEN"},select:{id:true}});
+  await pausePlayerFeeCollection({teamId:entry.teamId,feeIds:fees.map(f=>f.id),paused:true,actorUserId:access.user.id});
+  revalidatePath(`/captain/team/${teamId}/payments`);
+  revalidatePath(`/captain/team/${teamId}/player-payments`);
+  redirect(`/captain/team/${teamId}/payments?links=paused`);
 }
 
 export default async function CaptainPaymentsPage({

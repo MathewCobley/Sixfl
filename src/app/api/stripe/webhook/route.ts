@@ -2,6 +2,7 @@
 // File: src/app/api/stripe/webhook/route.ts
 // ========================================
 
+import { settlePlayerRepaymentSession, handlePlayerRepaymentExpiry, handlePlayerRepaymentRefund } from "@/lib/payments/player-repayment-checkout";
 import type { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 import { NextResponse } from "next/server";
@@ -337,6 +338,7 @@ async function handleCompletedCheckoutSession(
   session: Stripe.Checkout.Session,
   stripe: Stripe,
 ) {
+  if (await settlePlayerRepaymentSession(session, stripe)) return;
   const handledTeamAutoPaySetup = await handleCompletedTeamAutoPaySetupCheckoutSession(session, stripe);
 
   if (handledTeamAutoPaySetup) return;
@@ -418,6 +420,12 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (event.type === "checkout.session.expired" || event.type === "checkout.session.async_payment_failed") {
+      if(await handlePlayerRepaymentExpiry(event.data.object as Stripe.Checkout.Session))return NextResponse.json({ok:true});
+    }
+    if(event.type === "charge.refunded") {
+      if(await handlePlayerRepaymentRefund(event.data.object as Stripe.Charge,stripe))return NextResponse.json({ok:true});
+    }
     switch (event.type) {
       case "checkout.session.completed":
       case "checkout.session.async_payment_succeeded": {

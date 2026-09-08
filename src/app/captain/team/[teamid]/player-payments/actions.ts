@@ -4,14 +4,18 @@
 
 "use server";
 
+import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
 
+import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
+import { syncFixtureMatchFeeCharges } from "@/lib/payments/fixture-match-fees";
 import {
   ensurePlayerMatchFeePaymentDetailsForFees,
   queuePlayerMatchFeeReminder,
 } from "@/lib/payments/player-match-fees";
+import { getTeamPaymentLedger } from "@/lib/payments/team-payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
@@ -251,6 +255,19 @@ async function emailPlayerPaymentLinks(feeIds: string[]) {
   return { queued, skipped };
 }
 
+export async function closeCaptainSquadPaymentCollectionAction(formData: FormData) {
+  const teamId=getString(formData,"teamId"),fixtureId=getString(formData,"fixtureId");
+  if(!teamId||!fixtureId)redirect("/captain");
+  const access=await requireCaptain(teamId);
+  if(!access.user)redirect("/login");
+  if(!await assertFixtureBelongsToTeam({fixtureId,teamId}))redirect(getPlayerPaymentsPath(teamId,fixtureId,"&error=fixture_not_found"));
+  const fees=await prisma.playerMatchFee.findMany({where:{teamId,fixtureId,status:"OPEN"},select:{id:true}});
+  await pausePlayerFeeCollection({teamId,feeIds:fees.map(f=>f.id),paused:true,actorUserId:access.user.id});
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(fees.map(f=>f.id),"Player collection paused. The debt remains recorded.");
+  revalidatePath(getPlayerPaymentsPath(teamId,fixtureId));
+  redirect(getPlayerPaymentsPath(teamId,fixtureId,"&saved=collection_paused"));
+}
+
 export async function resendCaptainPlayerPaymentLinkAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
@@ -431,7 +448,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && isLockedPlayerFee(existing.status)) continue;
+      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerControlled(existing.id))) continue;
 
       const data = {
         amountPence: playerAmountPence,
@@ -476,7 +493,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && isLockedPlayerFee(existing.status)) continue;
+      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerControlled(existing.id))) continue;
 
       const data = {
         amountPence: playerAmountPence,
@@ -525,6 +542,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   });
 
   for (const fee of removableFees) {
+    if (await isPlayerFeeLedgerControlled(fee.id)) continue;
     const isSelectedMember = fee.teamMemberId
       ? selectedMemberIds.includes(fee.teamMemberId)
       : false;

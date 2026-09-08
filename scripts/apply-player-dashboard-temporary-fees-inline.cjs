@@ -29,6 +29,7 @@ type TemporaryDashboardMatchFeeRow = {
   teamId: string;
   teamName: string;
   amountPence: number;
+  note: string | null;
   status: PlayerMatchFeeStatus;
   paymentUrl: string | null;
   createdAt: Date;
@@ -60,6 +61,7 @@ const temporaryFeeQuery = `  const temporaryFeeUserId = previewMembership?.user.
       fee."teamId",
       team."name" AS "teamName",
       fee."amountPence",
+      fee."note",
       fee."status",
       fee."paymentUrl",
       fee."createdAt",
@@ -104,6 +106,7 @@ const combinedSummary = `  const allPlayerFees = [
       teamMemberId: null,
       prospectId: null,
       amountPence: fee.amountPence,
+      note: fee.note,
       status: fee.status,
       paymentUrl: fee.paymentUrl,
       createdAt: fee.createdAt,

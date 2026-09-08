@@ -1,0 +1,85 @@
+name: Player ledger and smaller payments
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: player-ledger-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_player_ledger_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_player_ledger_test" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_player_ledger_test
+      NEXTAUTH_SECRET: player-ledger-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      RESEND_API_KEY: re_player_ledger_ci_placeholder
+      STRIPE_SECRET_KEY: sk_test_nonfunctional_player_ledger_ci
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      CRON_SECRET: player-ledger-ci-unused
+      SIXFL_PLAYER_LEDGER_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: tar -czf /tmp/ledger-native-review.tar.gz src prisma scripts tests docs .github config package.json package-lock.json tsconfig.json next.config.*
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - name: Create disposable base schema before applying the real ledger migration
+        run: |
+          node - <<'JS'
+          const fs=require('fs');
+          const u=new URL(process.env.DATABASE_URL);
+          if(u.hostname!=='127.0.0.1'||u.pathname!=='/sixfl_player_ledger_test')throw Error('Local disposable database only');
+          let schema=fs.readFileSync('prisma/schema.prisma','utf8');
+          for(const name of ['PlayerFeeLedgerState','PlayerLedgerEntry','PlayerRepaymentPlan','PlayerRepaymentRequest']){
+            const pattern=new RegExp('model '+name+' \\{[^}]*\\}','g');
+            if(!pattern.test(schema))throw Error('Missing ledger schema model '+name);
+            schema=schema.replace(pattern,'');
+          }
+          fs.writeFileSync('prisma/ledger-base-test.prisma',schema);
+          JS
+          npx prisma db push --skip-generate --schema prisma/ledger-base-test.prisma
+          rm prisma/ledger-base-test.prisma
+      - name: Real migration, ledger, checkout and duplicate/refund tests (no external HTTP)
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-ledger.test.ts"],outfile:".player-ledger-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .player-ledger-tests.cjs 2>&1 | tee /tmp/ledger-test-results.txt
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Final native source and temporary workflow checks
+        run: |
+          test ! -f .github/workflows/inspect-player-ledger-once.yml
+          test ! -f .github/workflows/integrate-player-ledger-once.yml
+          test ! -f .github/workflows/harden-player-ledger-once.yml
+          test ! -f .github/workflows/ledger-integrity-review-once.yml
+          git grep -nE 'PlayerLedgerStatement|createPlayerRepaymentPlan|settlePlayerRepaymentSession|playerLedgerNotificationBlock' -- src
+      - name: Preserve prepared-source review evidence
+        if: always()
+        run: tar -czf /tmp/ledger-prepared-review.tar.gz src prisma scripts tests docs .github config package.json package-lock.json tsconfig.json next.config.*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ledger-verification-evidence
+          path: /tmp/ledger-*
+          retention-days: 3

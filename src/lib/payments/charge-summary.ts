@@ -2,6 +2,7 @@
 // File: src/lib/payments/charge-summary.ts
 // ========================================
 
+import { getPlayerLedgerTransactionTotal } from "./player-ledger-markers";
 import {
   getPlayerFeeCashReceivedPence,
   getPlayerFeeSubsidyPence,
@@ -120,10 +121,11 @@ export function summariseChargesWithPlayerMatchFees<TCharge extends TeamChargeFo
   );
 
   return charges.map((charge) => {
-    const directPaidPence = getDirectChargePaidTotal(charge.transactions);
-    const playerPaidPence = charge.fixtureId
+    const ledgerPlayerPaidPence = getPlayerLedgerTransactionTotal(charge.transactions);
+    const directPaidPence = getDirectChargePaidTotal(charge.transactions) - ledgerPlayerPaidPence;
+    const playerPaidPence = ledgerPlayerPaidPence + (charge.fixtureId
       ? playerMatchFeeTotalsByFixture.get(charge.fixtureId) ?? 0
-      : 0;
+      : 0);
     const playerSubsidyPence = charge.fixtureId
       ? playerMatchFeeSubsidyTotalsByFixture.get(charge.fixtureId) ?? 0
       : 0;

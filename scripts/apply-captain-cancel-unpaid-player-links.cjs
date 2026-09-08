@@ -19,37 +19,7 @@ function replaceRequired(before, after, label) {
 // Previously this action was restricted to fixtures whose team charge was already
 // fully paid, which is why an open £36 fixture with £48 of unpaid links had no
 // usable cancellation path.
-replaceRequired(
-  [
-    '    !entry.fixtureId ||',
-    '    entry.displayStatus !== "PAID" ||',
-    '    entry.playerOpenPence <= 0',
-  ].join("\n"),
-  [
-    '    !entry.fixtureId ||',
-    '    entry.playerOpenPence <= 0',
-  ].join("\n"),
-  "unpaid player-link cancellation eligibility",
-);
-
-replaceRequired(
-  [
-    '    data: {',
-    '      status: "CANCELLED",',
-    '      note: "Cancelled by captain because the team fixture charge was already fully covered.",',
-    '    },',
-  ].join("\n"),
-  [
-    '    data: {',
-    '      status: "CANCELLED",',
-    '      cancelledAt: new Date(),',
-    '      paymentUrl: null,',
-    '      paymentToken: null,',
-    '      note: "Cancelled by captain from team payments. Existing completed player payments were preserved.",',
-    '    },',
-  ].join("\n"),
-  "unpaid player-link cancellation data",
-);
+// Native pausePlayerFeeCollection now preserves the debt. No action rewriting.
 
 source = source.replace(
   "Those player links could not be changed. Refresh the page and check that the charge is fully paid.",
@@ -72,7 +42,7 @@ const newOpenLinksCopy = [
   '                                type="submit"',
   '                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-red-300/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/25"',
   '                              >',
-  '                                Cancel all unpaid player links',
+  '                                Pause unpaid player links — keep debt',
   '                              </button>',
   '                            </form>',
 ].join("\n");
@@ -110,9 +80,8 @@ if (source.includes(duplicatePaidControls)) {
 }
 
 if (
-  !source.includes("Cancel all unpaid player links") ||
-  !source.includes("cancelledAt: new Date()") ||
-  !source.includes("paymentToken: null") ||
+  !source.includes("Pause unpaid player links — keep debt") ||
+  !source.includes("pausePlayerFeeCollection") ||
   !source.includes("Each payment will reduce that balance") ||
   source.includes(
     '    !entry.fixtureId ||\n    entry.displayStatus !== "PAID" ||\n    entry.playerOpenPence <= 0',

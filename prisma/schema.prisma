@@ -1245,3 +1245,92 @@ model InboxAlert {
   @@index([threadId])
   @@index([type, status])
 }
+
+// Player obligations and their collection requests are deliberately separate.
+// Identity references are snapshots (not cascade-delete relations): financial
+// history survives removal of a membership, prospect, fixture or payment link.
+model PlayerFeeLedgerState {
+  feeId String @id
+  teamId String
+  fixtureId String
+  teamMemberId String?
+  prospectId String?
+  userId String?
+  playerName String?
+  openingAmountPence Int
+  balancePence Int
+  receivedPence Int @default(0)
+  captainReceivedPence Int @default(0)
+  controlled Boolean @default(false)
+  collectionPaused Boolean @default(false)
+  planId String?
+  version Int @default(0)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  @@index([teamId, userId])
+  @@index([teamId, teamMemberId])
+  @@index([teamId, prospectId])
+  @@index([planId])
+}
+
+model PlayerLedgerEntry {
+  sequence BigInt @unique @default(autoincrement())
+  id String @id @default(uuid())
+  feeId String
+  teamId String
+  kind String
+  amountPence Int
+  balanceAfterPence Int
+  receiptPence Int @default(0)
+  receivedBy String?
+  actorUserId String?
+  reason String
+  reference String?
+  sourceKey String? @unique
+  createdAt DateTime @default(now())
+  @@index([teamId, feeId, createdAt])
+}
+
+model PlayerRepaymentPlan {
+  id String @id @default(uuid())
+  teamId String
+  anchorFeeId String
+  token String @unique
+  instalmentPence Int
+  instalmentPaidPence Int @default(0)
+  nextDueAt DateTime
+  intervalDays Int @default(7)
+  status String @default("ACTIVE")
+  reason String
+  createdByUserId String
+  activeRequestId String?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([teamId, anchorFeeId])
+  @@index([status, nextDueAt])
+}
+
+model PlayerRepaymentRequest {
+  id String @id @default(uuid())
+  teamId String
+  planId String?
+  feeId String?
+  status String @default("CREATING")
+  amountPence Int
+  dueAt DateTime
+  allocations Json
+  stripeParams Json?
+  checkoutSessionId String? @unique
+  paymentIntentId String? @unique
+  checkoutUrl String?
+  expiresAt DateTime
+  paidAt DateTime?
+  refundedPence Int @default(0)
+  failureReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([planId, status])
+  @@index([feeId, status])
+}

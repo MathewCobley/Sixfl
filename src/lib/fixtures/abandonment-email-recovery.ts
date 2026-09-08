@@ -36,6 +36,7 @@ function getPaidPence(input: {
     teamId: string;
     amountPence: number;
     status: string;
+    note?: string | null;
   }>;
 }) {
   const directPaidPence = input.charge
@@ -49,6 +50,7 @@ function getPaidPence(input: {
         getPlayerFeeCashReceivedPence({
           amountPence: fee.amountPence,
           status: fee.status,
+          note: fee.note,
         }),
       0,
     );
