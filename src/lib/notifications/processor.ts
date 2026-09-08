@@ -2,6 +2,7 @@
 // File: src/lib/notifications/processor.ts
 // ========================================
 
+import { applyPlayerPaymentWarningDeliveryGate } from "@/lib/payments/player-payment-warning";
 import { NotificationChannel } from "@prisma/client";
 import { applyRegistrationDeliveryGate } from "@/lib/managed-squad/registration-reminders";
 import { cancelOwnedReplacementSms, getReplacementSmsCancellationReason } from "@/lib/fixtures/replacement-sms-lifecycle";
@@ -399,6 +400,12 @@ export async function processNotificationQueue(limit = 25) {
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
           continue;
         }
+        const warningBlock = await applyPlayerPaymentWarningDeliveryGate(dispatch);
+        if (warningBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: warningBlock });
+          continue;
+        }
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
           subject: dispatch.subject,
@@ -466,6 +473,12 @@ export async function processNotificationQueue(limit = 25) {
         if (registrationBlock) {
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: registrationBlock });
+          continue;
+        }
+        const warningBlock = await applyPlayerPaymentWarningDeliveryGate(dispatch);
+        if (warningBlock) {
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: warningBlock });
           continue;
         }
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });

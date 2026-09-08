@@ -1027,6 +1027,7 @@ export default async function AdminPaymentsPage({
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <Link href={`/captain/team/${fee.team.id}/match-fees?fixtureId=${fee.fixture.id}`} className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10">Open team fees</Link>
                       {fee.paymentUrl ? <Link href={fee.paymentUrl} className="inline-flex items-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">Payment link</Link> : null}
+                      <Link href={`/admin/payments/player-warning?feeId=${encodeURIComponent(fee.id)}`} className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">Send payment warning</Link>
                       <form action={sendPlayerMatchFeeReminderAction}>
                         <input type="hidden" name="feeId" value={fee.id} />
                         <button type="submit" className="inline-flex items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/15">Chase player</button>

@@ -65,6 +65,15 @@ const { chromium } = require('playwright');
       await body.fill('Bold and italic');
       await body.evaluate(el => { el.focus(); el.select(); });
       await page.getByRole('button', { name: 'Bold', exact: true }).click();
+      // The editor restores its caret in requestAnimationFrame. Let that owned
+      // update finish before programmatically making a new selection, or its
+      // pending callback can overwrite the test's el.select(). Keep all original
+      // formatting, rendered-preview and save/reopen assertions unchanged.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await page.waitForFunction(() => {
+        const el = document.querySelector('textarea[name="body"]');
+        return el.value === '**Bold and italic**' && el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+      });
       await body.evaluate(el => { el.focus(); el.select(); });
       await page.getByRole('button', { name: 'Italics', exact: true }).click();
       assert.equal(await body.inputValue(), '***Bold and italic***');

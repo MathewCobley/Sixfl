@@ -195,7 +195,7 @@ function getNextUkDate(input: { year: number; month: number; day: number }) {
   };
 }
 
-function resolveScheduledFor(input: {
+export function resolveScheduledFor(input: {
   channel: NotificationChannel;
   scheduledFor?: Date;
 }) {
@@ -291,7 +291,7 @@ async function applySmsShortLinks(dispatch: NotificationDispatch, db: Notificati
   });
 }
 
-function buildQueuedContentFromTemplate(input: {
+export function buildQueuedContentFromTemplate(input: {
   template: NotificationTemplate;
   variables?: NotificationTemplateVariables;
   emailBranding?: SIXFLEmailBranding;

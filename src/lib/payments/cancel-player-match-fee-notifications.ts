@@ -7,6 +7,7 @@ import { NotificationDispatchStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const PLAYER_MATCH_FEE_NOTIFICATION_SOURCE_TYPES = [
+  "PLAYER_MATCH_FEE_WARNING",
   "PLAYER_MATCH_FEE_REQUEST",
   "PLAYER_MATCH_FEE_CHASE_24H",
   "PLAYER_MATCH_FEE_CHASE_72H",
