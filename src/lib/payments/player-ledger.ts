@@ -243,11 +243,13 @@ export function repaymentAmount(plan: { instalmentPence:number; instalmentPaidPe
   return amount;
 }
 
-export async function getPlayerLedgerSummaryForUser(teamId:string,userId:string) {
+export async function getPlayerLedgerSummaryForUser(teamId:string,userId:string,includeTemporaryFees=false) {
   const rows=await prisma.$queryRaw<Array<{anchorFeeId:string|null;balancePence:number;receivedPence:number}>>(Prisma.sql`
     SELECT MIN(s."feeId") AS "anchorFeeId",COALESCE(SUM(s."balancePence"),0)::int AS "balancePence",
       COALESCE(SUM(s."receivedPence"+s."captainReceivedPence"),0)::int AS "receivedPence"
-    FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND (s."userId"=${userId} OR (s."userId" IS NULL AND s."prospectId" IN (
+    FROM "PlayerFeeLedgerState" s WHERE (s."teamId"=${teamId} OR (${includeTemporaryFees} AND EXISTS (
+      SELECT 1 FROM "PlayerMatchFee" temporary_fee WHERE temporary_fee.id=s."feeId" AND temporary_fee."temporaryUserId"=${userId})))
+      AND ${visiblePlayerLedgerStateSql()} AND (s."userId"=${userId} OR (s."userId" IS NULL AND s."prospectId" IN (
       SELECT p."sourceProspectId" FROM "TeamMemberProfile" p JOIN "TeamMember" m ON m.id=p."teamMemberId"
       WHERE m."teamId"=${teamId} AND p."sourceProspectId" IS NOT NULL GROUP BY p."sourceProspectId"
       HAVING COUNT(DISTINCT m."userId")=1 AND MIN(m."userId")=${userId})))`);

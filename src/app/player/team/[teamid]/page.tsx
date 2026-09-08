@@ -341,7 +341,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
   const paidFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.PAID);
   const waivedFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.WAIVED);
-  const playerLedgerSummary=membership?await getPlayerLedgerSummaryForUser(teamid,membership.userId):null;
+  const playerLedgerSummary=membership?await getPlayerLedgerSummaryForUser(teamid,membership.userId,true):null;
   const outstandingPence = playerLedgerSummary?.balancePence ?? openFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const paidPence = paidFees.filter(fee=>!hasPlayerLedgerReceipts(fee.note)).reduce((sum, fee) => sum + fee.amountPence, 0) + (playerLedgerSummary?.receivedPence ?? 0);
   const waivedPence = waivedFees.reduce((sum, fee) => sum + fee.amountPence, 0);

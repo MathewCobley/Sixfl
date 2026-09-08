@@ -67,35 +67,47 @@ ON CONFLICT ("sourceKey") DO NOTHING;
 
 -- Every legacy writer, including prepared routes, records the obligation.
 -- Controlled balances cannot be silently overwritten by the old link editor.
-CREATE OR REPLACE FUNCTION sixfl_player_ledger_capture() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE
-  s "PlayerFeeLedgerState"%ROWTYPE; ctx JSONB; next_balance INTEGER; delta INTEGER;
-  actor TEXT; kind TEXT; reason TEXT; uid TEXT; pname TEXT; receipt INTEGER := 0;
+CREATE OR REPLACE FUNCTION sixfl_player_ledger_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE s "PlayerFeeLedgerState"%ROWTYPE; ctx JSONB;
   marker TEXT := '[SIXFL_PLAYER_LEDGER_RECEIPTS]';
 BEGIN
-  ctx := COALESCE(NULLIF(current_setting('sixfl.player_ledger_context',true),''),'{}')::jsonb;
   IF TG_OP='DELETE' THEN
     SELECT * INTO s FROM "PlayerFeeLedgerState" WHERE "feeId"=OLD.id FOR UPDATE;
     IF COALESCE(s."balancePence",0)>0 THEN
       RAISE EXCEPTION 'This player has an unpaid ledger balance. Settle or explicitly waive the charge before deleting it.';
     END IF;
-    UPDATE "PlayerFeeLedgerState" SET "deletedAt"=CURRENT_TIMESTAMP WHERE "feeId"=OLD.id;
     RETURN OLD;
   END IF;
   SELECT * INTO s FROM "PlayerFeeLedgerState" WHERE "feeId"=NEW.id FOR UPDATE;
+  ctx := COALESCE(NULLIF(current_setting('sixfl.player_ledger_context',true),''),'{}')::jsonb;
   IF TG_OP='UPDATE' AND s."controlled" AND
      (NEW."amountPence" IS DISTINCT FROM OLD."amountPence" OR NEW.status IS DISTINCT FROM OLD.status) AND
      (ctx->>'feeId' IS DISTINCT FROM NEW.id) THEN
     RAISE EXCEPTION 'This fee has a player repayment ledger. Use Player account to record payments or reduce its balance; editing a link cannot change the debt.';
   END IF;
-  IF TG_OP='UPDATE' AND s."feeId" IS NOT NULL AND NEW."teamId" IS DISTINCT FROM OLD."teamId" THEN
-    RAISE EXCEPTION 'An unpaid player balance must stay with its original team. Resolve the balance before moving the charge.';
+  IF TG_OP='UPDATE' AND s."feeId" IS NOT NULL AND
+     (NEW."teamId" IS DISTINCT FROM OLD."teamId" OR NEW."fixtureId" IS DISTINCT FROM OLD."fixtureId") THEN
+    RAISE EXCEPTION 'A recorded player charge must stay with its original team and fixture. A financial transfer needs an explicit ledger adjustment.';
   END IF;
   IF s."controlled" THEN
     IF position(marker in COALESCE(NEW.note,''))=0 THEN NEW.note := CONCAT_WS(E'\n',NULLIF(NEW.note,''),marker); END IF;
   ELSIF position(marker in COALESCE(NEW.note,''))>0 THEN
     RAISE EXCEPTION 'Reserved player ledger marker cannot be added to an ordinary fee.';
   END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION sixfl_player_ledger_capture() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  s "PlayerFeeLedgerState"%ROWTYPE; ctx JSONB; next_balance INTEGER; delta INTEGER;
+  actor TEXT; kind TEXT; reason TEXT; uid TEXT; pname TEXT; receipt INTEGER := 0;
+BEGIN
+  IF TG_OP='DELETE' THEN
+    UPDATE "PlayerFeeLedgerState" SET "deletedAt"=CURRENT_TIMESTAMP WHERE "feeId"=OLD.id;
+    RETURN OLD;
+  END IF;
+  SELECT * INTO s FROM "PlayerFeeLedgerState" WHERE "feeId"=NEW.id FOR UPDATE;
+  ctx := COALESCE(NULLIF(current_setting('sixfl.player_ledger_context',true),''),'{}')::jsonb;
   SELECT m."userId",u.name INTO uid,pname FROM "TeamMember" m JOIN "User" u ON u.id=m."userId" WHERE m.id=NEW."teamMemberId";
   IF pname IS NULL THEN SELECT TRIM(CONCAT(p."firstName",' ',p."lastName")) INTO pname FROM "TeamPlayerProspect" p WHERE p.id=NEW."prospectId"; END IF;
   uid := COALESCE(uid,to_jsonb(NEW)->>'temporaryUserId');
@@ -132,8 +144,11 @@ BEGIN
     "updatedAt"=CURRENT_TIMESTAMP WHERE "feeId"=NEW.id;
   RETURN NEW;
 END $$;
+DROP TRIGGER IF EXISTS sixfl_player_ledger_guard_trigger ON "PlayerMatchFee";
+CREATE TRIGGER sixfl_player_ledger_guard_trigger BEFORE INSERT OR UPDATE OR DELETE ON "PlayerMatchFee"
+FOR EACH ROW EXECUTE FUNCTION sixfl_player_ledger_guard();
 DROP TRIGGER IF EXISTS sixfl_player_ledger_capture_trigger ON "PlayerMatchFee";
-CREATE TRIGGER sixfl_player_ledger_capture_trigger BEFORE INSERT OR UPDATE OR DELETE ON "PlayerMatchFee"
+CREATE TRIGGER sixfl_player_ledger_capture_trigger AFTER INSERT OR UPDATE OR DELETE ON "PlayerMatchFee"
 FOR EACH ROW EXECUTE FUNCTION sixfl_player_ledger_capture();
 
 CREATE OR REPLACE FUNCTION sixfl_player_ledger_immutable() RETURNS trigger LANGUAGE plpgsql AS $$

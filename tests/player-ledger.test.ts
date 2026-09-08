@@ -204,3 +204,24 @@ test("unpublished ordinary charges are not exposed in player balances; real cont
  await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:new Date()}}); await plan(t);
  await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:null}}); assert.equal((await account(t)).balancePence,1200);
 });
+
+
+test("skipped duplicate inserts and upserts record only the rows actually written",async()=>{
+ const t=await target(); const before=(await account(t)).entries.length;
+ await prisma.playerMatchFee.createMany({data:[{teamId:t.team.id,fixtureId:t.fixture.id,teamMemberId:t.member.id,amountPence:800,status:"OPEN"}],skipDuplicates:true});
+ assert.equal((await account(t)).balancePence,1200); assert.equal((await account(t)).entries.length,before);
+ assert.equal(await prisma.playerFeeLedgerState.count({where:{teamId:t.team.id}}),1);
+ await prisma.playerMatchFee.upsert({where:{fixtureId_teamMemberId:{fixtureId:t.fixture.id,teamMemberId:t.member.id}},
+   create:{teamId:t.team.id,fixtureId:t.fixture.id,teamMemberId:t.member.id,amountPence:800,status:"OPEN"},update:{amountPence:1000}});
+ assert.equal((await account(t)).balancePence,1000); assert.equal((await account(t)).entries.length,before+1);
+ await plan(t);
+ await assert.rejects(prisma.playerMatchFee.upsert({where:{id:t.fee.id},create:{id:t.fee.id,teamId:t.team.id,fixtureId:t.fixture.id,amountPence:1,status:"OPEN"},update:{amountPence:1}}),/repayment ledger/);
+ assert.equal((await account(t)).balancePence,1000);
+});
+test("the unified dashboard retains exact-user temporary fees without mixing team account statements",async()=>{
+ const t=await target(); const other=await target(700);
+ await prisma.$executeRaw(Prisma.sql`UPDATE "PlayerMatchFee" SET "teamMemberId"=NULL,"temporaryUserId"=${t.user.id} WHERE id=${other.fee.id}`);
+ assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id)).balancePence,1200);
+ assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id,true)).balancePence,1900);
+ assert.equal((await account(t)).balancePence,1200);
+});
