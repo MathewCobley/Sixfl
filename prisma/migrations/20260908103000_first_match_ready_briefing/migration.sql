@@ -54,3 +54,24 @@ You can use the captain checklist and guide in your dashboard if you need a remi
 
 Thanks,
 SIXFL$original$;
+
+-- Keep unchanged welcome/post-match factory text readable when using templates.
+-- This changes only literal newline escapes in those exact seeded bodies.
+UPDATE "NotificationTemplate" SET "body" = $body$Hi {{captainName}},
+
+Welcome to SIXFL. Your team is now set up.
+
+Please log in to your captain area and complete the team setup checklist before your first fixture. It only takes a few minutes and covers your squad, availability, payments and matchday responsibilities.
+
+Thanks,
+SIXFL$body$, "updatedAt" = NOW()
+WHERE "key" = 'captain-onboarding-welcome' AND "body" = $seed$Hi {{captainName}},\n\nWelcome to SIXFL. Your team is now set up.\n\nPlease log in to your captain area and complete the team setup checklist before your first fixture. It only takes a few minutes and covers your squad, availability, payments and matchday responsibilities.\n\nThanks,\nSIXFL$seed$;
+UPDATE "NotificationTemplate" SET "body" = $body$Hi {{captainName}},
+
+Hope you enjoyed your first SIXFL game.
+
+Your captain area is where you can find fixtures, squad details, payments, results and support. The Captain Guide is also there if you need a quick reminder of weekly responsibilities.
+
+Thanks,
+SIXFL$body$, "updatedAt" = NOW()
+WHERE "key" = 'captain-post-first-match' AND "body" = $seed$Hi {{captainName}},\n\nHope you enjoyed your first SIXFL game.\n\nYour captain area is where you can find fixtures, squad details, payments, results and support. The Captain Guide is also there if you need a quick reminder of weekly responsibilities.\n\nThanks,\nSIXFL$seed$;

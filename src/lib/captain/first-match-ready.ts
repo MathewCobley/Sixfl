@@ -7,7 +7,7 @@ import { isFixturePlaceholderTeam } from "@/lib/teams/fixture-placeholders";
 
 export const FIRST_MATCH_READY_TEMPLATE = "captain-first-fixture-reminder";
 export const FIRST_MATCH_READY_WINDOW_MS = 48 * 60 * 60 * 1000;
-type Db = Pick<typeof prisma, "$queryRaw" | "team" | "fixture" | "notificationDispatch" | "notificationTemplate" | "notificationRecipient" | "notificationPreference">;
+type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "team" | "fixture" | "notificationDispatch" | "notificationTemplate" | "notificationRecipient" | "notificationPreference">;
 const emailKey = (value?: string | null) => value?.trim().toLowerCase() || "";
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const format = (date: Date) => formatDateTimeInLondon(date, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });

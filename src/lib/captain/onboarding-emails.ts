@@ -207,6 +207,19 @@ async function queueStage(input: {
     return queueFirstMatchReadyEmail({ teamId: input.row.id, manual: input.manual });
   }
 
+  if (!input.manual) {
+  const previousAttempt = await prisma.notificationDispatch.findFirst({
+    where: { sourceType: "TEAM", sourceId: input.row.id, channel: "EMAIL", OR: [
+      { template: { is: { key: STAGE_TEMPLATE_KEYS[input.stage] } } },
+      { AND: [
+        { metadata: { path: ["type"], equals: "captain_onboarding" } },
+        { metadata: { path: ["stage"], equals: input.stage } },
+      ] },
+    ] }, select: { id: true },
+  });
+  if (previousAttempt) return "not_due" as const;
+}
+
   const captainEmail = getCaptainEmail(input.row);
 
   if (!captainEmail) {

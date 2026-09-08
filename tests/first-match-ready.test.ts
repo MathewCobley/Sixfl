@@ -159,3 +159,18 @@ test("final source retains the new timing policy, editable template sender and d
   assert.ok(guarded(processor)); assert.equal(guarded(processor.replace("await getFirstMatchReadyDeliveryBlock(dispatch)", "null")), false);
   assert.match(readFileSync("src/app/api/cron/notifications/route.ts", "utf8"), /runCaptainOnboardingEmailJob/);
 });
+
+test("welcome and post-match stages retain readable editable templates and do not repeat skipped attempts", async () => {
+  for (const stage of ["welcome", "postFirstMatch"] as const) {
+    const t = await target();
+    assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: t.team.id, stage, force: true }), "queued");
+    const d = (await dispatches(t))[0];
+    assert.ok(d.templateId); assert.match(d.bodyText, /Hi Alex,\n/); assert.equal(d.bodyText.includes("\\n"), false);
+    assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: t.team.id, stage, force: true }), "not_due");
+    const p = await target();
+    await prisma.notificationRecipient.create({ data: { sourceType: "TEAM", sourceId: p.team.id, audience: "TEAM", email: p.team.contactEmail, transactionalEmailOptIn: false } });
+    assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: p.team.id, stage, force: true }), "not_due");
+    assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: p.team.id, stage, force: true }), "not_due");
+    assert.equal((await dispatches(p)).length, 1);
+  }
+});
