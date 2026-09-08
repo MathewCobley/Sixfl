@@ -198,3 +198,43 @@ test('prepared source connects list/detail, both queue entrances, both providers
   assert.match(read('src/app/api/admin/leads/team-confirmation-sms-status/route.ts'), /Not interested — registration chases stopped/);
   assert.equal(fs.existsSync(path.join(root, 'scripts/prepare-lead-decline-branch.cjs')), false);
 });
+
+
+for (const channel of ['EMAIL', 'SMS']) for (const mode of ['template', 'direct']) {
+  test('actual ' + mode + ' queue blocks declined ' + channel + ' and preserves normal recipient checks', async () => {
+    const created = [];
+    const recipient = {
+      id: 'synthetic-recipient', email: 'test@example.test', phone: '+447700900123',
+      isSuppressed: false, transactionalEmailOptIn: true, transactionalSmsOptIn: true,
+      marketingEmailOptIn: false, marketingSmsOptIn: false,
+      preferences: { emailEnabled: true, smsEnabled: true, marketingEmailEnabled: false, marketingSmsEnabled: false },
+    };
+    const template = { id: 'synthetic-template', key: 'team-place-confirmation-email', kind: 'TRANSACTIONAL', channel, audience: 'LEAD', subject: 'Isolated test', body: 'Isolated registration request', isActive: true, ctaLabel: null, ctaUrlKey: null };
+    const runtimeDb = {
+      $queryRaw: query => db.$queryRaw(query),
+      notificationTemplate: { findUnique: async () => template },
+      notificationRecipient: { findUnique: async () => recipient },
+      notificationDispatch: { create: async ({data}) => { const row = { id: 'created-' + created.length, ...data }; created.push(row); return row; } },
+    };
+    const service = loadTs('src/lib/notifications/service.ts', {
+      '@/lib/prisma': { prisma: runtimeDb },
+      './recipients': { getNotificationRecipientById: async () => recipient },
+      '@/lib/fixtures/publishing': { getUnpublishedFixtureBlockReason: async () => null },
+      '@/lib/fixtures/replacement-sms-lifecycle': { getReplacementSmsCancellationReason: async () => null },
+      '@/lib/referees/evening-policy': { isLegacyRefereeNotice: () => false },
+      '@/lib/resend/client': { getEmailReplyDomain: () => 'example.test' },
+    });
+    const queue = () => mode === 'template'
+      ? service.queueNotificationFromTemplate({ ...reference, recipientId: recipient.id, templateKey: template.key })
+      : service.queueDirectNotification({ ...reference, recipientId: recipient.id, channel, audience: 'LEAD', subject: template.subject, body: template.body });
+    recipient.isSuppressed = true;
+    assert.equal((await queue()).status, 'SKIPPED');
+    recipient.isSuppressed = false;
+    assert.equal((await queue()).status, 'QUEUED');
+    await decline();
+    const stopped = await queue();
+    assert.equal(stopped.status, 'CANCELLED');
+    assert.equal(stopped.failureReason, policy.TEAM_LEAD_STOP_REASON);
+    assert.equal(created.length, 3);
+  });
+}
