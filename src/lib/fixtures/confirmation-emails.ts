@@ -8,6 +8,7 @@ import {
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { getAllocatedReplacementConfirmationBlock } from "./replacement-confirmation-policy";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 type ConfirmationEmailMode = "initial" | "auto72h" | "auto24h";
@@ -164,6 +165,8 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
     return "skipped";
   }
 
+  if (await getAllocatedReplacementConfirmationBlock(input)) return "skipped";
+
   const confirmation = fixture.captainConfirmations[0];
   if (
     confirmation?.status === FixtureCaptainConfirmationStatus.CONFIRMED ||
@@ -305,6 +308,10 @@ export async function runFixtureConfirmationEmailJob() {
     }
 
     for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
+      if (await getAllocatedReplacementConfirmationBlock({ fixtureId: fixture.id, teamId })) {
+        summary.skipped += 1;
+        continue;
+      }
       const confirmation = fixture.captainConfirmations.find(
         (item) => item.teamId === teamId,
       );

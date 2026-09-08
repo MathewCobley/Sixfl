@@ -199,7 +199,7 @@ export async function sendLastMinuteReplacementAlert(input: {
       publishedAt: true,
       status: true,
       league: { select: { name: true, season: true, venueName: true } },
-      venue: { select: { name: true } },
+      venue: { select: { id: true, name: true } },
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
     },
@@ -326,6 +326,7 @@ export async function sendLastMinuteReplacementAlert(input: {
           droppedTeamId: input.droppedTeamId,
           opponentTeamId: opponent.id,
           kickoffAt: fixture.kickoffAt.toISOString(),
+          replacementContext: { leagueId: fixture.leagueId, venueId: fixture.venue?.id ?? null, pitch: fixture.pitch?.trim() || null },
         },
         createdByUserId: input.createdByUserId ?? null,
       });
@@ -348,6 +349,7 @@ export async function sendLastMinuteReplacementAlert(input: {
           droppedTeamId: input.droppedTeamId,
           opponentTeamId: opponent.id,
           kickoffAt: fixture.kickoffAt.toISOString(),
+          replacementContext: { leagueId: fixture.leagueId, venueId: fixture.venue?.id ?? null, pitch: fixture.pitch?.trim() || null },
         },
         createdByUserId: input.createdByUserId ?? null,
       });

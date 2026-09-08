@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { cancelAllocatedReplacementConfirmationRequests } from "./replacement-confirmation-policy";
 import { NotificationChannel, Prisma } from "@prisma/client";
 
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
@@ -312,6 +313,11 @@ export async function reconcileLastMinuteReplacement(input: {
 }) {
   // Run even for an already-resolved fixture so earlier queued SMS are cleared.
   // The delivery gate independently protects any worker already in progress.
+  try {
+    await cancelAllocatedReplacementConfirmationRequests(input.fixtureId);
+  } catch (error) {
+    console.error("[replacement-confirmations] Cleanup failed; final delivery checks remain active", error);
+  }
   try {
     const cancelled = await cancelClosedReplacementSms(input.fixtureId);
     if (cancelled) console.info("[replacement-sms] Fixture SMS cancelled", { fixtureId: input.fixtureId, cancelled });
