@@ -1,0 +1,23 @@
+name: Individual player payment warning
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  warning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot current source and payment callsites
+        run: |
+          git grep -n -E 'queuePlayerMatchFeeReminder|Chase player|payment warning|PLAYER_MATCH_FEE_|ensurePlayerMatchFeePaymentDetails' -- src scripts prisma > warning-inventory.txt || true
+          git archive --format=tar.gz HEAD > warning-source.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: payment-warning-source
+          path: |
+            warning-source.tgz
+            warning-inventory.txt
+          retention-days: 3
