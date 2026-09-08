@@ -35,6 +35,17 @@ jobs:
         run: |
           node -e 'const u=new URL(process.env.DATABASE_URL);if(u.hostname!=="127.0.0.1"||u.pathname!=="/sixfl_announcement_test")throw Error("Local test database required")'
           npx prisma db push --skip-generate
+          node - <<'JS'
+          const { PrismaClient } = require('@prisma/client');
+          const u = new URL(process.env.DATABASE_URL);
+          if (u.hostname !== '127.0.0.1' || u.pathname !== '/sixfl_announcement_test') throw Error('Local test database required');
+          const db = new PrismaClient();
+          // PlayerPoolProfile is migration-owned, not a Prisma model. Provide the
+          // column read by the real audience SQL; never alter production schema.
+          db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "PlayerPoolProfile" ("emailNormalized" TEXT)')
+            .catch(error => { console.error(error); process.exitCode = 1; })
+            .finally(() => db.$disconnect());
+          JS
       - name: Real SQL, queue transactions, concurrent deduplication and read-only status
         run: node --test tests/announcement-queue.test.cjs
       - name: Prove removing persisted deduplication is detected
