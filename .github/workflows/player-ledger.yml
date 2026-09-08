@@ -5,6 +5,9 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: player-ledger-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   ledger:
     runs-on: ubuntu-latest
@@ -42,17 +45,19 @@ jobs:
       - run: npm run prebuild
       - run: npx prisma generate
       - run: node scripts/check-critical-feature-contracts.mjs
-      - run: npx tsc --noEmit
       - name: Create disposable base schema before applying the real ledger migration
         run: |
           node - <<'JS'
           const fs=require('fs');
           const u=new URL(process.env.DATABASE_URL);
           if(u.hostname!=='127.0.0.1'||u.pathname!=='/sixfl_player_ledger_test')throw Error('Local disposable database only');
-          const schema=fs.readFileSync('prisma/schema.prisma','utf8');
-          const i=schema.indexOf('// Player obligations and their collection requests are deliberately separate.');
-          if(i<0)throw Error('Ledger schema boundary missing');
-          fs.writeFileSync('prisma/ledger-base-test.prisma',schema.slice(0,i));
+          let schema=fs.readFileSync('prisma/schema.prisma','utf8');
+          for(const name of ['PlayerFeeLedgerState','PlayerLedgerEntry','PlayerRepaymentPlan','PlayerRepaymentRequest']){
+            const pattern=new RegExp('model '+name+' \\{[^}]*\\}','g');
+            if(!pattern.test(schema))throw Error('Missing ledger schema model '+name);
+            schema=schema.replace(pattern,'');
+          }
+          fs.writeFileSync('prisma/ledger-base-test.prisma',schema);
           JS
           npx prisma db push --skip-generate --schema prisma/ledger-base-test.prisma
           rm prisma/ledger-base-test.prisma
@@ -60,12 +65,14 @@ jobs:
         run: |
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-ledger.test.ts"],outfile:".player-ledger-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .player-ledger-tests.cjs 2>&1 | tee /tmp/ledger-test-results.txt
+      - run: npx tsc --noEmit
       - run: npx next build
       - name: Final native source and temporary workflow checks
         run: |
           test ! -f .github/workflows/inspect-player-ledger-once.yml
           test ! -f .github/workflows/integrate-player-ledger-once.yml
           test ! -f .github/workflows/harden-player-ledger-once.yml
+          test ! -f .github/workflows/ledger-integrity-review-once.yml
           git grep -nE 'PlayerLedgerStatement|createPlayerRepaymentPlan|settlePlayerRepaymentSession|playerLedgerNotificationBlock' -- src
       - name: Preserve prepared-source review evidence
         if: always()
