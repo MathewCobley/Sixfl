@@ -475,8 +475,8 @@ async function createNonQueuedDirectDispatch(input: {
   metadata?: Prisma.InputJsonValue;
   scheduledFor: Date;
   createdByUserId?: string | null;
-}) {
-  const dispatch = await prisma.notificationDispatch.create({
+}, db: NotificationDb = prisma) {
+  const dispatch = await db.notificationDispatch.create({
     data: {
       recipientId: input.recipient.id,
       channel: input.channel,
@@ -497,7 +497,7 @@ async function createNonQueuedDirectDispatch(input: {
     },
   });
 
-  return applySmsShortLinks(dispatch);
+  return applySmsShortLinks(dispatch, db);
 }
 
 export async function queueNotificationFromTemplate(input: QueueNotificationFromTemplateInput, db: NotificationDb = prisma) {
@@ -586,8 +586,8 @@ export async function queueNotificationFromTemplate(input: QueueNotificationFrom
   return applySmsShortLinks(dispatch, db);
 }
 
-export async function queueDirectNotification(input: QueueDirectNotificationInput) {
-  const recipient = await getNotificationRecipientById(input.recipientId);
+export async function queueDirectNotification(input: QueueDirectNotificationInput, db: NotificationDb = prisma) {
+  const recipient = db === prisma ? await getNotificationRecipientById(input.recipientId) : await db.notificationRecipient.findUnique({ where: { id: input.recipientId }, include: { preferences: true } });
   if (!recipient) throw new Error("Notification recipient not found.");
 
   const isTransactional = input.isTransactional ?? true;
@@ -626,7 +626,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       metadata: input.metadata,
       scheduledFor,
       createdByUserId: input.createdByUserId,
-    });
+    }, db);
   }
 
   const allowed = canQueueForRecipient({ recipient, channel: input.channel, isTransactional });
@@ -645,12 +645,12 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
       metadata: input.metadata,
       scheduledFor,
       createdByUserId: input.createdByUserId,
-    });
+    }, db);
   }
 
   if (input.channel === "EMAIL") ensureEmailRepliesConfigured();
 
-  const dispatch = await prisma.notificationDispatch.create({
+  const dispatch = await db.notificationDispatch.create({
     data: {
       recipientId: recipient.id,
       channel: input.channel,
@@ -669,7 +669,7 @@ export async function queueDirectNotification(input: QueueDirectNotificationInpu
     },
   });
 
-  return applySmsShortLinks(dispatch);
+  return applySmsShortLinks(dispatch, db);
 }
 
 export async function getDueNotificationDispatches(limit = 50) {

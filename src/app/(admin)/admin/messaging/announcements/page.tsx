@@ -1,14 +1,14 @@
 import Link from "next/link";
 
 import {
-  getAnnouncementAlreadyQueuedEmails,
   getAnnouncementSourceId,
   getAnnouncementTemplateCompatibility,
   getSystemAnnouncementAudience,
 } from "@/lib/communications/system-announcements";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { sendSystemAnnouncementAction } from "./actions";
+import AnnouncementSendPanel from "@/components/admin/communications/AnnouncementSendPanel";
+import { getAnnouncementProgress, getAnnouncementAudienceKey } from "@/lib/communications/announcement-queue";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -88,9 +88,8 @@ export default async function AnnouncementsPage({
     : null;
 
   const audience = await getSystemAnnouncementAudience();
-  const alreadyQueuedEmails = announcementSourceId
-    ? await getAnnouncementAlreadyQueuedEmails(announcementSourceId)
-    : new Set<string>();
+  const initialProgress = announcementSourceId ? await getAnnouncementProgress(announcementSourceId, audience) : null;
+  const audienceKey = getAnnouncementAudienceKey(audience);
   const compatibility = selectedTemplate
     ? getAnnouncementTemplateCompatibility({
         subject: selectedTemplate.subject,
@@ -100,9 +99,7 @@ export default async function AnnouncementsPage({
       })
     : null;
 
-  const alreadyCount = audience.filter((person) =>
-    alreadyQueuedEmails.has(person.email),
-  ).length;
+  const alreadyCount = initialProgress?.recorded ?? 0;
   const remainingCount = Math.max(0, audience.length - alreadyCount);
   const hasResult = sp.sent === "1";
 
@@ -129,10 +126,10 @@ export default async function AnnouncementsPage({
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                Already queued / sent
+                Recorded recipients
               </div>
               <div className="mt-2 text-3xl font-black text-white">{alreadyCount}</div>
-              <div className="mt-1 text-xs text-white/40">For this saved announcement revision</div>
+              <div className="mt-1 text-xs text-white/40">At page load; includes skipped or failed outcomes</div>
             </div>
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100/60">
@@ -155,7 +152,7 @@ export default async function AnnouncementsPage({
 
         {hasResult ? (
           <section className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm text-emerald-50">
-            <strong>Announcement processed.</strong>{" "}
+            <strong>Queueing request completed.</strong>{" "}
             Queued: {resultNumber(sp.queued)} · Skipped by normal email rules: {resultNumber(sp.skipped)} · Already queued/sent: {resultNumber(sp.already)} · Failed: {resultNumber(sp.failed)}.
           </section>
         ) : null}
@@ -264,31 +261,12 @@ export default async function AnnouncementsPage({
               This uses the normal SIXFL notification queue, branded email renderer, preferences, suppression handling and delivery processing. Re-running this unchanged announcement cannot send a second copy to an address that was already queued or sent. If you later edit the template into a genuinely new announcement, that new saved revision can be sent once in its own right.
             </p>
 
-            <form action={sendSystemAnnouncementAction} className="mt-5 space-y-4">
-              <input type="hidden" name="templateId" value={selectedTemplate.id} />
-              <label className="flex max-w-3xl items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
-                <input
-                  type="checkbox"
-                  name="confirm"
-                  value="yes"
-                  required
-                  className="mt-1 h-4 w-4 rounded border-white/20"
-                />
-                <span>
-                  I have reviewed the selected template and understand that this saved announcement revision will be queued to every remaining unique saved email address.
-                </span>
-              </label>
-
-              <button
-                type="submit"
-                disabled={!compatibility?.compatible || remainingCount === 0}
-                className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-black text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {remainingCount > 0
-                  ? `Queue announcement to ${remainingCount} email${remainingCount === 1 ? "" : "s"}`
-                  : "Everyone has already received this announcement"}
-              </button>
-            </form>
+            {announcementSourceId && initialProgress ? <AnnouncementSendPanel
+              key={`${announcementSourceId}:${audienceKey}`}
+              review={{ templateId: selectedTemplate.id, sourceId: announcementSourceId, audienceKey }}
+              initialProgress={initialProgress}
+              compatible={Boolean(compatibility?.compatible)}
+            /> : null}
           </section>
         ) : null}
       </div>

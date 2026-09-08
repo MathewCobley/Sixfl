@@ -30,7 +30,7 @@ export function getAnnouncementAudienceKey(audience: SystemAnnouncementAudienceR
 // edit must not make an old announcement look unsent to its original address.
 export async function getAnnouncementRecords(sourceId: string, db: ReadDb = prisma) {
   const rows = await db.$queryRaw<Array<{ email: string; status: string }>>(Prisma.sql`
-    SELECT DISTINCT ON (LOWER(TRIM(COALESCE(NULLIF(d."metadata"->>'emailNormalized', ''), r."emailNormalized", r."email")))))
+    SELECT DISTINCT ON (LOWER(TRIM(COALESCE(NULLIF(d."metadata"->>'emailNormalized', ''), r."emailNormalized", r."email"))))
       LOWER(TRIM(COALESCE(NULLIF(d."metadata"->>'emailNormalized', ''), r."emailNormalized", r."email"))) AS "email",
       d."status"::text AS "status"
     FROM "NotificationDispatch" d
