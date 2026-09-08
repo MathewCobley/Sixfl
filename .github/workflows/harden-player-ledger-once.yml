@@ -13,61 +13,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/player-ledger-small-payments
-      - name: Apply reviewed native compatibility corrections
+      - name: Apply exact reviewed native compatibility corrections
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          from pathlib import Path
-          def change(path,fn):
-            p=Path(path);s=p.read_text();n=fn(s);assert n!=s,path;p.write_text(n)
-          def one(s,a,b):
-            assert s.count(a)==1,(s.count(a),a[:90]);return s.replace(a,b)
-          change('scripts/apply-player-payment-email-required.cjs',lambda s:s.replace("if (!page.includes('disabled={player.emailRequired'))", "if (!page.includes('disabled={player.emailRequired') && !page.includes('disabled={ledgerControlled || (player.emailRequired && !player.fee)}'))").replace('if (!input.includes("disabled={player.emailRequired"))','if (!input.includes("disabled={player.emailRequired") && !input.includes("disabled={ledgerControlled || (player.emailRequired && !player.fee)}"))'))
-          change('scripts/check-critical-feature-contracts.mjs',lambda s:one(s,'"disabled={player.emailRequired && !player.fee}", "players without email','"disabled={ledgerControlled || (player.emailRequired && !player.fee)}", "players without email'))
-          change('src/lib/fixtures/abandonment.ts',lambda s:one(s,'          note: fee.note,\n          note: fee.note,','          note: fee.note,'))
-          change('scripts/apply-fixture-abandonment-workflow.cjs',lambda s:s[:s.index('service = service.replace(')]+'// Cash helper accepts the native note; preserve the ledger receipt distinction.\n\n'+s[s.index('if (!service.includes("const finalResponsibleCharge'):])
-          change('src/lib/fixtures/abandonment-email-recovery.ts',lambda s:one(s,'    amountPence: number;\n    status: string;','    amountPence: number;\n    status: string;\n    note?: string | null;'))
-          change('src/lib/payments/player-match-fee-reconciliation.ts',lambda s:one(s,'import { getDirectChargePaidTotal } from "./charge-summary";','import { getDirectChargePaidTotal } from "@/lib/payments/charge-summary";'))
-          change('tests/player-ledger.test.ts',lambda s:s.replace('} as Stripe.Checkout.Session;', '} as unknown as Stripe.Checkout.Session;').replace('assert.match(html,/Pay £8.00/);','assert.match(html.replace(/<!--.*?-->/g,""),/Pay £8.00/);'))
-          vis='''\nexport function visiblePlayerLedgerStateSql() {
-            return Prisma.sql`(s.controlled OR s."deletedAt" IS NOT NULL OR EXISTS (
-              SELECT 1 FROM "Fixture" visible_fixture WHERE visible_fixture.id=s."fixtureId" AND visible_fixture."publishedAt" IS NOT NULL))`;
-          }
-          '''
-          def ledger(s):
-            s=one(s,'export type LedgerState =',vis+'\nexport type LedgerState =')
-            s=one(s,'WHERE s."teamId"=${teamId} AND ${owner}', 'WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND ${owner}')
-            s=one(s,'WHERE s."teamId"=${teamId} AND (s."userId"=', 'WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND (s."userId"=')
-            s=s.replace('s."userId"=${userId} OR s."prospectId" IN (','s."userId"=${userId} OR (s."userId" IS NULL AND s."prospectId" IN (')
-            s=s.replace('MIN(m."userId")=${userId}))`','MIN(m."userId")=${userId})))`')
-            s=one(s,'dispatch:{sourceType:string|null;sourceId:string|null}', 'dispatch:{sourceType:string|null;sourceId:string|null;createdAt?:Date}')
-            s=one(s,'  return playerFeeCollectionHold(dispatch.sourceId);', '''  const hold=await playerFeeCollectionHold(dispatch.sourceId);
-            if(hold)return hold;
-            const state=await readPlayerLedgerState(dispatch.sourceId);
-            if(state?.controlled){
-              if(!state.balancePence)return "This player balance is settled.";
-              if(dispatch.createdAt && await prisma.playerLedgerEntry.findFirst({where:{feeId:state.feeId,amountPence:{not:0},createdAt:{gt:dispatch.createdAt}},select:{id:true}}))return "Player balance changed after this demand was queued. Use the current account amount.";
-            }
-            return null;''')
-            return s
-          change('src/lib/payments/player-ledger.ts',ledger)
-          change('src/app/captain/team/[teamid]/player-payments/accounts/page.tsx',lambda s:s.replace('import { money }','import { money, visiblePlayerLedgerStateSql }').replace('WHERE s."teamId"=${teamid} ORDER BY','WHERE s."teamId"=${teamid} AND ${visiblePlayerLedgerStateSql()} ORDER BY'))
-          def dashboard(s):
-            s=one(s,'import { getPlayerLedgerSummaryForUser }','import { hasPlayerLedgerReceipts } from "@/lib/payments/player-ledger-markers";\nimport { getPlayerLedgerSummaryForUser }')
-            s=one(s,'            amountPence: true,\n            status: true,','            amountPence: true,\n            note: true,\n            status: true,')
-            s=one(s,'const paidPence = paidFees.reduce((sum, fee) => sum + fee.amountPence, 0);','const paidPence = paidFees.filter(fee=>!hasPlayerLedgerReceipts(fee.note)).reduce((sum, fee) => sum + fee.amountPence, 0) + (playerLedgerSummary?.receivedPence ?? 0);')
-            return s
-          change('src/app/player/team/[teamid]/page.tsx',dashboard)
-          change('scripts/apply-captain-cancel-unpaid-player-links.cjs',lambda s:s.replace('Cancel all unpaid player links','Pause unpaid player links — keep debt').replace('sp.links === "closed"','sp.links === "paused"').replace('Remaining unpaid player links were closed. No further player payment can be taken for that fixture.','Player collection links are paused. Their unpaid balances remain recorded; use Player account to resume collection or record a genuine reduction.'))
-          change('scripts/apply-modern-captain-player-payment-page.cjs',lambda s:s.replace('Close unpaid links','Pause unpaid links — keep debt').replace('player payment links and preserves any payment already completed.','player payment links without reducing the player debt. Existing completed payments are preserved.'))
-          change('prisma/migrations/20260908140000_player_ledger_and_repayments/migration.sql',lambda s:one(s,'IF TG_OP=\'UPDATE\' AND COALESCE(s."balancePence",0)>0 AND NEW."teamId" IS DISTINCT FROM OLD."teamId" THEN', 'IF TG_OP=\'UPDATE\' AND s."feeId" IS NOT NULL AND NEW."teamId" IS DISTINCT FROM OLD."teamId" THEN'))
-          with Path('tests/player-ledger.test.ts').open('a') as f:f.write('''\n
-test("unpublished ordinary charges are not exposed in player balances; real controlled debt survives unpublishing",async()=>{
- const t=await target(); await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:null}});
- assert.equal((await account(t)).balancePence,0); assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id)).balancePence,0);
- await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:new Date()}}); await plan(t);
- await prisma.fixture.update({where:{id:t.fixture.id},data:{publishedAt:null}}); assert.equal((await account(t)).balancePence,1200);
-});
-''')
+          import base64,json,subprocess
+          obj=json.loads(subprocess.check_output(['gh','api','repos/MathewCobley/Sixfl/git/blobs/f739eb8f0a1054ea9d131219f57be018fbe9dbbe']))
+          original=base64.b64decode(obj['content']).decode()
+          script=original.split("          python3 - <<'PY'\n",1)[1].split('\n          PY\n',1)[0]
+          script='\n'.join(line[10:] if line.startswith('          ') else line for line in script.splitlines())
+          exec(compile(script,'reviewed-player-ledger-hardening','exec'))
           PY
           git config user.name 'SIXFL source integration'
           git config user.email '262667783+MathewCobley@users.noreply.github.com'
