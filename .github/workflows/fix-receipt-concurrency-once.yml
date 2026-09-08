@@ -1,0 +1,59 @@
+name: Correct concurrent player receipt creation once
+on:
+  push:
+    branches: [fix/player-partial-payment-integrity]
+    paths: ['.github/workflows/fix-receipt-concurrency-once.yml']
+permissions:
+  contents: write
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/player-partial-payment-integrity
+      - name: Apply exact reviewed source and concurrent regression changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p=Path('src/lib/payments/player-repayment-checkout.ts')
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='dee5f809b539b3dbd4c66b17483dc0afcca0507e9af89e736fa5bf9dd202b00f'
+          s=p.read_text()
+          old='''    request=await prisma.playerRepaymentRequest.upsert({where:{checkoutSessionId:session.id},update:{},create:{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
+                amountPence:session.amount_total,dueAt:new Date(),expiresAt:new Date(),status:"READY",checkoutSessionId:session.id,
+                allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}});'''
+          new='''    // INSERT ... ON CONFLICT DO NOTHING is atomic even when webhook workers
+              // race on both the deterministic receipt id and unique checkout-session id.
+              // Prisma's empty-update upsert can otherwise fall back to read-then-insert.
+              await prisma.playerRepaymentRequest.createMany({skipDuplicates:true,data:[{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
+                amountPence:session.amount_total,dueAt:new Date(),expiresAt:new Date(),status:"READY",checkoutSessionId:session.id,
+                allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}]});
+              request=await prisma.playerRepaymentRequest.findUnique({where:{checkoutSessionId:session.id}});'''
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='03e4ed62d966b413004868ddbaad728a56500c299c48ee9b4c5b61059438f7ad'
+          p=Path('tests/player-ledger.test.ts')
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='8c851a99cbddb4f585d50aadcb52aaa39beff22be1b17ccdfa216aec0190badc'
+          s=p.read_text()
+          old='''  const t=await target(), {session,provider}=ordinaryCheckout(t,800);
+            await Promise.all([settlePlayerRepaymentSession(session,provider.api),settlePlayerRepaymentSession(session,provider.api)]);
+            assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
+            assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);assert.equal(provider.refundCalls,0);'''
+          new='''  for(let round=0;round<5;round++) {
+              const t=await target(), {session,provider}=ordinaryCheckout(t,800);
+              await Promise.all(Array.from({length:4},()=>settlePlayerRepaymentSession(session,provider.api)));
+              assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
+              assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);assert.equal(provider.refundCalls,0);
+              assert.equal(await prisma.playerRepaymentRequest.count({where:{checkoutSessionId:session.id}}),1);
+            }'''
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          assert hashlib.sha256(p.read_bytes()).hexdigest()=='f0c828a8c594d035ffea5b4f244ac315f4c55702203268e90b866122f9d2b096'
+          PY
+          git config user.name 'SIXFL source integration'
+          git config user.email '262667783+MathewCobley@users.noreply.github.com'
+          git add src/lib/payments/player-repayment-checkout.ts tests/player-ledger.test.ts
+          git commit -m 'Atomically create ordinary receipt requests under concurrent webhooks'
+          git push origin HEAD:fix/player-partial-payment-integrity
