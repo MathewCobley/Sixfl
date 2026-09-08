@@ -214,6 +214,7 @@ write(teamChargeStartPath, teamChargeStart);
 // beyond one full match fee of credit.
 // ---------------------------------------------------------------------------
 const webhookPath = "src/app/api/stripe/webhook/route.ts";
+if (!read(webhookPath).includes("NATIVE_PLAYER_RECEIPT_SETTLEMENT")) {
 let webhook = read(webhookPath);
 webhook = ensureImport(
   webhook,
@@ -308,6 +309,8 @@ if (!webhook.includes("maximumAdditionalCollectionPence")) {
   webhook = webhook.slice(0, insertAt) + boundedGate + webhook.slice(insertAt);
 }
 write(webhookPath, webhook);
+
+}
 
 // ---------------------------------------------------------------------------
 // Team credit calculation must recognise hidden SIXFL subsidies when deciding

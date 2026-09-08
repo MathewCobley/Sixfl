@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 function patchFile(filePath, replacements) {
   const absolutePath = path.join(root, filePath);
   let source = fs.readFileSync(absolutePath, "utf8");
+  if (filePath === "src/app/api/stripe/webhook/route.ts" && source.includes("NATIVE_PLAYER_RECEIPT_SETTLEMENT")) return;
 
   for (const replacement of replacements) {
     const { before, after, label } = replacement;

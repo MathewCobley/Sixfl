@@ -146,7 +146,7 @@ replaceRequired(
 
 const rowBadgeAnchor = `                      <div className="flex flex-wrap items-center gap-2">
                         <span className={\`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold \${getFeeStatusClasses(fee.status)}\`}>
-                          {getFeeStatusLabel(fee.status)}
+                          {getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id)).statusLabel}
                         </span>`;
 
 const rowBadgeWithTemporaryTeam = `                      <div className="flex flex-wrap items-center gap-2">
@@ -156,7 +156,7 @@ const rowBadgeWithTemporaryTeam = `                      <div className="flex fl
                           </span>
                         ) : null}
                         <span className={\`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold \${getFeeStatusClasses(fee.status)}\`}>
-                          {getFeeStatusLabel(fee.status)}
+                          {getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id)).statusLabel}
                         </span>`;
 
 replaceRequired(
@@ -165,6 +165,7 @@ replaceRequired(
   "temporary-team fee label",
 );
 
+source = source.replace("getPlayerReceiptStates(playerFees.map(fee => fee.id))", "getPlayerReceiptStates(allPlayerFees.map(fee => fee.id))");
 fs.writeFileSync(filePath, source, "utf8");
 
 const finalSource = fs.readFileSync(filePath, "utf8");

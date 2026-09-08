@@ -98,10 +98,16 @@ export async function setLedgerContext(db: LedgerDb, input: {
 }) {
   await db.$executeRaw(Prisma.sql`SELECT set_config('sixfl.player_ledger_context',${JSON.stringify(input)},true)`);
 }
-export function basicRepaymentFee(fee: { status: string; amountPence: number; note: string | null; fixture: { publishedAt: Date | null; status: string } }) {
-  if (fee.status !== "OPEN" || fee.amountPence <= 0 || !fee.fixture.publishedAt || ["CANCELLED","POSTPONED"].includes(fee.fixture.status)) return false;
-  // Existing concessions/credits retain their normal behavior. Do not turn a
-  // subsidy into a player debt, or move a historical credit into a new cash pot.
+type CollectiblePlayerFee = { status: string; amountPence: number; note: string | null; fixture: { publishedAt: Date | null; status: string } };
+/** A concession changes what is owed, not whether a genuine receipt counts.
+ * Plan selection stays more restrictive; an ordinary capped fee can still be
+ * paid in two parts without forgiving a remainder or charging the cap twice. */
+export function collectiblePlayerLedgerFee(fee: CollectiblePlayerFee) {
+  return fee.status === "OPEN" && fee.amountPence > 0 && Boolean(fee.fixture.publishedAt)
+    && !["CANCELLED", "POSTPONED"].includes(fee.fixture.status);
+}
+export function basicRepaymentFee(fee: CollectiblePlayerFee) {
+  if (!collectiblePlayerLedgerFee(fee)) return false;
   return !/Player fee cap applied|Zero-fee player share waived|Player credit applied:/i.test(fee.note ?? "");
 }
 async function assertNoOpenRequest(db: LedgerDb, feeIds: string[], planId?: string | null) {

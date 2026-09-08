@@ -1,3 +1,4 @@
+import { getPlayerPaymentDisplay } from "@/lib/payments/player-payment-display";
 // ========================================
 // File: src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx
 // ========================================
@@ -837,9 +838,10 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     <span
                       className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(captainStatus)}`}
                     >
-                      {statusLabel(fee.status, fee.note)}
+                      {getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).statusLabel}
                     </span>
                     <Link href={`/captain/team/${teamid}/player-payments/account/${fee.id}`} className="rounded-full border border-white/10 px-3 py-1 text-xs text-emerald-200">Player account</Link>
+                    <p className="mt-2 text-xs text-white/65">{getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).detail}</p>
                     {ledgerByFee.get(fee.id)?.collectionPaused ? <span className="text-xs text-amber-100">Collection paused — debt remains</span> : null}
                     {canResend && !ledgerByFee.get(fee.id)?.controlled && !ledgerByFee.get(fee.id)?.collectionPaused ? (
                       <form action={resendCaptainPlayerPaymentLinkAction}>

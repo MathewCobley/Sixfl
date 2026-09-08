@@ -3,7 +3,7 @@
 // ========================================
 
 import { getPlayerLedgerTransactionTotal } from "./player-ledger-markers";
-import { getDirectChargePaidTotal } from "@/lib/payments/charge-summary";
+import { summariseChargesWithPlayerMatchFees, getDirectChargePaidTotal } from "@/lib/payments/charge-summary";
 import { PaymentChargeStatus } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -174,37 +174,31 @@ export async function reconcileFixtureChargeFromPlayerPayments(input: {
   const repaymentTransactions = await prisma.paymentTransaction.findMany({
     where: {chargeId:matchingCharge.id,teamId:input.teamId}, select:{amountPence:true,notes:true},
   });
-  const allCoveredPence = coveredTotalPence + getDirectChargePaidTotal(repaymentTransactions);
-  if (allCoveredPence < matchingCharge.amountPence) {
-    return {
-      chargeId: matchingCharge.id,
-      paidTotalPence,
-      subsidyPence,
-      coveredTotalPence,
-      covered: false,
-      overpaymentPence,
-    };
-  }
-
-  await prisma.paymentCharge.update({
+  const freshCharge = await prisma.paymentCharge.findUnique({
     where: { id: matchingCharge.id },
-    data: {
-      status: "PAID",
-      description: appendOverpaymentNote(
-        appendCoveredNote(matchingCharge.description, coveredTotalPence),
-        overpaymentPence,
-      ),
-    },
+    select: { amountPence: true, fixtureId: true, status: true, description: true },
   });
-
-  await cancelQueuedMatchFeeNotificationDispatches([matchingCharge.id]);
-
+  if (!freshCharge) return null;
+  const summary = summariseChargesWithPlayerMatchFees(
+    [{ ...freshCharge, transactions: repaymentTransactions }],
+    playerFees.map(fee => ({ ...fee, fixtureId: input.fixtureId })),
+  )[0];
+  const covered = summary.displayStatus === "PAID";
+  // A stale PAID flag is never authoritative over a remaining balance. Reconcile
+  // both directions; refunds/partial receipts must remain collectible.
+  if (freshCharge.status !== "VOID") {
+    await prisma.paymentCharge.update({
+      where: { id: matchingCharge.id },
+      data: { status: summary.displayStatus as PaymentChargeStatus },
+    });
+  }
+  if (covered) await cancelQueuedMatchFeeNotificationDispatches([matchingCharge.id]);
   return {
     chargeId: matchingCharge.id,
-    paidTotalPence,
-    subsidyPence,
-    coveredTotalPence,
-    covered: true,
+    paidTotalPence: summary.playerPaidPence,
+    subsidyPence: summary.playerSubsidyPence,
+    coveredTotalPence: summary.coveredPence,
+    covered,
     overpaymentPence,
   };
 }
