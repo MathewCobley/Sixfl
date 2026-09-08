@@ -1,0 +1,21 @@
+name: Player payment warning history
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect source without production data or secrets
+        run: |
+          git grep -nE 'PLAYER_MATCH_FEE_WARNING|player-payment-warning|Last request/chase|formatLastChasedLabel|Chase player' -- src scripts tests > warning-history-inventory.txt
+          git archive --format=tar.gz HEAD src scripts tests prisma docs config .github package.json package-lock.json tsconfig.json next.config.ts next-env.d.ts postcss.config.mjs AGENTS.md DEV_RULES.md ENGINEERING.md > warning-history-source.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: warning-history-source
+          path: |
+            warning-history-source.tgz
+            warning-history-inventory.txt
+          retention-days: 2
