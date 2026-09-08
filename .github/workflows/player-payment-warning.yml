@@ -5,19 +5,81 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: player-warning-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   warning:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_warning_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_warning_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_warning_test
+      NEXTAUTH_SECRET: warning-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      RESEND_API_KEY: re_warning_ci_placeholder
+      CRON_SECRET: warning-ci-unused
+      SIXFL_ISOLATED_WARNING_TEST: '1'
     steps:
       - uses: actions/checkout@v4
-      - name: Snapshot current source and payment callsites
-        run: |
-          git grep -n -E 'queuePlayerMatchFeeReminder|Chase player|payment warning|PLAYER_MATCH_FEE_|ensurePlayerMatchFeePaymentDetails' -- src scripts prisma > warning-inventory.txt || true
-          git archive --format=tar.gz HEAD > warning-source.tgz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: payment-warning-source
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: node scripts/check-squad-invite-placeholders.mjs
+      - name: Create disposable local schema only
+        run: npx prisma db push --skip-generate
+      - name: Real PostgreSQL preview, confirmation, queue and provider lifecycle
+        run: node --test tests/player-payment-warning.test.cjs | tee warning-test.log
+      - name: Verify removal of delivery guards is caught
+        run: |
+          cp src/lib/notifications/processor.ts /tmp/warning-processor.ts
+          trap 'cp /tmp/warning-processor.ts src/lib/notifications/processor.ts' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/notifications/processor.ts')
+          p.write_text(p.read_text().replace('await applyPlayerPaymentWarningDeliveryGate(dispatch)', 'null'))
+          PY
+          if node --test tests/player-payment-warning.test.cjs > warning-negative.log 2>&1; then
+            echo 'Missing payment warning delivery guards were not detected'; exit 1
+          fi
+          grep -E 'not ok|fail' warning-negative.log
+      - run: npx next build
+      - name: Test the real confirmation controls on desktop and mobile
+        run: |
+          npm install --prefix /tmp/warning-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/warning-browser/node_modules/.bin/playwright install --with-deps chromium
+          WARNING_PLAYWRIGHT_MODULE=/tmp/warning-browser/node_modules/playwright node --test tests/player-payment-warning.browser.cjs
+      - name: Verify native integration and preserve ordinary chases
+        run: |
+          test ! -f .github/workflows/integrate-player-warning-once.yml
+          git grep -nE 'Send payment warning|previewPlayerPaymentWarning|sendPlayerPaymentWarning|applyPlayerPaymentWarningDeliveryGate|Chase player' -- src > warning-inventory.txt
+          git diff --exit-code -- src/lib/payments/player-payment-warning.ts src/lib/payments/player-payment-warning-policy.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-warning-verification
           path: |
-            warning-source.tgz
+            warning-test.log
+            warning-negative.log
             warning-inventory.txt
-          retention-days: 3
+            artifacts/player-warning/
+          retention-days: 14

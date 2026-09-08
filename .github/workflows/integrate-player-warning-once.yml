@@ -1,0 +1,47 @@
+name: Integrate individual warning native callsites once
+on:
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.event.pull_request.number == 469 && github.event.pull_request.head.repo.full_name == 'MathewCobley/Sixfl' && github.event.pull_request.head.ref == 'feat/individual-player-payment-warning'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Integrate four exact existing callsites on the feature branch only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def replace_file(name, replacements):
+              p=Path(name); s=p.read_text()
+              for old,new in replacements:
+                  assert s.count(old)==1, (name, old, s.count(old))
+                  s=s.replace(old,new)
+              p.write_text(s)
+          replace_file('src/lib/notifications/service.ts', [
+            ('function buildQueuedContentFromTemplate(input:', 'export function buildQueuedContentFromTemplate(input:'),
+            ('function resolveScheduledFor(input:', 'export function resolveScheduledFor(input:')])
+          anchor='                      <form action={sendPlayerMatchFeeReminderAction}>'
+          link='                      <Link href={`/admin/payments/player-warning?feeId=${encodeURIComponent(fee.id)}`} className="inline-flex items-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">Send payment warning</Link>\n'
+          replace_file('src/app/(admin)/admin/payments/page.tsx',[(anchor,link+anchor)])
+          block='        const warningBlock = await applyPlayerPaymentWarningDeliveryGate(dispatch);\n        if (warningBlock) {\n          result.skipped += 1;\n          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: warningBlock });\n          continue;\n        }\n'
+          replacements=[('import { NotificationChannel }','import { applyPlayerPaymentWarningDeliveryGate } from "@/lib/payments/player-payment-warning";\nimport { NotificationChannel }')]
+          for provider in ['sendEmailWithResend','sendSmsWithTwilio']:
+              anchor='        const sendResult = await '+provider+'({'
+              replacements.append((anchor,block+anchor))
+          replace_file('src/lib/notifications/processor.ts',replacements)
+          anchor='const PLAYER_MATCH_FEE_NOTIFICATION_SOURCE_TYPES = ['
+          replace_file('src/lib/payments/cancel-player-match-fee-notifications.ts',[(anchor,anchor+'\n  "PLAYER_MATCH_FEE_WARNING",')])
+          PY
+          git diff --check
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'src/app/(admin)/admin/payments/page.tsx' src/lib/notifications/service.ts src/lib/notifications/processor.ts src/lib/payments/cancel-player-match-fee-notifications.ts
+          test "$(git diff --cached --name-only | wc -l)" = 4
+          git commit -m 'Integrate native individual warning button, shared renderer and provider guards'
+          git push origin HEAD:refs/heads/feat/individual-player-payment-warning
