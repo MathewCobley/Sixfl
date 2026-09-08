@@ -221,3 +221,27 @@ test('native per-fee link, admin actions and both provider guards survive full p
   assert.match(read('src/lib/payments/player-payment-warning.ts'),/queueNotificationFromTemplate/);
   assert.doesNotMatch(read('src/lib/payments/player-payment-warning.ts'),/queueDirectNotification|playerMatchFee\.update|checkout.sessions.create/);
 });
+
+test('warning status reads existing outbox records for the exact fee, including queued, sent and later failure', async () => {
+  const history = load('src/lib/payments/player-payment-warning-history.ts');
+  const first = await target(), second = await target();
+  const originalFees = await prisma.playerMatchFee.findMany({ orderBy: { id: 'asc' } });
+  const queued = await send(await preview(first));
+  let latest = await history.getLatestPlayerPaymentWarnings([first.fee.id, second.fee.id]);
+  assert.equal(latest.get(first.fee.id).label, 'Warning queued');
+  assert.equal(latest.has(second.fee.id), false);
+  assert.equal(providerCalls.length, 0);
+  const initialDispatchCount = await prisma.notificationDispatch.count();
+  await history.getPlayerPaymentWarningHistory(first.fee.id);
+  assert.equal(await prisma.notificationDispatch.count(), initialDispatchCount);
+  await processor.processNotificationQueue(100);
+  latest = await history.getLatestPlayerPaymentWarnings([first.fee.id]);
+  assert.equal(latest.get(first.fee.id).label, 'Warning sent');
+  assert.match(latest.get(first.fee.id).deadline, /10 Sept 2026/);
+  await prisma.notificationDispatch.update({ where: { id: queued.dispatchId }, data: { status: 'FAILED', failedAt: now, failureReason: 'Simulated later delivery failure' } });
+  const records = await history.getPlayerPaymentWarningHistory(first.fee.id);
+  assert.equal(records[0].label, 'Warning failed');
+  assert.equal(records[0].failureReason, 'Simulated later delivery failure');
+  assert.deepEqual(await prisma.playerMatchFee.findMany({ orderBy: { id: 'asc' } }), originalFees);
+  assert.equal(providerCalls.length, 1);
+});

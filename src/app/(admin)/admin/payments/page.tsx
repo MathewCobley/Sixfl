@@ -7,6 +7,9 @@ import { PaymentChargeStatus, PaymentMethod, PlayerMatchFeeStatus } from "@prism
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import PlayerPaymentWarningStatus from "@/components/admin/payments/PlayerPaymentWarningStatus";
+import RefreshPaymentWarningStatus from "@/components/admin/payments/RefreshPaymentWarningStatus";
+import { getLatestPlayerPaymentWarnings } from "@/lib/payments/player-payment-warning-history";
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { queueNotificationFromTemplate } from "@/lib/notifications/service";
@@ -777,6 +780,7 @@ export default async function AdminPaymentsPage({
   const visibleTransactions = filteredTransactions.slice(0, listLimit);
   const filteredPlayerFeeOutstanding = filteredOpenPlayerFees.reduce((sum, fee) => sum + fee.amountPence, 0);
   const showPlayerFees = selectedView === "all" || selectedView === "playerFees";
+  const latestPlayerWarnings = await getLatestPlayerPaymentWarnings(showPlayerFees ? visibleOpenPlayerFees.map(fee => fee.id) : []);
   const showTeamCharges = selectedView === "all" || selectedView === "teamCharges";
   const showRecentPayments = selectedView === "all" || selectedView === "recentPayments";
 
@@ -997,6 +1001,7 @@ export default async function AdminPaymentsPage({
               <p className="mt-2 max-w-3xl text-sm text-white/65">
                 Showing {visibleOpenPlayerFees.length} of {filteredOpenPlayerFees.length} matching open player fees.
               </p>
+              <div className="mt-3"><RefreshPaymentWarningStatus /></div>
             </div>
             <span className="rounded-2xl border border-amber-400/25 bg-black/20 px-4 py-3 text-sm font-semibold text-amber-100">
               {filteredOpenPlayerFees.length} open player fee{filteredOpenPlayerFees.length === 1 ? "" : "s"}
@@ -1023,6 +1028,7 @@ export default async function AdminPaymentsPage({
                       <div className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fee.lastChasedAt ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/5 text-white/55"}`}>
                         {formatLastChasedLabel(fee.lastChasedAt)}
                       </div>
+                      <PlayerPaymentWarningStatus feeId={fee.id} warning={latestPlayerWarnings.get(fee.id)} showHistoryLink />
                     </div>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <Link href={`/captain/team/${fee.team.id}/match-fees?fixtureId=${fee.fixture.id}`} className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10">Open team fees</Link>
