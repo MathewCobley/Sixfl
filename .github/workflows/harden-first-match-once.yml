@@ -1,0 +1,74 @@
+name: Harden first-match integration once
+on:
+  push:
+    branches: [fix/first-match-ready-email]
+    paths: ['.github/workflows/harden-first-match-once.yml']
+permissions:
+  contents: write
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/first-match-ready-email
+      - name: Correct reviewed native integration details
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/lib/captain/first-match-ready.ts');s=p.read_text();old='type Db = Pick<typeof prisma, "$queryRaw" | "team"';assert old in s
+          p.write_text(s.replace(old,'type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "team"'))
+          p=Path('src/lib/captain/onboarding-emails.ts');s=p.read_text()
+          anchor='  const captainEmail = getCaptainEmail(input.row);';assert s.count(anchor)==1
+          guard='''  if (!input.manual) {
+            const previousAttempt = await prisma.notificationDispatch.findFirst({
+              where: { sourceType: "TEAM", sourceId: input.row.id, channel: "EMAIL", OR: [
+                { template: { is: { key: STAGE_TEMPLATE_KEYS[input.stage] } } },
+                { AND: [
+                  { metadata: { path: ["type"], equals: "captain_onboarding" } },
+                  { metadata: { path: ["stage"], equals: input.stage } },
+                ] },
+              ] }, select: { id: true },
+            });
+            if (previousAttempt) return "not_due" as const;
+          }
+
+          '''
+          s=s.replace(anchor,guard+anchor);p.write_text(s)
+          # The old migration stored literal backslash-n in two unused template
+          # defaults. Normalise ONLY those exact factory bodies when adopting
+          # templates; retain all edited bodies, subjects and enabled flags.
+          seed=Path('prisma/migrations/20260624224500_add_captain_onboarding/migration.sql').read_text()
+          sql='\n-- Keep unchanged welcome/post-match factory text readable when using templates.\n-- This changes only literal newline escapes in those exact seeded bodies.\n'
+          for key in ['captain-onboarding-welcome','captain-post-first-match']:
+            chunk=seed.split("    '"+key+"',",2)[2].split('    NOW()',1)[0]
+            match=re.search(r"    '(Hi .*?)',\n    'Open captain area'",chunk,re.S);assert match,key
+            body=match.group(1)
+            sql+='UPDATE "NotificationTemplate" SET "body" = $body$'+body.replace('\\n','\n')+'$body$, "updatedAt" = NOW()\nWHERE "key" = \''+key+'\' AND "body" = $seed$'+body+'$seed$;\n'
+          p=Path('prisma/migrations/20260908103000_first_match_ready_briefing/migration.sql');s=p.read_text();assert 'factory text readable' not in s;p.write_text(s+sql)
+          p=Path('tests/first-match-ready.test.ts');s=p.read_text();s+='''
+          test("welcome and post-match stages retain readable editable templates and do not repeat skipped attempts", async () => {
+            for (const stage of ["welcome", "postFirstMatch"] as const) {
+              const t = await target();
+              assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: t.team.id, stage, force: true }), "queued");
+              const d = (await dispatches(t))[0];
+              assert.ok(d.templateId); assert.match(d.bodyText, /Hi Alex,\\n/); assert.equal(d.bodyText.includes("\\\\n"), false);
+              assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: t.team.id, stage, force: true }), "not_due");
+              const p = await target();
+              await prisma.notificationRecipient.create({ data: { sourceType: "TEAM", sourceId: p.team.id, audience: "TEAM", email: p.team.contactEmail, transactionalEmailOptIn: false } });
+              assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: p.team.id, stage, force: true }), "not_due");
+              assert.equal(await queueCaptainOnboardingEmailForTeam({ teamId: p.team.id, stage, force: true }), "not_due");
+              assert.equal((await dispatches(p)).length, 1);
+            }
+          });
+          ''';p.write_text(s)
+          PY
+          git diff --check
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'maintenance@sixfl.co.uk'
+          git add src/lib/captain/first-match-ready.ts src/lib/captain/onboarding-emails.ts prisma/migrations/20260908103000_first_match_ready_briefing/migration.sql tests/first-match-ready.test.ts
+          git diff --cached --stat
+          git commit -m 'Fix raw-client typing and preserve adjacent onboarding template behavior'
+          git push origin HEAD:refs/heads/fix/first-match-ready-email
