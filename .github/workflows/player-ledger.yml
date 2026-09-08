@@ -37,6 +37,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - run: tar -czf /tmp/ledger-native-review.tar.gz src prisma scripts tests docs .github config package.json package-lock.json tsconfig.json next.config.*
       - run: npm ci
       - run: npm run prebuild
       - run: npx prisma generate
@@ -58,10 +59,20 @@ jobs:
       - name: Real migration, ledger, checkout and duplicate/refund tests (no external HTTP)
         run: |
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-ledger.test.ts"],outfile:".player-ledger-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
-          node --test .player-ledger-tests.cjs
+          node --test .player-ledger-tests.cjs 2>&1 | tee /tmp/ledger-test-results.txt
       - run: npx next build
       - name: Final native source and temporary workflow checks
         run: |
           test ! -f .github/workflows/inspect-player-ledger-once.yml
           test ! -f .github/workflows/integrate-player-ledger-once.yml
+          test ! -f .github/workflows/harden-player-ledger-once.yml
           git grep -nE 'PlayerLedgerStatement|createPlayerRepaymentPlan|settlePlayerRepaymentSession|playerLedgerNotificationBlock' -- src
+      - name: Preserve prepared-source review evidence
+        if: always()
+        run: tar -czf /tmp/ledger-prepared-review.tar.gz src prisma scripts tests docs .github config package.json package-lock.json tsconfig.json next.config.*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ledger-verification-evidence
+          path: /tmp/ledger-*
+          retention-days: 3
