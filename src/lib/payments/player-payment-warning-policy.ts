@@ -23,7 +23,15 @@ export function parseWarningDeadline(value: unknown, now = new Date()) {
   if (result.getTime() < now.getTime() + HOUR || result.getTime() > now.getTime() + 30 * 24 * HOUR) throw new PaymentWarningError("Choose a deadline at least one hour from now and within 30 days.");
   return result;
 }
-export const warningFingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// JSONB may reorder object keys. Compare meaning, retaining array order, rather
+// than rejecting an unchanged payment destination after its database round trip.
+function canonical(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical((value as Record<string, unknown>)[key])]));
+  return value;
+}
+export const warningFingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(canonical(value)) ?? "null").digest("hex");
 function secret() {
   const value = process.env.NEXTAUTH_SECRET?.trim();
   if (!value) throw new Error("Payment warning preview signing is not configured.");
@@ -39,7 +47,7 @@ export function readWarningTicket(token: unknown, actorId: string, now = new Dat
   const [payload, signature, extra] = token.split(".");
   if (!payload || !signature || extra) throw new PaymentWarningError("Invalid warning preview. Please preview again.");
   const expected = createHmac("sha256", secret()).update(`player-payment-warning:${payload}`).digest("base64url");
-  if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new PaymentWarningError("Invalid warning preview. Please preview again.");
+  if (!/^[A-Za-z0-9_-]{43}$/.test(signature) || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new PaymentWarningError("Invalid warning preview. Please preview again.");
   let data: PreviewTicket;
   try { data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")); } catch { throw new PaymentWarningError("Invalid warning preview."); }
   if (data.version !== 1 || data.actorId !== actorId || !data.feeId || !data.requestId || !data.fingerprint || !Number.isFinite(data.expiresAt)) throw new PaymentWarningError("This preview does not belong to your admin session.");
