@@ -1,5 +1,11 @@
 -- Add an independent, append-only player statement. Existing balances are
 -- imported exactly as currently stored; historical fee reductions are NOT undone.
+-- Keep the opening snapshot and write-capture installation atomic. Existing
+-- application writers wait briefly rather than slipping between those steps.
+BEGIN;
+SET LOCAL lock_timeout = '15s';
+LOCK TABLE "PlayerMatchFee" IN SHARE ROW EXCLUSIVE MODE;
+
 CREATE TABLE IF NOT EXISTS "PlayerFeeLedgerState" (
   "feeId" TEXT PRIMARY KEY, "teamId" TEXT NOT NULL, "fixtureId" TEXT NOT NULL,
   "teamMemberId" TEXT, "prospectId" TEXT, "userId" TEXT, "playerName" TEXT,
@@ -177,3 +183,5 @@ This is a part-payment arrangement, not a reduction of the debt. Any new match f
 Thanks,
 SIXFL$body$,'Pay agreed amount','paymentUrl',true,NOW(),NOW())
 ON CONFLICT (key) DO NOTHING;
+
+COMMIT;
