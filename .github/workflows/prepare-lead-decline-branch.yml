@@ -1,0 +1,27 @@
+name: Prepare native lead decision changes
+on:
+  push:
+    branches: [fix/team-lead-decline-stop-chasing]
+    paths: [scripts/prepare-lead-decline-branch.cjs, .github/workflows/prepare-lead-decline-branch.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/fix/team-lead-decline-stop-chasing'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/prepare-lead-decline-branch.cjs
+      - name: Inspect source ownership and all lead follow-up send paths
+        run: |
+          git grep -n -E 'declineTeamPlaceFromLead|LEAD_.*(EMAIL|SMS|CHASE)|LeadTeamConfirmation.*(UPDATE|INSERT)' -- src scripts | head -180
+          git grep -n 'LeadTeamDecisionPanel\|TeamLeadDecisionControls\|team-lead-chases' -- src
+          git diff --check
+      - name: Commit native files and remove temporary editing aids
+        run: |
+          git rm scripts/prepare-lead-decline-branch.cjs .github/workflows/prepare-lead-decline-branch.yml
+          git add src
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Wire native team decline controls and stop registration follow-ups'
+          git push origin HEAD:refs/heads/fix/team-lead-decline-stop-chasing
