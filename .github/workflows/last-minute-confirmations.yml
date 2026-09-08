@@ -1,0 +1,17 @@
+name: Last-minute replacement confirmations
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: tar -czf replacement-source.tgz src prisma scripts tests docs config .github package.json package-lock.json tsconfig.json next.config.ts next-env.d.ts postcss.config.mjs AGENTS.md ENGINEERING.md DEV_RULES.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replacement-source
+          path: replacement-source.tgz
+          retention-days: 2
