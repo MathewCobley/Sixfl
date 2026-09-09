@@ -37,6 +37,10 @@ jobs:
       RESEND_API_KEY: re_replacement_ci_placeholder
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Check the complete committed change before legacy source preparation
+        run: git diff --check HEAD^ HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -75,7 +79,10 @@ jobs:
           test ! -f .github/workflows/integrate-last-minute-once.yml
           git grep -nE 'getAllocatedReplacementConfirmationBlock|getFixtureConfirmationDeliveryBlock|cancelAllocatedReplacementConfirmationRequests|queueInitialFixtureConfirmationEmailForTeam|reconcileLastMinuteReplacement' -- src > replacement-inventory.txt
           git diff --exit-code -- src/lib/fixtures/replacement-confirmation-policy.ts
-          git diff --check
+          # The complete committed diff is checked above. Legacy prebuild scripts
+          # also rewrite unrelated kit files; check this feature's prepared paths
+          # here without treating their pre-existing whitespace as its regression.
+          git diff --check -- src/lib/fixtures/replacement-confirmation-policy.ts src/lib/fixtures/confirmation-emails.ts src/lib/fixtures/confirmation-reminders.ts src/lib/fixtures/confirmation-warning-emails.ts src/lib/fixtures/last-minute-replacement-resolution.ts src/lib/fixtures/last-minute-replacement.ts src/lib/notifications/processor.ts tests/last-minute-confirmations.test.cjs docs/last-minute-confirmation-policy.md .github/workflows/last-minute-confirmations.yml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
