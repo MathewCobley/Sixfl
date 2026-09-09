@@ -40,9 +40,14 @@ const input = {
   kickoffAt: new Date('2026-09-08T20:20:00Z'), venueName: 'Test Sports Centre', pitch: '1', replacementFeePence: 0, createdByUserId: 'admin-test',
 };
 function harness(options = {}) {
-  const queued = [], direct = [], logged = [], processed = [], contacts = [];
+  const queued = [], direct = [], logged = [], processed = [], contacts = [], cleanupReads = [];
   const team = id => ({ id, name: id === 'silent-team' ? 'Example FC' : id, leagueId: 'league', logoUrl: '/team-logo.png', league: { name: 'Example league', season: 'Summer 2026' } });
   const prisma = {
+    // These copy fixtures contain no redundant confirmation requests. Execute
+    // the real cleanup with an empty isolated outbox, recording its query.
+    // Matching rows and provider races use real PostgreSQL in
+    // tests/last-minute-confirmations.test.cjs; no safety function is bypassed.
+    notificationDispatch: { findMany: async query => { cleanupReads.push(query); return []; } },
     team: { findUnique: async ({ where }) => options.missingTeam ? null : team(where.id) },
     fixture: { findUnique: async () => ({ id: 'fixture', status: 'SCHEDULED', kickoffAt: new Date('2099-09-08T20:20:00Z'),
       pitch: '1', matchFeePence: 4000, homeTeam: {id:'replacement',name:'Replacement FC'}, awayTeam:{id:'opponent',name:'Opponent FC'},
@@ -58,6 +63,7 @@ function harness(options = {}) {
   };
   const module = load(sourcePath, {
     '@/lib/prisma': { prisma },
+    './replacement-confirmation-policy': load('src/lib/fixtures/replacement-confirmation-policy.ts', { '@/lib/prisma': { prisma } }),
     './replacement-sms-lifecycle': { cancelClosedReplacementSms: async () => 0, REPLACEMENT_SMS_CANCEL_REASON: 'Replacement request closed — unsent SMS cancelled.' },
     '@/lib/communications/send-team-broadcast': { sendTeamBroadcastMessage: async payload => { direct.push(payload); return {dispatchId:`direct-${direct.length}`}; } },
     '@/lib/notifications/processor': { processNotificationQueue: async count => { processed.push(count); } },
@@ -68,7 +74,7 @@ function harness(options = {}) {
     } },
     '@/lib/communications/log-dispatch': { logNotificationDispatchToThread: async payload => { logged.push(payload); } },
   }, '\nexport const testSendResolutionMessage = sendResolutionMessage;');
-  return {...module, queued, direct, logged, processed, contacts};
+  return {...module, queued, direct, logged, processed, contacts, cleanupReads};
 }
 
 test('email and SMS defaults are neutral, fully renderable, transactional team templates', async () => {
@@ -127,12 +133,16 @@ test('contacted non-responders and declined teams still receive neutral closure,
   assert.equal(h.queued.length,4); assert.equal(h.direct.length,4); assert.equal(h.processed.length,1);
   assert.deepEqual([...new Set(h.direct.map(row=>row.teamId))].sort(),['opponent','replacement']);
   assert.equal(h.queued.some(row=>row.sourceId==='dropped'),false);
+  assert.equal(h.cleanupReads.length,1);
+  assert.deepEqual(h.cleanupReads[0].where.OR,[{metadata:{path:['fixtureId'],equals:'fixture'}},{sourceId:{startsWith:'fixture:'}}]);
+  assert.deepEqual(h.cleanupReads[0].where.status,{in:['QUEUED','FAILED']});
 });
 
 test('already resolved cycles do not send the revised copy again', async () => {
   const h=harness({alreadyResolved:true}); const result=await h.reconcileLastMinuteReplacement({fixtureId:'fixture'});
   assert.equal(result.reason,'already_resolved');
   assert.equal(h.queued.length+h.direct.length+h.processed.length,0);
+  assert.equal(h.cleanupReads.length,1,'Already-resolved cycles still check the real unsent-confirmation cleanup');
 });
 
 test('inactive/missing templates have no hard-coded fallback and skipped SMS retains history', async () => {

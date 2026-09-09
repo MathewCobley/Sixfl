@@ -6,6 +6,7 @@ import { playerLedgerNotificationBlock } from "@/lib/payments/player-ledger";
 import { playerRepaymentReminderDeliveryBlock } from "@/lib/payments/player-repayment-reminders";
 import { applyPlayerPaymentWarningDeliveryGate } from "@/lib/payments/player-payment-warning";
 import { NotificationChannel } from "@prisma/client";
+import { getFixtureConfirmationDeliveryBlock } from "@/lib/fixtures/replacement-confirmation-policy";
 import { applyRegistrationDeliveryGate } from "@/lib/managed-squad/registration-reminders";
 import { cancelOwnedReplacementSms, getReplacementSmsCancellationReason } from "@/lib/fixtures/replacement-sms-lifecycle";
 import { getUnresolvedEmailPlaceholderReason } from "./renderer";
@@ -410,6 +411,13 @@ export async function processNotificationQueue(limit = 25) {
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: warningBlock });
           continue;
         }
+        const confirmationBlock = await getFixtureConfirmationDeliveryBlock(dispatch);
+        if (confirmationBlock) {
+          await markNotificationDispatchCancelled(dispatch.id, confirmationBlock);
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: confirmationBlock });
+          continue;
+        }
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
           subject: dispatch.subject,
@@ -483,6 +491,13 @@ export async function processNotificationQueue(limit = 25) {
         if (warningBlock) {
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: warningBlock });
+          continue;
+        }
+        const confirmationBlock = await getFixtureConfirmationDeliveryBlock(dispatch);
+        if (confirmationBlock) {
+          await markNotificationDispatchCancelled(dispatch.id, confirmationBlock);
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: confirmationBlock });
           continue;
         }
         const sendResult = await sendSmsWithTwilio({ to: dispatch.recipient.phone, body: dispatch.bodyText });

@@ -8,6 +8,7 @@ import {
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { getAllocatedReplacementConfirmationBlock } from "./replacement-confirmation-policy";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 export const FIXTURE_CONFIRMATION_WARNING_SOURCE_TYPE =
@@ -93,6 +94,9 @@ async function getUpcomingWarningsWithoutEmail(now: Date) {
 export async function queueFixtureConfirmationWarningEmail(
   warning: FixtureConfirmationWarningEmailInput,
 ) {
+  if (await getAllocatedReplacementConfirmationBlock(warning)) {
+    return { status: "not_queued" as const, queued: 0, dispatchId: null, dispatchStatus: "CANCELLED" as const };
+  }
   const existingDispatch = await prisma.notificationDispatch.findFirst({
     where: {
       sourceType: FIXTURE_CONFIRMATION_WARNING_SOURCE_TYPE,

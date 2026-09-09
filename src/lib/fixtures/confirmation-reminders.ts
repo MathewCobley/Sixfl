@@ -12,6 +12,7 @@ import {
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { getAllocatedReplacementConfirmationBlock } from "./replacement-confirmation-policy";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 export type FixtureConfirmationReminderMode =
@@ -289,6 +290,10 @@ export async function queueFixtureConfirmationSmsReminder(input: {
   }
 
   if (fixture.publishedAt === null || fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
+    return { ok: false, status: "not_available", teamName: team.name };
+  }
+
+  if (await getAllocatedReplacementConfirmationBlock(input)) {
     return { ok: false, status: "not_available", teamName: team.name };
   }
 
