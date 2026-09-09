@@ -6,52 +6,42 @@ permissions:
   contents: write
 jobs:
   source:
-    if: github.repository == 'MathewCobley/Sixfl'
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/fix/admin-sms-reply-reliable-submit'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: fix/admin-sms-reply-reliable-submit
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Inspect owning sources and related entry points (no production access)
+      - name: Materialise owning React and server sources, without production access
         run: |
-          git grep -n -E 'sendAdminMessageReplyAction|queueAdmin.*Reply|SMS reply|\.submit\(|cloneNode|outerHTML' -- src scripts || true
-          node - <<'JS'
-          const fs=require('node:fs');
-          const schema=fs.readFileSync('prisma/schema.prisma','utf8');
-          for(const name of ['MessageThread','MessageEntry','NotificationRecipient','NotificationPreference','NotificationDispatch','User','TeamMember']) {
-            const match=schema.match(new RegExp('model '+name+' \\{[\\s\\S]*?\\n\\}'));
-            console.log('\nSCHEMA '+name+'\n'+(match?.[0]||'missing'));
-          }
-          for(const p of ['src/lib/requireAdmin.ts','src/lib/notifications/service.ts','src/lib/messaging/phone.ts','tests/announcement-queue.test.cjs','tests/announcement-feedback.browser.cjs','docs/critical-feature-contracts.md','docs/regression-checklist.md']) {
-            console.log('\nSOURCE '+p+'\n'+fs.readFileSync(p,'utf8'));
-          }
-          JS
-      - name: Materialise native source edits, without updating any branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ ! -f scripts/author-sms-repair.cjs ]; then exit 0; fi
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/admin-sms-reply-reliable-submit'
+          test -f scripts/author-sms-repair.cjs
           node scripts/author-sms-repair.cjs
+          node - <<'JS'
+          const fs = require('node:fs');
+          function replace(p,b,a) { const s=fs.readFileSync(p,'utf8'); if(s.split(b).length!==2)throw Error('Expected one anchor: '+p);fs.writeFileSync(p,s.replace(b,a)); }
+          replace('src/components/admin/messages/AdminMessageThread.tsx', '  const replyEmail =', '  const replyPhoneLabel = formatPhone(replyPhoneRaw);\n  const replyEmail =');
+          replace('src/components/admin/messages/AdminSmsReplyForm.tsx', '      </div>\n      {record ? <div', '        {record && ["FAILED", "SKIPPED", "CANCELLED"].includes(record.status) ? <button type="button" disabled={busy || checking || uncertain} onClick={() => { save(newDraft(phone)); setRecord(null); setRecordRequestId(""); setUncertain(false); setNotice("New empty draft opened. The previous reply has not been retried."); }} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">Write another reply</button> : null}\n      </div>\n      {record ? <div');
+          replace('tests/admin-sms-reply.browser.cjs', '      assert.ok(gets >= 4); assert.deepEqual(errors, []);', '      const beforeNewDraft = posts.length; await page.getByRole("button", { name: "Write another reply" }).click(); await page.getByText("New empty draft opened. The previous reply has not been retried.", { exact: true }).waitFor(); assert.equal(await field.inputValue(), ""); assert.equal(await field.getAttribute("readonly"), null); assert.equal(posts.length, beforeNewDraft);\n      assert.ok(gets >= 4); assert.deepEqual(errors, []);');
+          JS
           git diff --check
           git diff --stat
-          git diff
-          node - <<'JS'
-          const fs=require('node:fs'); const cp=require('node:child_process');
-          const repo=process.env.GITHUB_REPOSITORY;
-          async function api(path,body){const r=await fetch('https://api.github.com/repos/'+repo+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(await r.text());return r.json();}
-          (async()=>{
-            const head=cp.execSync('git rev-parse HEAD',{encoding:'utf8'}).trim();
-            const base=await api('/git/commits/'+head);
-            const names=cp.execSync('git diff --name-only',{encoding:'utf8'}).trim().split('\n').filter(Boolean);
-            const tree=[];
-            for(const path of names){if(!fs.existsSync(path)){tree.push({path,mode:'100644',type:'blob',sha:null});continue;}const blob=await api('/git/blobs',{content:fs.readFileSync(path,'utf8'),encoding:'utf-8'});tree.push({path,mode:'100644',type:'blob',sha:blob.sha});}
-            for(const path of ['scripts/author-sms-repair.cjs','.github/workflows/sms-repair-workbench.yml']) if(!tree.some(x=>x.path===path))tree.push({path,mode:'100644',type:'blob',sha:null});
-            const result=await api('/git/trees',{base_tree:base.tree.sha,tree});
-            console.log('NATIVE_SOURCE_PARENT='+head); console.log('NATIVE_SOURCE_TREE='+result.sha);
-            console.log('NATIVE_SOURCE_CHANGES='+JSON.stringify(tree));
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
+          git grep -n -E 'sendAdminMessageReplyAction|<AdminSmsReplyForm|smsReplyStatusLabel' -- src
+      - name: Commit integration only to fix branch; remove authoring tools
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/admin-sms-reply-reliable-submit'
+          git rm scripts/author-sms-repair.cjs .github/workflows/sms-repair-workbench.yml
+          git add src/lib/messaging/service.ts 'src/app/(admin)/admin/messaging/page.tsx' src/components/admin/messages/AdminMessagesInbox.tsx src/components/admin/messages/AdminMessageThread.tsx 'src/app/(admin)/admin/messages/actions.ts' src/components/admin/messages/AdminSmsReplyForm.tsx scripts/apply-message-sender-attribution.cjs docs/critical-feature-contracts.md tests/admin-sms-reply.browser.cjs
+          git diff --cached --check
+          git config user.name 'SIXFL SMS repair'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Wire native SMS reply form, atomic service, accurate delivery states and preserved attribution'
+          git push origin HEAD:refs/heads/fix/admin-sms-reply-reliable-submit
+          git rev-parse HEAD
