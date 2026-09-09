@@ -5,6 +5,9 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: sms-reply-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   sms-reply:
     runs-on: ubuntu-latest
@@ -57,7 +60,14 @@ jobs:
           s=p.read_text(); assert 'if (existing) {' in s
           p.write_text(s.replace('if (existing) {', 'if (false && existing) {', 1))
           PY
-          if node --test --test-name-pattern='concurrent same-request' tests/admin-sms-reply.test.cjs > test-results/negative-control.log 2>&1; then echo 'Duplicate regression unexpectedly passed'; exit 1; fi
+          # Use a sequential repeated-send test for the deliberate failure.
+          # The unmodified suite separately tests six truly concurrent retries.
+          set +e
+          timeout 60s node --test --test-name-pattern='lost-response retry after sent' tests/admin-sms-reply.test.cjs > test-results/negative-control.log 2>&1
+          exit_code=$?
+          set -e
+          test "$exit_code" -eq 1
+          grep -Eq 'P2002|Unique constraint failed' test-results/negative-control.log
       - name: Browser tooling isolated from application package files
         run: |
           npm install --prefix "$RUNNER_TEMP/sms-browser" --no-audit --no-fund playwright esbuild
