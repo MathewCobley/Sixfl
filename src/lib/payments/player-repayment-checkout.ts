@@ -172,9 +172,13 @@ export async function settlePlayerRepaymentSession(eventSession:Stripe.Checkout.
     if(charge&&charge.amountPence>0){
       await applyExistingTeamCreditToChargeFirst({teamId:s.teamId,chargeId:charge.chargeId,fixtureFeePence:charge.amountPence});
     }
-    request=await prisma.playerRepaymentRequest.upsert({where:{checkoutSessionId:session.id},update:{},create:{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
+    // INSERT ... ON CONFLICT DO NOTHING is atomic even when webhook workers
+    // race on both the deterministic receipt id and unique checkout-session id.
+    // Prisma's empty-update upsert can otherwise fall back to read-then-insert.
+    await prisma.playerRepaymentRequest.createMany({skipDuplicates:true,data:[{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
       amountPence:session.amount_total,dueAt:new Date(),expiresAt:new Date(),status:"READY",checkoutSessionId:session.id,
-      allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}});
+      allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}]});
+    request=await prisma.playerRepaymentRequest.findUnique({where:{checkoutSessionId:session.id}});
   }
   if(!request) throw new Error("Repayment request not found; no ledger was changed.");
   if(request.status==="PAID") {await reconcileRepaymentCharges(request);return true;}

@@ -270,10 +270,13 @@ test("ordinary £12 fee / £8 receipt is part-paid £4, without creating or requ
   assert.equal((await account(t)).entries.reduce((sum,e)=>sum+e.receiptPence,0),1200);
 });
 test("ordinary duplicate and concurrent delivery subtracts £8 exactly once, never closes the remaining £4",async()=>{
-  const t=await target(), {session,provider}=ordinaryCheckout(t,800);
-  await Promise.all([settlePlayerRepaymentSession(session,provider.api),settlePlayerRepaymentSession(session,provider.api)]);
-  assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
-  assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);assert.equal(provider.refundCalls,0);
+  for(let round=0;round<5;round++) {
+    const t=await target(), {session,provider}=ordinaryCheckout(t,800);
+    await Promise.all(Array.from({length:4},()=>settlePlayerRepaymentSession(session,provider.api)));
+    assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
+    assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);assert.equal(provider.refundCalls,0);
+    assert.equal(await prisma.playerRepaymentRequest.count({where:{checkoutSessionId:session.id}}),1);
+  }
 });
 test("different ordinary receipts for the same fee both count, unlike the old fee-ID-only duplicate check",async()=>{
   const t=await target();const provider=fakeStripe();const a=ordinaryCheckout(t,800,provider),b=ordinaryCheckout(t,400,provider);
