@@ -139,6 +139,7 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
           {busy ? "Queueing reply…" : draft?.attempted ? "Retry this reply safely" : "Send SMS reply"}
         </button>
         {(draft?.attempted || record) ? <button type="button" onClick={checkStatus} disabled={checking || busy} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">{checking ? "Checking…" : "Check status"}</button> : null}
+        {record && ["FAILED", "SKIPPED", "CANCELLED"].includes(record.status) ? <button type="button" disabled={busy || checking || uncertain} onClick={() => { save(newDraft(phone)); setRecord(null); setRecordRequestId(""); setUncertain(false); setNotice("New empty draft opened. The previous reply has not been retried."); }} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">Write another reply</button> : null}
       </div>
       {record ? <div className="space-y-2 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
         <div className="font-semibold text-white">{smsReplyStatusLabel(record.status, record.providerStatus)}</div>

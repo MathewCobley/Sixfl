@@ -61,6 +61,7 @@ const { chromium } = require('playwright');
       mode = 'save'; await page.getByRole('button', { name: 'Retry this reply safely' }).click(); await page.getByText(/Reply saved and queued/).waitFor(); assert.equal(posts.at(-1).requestId, retryKey);
       stored = { ...stored, status: 'FAILED', providerStatus: 'failed', failureReason: 'Synthetic provider failure' };
       await page.getByRole('button', { name: 'Check status', exact: true }).click(); await page.getByText('Failed', { exact: true }).waitFor(); assert.equal(posts.length, beforeCheck + 1);
+      const beforeNewDraft = posts.length; await page.getByRole("button", { name: "Write another reply" }).click(); await page.getByText("New empty draft opened. The previous reply has not been retried.", { exact: true }).waitFor(); assert.equal(await field.inputValue(), ""); assert.equal(await field.getAttribute("readonly"), null); assert.equal(posts.length, beforeNewDraft);
       assert.ok(gets >= 4); assert.deepEqual(errors, []);
       console.log('Browser passed '+viewport.width+'px: explicit POST, pending/double click, queued-not-sent, draft reload/isolation, failed validation, lost-response recovery, stable retry key, read-only status and provider failure.');
       await page.close();

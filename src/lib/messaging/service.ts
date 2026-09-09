@@ -604,7 +604,25 @@ export async function getMessageThreadById(threadId: string) {
       team: true,
       league: true,
       assignedToUser: true,
-      messages: { orderBy: [{ createdAt: "asc" }], include: { dispatch: { select: { id: true, template: { select: { id: true, name: true, key: true } }, metadata: true } } } },
+      messages: {
+        orderBy: [{ createdAt: "asc" }],
+        include: {
+          createdByUser: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+          dispatch: {
+            select: {
+              id: true,
+              template: { select: { id: true, name: true, key: true } },
+              metadata: true,
+              status: true,
+              failureReason: true,
+              scheduledFor: true,
+              sentAt: true,
+            },
+          },
+        },
+      },
       alerts: { orderBy: [{ createdAt: "desc" }] },
     },
   });
