@@ -379,3 +379,95 @@ test("final prepared source has no ordinary receipt-to-PAID fallback or implicit
   assert.match(readFileSync("src/lib/payments/player-fee-coverage.ts","utf8"),/if \(!agreement\) return 0/);
   assert.match(readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8"),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
 });
+
+// Admin historical corrections: use real database triggers and provider-read
+// fixtures. No account-specific live data or external HTTP is used.
+import { assertPlayerChargeCorrectionAdmin, previewOriginalPlayerCharge, confirmOriginalPlayerCharge, getOriginalChargeCorrectionCandidate } from "../src/lib/payments/player-charge-correction";
+async function historicalCorrectionFixture() {
+  const t = await target(1200);
+  const admin = await prisma.user.create({data:{email:`admin-${randomUUID()}@example.invalid`,role:"ADMIN",name:"Test administrator"}});
+  await prisma.$executeRaw(Prisma.sql`UPDATE "PlayerMatchFee" SET "captainAssignedAmountPence"=1200 WHERE id=${t.fee.id}`);
+  const sessionId=`cs_test_historical_${randomUUID()}`, intentId=`pi_historical_${randomUUID()}`, chargeId=`ch_historical_${randomUUID()}`;
+  const receipt=await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:800,method:"STRIPE",paidAt:new Date(),
+    stripeCheckoutSessionId:sessionId,stripePaymentIntentId:intentId,reference:intentId,notes:`Player match fee paid online via Stripe Checkout. Player fee ID: ${t.fee.id}`}});
+  await prisma.$executeRaw(Prisma.sql`UPDATE "PaymentTransaction" SET "playerMatchFeeId"=${t.fee.id} WHERE id=${receipt.id}`);
+  await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{amountPence:800,status:"PAID",paidAt:new Date()}});
+  const metadata={playerMatchFeeId:t.fee.id,teamId:t.team.id,fixtureId:t.fixture.id};
+  const session={id:sessionId,mode:"payment",status:"complete",payment_status:"paid",currency:"gbp",amount_total:800,payment_intent:intentId,metadata};
+  const intent={id:intentId,status:"succeeded",currency:"gbp",amount_received:800,latest_charge:chargeId,metadata};
+  const charge={id:chargeId,status:"succeeded",currency:"gbp",paid:true,captured:true,amount_captured:800,amount_refunded:0,refunded:false,disputed:false,payment_intent:intentId};
+  const noWrite=async()=>{throw Error("No provider write is permitted by a historical correction");};
+  const stripe={checkout:{sessions:{retrieve:async(id:string)=>{assert.equal(id,session.id);return session;},create:noWrite,expire:noWrite}},
+    paymentIntents:{retrieve:async(id:string)=>{assert.equal(id,intent.id);return intent;}},charges:{retrieve:async(id:string)=>{assert.equal(id,charge.id);return charge;}},refunds:{create:noWrite}} as unknown as Stripe;
+  const input={feeId:t.fee.id,actorUserId:admin.id,originalPence:1200,reason:"Original charge was twelve pounds; no waiver agreed. Restore the unpaid remainder.",noWaiver:true};
+  return {t,admin,receipt,stripe,input,session,intent,charge};
+}
+test("admin correction preview is read-only and £12 less verified £8 previews £4",async()=>{
+  const h=await historicalCorrectionFixture();const entries=await prisma.playerLedgerEntry.count();const tx=await prisma.paymentTransaction.count();const messages=await prisma.notificationDispatch.count();
+  const candidate=await getOriginalChargeCorrectionCandidate(h.t.fee.id,h.admin.id);assert.equal(candidate.assignedPence,1200);
+  const p=await previewOriginalPlayerCharge(h.input,h.stripe);assert.deepEqual([p.originalPence,p.receivedPence,p.outstandingPence],[1200,800,400]);
+  assert.equal((await state(h.t)).balancePence,0);assert.equal(await prisma.playerLedgerEntry.count(),entries);assert.equal(await prisma.paymentTransaction.count(),tx);assert.equal(await prisma.notificationDispatch.count(),messages);
+});
+test("admin correction restores £4 once, retains the same £8 receipt and keeps all chases paused",async()=>{
+  const h=await historicalCorrectionFixture();const before=await prisma.paymentTransaction.count();const messages=await prisma.notificationDispatch.count();const prior=(await account(h.t)).entries;
+  const p=await previewOriginalPlayerCharge(h.input,h.stripe);const input={feeId:h.input.feeId,actorUserId:h.admin.id,token:p.token};
+  const results=await Promise.all([confirmOriginalPlayerCharge(input,h.stripe),confirmOriginalPlayerCharge(input,h.stripe)]);
+  assert.equal(results.filter(r=>!r.alreadySaved).length,1);assert.equal((await account(h.t)).balancePence,400);assert.equal((await state(h.t)).receivedPence,800);
+  assert.equal((await state(h.t)).collectionPaused,true);assert.ok(await playerFeeCollectionHold(h.t.fee.id));assert.equal(await prisma.notificationDispatch.count(),messages);
+  assert.equal(await prisma.paymentTransaction.count(),before);const receipt=await prisma.paymentTransaction.findUniqueOrThrow({where:{id:h.receipt.id}});
+  assert.deepEqual([receipt.amountPence,receipt.stripePaymentIntentId,receipt.stripeCheckoutSessionId,receipt.paidAt],[h.receipt.amountPence,h.receipt.stripePaymentIntentId,h.receipt.stripeCheckoutSessionId,h.receipt.paidAt]);
+  const entries=(await account(h.t)).entries;assert.deepEqual(entries.slice(0,prior.length),prior);assert.equal(entries.at(-1)!.kind,"ORIGINAL_CHARGE_CORRECTION");assert.equal(entries.at(-1)!.actorUserId,h.admin.id);assert.match(entries.at(-1)!.reference!,new RegExp(h.receipt.id));
+  const display=getPlayerPaymentDisplay(await feeRow(h.t),await state(h.t));assert.equal(display.statusLabel,"Part-paid");assert.equal(display.amountPence,1200);assert.equal(display.outstandingPence,400);
+  const ledger=await getTeamPaymentLedger(h.t.team.id);assert.equal(ledger!.entries[0].playerPaidPence,800);assert.equal(ledger!.entries[0].outstandingPence,3200);
+  const again=await confirmOriginalPlayerCharge(input,h.stripe);assert.equal(again.alreadySaved,true);assert.equal((await state(h.t)).receivedPence,800);
+  await assert.rejects(prisma.playerMatchFee.update({where:{id:h.t.fee.id},data:{amountPence:1200}}),/repayment ledger/);
+});
+test("after an admin correction the remaining £4 can be paid normally without duplicating old cash",async()=>{
+  const h=await historicalCorrectionFixture(),p=await previewOriginalPlayerCharge(h.input,h.stripe);await confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe);
+  await pausePlayerFeeCollection({teamId:h.t.team.id,feeIds:[h.t.fee.id],paused:false,actorUserId:h.admin.id});const provider=fakeStripe();
+  await startPlayerRepaymentCheckout({feeToken:h.t.fee.paymentToken!},provider.api);
+  const pending=await prisma.playerRepaymentRequest.findFirstOrThrow({where:{feeId:h.t.fee.id,status:"READY"}});assert.equal(pending.amountPence,400);
+  await settlePlayerRepaymentSession(provider.paid(pending.checkoutSessionId!),provider.api);assert.equal((await state(h.t)).balancePence,0);assert.equal((await state(h.t)).receivedPence,1200);
+  assert.equal((await getTeamPaymentLedger(h.t.team.id))!.entries[0].playerPaidPence,1200);
+});
+test("an adopted historical receipt remains refund-aware without rewriting the original payment",async()=>{
+  const h=await historicalCorrectionFixture(),p=await previewOriginalPlayerCharge(h.input,h.stripe);await confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe);
+  const refundApi={...h.stripe,refunds:{list:async()=>({data:[{id:"re_historical",amount:300,status:"succeeded"}],has_more:false})}} as unknown as Stripe;
+  await handlePlayerRepaymentRefund(h.charge as Stripe.Charge,refundApi);await handlePlayerRepaymentRefund(h.charge as Stripe.Charge,refundApi);
+  assert.equal((await state(h.t)).balancePence,700);assert.equal((await state(h.t)).receivedPence,500);
+  assert.equal((await getTeamPaymentLedger(h.t.team.id))!.entries[0].playerPaidPence,500);
+});
+test("captains/players and missing actors cannot preview or confirm historical corrections",async()=>{
+  const h=await historicalCorrectionFixture();await assert.rejects(assertPlayerChargeCorrectionAdmin(h.t.user.id),/Administrator/);
+  await assert.rejects(previewOriginalPlayerCharge({...h.input,actorUserId:h.t.user.id},h.stripe),/Administrator/);
+  const p=await previewOriginalPlayerCharge(h.input,h.stripe);await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.t.user.id,token:p.token},h.stripe),/Administrator/);
+  await assert.rejects(previewOriginalPlayerCharge({...h.input,actorUserId:""},h.stripe),/Administrator/);assert.equal((await state(h.t)).balancePence,0);
+});
+test("confirmation is bound to the exact administrator, fee, proposed amount and receipt snapshot",async()=>{
+  const h=await historicalCorrectionFixture(),p=await previewOriginalPlayerCharge(h.input,h.stripe);const other=await historicalCorrectionFixture();
+  await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:other.admin.id,token:p.token},h.stripe),/another administrator/);
+  await assert.rejects(confirmOriginalPlayerCharge({feeId:other.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe),/another administrator/);
+  const [body,sig]=p.token.split('.');const edited=JSON.parse(Buffer.from(body,"base64url").toString());edited.originalPence=9999;
+  await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:`${Buffer.from(JSON.stringify(edited)).toString("base64url")}.${sig}`},h.stripe),/changed/);
+  await prisma.playerMatchFee.update({where:{id:h.t.fee.id},data:{note:"Changed after preview"}});
+  await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe),/changed since preview/);assert.equal((await state(h.t)).balancePence,0);
+});
+test("historical correction refuses concessions, missing receipts, wrong allocation and invalid totals",async()=>{
+  for (const kind of ["concession","missing","allocation","invalid"]){const h=await historicalCorrectionFixture();
+    if(kind==="concession")await prisma.playerMatchFee.update({where:{id:h.t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
+    if(kind==="missing")await prisma.paymentTransaction.delete({where:{id:h.receipt.id}});
+    if(kind==="allocation")await prisma.paymentTransaction.update({where:{id:h.receipt.id},data:{teamId:h.t.opponent.id}});
+    await assert.rejects(previewOriginalPlayerCharge({...h.input,...(kind==="invalid"?{originalPence:800}:{})},h.stripe));assert.equal((await state(h.t)).balancePence,0);
+  }
+});
+test("provider capture, identity, currency, refund and dispute changes block correction without financial writes",async()=>{
+  for(const kind of ["refund","dispute","identity","currency","unpaid"]){const h=await historicalCorrectionFixture();const p=await previewOriginalPlayerCharge(h.input,h.stripe);
+    if(kind==="refund")h.charge.amount_refunded=100;if(kind==="dispute")h.charge.disputed=true;if(kind==="identity")h.intent.metadata={...h.intent.metadata,teamId:h.t.opponent.id};
+    if(kind==="currency")h.intent.currency="usd";if(kind==="unpaid")h.intent.status="processing";
+    await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe));assert.equal((await state(h.t)).balancePence,0);
+  }
+});
+test("an administrator whose role was revoked cannot confirm a prior preview",async()=>{
+  const h=await historicalCorrectionFixture(),p=await previewOriginalPlayerCharge(h.input,h.stripe);await prisma.user.update({where:{id:h.admin.id},data:{role:"USER"}});
+  await assert.rejects(confirmOriginalPlayerCharge({feeId:h.t.fee.id,actorUserId:h.admin.id,token:p.token},h.stripe),/Administrator/);
+});
