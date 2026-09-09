@@ -1,3 +1,4 @@
+import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/player-payment-display";
 import { hasPlayerLedgerReceipts } from "@/lib/payments/player-ledger-markers";
 import { getPlayerLedgerSummaryForUser } from "@/lib/payments/player-ledger";
 // ========================================
@@ -350,6 +351,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
   const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
   const nextFixture = upcomingFixtures[0] ?? null;
+  const playerReceiptStates = await getPlayerReceiptStates(playerFees.map(fee => fee.id));
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
@@ -550,12 +552,13 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getFeeStatusClasses(fee.status)}`}>
-                          {getFeeStatusLabel(fee.status)}
+                          {getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id)).statusLabel}
                         </span>
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/60">
                           {formatMoney(fee.amountPence)}
                         </span>
                       </div>
+                      <p className="mt-2 text-xs text-white/65">{getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id)).detail}</p>
                       <h3 className="mt-3 text-sm font-semibold text-white">
                         {getFixtureLabel({ homeTeamName: fee.fixture.homeTeam.name, awayTeamName: fee.fixture.awayTeam.name })}
                       </h3>
@@ -615,7 +618,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                           {fee ? (
                             <div className="mt-3 flex flex-wrap gap-2">
                               <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getFeeStatusClasses(fee.status)}`}>
-                                Fee: {formatMoney(fee.amountPence)} · {getFeeStatusLabel(fee.status)}
+                                Fee: {formatMoney(fee.amountPence)} · {getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id)).statusLabel}
                               </span>
                               {fee.status === PlayerMatchFeeStatus.OPEN && fee.paymentUrl ? (
                                 <Link href={fee.paymentUrl} target="_blank" className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-100 transition hover:bg-amber-500/15">

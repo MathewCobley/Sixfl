@@ -1,25 +1,36 @@
+import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/player-payment-display";
+// NATIVE_PLAYER_PAYMENT_HISTORY
 // ========================================
 // File: src/app/captain/team/[teamid]/payments/page.tsx
 // ========================================
 
 import { pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
 import Link from "next/link";
+import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getKitFundLedger } from "@/lib/kits/kit-fund";
 import {
   applyAvailableTeamCreditToCharge,
   getTeamCreditLedger,
   type TeamCreditLedgerEntry,
 } from "@/lib/payments/team-credits";
 import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";
+import { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";
+import { reconcileZeroFeePlayerAdjustmentsForTeam } from "@/lib/payments/zero-fee-player-adjustments";
 import {
   formatPaymentFixtureDate,
   formatPaymentMoney,
   getTeamPaymentLedger,
 } from "@/lib/payments/team-payment-ledger";
 import { getTeamSubscriptionSnapshot } from "@/lib/payments/team-subscriptions";
+import {
+  getTeamAutoPaySnapshot,
+  isConfirmedTeamAutoPaySetup,
+  reconcileTeamAutoPaySetup,
+} from "@/lib/payments/team-autopay-snapshot";
 import { TeamPaymentOrderNotice } from "@/components/payments/TeamPaymentOrderNotice";
 import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +53,9 @@ function formatMoney(amountPence: number) {
   return formatPaymentMoney(amountPence);
 }
 
-function formatChargeStatus(status: string) {
+function formatChargeStatus(status: string, waivedPence = 0) {
+  if (status === "PAID" && waivedPence > 0) return "Settled";
+
   switch (status) {
     case "OPEN":
       return "Open";
@@ -181,17 +194,17 @@ function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeeP
 function getSubscriptionMessage(state?: string) {
   switch (state) {
     case "success":
-      return "Automatic payment setup started. Stripe will confirm it here once the payment is complete.";
+      return "Saved card setup returned from Stripe.";
     case "cancelled":
-      return "Automatic payment setup was cancelled.";
+      return "Saved card setup was cancelled. No automatic matchday card payment has been enabled.";
     case "active":
-      return "Automatic payments are already active or being managed by Stripe.";
+      return "A saved Stripe payment method is already linked to this team.";
     case "missing_price":
-      return "Automatic payments are not configured yet. Ask an admin to add the Stripe subscription price ID.";
+      return "Saved-card matchday payments are not configured for this team yet.";
     case "missing_customer":
       return "A Stripe customer has not been created for this team yet.";
     case "no_fixture":
-      return "Automatic payments can be set up once this team has a published upcoming match-fee fixture.";
+      return "A saved card can be set up once this team has a published upcoming match-fee fixture.";
     default:
       return null;
   }
@@ -298,18 +311,24 @@ export default async function CaptainPaymentsPage({
   searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ subscription?: string; credit?: string; amount?: string }>;
+  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string  }>;
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
   await requireCaptain(teamid);
+  await reconcileZeroFeePlayerAdjustmentsForTeam(teamid);
 
-  const [team, subscription, ledger] = await Promise.all([
+  if (sp.autopay === "success") {
+    await reconcileTeamAutoPaySetup(teamid);
+  }
+
+  const [team, subscription, autoPay, ledger] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: { id: true, name: true, teamMode: true },
     }),
     getTeamSubscriptionSnapshot(teamid),
+    getTeamAutoPaySnapshot(teamid),
     getTeamPaymentLedger(teamid),
   ]);
 
@@ -320,6 +339,7 @@ export default async function CaptainPaymentsPage({
   const paymentOrder = await getTeamPaymentOrder(teamid, ledger);
   const olderTeamBalancePence = paymentOrder.overdue.reduce((sum, entry) => sum + entry.outstandingPence, 0);
   const creditLedger = await getTeamCreditLedger(ledger.relatedTeamIds);
+  const kitFundLedger = await getKitFundLedger(teamid);
   const creditBalancePence = Math.max(creditLedger.balancePence, 0);
   const recentCreditEntries = creditLedger.entries.slice(0, 6);
 
@@ -398,10 +418,161 @@ export default async function CaptainPaymentsPage({
     ]),
   );
 
-  const subscriptionMessage = getSubscriptionMessage(sp.subscription);
+  const fixtureIdsWithLedgerCharges = Array.from(
+    new Set(
+      ledger.entries
+        .map((entry) => entry.fixtureId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const playerCollectionRows = fixtureIdsWithLedgerCharges.length
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: { in: ledger.relatedTeamIds },
+          fixtureId: { in: fixtureIdsWithLedgerCharges },
+          status: { in: ["OPEN", "PAID", "WAIVED"] },
+        },
+        orderBy: [{ createdAt: "asc" }],
+        select: {
+          id: true,
+          teamId: true,
+          fixtureId: true,
+          amountPence: true,
+          status: true,
+          paidAt: true,
+          waivedAt: true,
+          note: true,
+          paymentUrl: true,
+          teamMember: {
+            select: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          prospect: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      })
+    : [];
+  const playerCollectionRowsWithAssignedShares =
+    await hydrateCaptainAssignedPlayerFees(playerCollectionRows);
+
+  const playerCollectionsByTeamFixture = new Map<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      contact: string | null;
+      amountPence: number;
+      statusLabel: string;
+      statusMeta: string;
+      tone: string;
+    }>
+  >();
+
+  const playerReceiptStates = await getPlayerReceiptStates(playerCollectionRowsWithAssignedShares.map(fee => fee.id));
+  for (const fee of playerCollectionRowsWithAssignedShares) {
+    const key = fee.teamId + ":" + fee.fixtureId;
+    const rows = playerCollectionsByTeamFixture.get(key) ?? [];
+    const display = getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id));
+    const displayAmountPence = display.amountPence;
+    const statusLabel = display.statusLabel;
+    const statusMeta = display.detail;
+    const tone = display.tone === "amber" ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
+      : display.tone === "emerald" ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+      : "border-white/10 bg-white/[0.04] text-white/55";
+
+    rows.push({
+      id: fee.id,
+      name: getPayerName({ teamMember: fee.teamMember, prospect: fee.prospect }),
+      contact: getPayerContact({ teamMember: fee.teamMember, prospect: fee.prospect }),
+      amountPence: displayAmountPence,
+      statusLabel,
+      statusMeta,
+      tone,
+    });
+    playerCollectionsByTeamFixture.set(key, rows);
+  }
+
+  const fixtureIdsWithCharges = ledger.entries
+    .map((entry) => entry.fixtureId)
+    .filter((value): value is string => Boolean(value));
+  const openPlayerFeeRows = fixtureIdsWithCharges.length
+    ? await prisma.playerMatchFee.findMany({
+        where: {
+          teamId: { in: ledger.relatedTeamIds },
+          fixtureId: { in: fixtureIdsWithCharges },
+          status: "OPEN",
+        },
+        orderBy: [{ createdAt: "asc" }],
+        select: {
+          id: true,
+          fixtureId: true,
+          amountPence: true,
+          teamMember: {
+            select: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          prospect: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      })
+    : [];
+  const openPlayerFeesByFixtureId = new Map<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      contact: string | null;
+      amountPence: number;
+    }>
+  >();
+
+  for (const fee of openPlayerFeeRows) {
+    const existing = openPlayerFeesByFixtureId.get(fee.fixtureId) ?? [];
+    existing.push({
+      id: fee.id,
+      name: getPayerName({ teamMember: fee.teamMember, prospect: fee.prospect }),
+      contact: getPayerContact({ teamMember: fee.teamMember, prospect: fee.prospect }),
+      amountPence: fee.amountPence,
+    });
+    openPlayerFeesByFixtureId.set(fee.fixtureId, existing);
+  }
+
+  const hasSavedCard = isConfirmedTeamAutoPaySetup(autoPay);
+  const hasStripeCustomer = Boolean(autoPay?.stripeCustomerId);
+  const subscriptionMessage =
+    sp.autopay === "success"
+      ? hasSavedCard
+        ? "Saved card setup complete. Your card is authorised for automatic one-off matchday team payments."
+        : "Stripe returned you to SIXFL, but a complete saved-card mandate has not been confirmed yet. Use Continue saved card setup below to finish."
+      : sp.autopay === "incomplete"
+        ? "Saved card setup is incomplete. Continue the setup to enter and confirm the card details."
+        : getSubscriptionMessage(sp.autopay ?? sp.subscription);
   const creditMessage = getCreditMessage(sp.credit, sp.amount);
-  const canOpenPortal = Boolean(subscription?.stripeCustomerId);
-  const subscriptionIsManaged = isManagedByStripe(subscription?.subscriptionStatus ?? null);
+  const canOpenPortal = hasSavedCard;
 
   return (
     <div className="space-y-8">
@@ -419,13 +590,32 @@ export default async function CaptainPaymentsPage({
         </div>
       ) : null}
 
+      {sp.links === "closed" ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+          Remaining unpaid player links were closed. No further player payment can be taken for that fixture.
+        </div>
+      ) : sp.links === "invalid" ? (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+          Those player links could not be changed. Refresh the page and check that unpaid player links are still open for this fixture.
+        </div>
+      ) : null}
+
       {creditMessage ? (
         <div className={`rounded-2xl border px-5 py-4 text-sm ${sp.credit === "used" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-amber-400/20 bg-amber-500/10 text-amber-100"}`}>
           {creditMessage}
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {creditBalancePence > 0 ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 py-4 text-sm leading-6 text-emerald-50/85">
+          <span className="font-semibold text-white">
+            Your team has {formatMoney(creditBalancePence)} available credit.
+          </span>{" "}
+          SIXFL uses team credit against the oldest eligible outstanding team charge before taking another card payment. Team credit is capped at one normal match fee.
+        </div>
+      ) : null}
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
             Your team’s balance due
@@ -458,8 +648,14 @@ export default async function CaptainPaymentsPage({
             {formatMoney(creditBalancePence)}
           </p>
           <p className="mt-2 text-sm text-emerald-100/75">
-            Credit available to use against fixture charges.
+            Used against the oldest eligible charge before another payment is taken. Credit is capped at one normal match fee.
           </p>
+        </div>
+
+        <div className="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">Kit fund</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{formatMoney(Math.max(kitFundLedger.balancePence, 0))}</p>
+          <p className="mt-2 text-sm text-sky-100/75">Reserved for SIXFL kits only.</p>
         </div>
 
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
@@ -474,6 +670,19 @@ export default async function CaptainPaymentsPage({
           </p>
         </div>
       </section>
+
+      <TeamKitFundTransferPanel
+        teamId={team.id}
+        teamCreditPence={Math.max(creditLedger.balancePence, 0)}
+        kitFundBalancePence={Math.max(kitFundLedger.balancePence, 0)}
+        entries={kitFundLedger.entries.slice(0, 8).map((entry) => ({
+          id: entry.id,
+          entryType: entry.entryType,
+          amountPence: entry.amountPence,
+          description: entry.description,
+          createdAtIso: entry.createdAt.toISOString(),
+        }))}
+      />
 
       {creditLedger.entries.length > 0 ? (
         <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10">
@@ -512,23 +721,33 @@ export default async function CaptainPaymentsPage({
         <div className="flex flex-col gap-6 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-100/70">
-              Automatic payments
+              Saved card payments
             </p>
             <h2 className="mt-3 text-2xl font-semibold text-white">
-              Recurring team payments
+              Saved card matchday payments
             </h2>
             <p className="mt-2 text-sm leading-6 text-emerald-50/75">
-              Set up a recurring Stripe payment for your team. Successful renewal payments will be recorded automatically in the SIXFL payment history.
+              Save a team card securely with Stripe. SIXFL only takes a one-off outstanding match fee on the actual fixture day. Player payments and team credit reduce that amount first, and postponed or cancelled fixtures are not charged.
             </p>
+
+            {hasStripeCustomer && !hasSavedCard ? (
+              <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                Stripe has created the team payment account, but a complete saved-card mandate is not recorded. Continue the saved-card setup to enter and confirm the card details.
+              </div>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
               <span
                 className={[
                   "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
-                  getSubscriptionTone(subscription?.subscriptionStatus ?? null),
+                  hasSavedCard
+                    ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+                    : hasStripeCustomer
+                      ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
+                      : "border-white/10 bg-white/[0.05] text-white/60",
                 ].join(" ")}
               >
-                {formatSubscriptionStatus(subscription?.subscriptionStatus ?? null)}
+                {hasSavedCard ? "Saved card setup complete" : hasStripeCustomer ? "Card setup incomplete" : "Not set up"}
               </span>
 
               {subscription?.subscriptionCurrentPeriodEnd ? (
@@ -552,22 +771,22 @@ export default async function CaptainPaymentsPage({
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
-            <form action={`/captain/team/${team.id}/payments/start-subscription`} method="post">
+            <form action={`/captain/team/${team.id}/payments/setup-saved-card`} method="post">
               <button
                 type="submit"
                 className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-300 px-5 text-sm font-semibold text-black transition hover:bg-emerald-200 sm:w-auto"
               >
-                {subscriptionIsManaged ? "Replace automatic payment" : "Set up automatic payments"}
+                {hasSavedCard ? "Replace saved card" : hasStripeCustomer ? "Continue saved card setup" : "Set up saved card"}
               </button>
             </form>
 
-            {canOpenPortal ? (
-              <form action={`/captain/team/${team.id}/payments/manage-subscription`} method="post">
+            {hasSavedCard ? (
+              <form action={`/captain/team/${team.id}/payments/manage-saved-card`} method="post">
                 <button
                   type="submit"
                   className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-white/10 bg-black/20 px-5 text-sm font-semibold text-white transition hover:bg-black/30 sm:w-auto"
                 >
-                  Manage in Stripe
+                  Manage saved card
                 </button>
               </form>
             ) : null}
@@ -610,6 +829,48 @@ export default async function CaptainPaymentsPage({
               const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
                 .filter(Boolean)
                 .join(" · ");
+              const unpaidPlayers = entry.fixtureId
+                ? openPlayerFeesByFixtureId.get(entry.fixtureId) ?? []
+                : [];
+              const playerCollectionDetails = entry.fixtureId
+                ? playerCollectionsByTeamFixture.get(entry.teamId + ":" + entry.fixtureId) ?? []
+                : [];
+              const nonPlayerChargePayments = entry.payments.filter((payment) => {
+                const notes = (payment.notes ?? "").toLowerCase();
+                return (
+                  !notes.includes("player match fee paid online") &&
+                  !notes.includes("player fee id:")
+                );
+              });
+              const teamCreditUsedPence = nonPlayerChargePayments
+                .filter((payment) => {
+                  const notes = (payment.notes ?? "").toLowerCase();
+                  return (
+                    payment.reference === "TEAM_CREDIT" ||
+                    notes.includes("team credit used")
+                  );
+                })
+                .reduce((sum, payment) => sum + payment.amountPence, 0);
+              const teamPaymentPence = Math.max(
+                entry.directPaidPence - teamCreditUsedPence,
+                0,
+              );
+              const playerSettledPence =
+                entry.playerPaidPence + entry.playerSubsidyPence;
+              const playerLinksOpenPence = Math.max(
+                entry.playerOpenPence,
+                playerCollectionDetails
+                  .filter((payment) => payment.statusLabel === "Awaiting payment")
+                  .reduce((sum, payment) => sum + payment.amountPence, 0),
+              );
+              const totalAppliedPence = Math.min(
+                entry.settledPence,
+                entry.amountPence,
+              );
+              const isKitCharge = entry.title
+                .trim()
+                .toLowerCase()
+                .startsWith("additional kit contribution");
 
               return (
                 <div key={entry.chargeId} className="px-6 py-5">
@@ -631,6 +892,13 @@ export default async function CaptainPaymentsPage({
                         {entry.description || "No description"}
                       </div>
 
+                      {entry.latePaymentFeeStatus === "APPLIED" && entry.latePaymentFeeAmountPence > 0 ? (
+                        <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100/85">
+                          <span className="font-semibold text-red-100">Late-payment admin fee applied:</span>{" "}
+                          base charge {formatMoney(entry.baseMatchFeePence)} + {formatMoney(entry.latePaymentFeeAmountPence)} admin fee = {formatMoney(entry.amountPence)} total.
+                        </div>
+                      ) : null}
+
                       <div className="mt-2 text-sm text-emerald-100/75">
                         {entry.fixtureLabel}
                       </div>
@@ -641,46 +909,310 @@ export default async function CaptainPaymentsPage({
 
                       <div className="mt-1 text-sm text-white/45">
                         {entry.dueDate
-                          ? `Due ${formatPaymentFixtureDate(entry.dueDate)}`
+                          ? "Due " + formatPaymentFixtureDate(entry.dueDate)
                           : entry.kickoffAt
-                            ? `Fixture ${formatPaymentFixtureDate(entry.kickoffAt)}`
+                            ? "Fixture " + formatPaymentFixtureDate(entry.kickoffAt)
                             : "No due date set"}
                       </div>
+
+                      {playerCollectionDetails.length > 0 ? (
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20 text-left">
+                          <div className="border-b border-white/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                            Player payment details
+                          </div>
+                          <div className="divide-y divide-white/10">
+                            {playerCollectionDetails.map((payment) => (
+                              <div
+                                key={payment.id}
+                                className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-white">{payment.name}</div>
+                                  {payment.contact ? (
+                                    <div className="mt-0.5 break-all text-xs text-white/45">
+                                      {payment.contact}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-3 sm:justify-end">
+                                  <div className="text-right">
+                                    <div className="font-semibold text-white">
+                                      {formatMoney(payment.amountPence)}
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-white/40">
+                                      {payment.statusMeta}
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={[
+                                      "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                                      payment.tone,
+                                    ].join(" ")}
+                                  >
+                                    {payment.statusLabel}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : entry.playerPaidPence > 0 || entry.playerOpenPence > 0 ? (
+                        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/80">
+                          Player payment totals exist, but the individual records could not be matched to this fixture charge.
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col gap-3 lg:items-end">
                       <TeamPaymentOrderNotice decision={paymentDecision} />
-                      <div className="text-right">
-                        <div className="text-base font-semibold text-white">
-                          {formatMoney(entry.amountPence)}
+                      <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/20 p-4 text-left">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-sm font-semibold text-white">
+                            {isKitCharge
+                              ? "Kit charge"
+                              : entry.fixtureId
+                                ? "Fixture charge"
+                                : "Charge"}
+                          </span>
+                          <span className="text-lg font-semibold text-white">
+                            {formatMoney(entry.amountPence)}
+                          </span>
                         </div>
-                        <div className="mt-1 text-sm text-white/55">
-                          Paid {formatMoney(entry.paidPence)} · Outstanding {" "}
-                          {formatMoney(entry.outstandingPence)}
+
+                        <div className="mt-3 space-y-2 text-sm text-white/65">
+                          {!isKitCharge ? (
+                            <div className="flex items-center justify-between gap-4">
+                              <span>Player shares settled</span>
+                              <span className="font-semibold text-white">
+                                {formatMoney(playerSettledPence)}
+                              </span>
+                            </div>
+                          ) : null}
+                          <div className="flex items-center justify-between gap-4">
+                            <span>{isKitCharge ? "Paid" : "Team paid"}</span>
+                            <span className="font-semibold text-white">
+                              {formatMoney(teamPaymentPence)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span>{isKitCharge ? "Credit used" : "Team credit used"}</span>
+                            <span className="font-semibold text-white">
+                              {formatMoney(teamCreditUsedPence)}
+                            </span>
+                          </div>
+                          {entry.waivedPence > 0 ? (
+                            <div className="flex items-center justify-between gap-4">
+                              <span>SIXFL waiver</span>
+                              <span className="font-semibold text-sky-100">
+                                {formatMoney(entry.waivedPence)}
+                              </span>
+                            </div>
+                          ) : null}
+                          {creditAvailableForChargePence > 0 ? (
+                            <div className="flex items-center justify-between gap-4 text-emerald-100">
+                              <span>Available team credit</span>
+                              <span className="font-semibold">
+                                {formatMoney(creditAvailableForChargePence)}
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
-                        {entry.playerPaidPence > 0 || entry.playerOpenPence > 0 ? (
-                          <div className="mt-1 text-xs text-white/45">
-                            Squad paid {formatMoney(entry.playerPaidPence)} · player links open {formatMoney(entry.playerOpenPence)}
+
+                        <div className="mt-3 border-t border-white/10 pt-3">
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="font-semibold text-white">
+                              {isKitCharge
+                                ? "Total applied to kit"
+                                : entry.fixtureId
+                                  ? "Total applied to fixture"
+                                  : "Total applied"}
+                            </span>
+                            <span className="font-semibold text-emerald-100">
+                              {formatMoney(totalAppliedPence)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-4 text-sm">
+                            <span className="text-white/60">Outstanding</span>
+                            <span
+                              className={
+                                entry.outstandingPence > 0
+                                  ? "font-semibold text-amber-100"
+                                  : "font-semibold text-emerald-100"
+                              }
+                            >
+                              {formatMoney(entry.outstandingPence)}
+                            </span>
+                          </div>
+                          {creditAvailableForChargePence > 0 ? (
+                            <div className="mt-2 flex items-center justify-between gap-4 border-t border-emerald-400/10 pt-2 text-sm">
+                              <span className="font-semibold text-emerald-100">
+                                Remaining after available credit
+                              </span>
+                              <span className="font-semibold text-emerald-100">
+                                {formatMoney(payableAfterCreditPence)}
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {playerLinksOpenPence > 0 ? (
+                          <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5">
+                            <div className="flex items-center justify-between gap-4 text-sm text-amber-100">
+                              <span className="font-semibold">Player links still open</span>
+                              <span className="font-semibold">
+                                {formatMoney(playerLinksOpenPence)}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-amber-50/70">
+                              These unpaid links are already included in the outstanding fixture balance above. Each payment will reduce that balance; only money collected after the fixture is fully covered becomes team credit.
+                            </p>
+                            <form action={closeSettledChargePlayerLinksAction} className="mt-3">
+                              <input type="hidden" name="teamId" value={team.id} />
+                              <input type="hidden" name="chargeId" value={entry.chargeId} />
+                              <button
+                                type="submit"
+                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-red-300/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/25"
+                              >
+                                Pause unpaid player links — keep debt
+                              </button>
+                            </form>
                           </div>
                         ) : null}
+
                         {entry.overpaidPence > 0 ? (
-                          <div className="mt-1 text-xs text-emerald-200">
+                          <div className="mt-3 text-xs text-emerald-200">
                             Team credit generated: {formatMoney(entry.overpaidPence)}
                           </div>
                         ) : null}
-                        <div className="mt-2">
+
+                        {nonPlayerChargePayments.length > 0 ? (
+                          <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                              {isKitCharge
+                                ? "Kit payment details"
+                                : entry.fixtureId
+                                  ? "Team payment and credit details"
+                                  : "Payment details"}
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {nonPlayerChargePayments.map((payment) => {
+                                const notes = (payment.notes ?? "").toLowerCase();
+                                const isTeamCredit =
+                                  payment.reference === "TEAM_CREDIT" ||
+                                  notes.includes("team credit used");
+
+                                return (
+                                  <div
+                                    key={payment.id}
+                                    className="flex items-start justify-between gap-4 text-xs leading-5"
+                                  >
+                                    <div>
+                                      <div className="font-semibold text-white">
+                                        {isTeamCredit
+                                          ? isKitCharge
+                                            ? "Credit used"
+                                            : "Team credit used"
+                                          : isKitCharge
+                                            ? "Kit payment"
+                                            : "Team payment"}
+                                      </div>
+                                      <div className="text-white/40">
+                                        {isTeamCredit
+                                          ? "Applied from the team credit balance"
+                                          : payment.method.replaceAll("_", " ") +
+                                            " · " +
+                                            formatUkDateTime(payment.paidAt)}
+                                      </div>
+                                    </div>
+                                    <span className="shrink-0 font-semibold text-white">
+                                      {formatMoney(payment.amountPence)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3">
                           <span
                             className={[
                               "inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]",
                               getChargeStatusTone(entry.displayStatus),
                             ].join(" ")}
                           >
-                            {formatChargeStatus(entry.displayStatus)}
+                            {formatChargeStatus(entry.displayStatus, entry.waivedPence)}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2 lg:items-end">
+                      {entry.displayStatus === "PAID" && playerLinksOpenPence > 0 ? (
+                        <div className="w-full max-w-xl rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-left">
+                          <div className="font-semibold text-amber-100">
+                            Fixture paid — these player links are extra
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-amber-50/80">
+                            The fixture charge is already fully covered. The remaining {formatMoney(playerLinksOpenPence)} is still available to collect from players, but it is not owed to SIXFL for this fixture.
+                          </p>
+
+                          <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/20 px-3 py-2 text-sm text-amber-50/85">
+                            {formatMoney(playerSettledPence)} player shares + {formatMoney(teamPaymentPence)} team payment + {formatMoney(teamCreditUsedPence)} team credit + {formatMoney(entry.waivedPence)} SIXFL waiver = {formatMoney(totalAppliedPence)} settled.
+                          </div>
+
+                          {unpaidPlayers.length > 0 ? (
+                            <div className="mt-3 overflow-hidden rounded-xl border border-amber-300/20 bg-black/20">
+                              <div className="border-b border-amber-300/15 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-100/70">
+                                Links still awaiting payment
+                              </div>
+                              <div className="divide-y divide-white/10">
+                                {unpaidPlayers.map((player) => (
+                                  <div
+                                    key={player.id}
+                                    className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-white">{player.name}</div>
+                                      {player.contact ? (
+                                        <div className="mt-0.5 break-all text-xs text-white/50">
+                                          {player.contact}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div className="shrink-0 font-semibold text-amber-100">
+                                      {formatMoney(player.amountPence)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <p className="mt-3 text-xs leading-5 text-amber-50/65">
+                            Any payment received from these links will be added to the team credit balance.
+                          </p>
+
+                          <p className="mt-3 text-xs text-white/55">
+                            Use the cancellation button in the player-links summary above if you do not want these links to remain payable.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="flex w-full max-w-xl flex-col gap-2 lg:items-end">
+                        {creditAvailableForChargePence > 0 ? (
+                          <div className="w-full rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-left">
+                            <div className="text-sm font-semibold text-emerald-50">
+                              {payableAfterCreditPence === 0
+                                ? "Your available team credit covers this fee in full."
+                                : `Use ${formatMoney(creditAvailableForChargePence)} team credit first`}
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-emerald-50/70">
+                              {payableAfterCreditPence === 0
+                                ? `Apply ${formatMoney(creditAvailableForChargePence)} credit and there will be £0.00 left to pay by card.`
+                                : `After credit, ${formatMoney(payableAfterCreditPence)} remains to pay. If you choose Pay now, SIXFL applies the credit first and Stripe only collects the remainder.`}
+                            </p>
+                          </div>
+                        ) : null}
+
                         {canUseCredit ? (
                           <form action={useTeamCreditAction}>
                             <input type="hidden" name="teamId" value={team.id} />
@@ -689,7 +1221,7 @@ export default async function CaptainPaymentsPage({
                               type="submit"
                               className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-500/15"
                             >
-                              Use team credit
+                              Use {formatMoney(creditAvailableForChargePence)} credit
                             </button>
                           </form>
                         ) : null}
@@ -700,9 +1232,15 @@ export default async function CaptainPaymentsPage({
                               href={`/pay/charge/${entry.paymentToken}`}
                               className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-500/15"
                             >
-                              Pay now
+                              {creditAvailableForChargePence > 0
+                                ? `Pay ${formatMoney(payableAfterCreditPence)} after credit`
+                                : "Pay now"}
                             </Link>
-                            {!isDueNow ? (
+                            {creditAvailableForChargePence > 0 ? (
+                              <div className="text-xs text-emerald-100/60">
+                                Team credit is applied before Stripe takes the remaining payment.
+                              </div>
+                            ) : !isDueNow ? (
                               <div className="text-xs text-white/45">
                                 Optional early payment — due on match day.
                               </div>
@@ -710,7 +1248,8 @@ export default async function CaptainPaymentsPage({
                           </div>
                         ) : paymentDecision.allowed && entry.displayStatus !== "PAID" &&
                           entry.displayStatus !== "VOID" &&
-                          entry.outstandingPence > 0 ? (
+                          entry.outstandingPence > 0 &&
+                          payableAfterCreditPence > 0 ? (
                           <div className="text-xs text-white/45">
                             Online payment link not ready yet.
                           </div>

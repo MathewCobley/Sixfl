@@ -21,37 +21,8 @@ function ensureImport(source, anchor, importLine, label) {
   return source.replace(anchor, `${anchor}\n${importLine}`);
 }
 
-// ---------------------------------------------------------------------------
-// Coverage: captain-assigned share is presentation/coverage; amountPence remains
-// the actual amount SIXFL asks the capped player to pay.
-// ---------------------------------------------------------------------------
-{
-  const file = "src/lib/payments/player-fee-coverage.ts";
-  let source = read(file);
-
-  source = replaceRequired(
-    source,
-    `export function getCaptainAssignedPlayerFeePence(input: {\n  amountPence: number;\n  note?: string | null;\n}) {\n  const match = CAP_NOTE_PATTERN.exec(input.note ?? "");\n  if (!match) return input.amountPence;\n\n  return parsePoundsToPence(match[1]) ?? input.amountPence;\n}`,
-    `export function getCaptainAssignedPlayerFeePence(input: {\n  amountPence: number;\n  note?: string | null;\n  captainAssignedAmountPence?: number | null;\n}) {\n  if (\n    typeof input.captainAssignedAmountPence === "number" &&\n    Number.isFinite(input.captainAssignedAmountPence) &&\n    input.captainAssignedAmountPence >= 0\n  ) {\n    return input.captainAssignedAmountPence;\n  }\n\n  const match = CAP_NOTE_PATTERN.exec(input.note ?? "");\n  if (!match) return input.amountPence;\n\n  return parsePoundsToPence(match[1]) ?? input.amountPence;\n}`,
-    "captain assigned share helper",
-  );
-
-  source = replaceRequired(
-    source,
-    `export function getPlayerFeeSubsidyPence(input: {\n  amountPence: number;\n  status: string;\n  note?: string | null;\n}) {`,
-    `export function getPlayerFeeSubsidyPence(input: {\n  amountPence: number;\n  status: string;\n  note?: string | null;\n  captainAssignedAmountPence?: number | null;\n}) {`,
-    "subsidy assigned share input",
-  );
-
-  source = replaceRequired(
-    source,
-    `  if (\n    input.status === "PAID" &&\n    Boolean(input.note?.includes(PLAYER_FEE_CAP_NOTE))\n  ) {\n    return Math.max(\n      getCaptainAssignedPlayerFeePence(input) - input.amountPence,\n      0,\n    );\n  }`,
-    `  if (input.status === "PAID") {\n    return Math.max(\n      getCaptainAssignedPlayerFeePence(input) - input.amountPence,\n      0,\n    );\n  }`,
-    "paid capped share coverage",
-  );
-
-  write(file, source);
-}
+// Subsidy eligibility is native in player-fee-coverage.ts. An assigned-share
+// difference must never be converted to an allowance without concession evidence.
 
 // ---------------------------------------------------------------------------
 // Team ledger: hydrate the durable captain share before calculating coverage.
@@ -146,44 +117,12 @@ function ensureImport(source, anchor, importLine, label) {
 // Captain Team payments: always display the captain-entered share. The real
 // capped amount remains in PlayerMatchFee.amountPence and in Stripe/accounting.
 // ---------------------------------------------------------------------------
-{
-  const file = "src/app/captain/team/[teamid]/payments/page.tsx";
-  let source = read(file);
-
-  source = ensureImport(
-    source,
-    'import { isMatchFeeChargePayable } from "@/lib/payments/match-day-billing";',
-    'import { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";',
-    "captain payments assigned share",
-  );
-
-  if (!source.includes("playerCollectionRowsWithAssignedShares")) {
-    source = replaceRequired(
-      source,
-      `  const playerCollectionsByTeamFixture = new Map<`,
-      `  const playerCollectionRowsWithAssignedShares =\n    await hydrateCaptainAssignedPlayerFees(playerCollectionRows);\n\n  const playerCollectionsByTeamFixture = new Map<`,
-      "captain payment assigned share hydration",
-    );
-    source = source.replace(
-      "  for (const fee of playerCollectionRows) {",
-      "  for (const fee of playerCollectionRowsWithAssignedShares) {",
-    );
-  }
-
-  source = replaceRequired(
-    source,
-    `    const captainSharePence = capMatch\n      ? Math.round(Number(capMatch[1].replace(/,/g, "")) * 100)\n      : fee.amountPence;`,
-    `    const captainSharePence =\n      typeof fee.captainAssignedAmountPence === "number"\n        ? fee.captainAssignedAmountPence\n        : capMatch\n          ? Math.round(Number(capMatch[1].replace(/,/g, "")) * 100)\n          : fee.amountPence;`,
-    "captain payment display share",
-  );
-
-  write(file, source);
-}
+// Owning page now renders a shared receipt/balance presentation natively.
 
 for (const [file, markers] of [
   [
     "src/lib/payments/player-fee-coverage.ts",
-    ["captainAssignedAmountPence?: number | null", 'if (input.status === "PAID")'],
+    ["captainAssignedAmountPence?: number | null", "const agreement = CAP_NOTE_PATTERN.exec"],
   ],
   [
     "src/lib/payments/team-payment-ledger.ts",
@@ -195,7 +134,7 @@ for (const [file, markers] of [
   ],
   [
     "src/app/captain/team/[teamid]/payments/page.tsx",
-    ["playerCollectionRowsWithAssignedShares", "fee.captainAssignedAmountPence"],
+    ["playerCollectionRowsWithAssignedShares", "getPlayerPaymentDisplay"],
   ],
 ]) {
   const source = read(file);
