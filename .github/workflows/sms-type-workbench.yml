@@ -14,7 +14,7 @@ jobs:
         with:
           ref: fix/admin-sms-reply-reliable-submit
           fetch-depth: 1
-      - name: Apply one native nullability correction and verification capture
+      - name: Apply native phone nullability correction only
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = 'refs/heads/fix/admin-sms-reply-reliable-submit'
@@ -24,31 +24,12 @@ jobs:
           s=p.read_text(); before='const replyPhoneLabel = formatPhone(replyPhoneRaw);'
           assert s.count(before)==1
           p.write_text(s.replace(before,'const replyPhoneLabel = formatPhone(replyPhoneRaw || null);'))
-          p=Path('.github/workflows/admin-sms-reply.yml')
-          s=p.read_text(); before='      - uses: actions/upload-artifact@v4\n'
-          assert s.count(before)==1
-          capture='''      - name: Capture committed and prepared owning sources for final review
-                  if: always()
-                  run: |
-                    mkdir -p test-results
-                    node - <<'JS'
-                    const fs=require('node:fs'), cp=require('node:child_process'), crypto=require('node:crypto');
-                    const paths=['src/lib/messaging/admin-sms-reply.ts','src/lib/messaging/sms-reply-display.ts','src/lib/messaging/service.ts','src/app/api/admin/messages/sms-reply/route.ts','src/app/(admin)/admin/messages/actions.ts','src/app/(admin)/admin/messaging/page.tsx','src/components/admin/messages/AdminSmsReplyForm.tsx','src/components/admin/messages/AdminMessageThread.tsx','src/components/admin/messages/AdminMessagesInbox.tsx','scripts/apply-message-sender-attribution.cjs','tests/admin-sms-reply.test.cjs','tests/admin-sms-reply.browser.cjs','.github/workflows/admin-sms-reply.yml','docs/critical-feature-contracts.md'];
-                    const files=paths.map(path=>{const committed=cp.execFileSync('git',['show','HEAD:'+path],{encoding:'utf8'});const prepared=fs.readFileSync(path,'utf8');return {path,committed,prepared,unchanged:committed===prepared,committedHash:crypto.createHash('sha256').update(committed).digest('hex')};});
-                    fs.writeFileSync('test-results/source-review.json',JSON.stringify({head:cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),files},null,2));
-                    JS
-                    git grep -n -E 'sendAdminMessageReplyAction|queueAdminSmsReply|<AdminSmsReplyForm|smsReplyStatusLabel' -- src > test-results/reply-entrypoints.txt
-          '''
-          # The first line already has 6 spaces; remaining lines have 10 extra.
-          capture='\n'.join(line[10:] if line.startswith('          ') else line for line in capture.split('\n'))
-          p.write_text(s.replace(before,capture+before))
           PY
           git diff --check
-          git diff --stat
-          git rm .github/workflows/sms-type-workbench.yml
-          git add src/components/admin/messages/AdminMessageThread.tsx .github/workflows/admin-sms-reply.yml
+          git diff
+          git add src/components/admin/messages/AdminMessageThread.tsx
           git config user.name 'SIXFL SMS repair'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Handle absent SMS phone in native header and capture prepared-source verification'
+          git commit -m 'Handle absent SMS phone in the native conversation header'
           git push origin HEAD:refs/heads/fix/admin-sms-reply-reliable-submit
           git rev-parse HEAD
