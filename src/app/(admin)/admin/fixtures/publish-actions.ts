@@ -76,7 +76,7 @@ function buildAbsoluteUrl(path: string) {
 }
 
 function buildAdminFixturesHref(input: {
-  publish: "success" | "none" | "error";
+  publish: "success" | "none" | "error" | "partial";
   leagueId: string;
   round?: number;
   divisionId?: string | null;
@@ -296,81 +296,93 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   let paymentMessagesQueued = 0;
   let paymentMessagesSkipped = 0;
 
-  for (const fixture of unpublishedFixtures) {
-    const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);
-    const chargeResult = await syncFixtureMatchFeeCharges({
-      fixtureId: fixture.id,
-      leagueId: league.id,
-      leagueName: league.name,
-      leagueSeason: league.season,
-      kickoffAt: fixture.kickoffAt,
-      homeTeam: fixture.homeTeam,
-      awayTeam: fixture.awayTeam,
-      homeMatchFeePence,
-      awayMatchFeePence,
-    });
+  // Publication has committed. A later setup failure must not masquerade as
+  // an unpublished fixture or cause an unsafe full-publication retry.
+  let postPublishSetupFailed = false;
+  try {
+    for (const fixture of unpublishedFixtures) {
+      const { homeMatchFeePence, awayMatchFeePence } = resolveFixtureMatchFees(fixture, placeholderTeamIds);
+      const chargeResult = await syncFixtureMatchFeeCharges({
+        fixtureId: fixture.id,
+        leagueId: league.id,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: fixture.kickoffAt,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        homeMatchFeePence,
+        awayMatchFeePence,
+      });
 
-    paymentChargesCreated += chargeResult.activeCharges.length;
+      paymentChargesCreated += chargeResult.activeCharges.length;
 
-    const messageResult = await queueFixtureMatchFeeEmails({
-      fixtureId: fixture.id,
-      leagueId: league.id,
-      leagueName: league.name,
-      leagueSeason: league.season,
-      kickoffAt: fixture.kickoffAt,
-      homeTeam: fixture.homeTeam,
-      awayTeam: fixture.awayTeam,
-      homeMatchFeePence,
-      awayMatchFeePence,
-      charges: chargeResult.activeCharges,
-    });
+      const messageResult = await queueFixtureMatchFeeEmails({
+        fixtureId: fixture.id,
+        leagueId: league.id,
+        leagueName: league.name,
+        leagueSeason: league.season,
+        kickoffAt: fixture.kickoffAt,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        homeMatchFeePence,
+        awayMatchFeePence,
+        charges: chargeResult.activeCharges,
+      });
 
-    paymentMessagesQueued += messageResult.queued;
-    paymentMessagesSkipped += messageResult.skipped;
-  }
+      paymentMessagesQueued += messageResult.queued;
+      paymentMessagesSkipped += messageResult.skipped;
+    }
 
-  for (const fixture of unpublishedFixtures) {
-    for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
-      if (placeholderTeamIds.has(teamId)) continue;
-      const { recipient } = await upsertTeamNotificationRecipient(teamId);
-      const teamDetails = getTeamDetailsForFixture(fixture, teamId);
-      const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
-      const reminderTimes = [
-        new Date(fixture.kickoffAt.getTime() - 48 * 60 * 60 * 1000),
-        new Date(fixture.kickoffAt.getTime() - 6 * 60 * 60 * 1000),
-      ].filter((date) => date.getTime() > Date.now());
+    for (const fixture of unpublishedFixtures) {
+      for (const teamId of [fixture.homeTeam.id, fixture.awayTeam.id]) {
+        if (placeholderTeamIds.has(teamId)) continue;
+        const { recipient } = await upsertTeamNotificationRecipient(teamId);
+        const teamDetails = getTeamDetailsForFixture(fixture, teamId);
+        const fixtureName = `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`;
+        const reminderTimes = [
+          new Date(fixture.kickoffAt.getTime() - 48 * 60 * 60 * 1000),
+          new Date(fixture.kickoffAt.getTime() - 6 * 60 * 60 * 1000),
+        ].filter((date) => date.getTime() > Date.now());
 
-      for (const scheduledFor of reminderTimes) {
-        const reminderDispatch = await queueTemplateNotificationOnce({
-          recipientId: recipient.id,
-          templateKey: "fixture-reminder-email",
-          sourceType: "FIXTURE_REMINDER",
-          sourceId: buildReminderSourceId({ fixtureId: fixture.id, teamId, scheduledFor }),
-          metadata: {
-            kind: "fixture_reminder",
-            teamId,
-            teamName: teamDetails.name,
-            leagueId: league.id,
-            leagueName: leagueDisplayName,
-            publishRound: input.round ?? null,
-            divisionId: input.divisionId ?? null,
-            fixtureId: fixture.id,
-            fixtureName,
-          },
-          scheduledFor,
-          variables: {
-            firstName: recipient.displayName?.trim() || teamDetails.name,
-            leagueName: league.name,
-            fixtureName,
-            kickoffLabel: formatKickoff(fixture.kickoffAt),
-            fixturesUrl,
-          },
-          emailBranding: { teamName: teamDetails.name, teamLogoUrl: teamDetails.logoUrl ?? null, leagueName: leagueDisplayName },
-        });
-        if (isQueuedDispatch(reminderDispatch.status)) reminderQueued += 1;
-        else reminderSkipped += 1;
+        for (const scheduledFor of reminderTimes) {
+          const reminderDispatch = await queueTemplateNotificationOnce({
+            recipientId: recipient.id,
+            templateKey: "fixture-reminder-email",
+            sourceType: "FIXTURE_REMINDER",
+            sourceId: buildReminderSourceId({ fixtureId: fixture.id, teamId, scheduledFor }),
+            metadata: {
+              kind: "fixture_reminder",
+              teamId,
+              teamName: teamDetails.name,
+              leagueId: league.id,
+              leagueName: leagueDisplayName,
+              publishRound: input.round ?? null,
+              divisionId: input.divisionId ?? null,
+              fixtureId: fixture.id,
+              fixtureName,
+            },
+            scheduledFor,
+            variables: {
+              firstName: recipient.displayName?.trim() || teamDetails.name,
+              leagueName: league.name,
+              fixtureName,
+              kickoffLabel: formatKickoff(fixture.kickoffAt),
+              fixturesUrl,
+            },
+            emailBranding: { teamName: teamDetails.name, teamLogoUrl: teamDetails.logoUrl ?? null, leagueName: leagueDisplayName },
+          });
+          if (isQueuedDispatch(reminderDispatch.status)) reminderQueued += 1;
+          else reminderSkipped += 1;
+        }
       }
     }
+  } catch (error) {
+    postPublishSetupFailed = true;
+    console.error("Fixture publication saved; subsequent setup incomplete", {
+      leagueId: input.leagueId,
+      fixtureIds: unpublishedFixtures.map((fixture) => fixture.id),
+      error,
+    });
   }
 
   revalidatePath("/admin/fixtures");
@@ -384,7 +396,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   }
 
   redirect(buildAdminFixturesHref({
-    publish: "success",
+    publish: postPublishSetupFailed ? "partial" : "success",
     leagueId: input.leagueId,
     round: input.round,
     divisionId: input.divisionId,

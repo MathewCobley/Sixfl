@@ -451,6 +451,22 @@ export async function syncFixtureMatchFeeCharges(
   return { activeCharges };
 }
 
+/** Load editable copy for reminderIntro; never weaken the unresolved-field guard.
+ * The first/follow-up messages retain their existing 24h/72h schedule.
+ * No saved dispatch is changed or replayed by this context repair. */
+async function getFixtureMatchFeeReminderIntro(channel: "EMAIL" | "SMS", hoursAfterKickoff: number) {
+  const stage = hoursAfterKickoff === 24 ? "first" : "follow-up";
+  const key = `match-fee-reminder-intro-${channel.toLowerCase()}-${stage}`;
+  const template = await prisma.notificationTemplate.findUnique({
+    where: { key },
+    select: { body: true, isActive: true, channel: true },
+  });
+  if (!template?.isActive || template.channel !== channel) {
+    throw new Error(`Match-fee reminder introduction template is missing or inactive: ${key}`);
+  }
+  return template.body;
+}
+
 export async function queueFixtureMatchFeeEmails(
   input: QueueFixtureMatchFeeEmailsInput,
 ) {
@@ -595,6 +611,7 @@ export async function queueFixtureMatchFeeEmails(
               hoursAfterKickoff: schedule.hoursAfterKickoff,
             },
             variables: {
+              reminderIntro: await getFixtureMatchFeeReminderIntro("EMAIL", schedule.hoursAfterKickoff),
               firstName: snapshot.primaryContact.name ?? charge.teamName,
               leagueName: input.leagueName,
               leagueDisplayName,
@@ -635,6 +652,7 @@ export async function queueFixtureMatchFeeEmails(
           hoursAfterKickoff: schedule.hoursAfterKickoff,
         },
         variables: {
+          reminderIntro: await getFixtureMatchFeeReminderIntro("SMS", schedule.hoursAfterKickoff),
           firstName: snapshot.primaryContact.name ?? charge.teamName,
           leagueName: input.leagueName,
           leagueDisplayName,

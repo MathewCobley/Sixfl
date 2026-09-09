@@ -340,15 +340,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, published: false, alreadyPublished: true });
   }
 
-  const stats = await queueEverythingForPublishedFixture({
-    fixture,
-    league: fixtureInfo.league,
-  });
-
-  return NextResponse.json({
-    ok: true,
-    published: true,
-    fixtureId,
-    ...stats,
-  });
+  try {
+    const stats = await queueEverythingForPublishedFixture({
+      fixture,
+      league: fixtureInfo.league,
+    });
+    return NextResponse.json({ ok: true, published: true, fixtureId, ...stats });
+  } catch (error) {
+    console.error("Fixture publication saved; subsequent setup incomplete", { fixtureId, error });
+    revalidatePath("/admin/fixtures");
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/night-board");
+    revalidatePath(`/admin/leagues/${fixtureInfo.league.id}`);
+    revalidatePath(`/admin/leagues/${fixtureInfo.league.id}/fixtures`);
+    if (fixtureInfo.league.slug) {
+      revalidatePath(`/leagues/${fixtureInfo.league.slug}`);
+      revalidatePath(`/leagues/${fixtureInfo.league.slug}/fixtures`);
+    }
+    return NextResponse.json({
+      ok: false,
+      published: true,
+      fixtureId,
+      error: "The fixture is published, but fee or notification setup did not finish. Do not republish or regenerate it. Existing queued messages have been kept; check System Templates and delivery status before recovering missing items.",
+    }, { status: 500 });
+  }
 }

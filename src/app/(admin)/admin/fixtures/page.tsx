@@ -96,6 +96,13 @@ function buildPublishNotice(input: {
   const reminderSkipped = Number(getSearchParamValue(input.searchParams.reminderSkipped) ?? 0);
   const publishError = getSearchParamValue(input.searchParams.publishError);
 
+  if (publish === "partial") {
+    return {
+      tone: "error",
+      message: `${formatCount(published, "fixture")} published for ${scopeLabel}, but fee or notification setup did not finish. Your fixtures remain published and any messages already queued have been kept. Do not republish or regenerate these fixtures. Check System Templates and delivery status before recovering missing items.`,
+    };
+  }
+
   if (publish === "success") {
     const summaryParts = [
       `${formatCount(published, "fixture")} published for ${scopeLabel}`,
