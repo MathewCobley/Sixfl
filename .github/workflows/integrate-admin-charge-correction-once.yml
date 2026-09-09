@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/admin-player-charge-correction
-      - name: Apply hash-checked native source changes and remove this helper
+      - name: Apply hash-checked native source only
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -30,7 +30,8 @@ jobs:
           paths=[]
           for item in edits:
             p=Path(item['path']);assert not p.is_absolute() and '..' not in p.parts
-            assert p.parts[0] in ['src','tests','docs','.github']
+            if p.parts[0]=='.github':continue
+            assert p.parts[0] in ['src','tests','docs']
             if item['before'] is None:
               assert not p.exists(),str(p)
               data=item['content'].encode()
@@ -42,7 +43,6 @@ jobs:
             assert hashlib.sha256(data).hexdigest()==item['after'],str(p)+' output mismatch'
             p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data);paths.append(str(p))
             print('Verified source:',p,item['after'])
-          helper=Path('.github/workflows/integrate-admin-charge-correction-once.yml');helper.unlink();paths.append(str(helper))
           subprocess.run(['git','config','user.name','SIXFL source integration'],check=True)
           subprocess.run(['git','config','user.email','262667783+MathewCobley@users.noreply.github.com'],check=True)
           subprocess.run(['git','add','--',*paths],check=True)
