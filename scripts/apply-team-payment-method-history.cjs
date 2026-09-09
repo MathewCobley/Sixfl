@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 function replaceOnce(filePath, before, after) {
   const absolutePath = path.join(root, filePath);
   const source = fs.readFileSync(absolutePath, "utf8");
+  if (source.includes("NATIVE_PLAYER_PAYMENT_HISTORY")) return;
   if (source.includes(after)) return;
   if (!source.includes(before)) {
     throw new Error(`Expected payment history source was not found in ${filePath}`);

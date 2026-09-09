@@ -1,3 +1,4 @@
+// NATIVE_PLAYER_RECEIPT_SETTLEMENT: shared receipt service preserves debt and the one-match-fee limit.
 // ========================================
 // File: src/app/api/stripe/webhook/route.ts
 // ========================================
@@ -12,7 +13,6 @@ import {
   getChargeStatusFromAmounts,
 } from "@/lib/payments/charge-status";
 import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
-import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "@/lib/payments/cancel-player-match-fee-notifications";
 import { reconcileFixtureChargeFromPlayerPayments } from "@/lib/payments/player-match-fee-reconciliation";
 import {
   saveTeamAutoPaySetup,
@@ -57,6 +57,164 @@ function getChargeIdFromCheckoutSession(session: Stripe.Checkout.Session) {
   return session.metadata?.chargeId?.trim() || session.client_reference_id?.trim() || null;
 }
 
+async function isConfirmedCheckoutPayment(
+  session: Stripe.Checkout.Session,
+  stripe: Stripe,
+) {
+  if (session.mode !== "payment" || session.payment_status !== "paid") {
+    return false;
+  }
+
+  const paymentIntentId = getPaymentIntentId(session);
+  if (!paymentIntentId) return false;
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const expectedAmountPence = session.amount_total ?? 0;
+
+  return (
+    paymentIntent.status === "succeeded" &&
+    session.currency === "gbp" && paymentIntent.currency === "gbp" &&
+    Number.isSafeInteger(expectedAmountPence) && expectedAmountPence > 0 &&
+    paymentIntent.amount_received === expectedAmountPence
+  );
+}
+
+function getPlayerMatchFeeIdFromTransactionNotes(notes: string | null) {
+  const match = /Player fee ID:\s*([a-zA-Z0-9_-]+)/i.exec(notes ?? "");
+  return match?.[1] ?? null;
+}
+
+async function invalidateFailedStripeTransaction(input: {
+  sessionId?: string | null;
+  paymentIntentId?: string | null;
+  playerMatchFeeId?: string | null;
+  reason: string;
+}) {
+  const orFilters: Prisma.PaymentTransactionWhereInput[] = [];
+  if (input.sessionId) {
+    orFilters.push({ stripeCheckoutSessionId: input.sessionId });
+  }
+  if (input.paymentIntentId) {
+    orFilters.push({ stripePaymentIntentId: input.paymentIntentId });
+  }
+  if (orFilters.length === 0) return;
+
+  const transaction = await prisma.paymentTransaction.findFirst({
+    where: { OR: orFilters },
+    select: {
+      id: true,
+      teamId: true,
+      chargeId: true,
+      notes: true,
+      paidAt: true,
+    },
+  });
+
+  if (!transaction) return;
+  // Ledger receipts are immutable verified receipts. Delayed failure events
+  // cannot delete them; only a confirmed refund posts a reversing entry.
+  if ((transaction.notes ?? "").startsWith("Player ledger repayment")) return;
+
+  const playerMatchFeeId =
+    input.playerMatchFeeId?.trim() ||
+    getPlayerMatchFeeIdFromTransactionNotes(transaction.notes);
+
+  await prisma.paymentTransaction.delete({ where: { id: transaction.id } });
+
+  if (playerMatchFeeId) {
+    const fee = await prisma.playerMatchFee.findUnique({
+      where: { id: playerMatchFeeId },
+      select: {
+        id: true,
+        teamId: true,
+        fixtureId: true,
+        status: true,
+        paidAt: true,
+        note: true,
+      },
+    });
+
+    if (fee) {
+      const anotherRecordedPayment = await prisma.paymentTransaction.findFirst({
+        where: {
+          amountPence: { gt: 0 },
+          notes: { contains: `Player fee ID: ${fee.id}` },
+        },
+        select: { id: true },
+      });
+      const paidAtMatchesRemovedTransaction =
+        Boolean(fee.paidAt) &&
+        Math.abs((fee.paidAt?.getTime() ?? 0) - transaction.paidAt.getTime()) < 60_000;
+
+      if (
+        fee.status === "PAID" &&
+        paidAtMatchesRemovedTransaction &&
+        !anotherRecordedPayment
+      ) {
+        await prisma.playerMatchFee.update({
+          where: { id: fee.id },
+          data: {
+            status: "OPEN",
+            paidAt: null,
+            waivedAt: null,
+            cancelledAt: null,
+            note: [
+              fee.note,
+              `Stripe payment attempt was not successful and was reopened automatically: ${input.reason}` ,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+        });
+      }
+
+      await reconcileFixtureChargeFromPlayerPayments({
+        teamId: fee.teamId,
+        fixtureId: fee.fixtureId,
+      });
+    }
+  }
+
+  if (transaction.chargeId) {
+    const charge = await prisma.paymentCharge.findUnique({
+      where: { id: transaction.chargeId },
+      include: { transactions: { select: { amountPence: true } } },
+    });
+
+    if (charge) {
+      const paidTotalPence = getChargePaidTotal(charge.transactions);
+      const nextStatus = getChargeStatusFromAmounts(charge.amountPence, paidTotalPence);
+      await prisma.paymentCharge.update({
+        where: { id: charge.id },
+        data: { status: nextStatus },
+      });
+    }
+  }
+}
+
+async function handleFailedCheckoutSession(
+  session: Stripe.Checkout.Session,
+  reason: string,
+) {
+  await invalidateFailedStripeTransaction({
+    sessionId: session.id,
+    paymentIntentId: getPaymentIntentId(session),
+    playerMatchFeeId: session.metadata?.playerMatchFeeId ?? null,
+    reason,
+  });
+}
+
+async function handleFailedPaymentIntent(
+  paymentIntent: Stripe.PaymentIntent,
+  reason: string,
+) {
+  await invalidateFailedStripeTransaction({
+    paymentIntentId: paymentIntent.id,
+    playerMatchFeeId: paymentIntent.metadata?.playerMatchFeeId ?? null,
+    reason,
+  });
+}
+
 async function hasExistingTransaction(sessionId: string) {
   const existingTransaction = await prisma.paymentTransaction.findUnique({
     where: { stripeCheckoutSessionId: sessionId },
@@ -64,221 +222,6 @@ async function hasExistingTransaction(sessionId: string) {
   });
 
   return Boolean(existingTransaction);
-}
-
-async function ensurePaymentTransactionPlayerFeeColumn() {
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE "PaymentTransaction"
-      ADD COLUMN IF NOT EXISTS "playerMatchFeeId" TEXT;
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "PaymentTransaction_playerMatchFeeId_idx"
-      ON "PaymentTransaction"("playerMatchFeeId");
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'PaymentTransaction_playerMatchFeeId_fkey'
-      ) THEN
-        ALTER TABLE "PaymentTransaction"
-          ADD CONSTRAINT "PaymentTransaction_playerMatchFeeId_fkey"
-          FOREIGN KEY ("playerMatchFeeId") REFERENCES "PlayerMatchFee"("id")
-          ON DELETE SET NULL ON UPDATE CASCADE;
-      END IF;
-    END $$;
-  `);
-}
-
-async function closePlayerMatchFeeFromStripeSession(input: {
-  playerMatchFeeId: string;
-  paidAt: Date;
-  paidAmountPence?: number | null;
-}) {
-  const fee = await prisma.playerMatchFee.findUnique({
-    where: { id: input.playerMatchFeeId },
-    select: {
-      id: true,
-      teamId: true,
-      fixtureId: true,
-      amountPence: true,
-      status: true,
-    },
-  });
-
-  if (!fee) return;
-
-  const paidAmountPence = input.paidAmountPence ?? null;
-  const shouldSyncAmount =
-    typeof paidAmountPence === "number" &&
-    paidAmountPence > 0 &&
-    paidAmountPence !== fee.amountPence;
-
-  if (fee.status === "OPEN" || shouldSyncAmount) {
-    await prisma.playerMatchFee.update({
-      where: { id: input.playerMatchFeeId },
-      data: {
-        ...(shouldSyncAmount ? { amountPence: paidAmountPence } : {}),
-        ...(fee.status === "OPEN"
-          ? {
-              status: "PAID",
-              paidAt: input.paidAt,
-              waivedAt: null,
-              cancelledAt: null,
-            }
-          : {}),
-      },
-    });
-  }
-
-  await cancelQueuedPlayerMatchFeeNotificationDispatches(
-    [input.playerMatchFeeId],
-    "Player match fee was paid before the queued payment reminder was sent.",
-  );
-
-  await reconcileFixtureChargeFromPlayerPayments({
-    teamId: fee.teamId,
-    fixtureId: fee.fixtureId,
-  });
-}
-
-async function findExistingPlayerFeeTransaction(input: {
-  playerMatchFeeId: string;
-  paymentIntentId: string | null;
-}) {
-  const orFilters: Prisma.PaymentTransactionWhereInput[] = [
-    {
-      notes: {
-        contains: `Player fee ID: ${input.playerMatchFeeId}`,
-      },
-    },
-  ];
-
-  if (input.paymentIntentId) {
-    orFilters.push({
-      stripePaymentIntentId: input.paymentIntentId,
-    });
-  }
-
-  return prisma.paymentTransaction.findFirst({
-    where: { OR: orFilters },
-    select: { id: true, paidAt: true, amountPence: true },
-    orderBy: { paidAt: "desc" },
-  });
-}
-
-async function handleCompletedPlayerMatchFeeCheckoutSession(
-  session: Stripe.Checkout.Session,
-) {
-  const playerMatchFeeId = session.metadata?.playerMatchFeeId?.trim();
-
-  if (!playerMatchFeeId) return false;
-
-  const paidAt = new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000);
-  const amountPence = session.amount_total ?? 0;
-
-  if (await hasExistingTransaction(session.id)) {
-    await closePlayerMatchFeeFromStripeSession({
-      playerMatchFeeId,
-      paidAt,
-      paidAmountPence: amountPence,
-    });
-    return true;
-  }
-
-  const fee = await prisma.playerMatchFee.findUnique({
-    where: { id: playerMatchFeeId },
-    select: {
-      id: true,
-      teamId: true,
-      fixtureId: true,
-      amountPence: true,
-      status: true,
-    },
-  });
-
-  if (!fee) return true;
-
-  if (fee.status !== "OPEN") {
-    if (fee.status === "PAID") {
-      await closePlayerMatchFeeFromStripeSession({
-        playerMatchFeeId: fee.id,
-        paidAt,
-        paidAmountPence: amountPence,
-      });
-    }
-
-    return true;
-  }
-
-  if (amountPence <= 0) return true;
-
-  const paymentIntentId = getPaymentIntentId(session);
-  const existingPlayerFeeTransaction = await findExistingPlayerFeeTransaction({
-    playerMatchFeeId: fee.id,
-    paymentIntentId,
-  });
-
-  if (existingPlayerFeeTransaction) {
-    await closePlayerMatchFeeFromStripeSession({
-      playerMatchFeeId: fee.id,
-      paidAt: existingPlayerFeeTransaction.paidAt,
-      paidAmountPence: existingPlayerFeeTransaction.amountPence,
-    });
-    return true;
-  }
-
-  await ensurePaymentTransactionPlayerFeeColumn();
-
-  await prisma.$transaction(async (tx) => {
-    const transaction = await tx.paymentTransaction.create({
-      data: {
-        teamId: fee.teamId,
-        chargeId: null,
-        amountPence,
-        method: "STRIPE",
-        reference: paymentIntentId || session.id,
-        notes: `Player match fee paid online via Stripe Checkout. Player fee ID: ${fee.id}`,
-        paidAt,
-        stripeCheckoutSessionId: session.id,
-        stripePaymentIntentId: paymentIntentId,
-      },
-      select: { id: true },
-    });
-
-    await tx.$executeRaw`
-      UPDATE "PaymentTransaction"
-      SET "playerMatchFeeId" = ${fee.id}
-      WHERE "id" = ${transaction.id}
-    `;
-
-    await tx.playerMatchFee.update({
-      where: { id: fee.id },
-      data: {
-        amountPence,
-        status: "PAID",
-        paidAt,
-        waivedAt: null,
-        cancelledAt: null,
-      },
-    });
-  });
-
-  await cancelQueuedPlayerMatchFeeNotificationDispatches(
-    [fee.id],
-    "Player match fee was paid before the queued payment reminder was sent.",
-  );
-
-  await reconcileFixtureChargeFromPlayerPayments({
-    teamId: fee.teamId,
-    fixtureId: fee.fixtureId,
-  });
-
-  return true;
 }
 
 async function handleCompletedTeamAutoPaySetupCheckoutSession(
@@ -347,9 +290,8 @@ async function handleCompletedCheckoutSession(
 
   if (handledTeamSubscription) return;
 
-  const handledPlayerMatchFee = await handleCompletedPlayerMatchFeeCheckoutSession(session);
-
-  if (handledPlayerMatchFee) return;
+  const paymentConfirmed = await isConfirmedCheckoutPayment(session, stripe);
+  if (!paymentConfirmed) return;
 
   const chargeId = getChargeIdFromCheckoutSession(session);
 
@@ -430,6 +372,22 @@ export async function POST(request: Request) {
       case "checkout.session.completed":
       case "checkout.session.async_payment_succeeded": {
         await handleCompletedCheckoutSession(event.data.object as Stripe.Checkout.Session, stripe);
+        break;
+      }
+      case "checkout.session.async_payment_failed":
+      case "checkout.session.expired": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleFailedCheckoutSession(session, event.type);
+        break;
+      }
+      case "payment_intent.payment_failed":
+      case "payment_intent.canceled": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        const failureReason =
+          paymentIntent.last_payment_error?.code ||
+          paymentIntent.cancellation_reason ||
+          event.type;
+        await handleFailedPaymentIntent(paymentIntent, failureReason);
         break;
       }
       case "customer.subscription.created":

@@ -6,8 +6,9 @@ import { getPublicSiteUrl, getStripeServerClient } from "@/lib/stripe/client";
 import { getTeamPaymentLedger } from "./team-payment-ledger";
 import { applyExistingTeamCreditToChargeFirst, getMaximumAdditionalCollectionPence, getTeamCreditPolicySnapshot } from "./team-credit-policy";
 import { reconcileFixtureChargeFromPlayerPayments } from "./player-match-fee-reconciliation";
-import { advanceRepaymentProgress, basicRepaymentFee, getPlayerLedgerAccount, lockLedgerFees, PlayerLedgerError, readPlayerLedgerState, repaymentAmount, setLedgerContext, type LedgerDb } from "./player-ledger";
+import { advanceRepaymentProgress, collectiblePlayerLedgerFee, getPlayerLedgerAccount, lockLedgerFees, PlayerLedgerError, readPlayerLedgerState, repaymentAmount, setLedgerContext, type LedgerDb } from "./player-ledger";
 
+import { cancelQueuedPlayerMatchFeeNotificationDispatches } from "./cancel-player-match-fee-notifications";
 import { LEDGER_TRANSACTION_PREFIX } from "./player-ledger-markers";
 type Allocation = { feeId:string; fixtureId:string; chargeId:string; amountPence:number; version:number };
 type Target = { planToken?:string; feeToken?:string };
@@ -91,7 +92,7 @@ export async function startPlayerRepaymentCheckout(target:Target, stripe=getStri
     for(const f of t.account.fees){
       const s=t.states.find(s=>s.feeId===f.id);
       if(!s||!s.balancePence) continue;
-      if(!s.controlled||!basicRepaymentFee(f)||s.deletedAt) throw new PlayerLedgerError("A selected charge changed or needs review. No money has been taken.");
+      if(!s.controlled||!collectiblePlayerLedgerFee(f)||s.deletedAt) throw new PlayerLedgerError("A selected charge changed or needs review. No money has been taken.");
       const amount=Math.min(left,s.balancePence); if(amount) parts.push({feeId:f.id,fixtureId:f.fixtureId,amountPence:amount,version:s.version});
       left-=amount; if(!left) break;
     }
@@ -147,22 +148,37 @@ async function recordRejectedPayment(request:RequestRow,session:Stripe.Checkout.
 export async function settlePlayerRepaymentSession(eventSession:Stripe.Checkout.Session,stripe:Stripe){
   const requestId=eventSession.metadata?.playerRepaymentRequestId;
   const legacyFeeId=eventSession.metadata?.playerMatchFeeId;
-  if(!requestId&&(!legacyFeeId||!await readPlayerLedgerState(legacyFeeId).then(s=>s?.controlled))) return false;
+  // All player checkouts, ordinary and arranged, settle against the recorded
+  // obligation. Never let an ordinary link fall through to a PAID-on-any-receipt handler.
+  if(!requestId&&!legacyFeeId) return false;
   const session=await stripe.checkout.sessions.retrieve(eventSession.id);
-  if(session.mode!=="payment"||session.payment_status!=="paid") return true;
+  if(session.mode!=="payment"||session.status!=="complete"||session.payment_status!=="paid") return true;
   if((requestId&&session.metadata?.playerRepaymentRequestId!==requestId)||(!requestId&&session.metadata?.playerMatchFeeId!==legacyFeeId))throw new Error("Repayment metadata changed between event and provider retrieval.");
   const intentId=typeof session.payment_intent==="string"?session.payment_intent:session.payment_intent?.id;
   if(!intentId) throw new Error("Repayment payment intent missing.");
   const intent=await stripe.paymentIntents.retrieve(intentId);
-  if(intent.status!=="succeeded"||intent.currency!=="gbp"||session.currency!=="gbp"||!session.amount_total||intent.amount_received!==session.amount_total) throw new Error("Repayment was not verified as received in full.");
-  let request=requestId?await prisma.playerRepaymentRequest.findUnique({where:{id:requestId}}):await prisma.playerRepaymentRequest.findUnique({where:{checkoutSessionId:session.id}});
+  if(intent.status!=="succeeded"||intent.currency!=="gbp"||session.currency!=="gbp"||!Number.isSafeInteger(session.amount_total)||!session.amount_total||session.amount_total<=0||intent.amount_received!==session.amount_total) throw new Error("Repayment was not verified as received in full.");
+  let request=requestId?await prisma.playerRepaymentRequest.findUnique({where:{id:requestId}}):await prisma.playerRepaymentRequest.findFirst({where:{OR:[{checkoutSessionId:session.id},{paymentIntentId:intentId}]}});
   if(!request&&legacyFeeId){
-    const s=await readPlayerLedgerState(legacyFeeId); if(!s?.controlled) return false;
+    // Replayed historical receipts must not re-close a fee, reset its amount,
+    // or be imported as another receipt. Historical mismatches need explicit review.
+    const recorded=await prisma.paymentTransaction.findFirst({where:{OR:[{stripeCheckoutSessionId:session.id},{stripePaymentIntentId:intentId}]},select:{id:true}});
+    if(recorded)return true;
+    const s=await readPlayerLedgerState(legacyFeeId);
+    if(!s)throw new PlayerLedgerError("Player obligation is missing. No balance was changed; this payment needs review.");
+    if(session.metadata?.teamId!==s.teamId || session.metadata?.fixtureId!==s.fixtureId)throw new PlayerLedgerError("The payment does not belong to this player's original team and fixture.");
     const ledger=await getTeamPaymentLedger(s.teamId);
     const charge=ledger?.entries.find(e=>e.teamId===s.teamId&&e.fixtureId===s.fixtureId&&e.displayStatus!=="VOID");
-    request=await prisma.playerRepaymentRequest.upsert({where:{checkoutSessionId:session.id},update:{},create:{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
+    if(charge&&charge.amountPence>0){
+      await applyExistingTeamCreditToChargeFirst({teamId:s.teamId,chargeId:charge.chargeId,fixtureFeePence:charge.amountPence});
+    }
+    // INSERT ... ON CONFLICT DO NOTHING is atomic even when webhook workers
+    // race on both the deterministic receipt id and unique checkout-session id.
+    // Prisma's empty-update upsert can otherwise fall back to read-then-insert.
+    await prisma.playerRepaymentRequest.createMany({skipDuplicates:true,data:[{id:`legacy-${session.id}`,teamId:s.teamId,feeId:s.feeId,
       amountPence:session.amount_total,dueAt:new Date(),expiresAt:new Date(),status:"READY",checkoutSessionId:session.id,
-      allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}});
+      allocations:[{feeId:s.feeId,fixtureId:s.fixtureId,chargeId:charge?.chargeId??"unavailable",amountPence:session.amount_total,version:s.version}]}]});
+    request=await prisma.playerRepaymentRequest.findUnique({where:{checkoutSessionId:session.id}});
   }
   if(!request) throw new Error("Repayment request not found; no ledger was changed.");
   if(request.status==="PAID") {await reconcileRepaymentCharges(request);return true;}
@@ -181,13 +197,17 @@ export async function settlePlayerRepaymentSession(eventSession:Stripe.Checkout.
       for(const a of parts){
         const s=await readPlayerLedgerState(a.feeId,db);
         const f=await db.playerMatchFee.findUnique({where:{id:a.feeId},include:{fixture:{select:{publishedAt:true,status:true}}}});
-        if(!s||!s.controlled||s.teamId!==fresh.teamId||s.fixtureId!==a.fixtureId||s.balancePence<a.amountPence||!f||!basicRepaymentFee(f)) throw new PlayerLedgerError("The underlying player charge changed or was already settled.");
+        if(!s||(requestId&&!s.controlled)||s.teamId!==fresh.teamId||s.fixtureId!==a.fixtureId||s.balancePence<a.amountPence||!f||!collectiblePlayerLedgerFee(f)) throw new PlayerLedgerError("The underlying player charge changed or was already settled.");
         if(requestId&&s.version!==a.version) throw new PlayerLedgerError("The player's balance changed while checkout was open.");
       }
       const chargeIds=[...new Set(parts.map(a=>a.chargeId))].sort();
       await db.$queryRaw(Prisma.sql`SELECT id FROM "PaymentCharge" WHERE id IN (${Prisma.join(chargeIds)}) ORDER BY id FOR UPDATE`);
       const ledger=await capacities(fresh.teamId,parts,false,db);
       for(const a of parts) if(!ledger.entries.some(e=>e.chargeId===a.chargeId&&e.teamId===fresh.teamId&&e.fixtureId===a.fixtureId&&e.displayStatus!=="VOID")) throw new PlayerLedgerError("The repayment's team-charge allocation is no longer valid.");
+      // This change is made only after receipt, identity and collection-capacity
+      // checks. The database capture now preserves the obligation/receipt split
+      // for a normal player as well as a player on a repayment arrangement.
+      await db.playerFeeLedgerState.updateMany({where:{feeId:{in:parts.map(a=>a.feeId)},teamId:fresh.teamId},data:{controlled:true}});
       const paidAt=new Date();
       const progress=new Map<string,number>();
       for(const [index,a] of parts.entries()){
@@ -197,7 +217,7 @@ export async function settlePlayerRepaymentSession(eventSession:Stripe.Checkout.
           reference:intentId,stripePaymentIntentId:intentId,stripeCheckoutSessionId:index===0?session.id:null,
           notes:`${LEDGER_TRANSACTION_PREFIX}. Player: ${s.playerName??"Player"}. Account fee reference: ${s.feeId}. Request: ${fresh.id}.`}});
         await setLedgerContext(db,{feeId:s.feeId,kind:"PAYMENT",receiptPence:a.amountPence,receivedBy:"SIXFL",reference:transaction.id,
-          reason:"Verified Stripe repayment allocated to this original match charge.",sourceKey:`stripe:${session.id}:${s.feeId}`});
+          reason:"Verified Stripe payment allocated to this original match charge. Any unpaid remainder is still owed.",sourceKey:`stripe:${session.id}:${s.feeId}`});
         await db.playerMatchFee.update({where:{id:s.feeId},data:{amountPence:balance>0?balance:s.receivedPence+s.captainReceivedPence+a.amountPence,
           status:balance>0?"OPEN":"PAID",paidAt:balance===0?paidAt:null,waivedAt:null,cancelledAt:null}});
         if(s.planId) progress.set(s.planId,(progress.get(s.planId)??0)+a.amountPence);
@@ -214,6 +234,8 @@ export async function settlePlayerRepaymentSession(eventSession:Stripe.Checkout.
 }
 
 async function reconcileRepaymentCharges(request:RequestRow) {
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(allocationsOf(request.allocations).map(a=>a.feeId),
+    "A verified player payment changed this balance. The remaining debt is retained; this old payment request is out of date.");
   for(const fixtureId of [...new Set(allocationsOf(request.allocations).map(a=>a.fixtureId))]) {
     await reconcileFixtureChargeFromPlayerPayments({teamId:request.teamId,fixtureId});
   }

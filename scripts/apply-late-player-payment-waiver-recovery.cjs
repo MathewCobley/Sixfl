@@ -95,12 +95,15 @@ if (!reconciliation.includes("late_player_payment_reduces_team_waiver")) {
   );
 }
 
+if (!reconciliation.includes("const freshCharge = await prisma.paymentCharge.findUnique")) {
 reconciliation = replaceRequired(
   reconciliation,
   `        appendCoveredNote(matchingCharge.description, coveredTotalPence),`,
   `        appendCoveredNote(effectiveDescription, coveredTotalPence),`,
   "preserve waiver reduction audit note",
 );
+
+}
 
 write(reconciliationPath, reconciliation);
 

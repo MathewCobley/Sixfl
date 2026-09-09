@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test, before, after } from "node:test";
-import { randomUUID, randomBytes } from "node:crypto";
+import { test, before, after, mock } from "node:test";
+import { randomUUID, randomBytes, createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import type Stripe from "stripe";
@@ -12,22 +12,31 @@ import { runPlayerRepaymentReminderJob, playerRepaymentReminderDeliveryBlock } f
 import { getTeamPaymentLedger } from "../src/lib/payments/team-payment-ledger";
 import { getTeamCreditLedger } from "../src/lib/payments/team-credits";
 import { getCaptainCollectedRemittanceSnapshots } from "../src/lib/payments/captain-collected-remittance";
-import { getPlayerFeeCashReceivedPence } from "../src/lib/payments/player-fee-coverage";
+import { getPlayerFeeCashReceivedPence, getPlayerFeeSubsidyPence } from "../src/lib/payments/player-fee-coverage";
 import { summariseChargesWithPlayerMatchFees } from "../src/lib/payments/charge-summary";
 import PlayerRepaymentPanel from "../src/components/payments/PlayerRepaymentPanel";
 import { renderToStaticMarkup } from "react-dom/server";
+import { getPlayerPaymentDisplay } from "../src/lib/payments/player-payment-display";
+import { getChargeStatusFromAmounts } from "../src/lib/payments/charge-status";
+import { POST as stripeWebhook } from "../src/app/api/stripe/webhook/route";
+import { getStripeServerClient } from "../src/lib/stripe/client";
 
 const database=new URL(process.env.DATABASE_URL||"http://invalid");
 assert.ok(process.env.SIXFL_PLAYER_LEDGER_TEST==="1"&&database.hostname==="127.0.0.1"&&database.pathname==="/sixfl_player_ledger_test","Disposable local database only");
 globalThis.fetch=async()=>{throw Error("External provider/network calls are forbidden in ledger tests");};
 const migration="prisma/migrations/20260908140000_player_ledger_and_repayments/migration.sql";
 const migrate=(path:string)=>execFileSync("psql",[process.env.DATABASE_URL!,"-v","ON_ERROR_STOP=1","-f",path],{stdio:"pipe"});
+function signedTestHeader(payload: string, secret: string) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  return `t=${timestamp},v1=${createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex")}`;
+}
 const past=()=>new Date(Date.now()-3600_000);
 let legacyId:string;
 before(async()=>{
   for(const name of ["20260424162000_add_team_member_profile","20260702162500_add_team_credit_pot","20260709210000_team_credit_ledger","20260804230000_add_private_player_codes_and_temporary_match_fees","20260809002500_captain_collected_remittance_checkout","20260810183500_add_fixture_context_to_team_credit_overpayments","20260813004500_standard_credit_conversion_boundary","20260825231500_player_fee_assigned_share"])migrate(`prisma/migrations/${name}/migration.sql`);
   const old=await target(800);legacyId=old.fee.id;
   migrate(migration);
+  migrate("prisma/migrations/20260909001000_player_receipt_amount_integrity/migration.sql");
 });
 after(async()=>{await prisma.$disconnect();});
 async function target(amountPence=1200,mode:"STANDARD"|"MANAGED"="STANDARD"){
@@ -123,12 +132,12 @@ test("unpaid sessions and cancelled/expired checkouts never alter the obligation
 });
 test("old full-size checkout is redirected to the ledger; stale excess is refunded, not silently credited as repayment",async()=>{
  const t=await target(),p=await plan(t);await pay(t,p);assert.equal((await state(t)).balancePence,400);
- const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
+ const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,fixtureId:t.fixture.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
  provider.sessions.set(s.id,s);assert.equal(await settlePlayerRepaymentSession(s,provider.api),true);assert.equal(provider.refundCalls,1);assert.equal((await state(t)).balancePence,400);
  await settlePlayerRepaymentSession(s,provider.api);assert.equal(provider.refundCalls,1);assert.equal((await state(t)).receivedPence,800);
 });
 test("old legitimate £12 checkout paid before any instalment settles the debt once",async()=>{
- const t=await target();await plan(t);const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
+ const t=await target();await plan(t);const provider=fakeStripe();const s={id:`cs_legacy_${randomUUID()}`,mode:"payment",status:"complete",currency:"gbp",payment_status:"paid",amount_total:1200,payment_intent:`pi_${randomUUID()}`,metadata:{teamId:t.team.id,fixtureId:t.fixture.id,playerMatchFeeId:t.fee.id}} as unknown as Stripe.Checkout.Session;
  provider.sessions.set(s.id,s);await settlePlayerRepaymentSession(s,provider.api);assert.equal((await state(t)).balancePence,0);assert.equal((await state(t)).receivedPence,1200);
 });
 test("genuine reductions and captain receipts are explicit, idempotent and do not fabricate SIXFL cash",async()=>{
@@ -224,4 +233,149 @@ test("the unified dashboard retains exact-user temporary fees without mixing tea
  assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id)).balancePence,1200);
  assert.equal((await getPlayerLedgerSummaryForUser(t.team.id,t.user.id,true)).balancePence,1900);
  assert.equal((await account(t)).balancePence,1200);
+});
+
+
+// Ordinary checkouts deliberately have no repayment-request metadata. These are
+// the production path which the original arrangement-only tests missed.
+function ordinaryCheckout(t: Target, amount: number, provider = fakeStripe()) {
+  const session = { id:`cs_ordinary_${randomUUID()}`, mode:"payment", status:"complete", currency:"gbp",
+    payment_status:"paid", amount_total:amount, payment_intent:`pi_${randomUUID()}`,
+    metadata:{teamId:t.team.id,fixtureId:t.fixture.id,playerMatchFeeId:t.fee.id,paymentType:"PLAYER_MATCH_FEE"}
+  } as unknown as Stripe.Checkout.Session;
+  provider.sessions.set(session.id,session);
+  return {session, provider};
+}
+async function receiveOrdinary(t: Target, amount: number, provider = fakeStripe()) {
+  const payment=ordinaryCheckout(t,amount,provider);
+  assert.equal(await settlePlayerRepaymentSession(payment.session,provider.api),true);
+  return payment;
+}
+test("ordinary £12 fee / £8 receipt is part-paid £4, without creating or requiring a repayment plan",async()=>{
+  const t=await target();
+  await prisma.$executeRaw(Prisma.sql`UPDATE "PlayerMatchFee" SET "captainAssignedAmountPence"=1200 WHERE id=${t.fee.id}`);
+  const before=(await account(t)).entries.length;
+  const {session,provider}=await receiveOrdinary(t,800);
+  const s=await state(t);assert.equal(s.balancePence,400);assert.equal(s.openingAmountPence,1200);assert.equal(s.receivedPence,800);assert.equal(s.controlled,true);
+  assert.equal((await feeRow(t)).status,"OPEN");assert.equal(await prisma.playerRepaymentPlan.count({where:{teamId:t.team.id}}),0);
+  const display=getPlayerPaymentDisplay(await feeRow(t),s);assert.equal(display.statusLabel,"Part-paid");assert.match(display.detail,/£8.00 received online.*£4.00 outstanding/);
+  await settlePlayerRepaymentSession(session,provider.api);
+  assert.equal((await account(t)).entries.length,before+1);assert.equal((await state(t)).balancePence,400);
+  assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].playerSubsidyPence,0);
+  const targetPage=await getPlayerRepaymentTarget({feeToken:t.fee.paymentToken!});assert.equal(targetPage.amountPence,400);
+  await startPlayerRepaymentCheckout({feeToken:t.fee.paymentToken!},provider.api);
+  const remaining=await prisma.playerRepaymentRequest.findFirstOrThrow({where:{feeId:t.fee.id,status:"READY"}});
+  assert.equal(remaining.amountPence,400);await settlePlayerRepaymentSession(provider.paid(remaining.checkoutSessionId!),provider.api);
+  assert.equal((await state(t)).balancePence,0);assert.equal((await state(t)).receivedPence,1200);assert.equal((await feeRow(t)).status,"PAID");
+  assert.equal((await account(t)).entries.reduce((sum,e)=>sum+e.receiptPence,0),1200);
+});
+test("ordinary duplicate and concurrent delivery subtracts £8 exactly once, never closes the remaining £4",async()=>{
+  for(let round=0;round<5;round++) {
+    const t=await target(), {session,provider}=ordinaryCheckout(t,800);
+    await Promise.all(Array.from({length:4},()=>settlePlayerRepaymentSession(session,provider.api)));
+    assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
+    assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);assert.equal(provider.refundCalls,0);
+    assert.equal(await prisma.playerRepaymentRequest.count({where:{checkoutSessionId:session.id}}),1);
+  }
+});
+test("different ordinary receipts for the same fee both count, unlike the old fee-ID-only duplicate check",async()=>{
+  const t=await target();const provider=fakeStripe();const a=ordinaryCheckout(t,800,provider),b=ordinaryCheckout(t,400,provider);
+  await Promise.all([settlePlayerRepaymentSession(a.session,provider.api),settlePlayerRepaymentSession(b.session,provider.api)]);
+  assert.equal((await state(t)).balancePence,0);assert.equal((await state(t)).receivedPence,1200);
+  assert.equal(await prisma.paymentTransaction.count({where:{teamId:t.team.id}}),2);assert.equal(provider.refundCalls,0);
+});
+test("£28 team cash plus £8 ordinary player receipt leaves £4 on the £40 team charge, with no invented subsidy",async()=>{
+  const t=await target();await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
+  await prisma.$executeRaw(Prisma.sql`UPDATE "PlayerMatchFee" SET "captainAssignedAmountPence"=1200 WHERE id=${t.fee.id}`);
+  await receiveOrdinary(t,800);const entry=(await getTeamPaymentLedger(t.team.id))!.entries[0];
+  assert.equal(entry.amountPence,4000);assert.equal(entry.paidPence,3600);assert.equal(entry.playerSubsidyPence,0);assert.equal(entry.outstandingPence,400);assert.equal(entry.displayStatus,"PART_PAID");
+  assert.equal((await prisma.paymentCharge.findUniqueOrThrow({where:{id:t.charge.id}})).status,"PART_PAID");
+});
+test("numeric assigned-share difference is not an authorised subsidy, even on a historical PAID record",async()=>{
+  const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{status:"PAID"}});
+  await prisma.$executeRaw(Prisma.sql`UPDATE "PlayerMatchFee" SET "captainAssignedAmountPence"=1200 WHERE id=${t.fee.id}`);
+  await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
+  const e=(await getTeamPaymentLedger(t.team.id))!.entries[0];assert.equal(e.paidPence,3600);assert.equal(e.playerSubsidyPence,0);assert.equal(e.outstandingPence,400);
+  assert.equal(getPlayerFeeSubsidyPence({status:"PAID",amountPence:800,captainAssignedAmountPence:1200}),0);
+  assert.equal(getPlayerPaymentDisplay({status:"PAID",amountPence:800,captainAssignedAmountPence:1200}).statusLabel,"Check balance");
+});
+test("explicit £12/£8 cap preserves its authorised £4 allowance, but records only £8 online cash",async()=>{
+  const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
+  await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
+  await receiveOrdinary(t,800);const e=(await getTeamPaymentLedger(t.team.id))!.entries[0];assert.equal(e.paidPence,3600);assert.equal(e.playerSubsidyPence,400);assert.equal(e.outstandingPence,0);
+  const d=getPlayerPaymentDisplay(await feeRow(t),await state(t));assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");assert.match(d.detail,/£8.00 received online.*£4.00 SIXFL adjustment/);
+});
+test("a partial payment of an explicitly capped fee cannot trigger the whole subsidy early",async()=>{
+  const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
+  const {provider}=await receiveOrdinary(t,500);assert.equal((await state(t)).balancePence,300);assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].playerSubsidyPence,0);
+  await startPlayerRepaymentCheckout({feeToken:t.fee.paymentToken!},provider.api);const r=await prisma.playerRepaymentRequest.findFirstOrThrow({where:{feeId:t.fee.id,status:"READY"}});
+  await settlePlayerRepaymentSession(provider.paid(r.checkoutSessionId!),provider.api);assert.equal((await state(t)).receivedPence,800);assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].playerSubsidyPence,400);
+});
+test("refunding ordinary receipts reopens only the refunded player and team balance, never double counts it",async()=>{
+  const t=await target();await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
+  const {session,provider}=await receiveOrdinary(t,1200);assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].displayStatus,"PAID");
+  const chargeId=`ch_${session.payment_intent}`;provider.refunds.set(chargeId,[{id:"re_partial",amount:400,status:"succeeded"}]);
+  await handlePlayerRepaymentRefund({id:chargeId} as Stripe.Charge,provider.api);await handlePlayerRepaymentRefund({id:chargeId} as Stripe.Charge,provider.api);
+  assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].outstandingPence,400);
+  assert.equal((await prisma.paymentCharge.findUniqueOrThrow({where:{id:t.charge.id}})).status,"PART_PAID");
+});
+test("ordinary failed, unpaid or wrong-currency checkouts never reduce a balance",async()=>{
+  const t=await target();const {session,provider}=ordinaryCheckout(t,800);session.payment_status="unpaid";
+  await settlePlayerRepaymentSession(session,provider.api);assert.equal((await state(t)).balancePence,1200);
+  session.payment_status="paid";session.currency="eur";await assert.rejects(settlePlayerRepaymentSession(session,provider.api),/not verified/);
+  assert.equal((await state(t)).balancePence,1200);assert.equal(await prisma.paymentTransaction.count({where:{teamId:t.team.id}}),0);
+});
+test("a checkout cannot settle a different player's team or fixture",async()=>{
+  const t=await target();const {session,provider}=ordinaryCheckout(t,800);session.metadata!.fixtureId="another-fixture";
+  await assert.rejects(settlePlayerRepaymentSession(session,provider.api),/original team and fixture/);assert.equal((await state(t)).balancePence,1200);
+  session.metadata!.fixtureId=t.fixture.id;session.metadata!.teamId="another-team";await assert.rejects(settlePlayerRepaymentSession(session,provider.api),/original team and fixture/);
+  assert.equal(await prisma.paymentTransaction.count({where:{teamId:t.team.id}}),0);
+});
+test("replaying an already-booked legacy receipt makes no historical balance repair or duplicate payment",async()=>{
+  const t=await target(800);const {session,provider}=ordinaryCheckout(t,800);
+  await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:800,method:"STRIPE",paidAt:new Date(),stripeCheckoutSessionId:session.id,stripePaymentIntentId:session.payment_intent as string,notes:`Player match fee paid online. Player fee ID: ${t.fee.id}`}});
+  await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{status:"PAID"}});const before=await account(t);
+  await settlePlayerRepaymentSession(session,provider.api);assert.deepEqual((await account(t)).entries,before.entries);assert.equal((await state(t)).controlled,false);
+  assert.equal(await prisma.playerRepaymentRequest.count({where:{teamId:t.team.id}}),0);assert.equal(provider.refundCalls,0);
+});
+test("ordinary stale overpayment is refunded with debt unchanged, not misreported as paid or team credit",async()=>{
+  const t=await target(800);const {session,provider}=ordinaryCheckout(t,1200);await settlePlayerRepaymentSession(session,provider.api);
+  assert.equal(provider.refundCalls,1);assert.equal((await state(t)).balancePence,800);assert.equal((await state(t)).receivedPence,0);assert.equal((await feeRow(t)).status,"OPEN");
+});
+test("normal full £6 payment still works with no arrangement or extra player action",async()=>{
+  const t=await target(600);await receiveOrdinary(t,600);assert.equal((await state(t)).balancePence,0);assert.equal((await state(t)).receivedPence,600);
+  assert.equal(getPlayerPaymentDisplay(await feeRow(t),await state(t)).statusLabel,"Paid online");assert.equal(await prisma.playerRepaymentPlan.count({where:{teamId:t.team.id}}),0);
+});
+test("new smaller receipts below the collection UI minimum are still recorded without rounding away debt",async()=>{
+  const t=await target(100);await receiveOrdinary(t,30);assert.equal((await state(t)).balancePence,70);assert.equal((await state(t)).receivedPence,30);
+});
+test("actual signature-verified webhook routes an ordinary underpayment through the ledger and ignores a late failure",async()=>{
+  const t=await target();const {session,provider}=ordinaryCheckout(t,800);const stripe=getStripeServerClient();
+  const m1=mock.method(stripe.checkout.sessions,"retrieve",provider.api.checkout.sessions.retrieve);
+  const m2=mock.method(stripe.paymentIntents,"retrieve",provider.api.paymentIntents.retrieve);
+  const secret="whsec_local_ordinary_receipt_test";process.env.STRIPE_WEBHOOK_SECRET=secret;
+  try {
+    const send=async(type:string,object:unknown)=>{const payload=JSON.stringify({id:`evt_${randomUUID()}`,object:"event",type,data:{object}});
+      return stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":signedTestHeader(payload,secret)}}));};
+    const response=await send("checkout.session.completed",session);assert.equal(response.status,200,await response.text());assert.equal((await state(t)).balancePence,400);
+    const late=await send("checkout.session.async_payment_failed",session);assert.equal(late.status,200);assert.equal((await state(t)).balancePence,400);assert.equal((await state(t)).receivedPence,800);
+    assert.equal(await prisma.paymentTransaction.count({where:{stripeCheckoutSessionId:session.id}}),1);
+  } finally { m1.mock.restore();m2.mock.restore(); }
+});
+test("actual team webhook keeps £10 of £40 part-paid, preserves the charge and shows £30 outstanding",async()=>{
+  const t=await target();const {session,provider}=ordinaryCheckout(t,1000);session.metadata={chargeId:t.charge.id,teamId:t.team.id};session.client_reference_id=t.charge.id;
+  const stripe=getStripeServerClient();const m=mock.method(stripe.paymentIntents,"retrieve",provider.api.paymentIntents.retrieve);
+  const secret="whsec_local_team_receipt_test";process.env.STRIPE_WEBHOOK_SECRET=secret;
+  try {const payload=JSON.stringify({id:`evt_${randomUUID()}`,object:"event",type:"checkout.session.completed",data:{object:session}});
+    const response=await stripeWebhook(new Request("http://localhost/api/stripe/webhook",{method:"POST",body:payload,headers:{"stripe-signature":signedTestHeader(payload,secret)}}));
+    assert.equal(response.status,200,await response.text());const charge=await prisma.paymentCharge.findUniqueOrThrow({where:{id:t.charge.id}});
+    assert.equal(charge.amountPence,4000);assert.equal(charge.status,"PART_PAID");assert.equal(getChargeStatusFromAmounts(4000,1000),"PART_PAID");
+    assert.equal((await getTeamPaymentLedger(t.team.id))!.entries[0].outstandingPence,3000);
+  } finally {m.mock.restore();}
+});
+test("final prepared source has no ordinary receipt-to-PAID fallback or implicit subsidy and uses native truthful history",()=>{
+  const webhook=readFileSync("src/app/api/stripe/webhook/route.ts","utf8");assert.doesNotMatch(webhook,/closePlayerMatchFeeFromStripeSession|handleCompletedPlayerMatchFeeCheckoutSession|shouldSyncAmount/);
+  const service=readFileSync("src/lib/payments/player-repayment-checkout.ts","utf8");assert.match(service,/if\(!requestId&&!legacyFeeId\) return false/);
+  assert.match(readFileSync("src/lib/payments/player-fee-coverage.ts","utf8"),/if \(!agreement\) return 0/);
+  assert.match(readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8"),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
 });

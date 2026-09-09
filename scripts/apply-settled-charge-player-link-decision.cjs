@@ -6,6 +6,10 @@ const filePath = path.join(
   "src/app/captain/team/[teamid]/payments/page.tsx",
 );
 let source = fs.readFileSync(filePath, "utf8");
+if (source.includes("NATIVE_PLAYER_PAYMENT_HISTORY")) {
+  if (!source.includes("pausePlayerFeeCollection")) throw new Error("Native collection pause controls missing");
+  return;
+}
 
 const actionMarker = `export default async function CaptainPaymentsPage({`;
 const action = `async function closeSettledChargePlayerLinksAction(formData: FormData) {
