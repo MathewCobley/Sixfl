@@ -83,10 +83,14 @@ jobs:
           node scripts/check-critical-feature-contracts.mjs 2>&1 | tee test-results/critical-contracts.log
           npm run audit:dom
           npm run audit:dom:changed
-      - name: Production build
+      - name: Production build of the fully prepared sources
         run: |
           set -euo pipefail
-          npm run build 2>&1 | tee test-results/production-build.log
+          # Full prebuild ran above and its outputs were tested. Do not run that
+          # legacy rewriting chain twice: the unrelated captain-payment patch
+          # is not idempotent after the complete chain. This still runs the real
+          # build command (prisma generate && next build), without another hook.
+          npm run build --ignore-scripts 2>&1 | tee test-results/production-build.log
       - name: Capture committed and prepared owning sources for final review
         if: always()
         run: |
