@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getAdminSmsReplyTarget } from "@/lib/messaging/admin-sms-reply";
 import {
   getAdminInboxSummary,
   getAdminInboxThreads,
@@ -137,7 +138,7 @@ export default async function AdminMessagesPage({
     error?: string;
   }>;
 }) {
-  await requireAdmin();
+  const { user: replyActor } = await requireAdmin();
 
   const sp = (await searchParams) ?? {};
   const selectedFilter = normaliseFilter(sp.filter);
@@ -203,6 +204,8 @@ export default async function AdminMessagesPage({
   const fallbackThread =
     selectedThread ??
     (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
+
+  const smsReplyTarget = fallbackThread ? await getAdminSmsReplyTarget(fallbackThread) : null;
 
   const prospectLauncherOptions = prospects.flatMap((prospect) => {
     if (!prospect.teamId || !prospect.team) return [];
@@ -416,6 +419,8 @@ export default async function AdminMessagesPage({
             fallbackThread
               ? {
                   id: fallbackThread.id,
+                  smsReplyPhone: smsReplyTarget?.phone ?? null,
+                  smsReplyActorId: replyActor?.id ?? "",
                   channel: fallbackThread.channel ?? "SMS",
                   status: fallbackThread.status,
                   contactName: fallbackThread.contactName,
@@ -463,6 +468,7 @@ export default async function AdminMessagesPage({
                     body: message.body,
                     htmlBody: message.htmlBody ?? null,
                     subject: message.subject ?? null,
+                    providerStatus: message.providerStatus ?? null,
                     fromNumber: message.fromNumber,
                     toNumber: message.toNumber,
                     fromEmail: message.fromEmail,
@@ -471,6 +477,31 @@ export default async function AdminMessagesPage({
                     sentAt: message.sentAt?.toISOString() ?? null,
                     receivedAt: message.receivedAt?.toISOString() ?? null,
                     readAt: message.readAt?.toISOString() ?? null,
+                    createdByUser: message.createdByUser
+                      ? {
+                          id: message.createdByUser.id,
+                          name: message.createdByUser.name,
+                          email: message.createdByUser.email,
+                          role: message.createdByUser.role,
+                        }
+                      : null,
+                    dispatch: message.dispatch
+                      ? {
+                          id: message.dispatch.id,
+                          template: message.dispatch.template
+                            ? {
+                                id: message.dispatch.template.id,
+                                name: message.dispatch.template.name,
+                                key: message.dispatch.template.key,
+                              }
+                            : null,
+                          metadata: message.dispatch.metadata,
+                          status: message.dispatch.status,
+                          failureReason: message.dispatch.failureReason,
+                          scheduledFor: message.dispatch.scheduledFor.toISOString(),
+                          sentAt: message.dispatch.sentAt?.toISOString() ?? null,
+                        }
+                      : null,
                   })),
                 }
               : null

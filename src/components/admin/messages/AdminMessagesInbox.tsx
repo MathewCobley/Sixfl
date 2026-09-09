@@ -51,6 +51,8 @@ type InboxThreadListItem = {
 };
 
 type SelectedThread = {
+  smsReplyPhone?: string | null;
+  smsReplyActorId?: string;
   id: string;
   channel: "SMS" | "EMAIL";
   status: "OPEN" | "ARCHIVED" | "CLOSED";
@@ -91,7 +93,17 @@ type SelectedThread = {
     receivedAt: string | null;
     readAt: string | null;
     createdAt: string;
+    createdByUser?: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      role: "USER" | "REFEREE" | "ADMIN";
+    } | null;
     dispatch?: {
+      status?: string;
+      failureReason?: string | null;
+      scheduledFor?: string | null;
+      sentAt?: string | null;
       id: string;
       template: {
         id: string;

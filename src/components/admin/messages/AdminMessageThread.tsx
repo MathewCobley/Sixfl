@@ -7,13 +7,14 @@
 import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Fragment, useMemo } from "react";
+import { Fragment } from "react";
+import AdminSmsReplyForm from "@/components/admin/messages/AdminSmsReplyForm";
+import { smsReplyStatusLabel } from "@/lib/messaging/sms-reply-display";
 import { useFormStatus } from "react-dom";
 import {
   archiveMessageThreadAction,
   markMessageThreadReadAction,
   reopenMessageThreadAction,
-  sendAdminMessageReplyAction,
 } from "@/app/(admin)/admin/messages/actions";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
@@ -21,6 +22,8 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const TRAILING_URL_PUNCTUATION_REGEX = /[),.!?]+$/;
 
 type SelectedThread = {
+  smsReplyPhone?: string | null;
+  smsReplyActorId?: string;
   id: string;
   channel: "SMS" | "EMAIL";
   status: "OPEN" | "ARCHIVED" | "CLOSED";
@@ -70,7 +73,17 @@ type SelectedThread = {
     receivedAt: string | null;
     readAt: string | null;
     createdAt: string;
+    createdByUser?: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      role: "USER" | "REFEREE" | "ADMIN";
+    } | null;
     dispatch?: {
+      status?: string;
+      failureReason?: string | null;
+      scheduledFor?: string | null;
+      sentAt?: string | null;
       id: string;
       template: {
         id: string;
@@ -234,7 +247,29 @@ function getMessageMeta(
     return `Received ${formatDateTime(message.receivedAt || message.createdAt)}`;
   }
 
-  return `Sent ${formatDateTime(message.sentAt || message.createdAt)}`;
+  if (message.channel === "SMS") {
+    const status = message.dispatch?.status || (message.sentAt ? "SENT" : message.providerStatus);
+    return `${smsReplyStatusLabel(status, message.providerStatus)} · ${formatDateTime(message.dispatch?.sentAt || message.sentAt || message.createdAt)}`;
+  }
+  return message.sentAt ? `Sent ${formatDateTime(message.sentAt)}` : `Recorded ${formatDateTime(message.createdAt)}`;
+}
+
+function getDispatchMetadataRecord(
+  message: NonNullable<SelectedThread>["messages"][number],
+) {
+  const metadata = message.dispatch?.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  return metadata as Record<string, unknown>;
+}
+
+function getDispatchMetadataString(
+  message: NonNullable<SelectedThread>["messages"][number],
+  key: string,
+) {
+  const value = getDispatchMetadataRecord(message)?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function getMessageRoleLabel(
@@ -243,6 +278,28 @@ function getMessageRoleLabel(
   if (message.direction === "INBOUND") {
     return "Contact";
   }
+
+  const creatorName =
+    message.createdByUser?.name?.trim() ||
+    message.createdByUser?.email?.trim() ||
+    getDispatchMetadataString(message, "actorName") ||
+    null;
+  const actorRole = getDispatchMetadataString(message, "actorRole")?.toUpperCase();
+  const origin = getDispatchMetadataString(message, "origin");
+
+  if (
+    actorRole === "CAPTAIN" ||
+    (origin === "captain_availability_sms_chase" &&
+      message.createdByUser?.role !== "ADMIN")
+  ) {
+    return creatorName ? `Captain · ${creatorName}` : "Captain";
+  }
+
+  if (actorRole === "ADMIN" || message.createdByUser?.role === "ADMIN") {
+    return creatorName ? `SIXFL admin · ${creatorName}` : "SIXFL admin";
+  }
+
+  if (creatorName) return `Sent by ${creatorName}`;
 
   switch (message.participantRole) {
     case "ADMIN":
@@ -261,6 +318,14 @@ function getMessageSourceLabel(
 ) {
   if (message.direction === "INBOUND") {
     return null;
+  }
+
+  const originLabel = getDispatchMetadataString(message, "originLabel");
+  if (originLabel) {
+    return {
+      label: originLabel,
+      key: null,
+    };
   }
 
   if (message.dispatch?.template) {
@@ -314,6 +379,8 @@ function getNotice(
           tone: "error",
           message: "Reopen the thread before sending a new reply.",
         };
+      case "reply_refresh_required":
+        return { tone: "error", message: "This reply was not queued. Refresh the conversation to load the new SMS reply form." };
       case "send_failed":
         return {
           tone: "error",
@@ -428,8 +495,8 @@ export default function AdminMessageThread({
 
   const title = getThreadTitle(thread);
   const replyPhoneRaw =
-    thread.phoneNormalized || thread.recipient?.phone || thread.contactPhone;
-  const replyPhoneLabel = formatPhone(replyPhoneRaw);
+    thread.smsReplyPhone !== undefined ? thread.smsReplyPhone : thread.phoneNormalized || thread.contactPhone || thread.recipient?.phone;
+  const replyPhoneLabel = formatPhone(replyPhoneRaw || null);
   const replyEmail =
     thread.contactEmail ||
     thread.recipient?.email ||
@@ -443,22 +510,11 @@ export default function AdminMessageThread({
       ? "Reply by SMS"
       : "Email replies";
 
-  const replyHelpText = canSmsReply
-    ? `Replying by SMS to ${replyPhoneLabel}. This keeps the full mixed conversation timeline together.`
-    : !replyPhoneRaw
-      ? "This thread has no valid phone number yet, so SMS reply is unavailable."
-      : thread.status !== "OPEN"
-        ? "Reopen this thread before sending a new SMS reply."
-        : "This thread cannot be replied to from the admin inbox right now.";
 
-  const orderedMessages = useMemo(
-    () =>
-      [...thread.messages].sort(
-        (a, b) =>
-          new Date(b.receivedAt || b.sentAt || b.createdAt).getTime() -
-          new Date(a.receivedAt || a.sentAt || a.createdAt).getTime(),
-      ),
-    [thread.messages],
+
+  const orderedMessages = [...thread.messages].sort((a, b) =>
+    new Date(b.receivedAt || b.sentAt || b.createdAt).getTime() -
+    new Date(a.receivedAt || a.sentAt || a.createdAt).getTime(),
   );
 
   return (
@@ -863,38 +919,13 @@ export default function AdminMessageThread({
                 : "Incoming replies appear here and are grouped across SMS and email."}
             </p>
 
-            <form action={sendAdminMessageReplyAction} className="mt-4 space-y-4">
-              <input type="hidden" name="threadId" value={thread.id} />
-              <input type="hidden" name="filter" value={selectedFilter} />
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
-                {replyHelpText}
-              </div>
-
-              <div>
-                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  SMS reply
-                </label>
-                <textarea
-                  name="body"
-                  rows={5}
-                  disabled={!canSmsReply}
-                  placeholder={
-                    canSmsReply
-                      ? "Type your SMS reply here..."
-                      : "SMS reply unavailable for this thread"
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 focus:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
-                />
-              </div>
-
-              <ActionButton
-                label="Send SMS reply"
-                pendingLabel="Sending reply..."
-                disabled={!canSmsReply}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-white/40"
-              />
-            </form>
+            <AdminSmsReplyForm
+              key={`${thread.smsReplyActorId || ""}:${thread.id}`}
+              threadId={thread.id}
+              actorId={thread.smsReplyActorId || ""}
+              phone={replyPhoneRaw || null}
+              canReply={canSmsReply}
+            />
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
