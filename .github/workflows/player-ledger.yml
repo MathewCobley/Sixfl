@@ -61,6 +61,10 @@ jobs:
           JS
           npx prisma db push --skip-generate --schema prisma/ledger-base-test.prisma
           rm prisma/ledger-base-test.prisma
+          # These production-owned legacy receipt fields/triggers are deliberately
+          # not in Prisma's generated schema; include them in the disposable test DB.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260506170000_link_player_match_fee_payments/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260713200000_make_player_payments_searchable/migration.sql
       - name: Real migration, ledger, checkout and duplicate/refund tests (no external HTTP)
         run: |
           set -o pipefail

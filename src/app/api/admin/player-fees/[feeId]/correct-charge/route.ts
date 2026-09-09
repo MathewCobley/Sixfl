@@ -8,8 +8,14 @@ import { parseLedgerMoney } from "@/lib/payments/player-ledger";
 
 export const dynamic = "force-dynamic";
 export async function POST(request: Request, { params }: { params: Promise<{ feeId: string }> }) {
-  // A normal same-origin JSON request, not a cross-site form/GET or a captain action.
-  if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json")) {
+  // Match the configured public origin as well as Request.url: behind Railway
+  // the latter can contain the internal HTTP host. Never trust submitted host flags.
+  const origins = [new URL(request.url).origin];
+  for (const value of [process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_APP_URL]) {
+    if (value) { try { origins.push(new URL(value).origin); } catch { /* Ignore invalid deployment settings. */ } }
+  }
+  if (!origins.includes(request.headers.get("origin") ?? "") || request.headers.get("sec-fetch-site") === "cross-site"
+    || !request.headers.get("content-type")?.startsWith("application/json")) {
     return NextResponse.json({ error: "Same-origin JSON request required." }, { status: 403 });
   }
   const session = await getServerSession(authOptions);

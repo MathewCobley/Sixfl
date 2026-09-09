@@ -35,3 +35,14 @@ test('all three native admin entry points survive production preparation; no pub
  const page=fs.readFileSync('src/app/(admin)/admin/payments/player-fees/[feeId]/correct-charge/page.tsx','utf8');assert.ok(page.includes('requireAdmin()'));assert.ok(page.includes('access.user.role !== "ADMIN"'));
  const core=fs.readFileSync('src/lib/payments/player-charge-correction.ts','utf8');assert.ok(core.includes('assertPlayerChargeCorrectionAdmin(input.actorUserId, db)'));assert.ok(!core.includes('paymentTransaction.create('));assert.ok(!core.includes('queueNotification'));assert.ok(!core.includes('refunds.create'));assert.ok(!core.includes('sessions.create'));
 });
+
+test('configured public origin works behind Railway without accepting cross-site callers',async()=>{
+ const old=process.env.NEXTAUTH_URL;process.env.NEXTAUTH_URL='https://sixfl.example';
+ state.calls=[];state.session={user:{email:'admin@example.invalid'}};state.user={id:'real-admin',role:'ADMIN'};
+ try{
+  const req=new Request('http://localhost:8080/api/admin/player-fees/fee-one/correct-charge',{method:'POST',headers:{origin:'https://sixfl.example','content-type':'application/json'},body:JSON.stringify({action:'preview',originalAmount:'12',reason:'Historical correction',noWaiver:true})});
+  assert.equal((await route.POST(req,{params:Promise.resolve({feeId:'fee-one'})})).status,200);assert.equal(state.calls.length,1);
+  const cross=request({action:'confirm',token:'x',confirmed:true});cross.headers.set('sec-fetch-site','cross-site');
+  assert.equal((await route.POST(cross,{params:Promise.resolve({feeId:'fee-one'})})).status,403);assert.equal(state.calls.length,1);
+ }finally{if(old===undefined)delete process.env.NEXTAUTH_URL;else process.env.NEXTAUTH_URL=old;}
+});
