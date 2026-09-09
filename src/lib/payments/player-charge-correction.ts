@@ -10,7 +10,7 @@ export class PlayerChargeCorrectionError extends Error {
 }
 const fail = (message: string): never => { throw new PlayerChargeCorrectionError(message); };
 const correctionKey = (id: string) => `original-charge-correction:${id}`;
-type Db = Prisma.TransactionClient;
+type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "user" | "playerMatchFee" | "paymentCharge" | "playerLedgerEntry" | "paymentTransaction" | "playerRepaymentRequest">;
 type Transaction = { id: string; teamId: string; chargeId: string | null; amountPence: number;
   method: string; reference: string | null; notes: string | null; paidAt: Date;
   stripePaymentIntentId: string | null; stripeCheckoutSessionId: string | null; playerMatchFeeId: string | null };
