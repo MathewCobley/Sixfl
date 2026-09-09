@@ -63,6 +63,11 @@ jobs:
           rm prisma/ledger-base-test.prisma
       - name: Real migration, ledger, checkout and duplicate/refund tests (no external HTTP)
         run: |
+          set -o pipefail
+          # Prove that capturing output cannot hide a failing test process.
+          if bash -o pipefail -c 'exit 9 | cat'; then
+            echo "Failure capture is not working"; exit 1
+          fi
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-ledger.test.ts"],outfile:".player-ledger-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .player-ledger-tests.cjs 2>&1 | tee /tmp/ledger-test-results.txt
       - run: npx tsc --noEmit
