@@ -34,8 +34,9 @@ async function loadCandidate(feeId: string, db: Db = prisma) {
   if (/cap applied|waiv|credit|concession|subsid|captain\/organiser marked/i.test(fee.note ?? "")) return fail("This record contains an adjustment or concession. Review it separately; this control must not undo genuine allowances.");
   if (fee.teamMemberId) {
     const profiles = await db.$queryRaw<Array<{ override: number | null; cap: number | null }>>(Prisma.sql`
-      SELECT "playerMatchFeePenceOverride" AS override, "playerMatchFeeCapPence" AS cap
-      FROM "TeamMemberProfile" WHERE "teamMemberId"=${fee.teamMemberId}`);
+      SELECT (to_jsonb(p)->>'playerMatchFeePenceOverride')::integer AS override,
+        (to_jsonb(p)->>'playerMatchFeeCapPence')::integer AS cap
+      FROM "TeamMemberProfile" p WHERE "teamMemberId"=${fee.teamMemberId}`);
     if (profiles.some(p => p.override !== null || p.cap !== null)) return fail("This player has a fee override or cap. Review the concession before correcting a historical balance.");
   }
   const assigned = (await db.$queryRaw<Array<{ amount: number | null }>>(Prisma.sql`
