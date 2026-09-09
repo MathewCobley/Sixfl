@@ -1,0 +1,26 @@
+name: Inspect fixture reminder context
+on:
+  push:
+    branches: [fix/fixture-publish-reminder-context]
+    paths: [.github/workflows/inspect-fixture-reminder.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect shared send paths and history (no production access)
+        run: |
+          git grep -n -E 'reminderIntro|match-fee-reminder-email|fixture-reminder-email|queueFixtureMatchFeeEmails' -- src prisma scripts tests || true
+          echo '--- POLICY ---'
+          find src prisma tests .github -name AGENTS.md -print
+          cat DEV_RULES.md ENGINEERING.md docs/critical-feature-contracts.md
+          echo '--- TEST WORKFLOWS ---'
+          ls .github/workflows
+          echo '--- INTRO HISTORY ---'
+          git log --all --oneline -S 'reminderIntro' -- src prisma scripts | head -35
+          echo '--- GUARD HISTORY ---'
+          git log --all --oneline -S 'getUnresolvedEmailPlaceholderReason' -- src | head -15
