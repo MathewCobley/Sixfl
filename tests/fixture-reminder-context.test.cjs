@@ -104,7 +104,12 @@ function harness() {
       if(id==='@prisma/client'||id.startsWith('node:'))return require(id);
       if(id==='crypto')return require('node:crypto');
       if(id.startsWith('@/'))return load('src/'+id.slice(2));
-      if(id.startsWith('.'))return load(path.posix.normalize(path.posix.join(path.posix.dirname(file),id)));
+      if(id.startsWith('.')) {
+        const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(file),id));
+        const alias='@/'+resolved.replace(/^src\//,'').replace(/\.ts$/,'');
+        if(Object.hasOwn(mocks,alias))return mocks[alias];
+        return load(resolved);
+      }
       throw new Error(`Unmocked dependency ${id}`);
     },module,module.exports,()=>{throw new Error('Provider/network access forbidden in regression tests');});
     return module.exports;
