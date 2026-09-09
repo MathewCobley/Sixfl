@@ -496,7 +496,7 @@ export default function AdminMessageThread({
   const title = getThreadTitle(thread);
   const replyPhoneRaw =
     thread.smsReplyPhone !== undefined ? thread.smsReplyPhone : thread.phoneNormalized || thread.contactPhone || thread.recipient?.phone;
-  const replyPhoneLabel = formatPhone(replyPhoneRaw);
+  const replyPhoneLabel = formatPhone(replyPhoneRaw || null);
   const replyEmail =
     thread.contactEmail ||
     thread.recipient?.email ||
