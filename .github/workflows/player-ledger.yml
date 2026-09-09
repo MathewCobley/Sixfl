@@ -70,8 +70,15 @@ jobs:
           fi
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-ledger.test.ts"],outfile:".player-ledger-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .player-ledger-tests.cjs 2>&1 | tee /tmp/ledger-test-results.txt
+      - name: Administrator-only correction API and native entry point contracts
+        run: node --test tests/player-charge-correction-controls.cjs
       - run: npx tsc --noEmit
       - run: npx next build
+      - name: Browser preview and confirmation controls (no external services)
+        run: |
+          npm install --prefix /tmp/correction-browser --no-package-lock playwright
+          /tmp/correction-browser/node_modules/.bin/playwright install --with-deps chromium
+          CORRECTION_PLAYWRIGHT_MODULE=/tmp/correction-browser/node_modules/playwright node --test tests/player-charge-correction.browser.cjs
       - name: Final native source and temporary workflow checks
         run: |
           test ! -f .github/workflows/inspect-player-ledger-once.yml
