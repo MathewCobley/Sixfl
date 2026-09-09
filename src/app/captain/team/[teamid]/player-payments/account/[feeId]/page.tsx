@@ -11,7 +11,7 @@ const button="rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black";
 const date=(d:Date)=>formatDateTimeInLondon(d,{day:"numeric",month:"short",year:"numeric"});
 
 export default async function PlayerAccountPage({params,searchParams}:{params:Promise<{teamid:string;feeId:string}>;searchParams:Promise<{saved?:string;error?:string}>}){
-  const {teamid,feeId}=await params;await requireCaptain(teamid);const sp=await searchParams;
+  const {teamid,feeId}=await params;const correctionAccess=await requireCaptain(teamid);const sp=await searchParams;
   const account=await getPlayerLedgerAccount(teamid,feeId);
   const activePlanIds=new Set(account.plans.filter(p=>["ACTIVE","PAUSED","REVIEW"].includes(p.status)).map(p=>p.id));
   const selectable=account.fees.filter(f=>basicRepaymentFee(f)&&!activePlanIds.has(account.states.find(s=>s.feeId===f.id)?.planId??""));
@@ -45,7 +45,8 @@ export default async function PlayerAccountPage({params,searchParams}:{params:Pr
     <section className="rounded-2xl border border-white/10 p-5"><h2 className="text-lg font-semibold">Recorded charges</h2><div className="mt-3 space-y-4">
       {account.states.map(s=>{const f=account.fees.find(f=>f.id===s.feeId);return <div key={s.feeId} className="rounded-xl border border-white/10 p-4"><p className="font-medium">{f?`${date(f.fixture.kickoffAt)} · ${f.fixture.homeTeam.name} vs ${f.fixture.awayTeam.name}`:"Historical charge"}</p>
       <p className="mt-1 text-sm">Outstanding: <strong>{money(s.balancePence)}</strong>{s.collectionPaused?" · Collection paused — debt retained":""}{s.controlled?" · Ledger-managed":""}</p>
-      {s.controlled?<p className="text-xs text-white/55">Received through this arrangement: {money(s.receivedPence)} by SIXFL; {money(s.captainReceivedPence)} by the captain. These are not added to the team charge twice.</p>:null}
+      {correctionAccess.isAdmin && !s.controlled && f?.status==="PAID" ? <Link className="mt-2 inline-block text-sm text-amber-100 underline" href={`/admin/payments/player-fees/${s.feeId}/correct-charge`}>Correct original charge</Link>:null}
+      {s.controlled?<p className="text-xs text-white/55">Recorded receipts: {money(s.receivedPence)} by SIXFL; {money(s.captainReceivedPence)} by the captain. These are not added to the team charge twice.</p>:null}
       {s.collectionPaused&&s.balancePence>0?<form action={savePlayerAccountAction} className="mt-2">{hidden}<input type="hidden" name="feeId" value={s.feeId}/><button className={button} name="action" value="resume-fee">Resume collection link</button></form>:null}
       {s.balancePence>0?<details className="mt-3"><summary className="cursor-pointer text-sm text-emerald-200">Record money received or a genuine reduction</summary><form action={savePlayerAccountAction} className="mt-3 space-y-3">{hidden}<input type="hidden" name="feeId" value={s.feeId}/><input type="hidden" name="requestKey" value={newLedgerActionKey()}/>
         <select className={input} name="action"><option value="captain-receipt">Captain actually received this money</option><option value="reduce">Forgive / reduce this part of the debt (no payment)</option></select>

@@ -315,7 +315,7 @@ export default async function CaptainPaymentsPage({
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
-  await requireCaptain(teamid);
+  const correctionAccess = await requireCaptain(teamid);
   await reconcileZeroFeePlayerAdjustmentsForTeam(teamid);
 
   if (sp.autopay === "success") {
@@ -951,6 +951,10 @@ export default async function CaptainPaymentsPage({
                                   >
                                     {payment.statusLabel}
                                   </span>
+                                  {correctionAccess.isAdmin && payment.statusLabel === "Check balance" ? <Link
+                                    href={`/admin/payments/player-fees/${payment.id}/correct-charge`}
+                                    className="rounded-xl border border-amber-300/35 px-3 py-2 text-xs font-semibold text-amber-100"
+                                  >Correct original charge</Link> : null}
                                 </div>
                               </div>
                             ))}

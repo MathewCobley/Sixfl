@@ -1,0 +1,13 @@
+# Admin correction of historical player underpayments
+
+An ordinary checkout historically overwrote a £12 fee with its £8 receipt and marked it paid. The earlier universal settlement fix protects future payments but deliberately does not reconstruct historic obligations.
+
+`player-charge-correction.ts` is the single correction service. Admin-only links on Team payments, Squad payments and the Player account open a native preview/confirmation page. The JSON endpoint requires a same-origin request, a real authenticated ADMIN user and a second role check in the transaction. Neither captain membership, a preview cookie, a posted actor id nor a development bypass grants correction permission.
+
+The preview is read-only. It verifies existing exact fee/team/fixture Stripe receipts, succeeded GBP capture, amount, metadata and absence of refunds/disputes. Ambiguous transactions, genuine allowances, active fee overrides/caps, already-controlled balances and cancelled fixtures are blocked. The administrator confirms the original total and that there was no waiver or separate payment, supplying an audit reason. A short-lived signed preview binds the actor, fee, proposed total, reason and complete original snapshot. Saving rechecks Stripe and the snapshot under locks; duplicate confirmations do not post twice.
+
+Saving adopts the **existing** transaction IDs into the ledger's allocation mechanism without creating or changing cash amounts. Original receipt metadata is retained in the immutable correction entry. Completed request records make later refunds/delayed callbacks use the shared receipt/refund handling. A single ledger-capture write records the existing receipt and restores only the unpaid remainder. The statement retains its earlier history and an explicit correcting entry; it never rewrites history or infers a new subsidy. No team charge amount, payment or refund is created by the correction.
+
+Collection is paused on correction. No customer message is queued and no saved-card collection is invoked. Review the updated account before deliberately using its separate Resume collection link control. New weekly fees are unaffected. Merely deploying this code changes no player's balance, including Tyler's.
+
+The database-backed ledger suite includes preview purity, £12/£8/£4, exact receipt retention, team coverage, idempotency, subsequent final payment, refunds, permissions, stale/tampered previews, unsupported allowances and provider mismatch. Endpoint tests independently reject absent/captain/forged access and cross-origin calls. Browser tests exercise the native two-stage control at desktop and mobile widths. No production data/providers are used in those tests.

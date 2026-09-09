@@ -182,7 +182,7 @@ function messageForError(error?: string) {
 
 export default async function PaymentPageServer({ params, searchParams }: Props) {
   const { teamid } = await params;
-  await requireCaptain(teamid);
+  const correctionAccess = await requireCaptain(teamid);
   const sp = (await searchParams) ?? {};
 
   const team = await prisma.team.findUnique({
@@ -842,6 +842,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     </span>
                     <Link href={`/captain/team/${teamid}/player-payments/account/${fee.id}`} className="rounded-full border border-white/10 px-3 py-1 text-xs text-emerald-200">Player account</Link>
                     <p className="mt-2 text-xs text-white/65">{getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).detail}</p>
+                    {correctionAccess.isAdmin && getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).review ? <Link
+                      href={`/admin/payments/player-fees/${fee.id}/correct-charge`} className="mt-2 inline-block text-xs text-amber-100 underline"
+                    >Correct original charge</Link> : null}
                     {ledgerByFee.get(fee.id)?.collectionPaused ? <span className="text-xs text-amber-100">Collection paused — debt remains</span> : null}
                     {canResend && !ledgerByFee.get(fee.id)?.controlled && !ledgerByFee.get(fee.id)?.collectionPaused ? (
                       <form action={resendCaptainPlayerPaymentLinkAction}>
