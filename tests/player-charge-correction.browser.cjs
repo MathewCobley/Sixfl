@@ -13,6 +13,9 @@ for(const width of [1440,390])test(`admin form requires a preview and explicit c
   assert.equal(requests.length,0);await page.getByLabel('Reason for correction').fill('No waiver agreed; restore remaining debt.');await page.getByRole('checkbox').check();
   await page.getByRole('button',{name:'Preview correction'}).click();await page.getByRole('heading',{name:'Review before saving'}).waitFor();assert.equal(requests.length,1);assert.equal(requests[0].action,'preview');
   assert.ok((await page.locator('body').innerText()).includes('£4.00'));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  for (const d of await page.locator('dd').all()) {
+    assert.ok(await d.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);return r.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).lineHeight)+1}),'Money must remain on one line');
+  }
   await page.screenshot({path:`/tmp/ledger-correction-ui/preview-${width}.png`,fullPage:true});await page.getByRole('button',{name:'Confirm correction — no message'}).click();await page.getByRole('heading',{name:'Correction saved'}).waitFor();
   assert.equal(requests.length,2);assert.deepEqual(requests[1],{action:'confirm',token:'bound-token',confirmed:true});assert.equal(await page.getByRole('link',{name:'Open player account'}).getAttribute('href'),'/captain/team/team-one/player-payments/account/fee-one');
  }finally{await context.close();}

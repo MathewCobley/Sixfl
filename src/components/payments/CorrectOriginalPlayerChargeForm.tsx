@@ -43,9 +43,9 @@ export default function CorrectOriginalPlayerChargeForm({ feeId, teamId, assigne
       <label className="flex gap-3"><input type="checkbox" checked={noWaiver} onChange={e => setNoWaiver(e.target.checked)} required disabled={busy}/><span>I have checked the agreement. The remaining amount was not waived, discounted or paid elsewhere.</span></label>
       <button className={button} disabled={busy}>{busy ? "Verifying receipts…" : "Preview correction"}</button>
     </form> : <div className="space-y-5 rounded-2xl border border-amber-400/30 p-5">
-      <h2 className="text-xl font-semibold">Review before saving</h2><dl className="space-y-3"><div className="flex justify-between gap-4"><dt>Correct original charge</dt><dd>{money(preview.originalPence)}</dd></div>
-        <div className="flex justify-between gap-4"><dt>Verified Stripe payments — retained once</dt><dd>{money(preview.receivedPence)}</dd></div>
-        <div className="flex justify-between gap-4 border-t border-white/15 pt-3 font-semibold"><dt>Still owing · Part-paid</dt><dd>{money(preview.outstandingPence)}</dd></div></dl>
+      <h2 className="text-xl font-semibold">Review before saving</h2><dl className="space-y-3"><div className="flex justify-between gap-4"><dt>Correct original charge</dt><dd className="shrink-0 whitespace-nowrap">{money(preview.originalPence)}</dd></div>
+        <div className="flex justify-between gap-4"><dt>Verified Stripe payments — retained once</dt><dd className="shrink-0 whitespace-nowrap">{money(preview.receivedPence)}</dd></div>
+        <div className="flex justify-between gap-4 border-t border-white/15 pt-3 font-semibold"><dt>Still owing · Part-paid</dt><dd className="shrink-0 whitespace-nowrap">{money(preview.outstandingPence)}</dd></div></dl>
       <p className="break-words text-sm text-white/70">Reason: {preview.reason}</p><p className="text-sm text-white/70">Your administrator identity and this correction will be recorded in the statement. Collection stays paused. No payment, refund or message will be sent.</p>
       <div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={() => void submit("confirm")}>{busy ? "Saving correction…" : uncertain ? "Retry same confirmation" : "Confirm correction — no message"}</button>
         <button className="rounded-xl border border-white/20 px-5 py-3 disabled:opacity-50" disabled={busy || uncertain} onClick={() => setPreview(null)}>Back — do not save</button></div>
