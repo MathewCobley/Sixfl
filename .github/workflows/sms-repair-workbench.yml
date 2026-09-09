@@ -1,0 +1,57 @@
+name: SMS repair source workbench
+on:
+  push:
+    branches: [fix/admin-sms-reply-reliable-submit]
+permissions:
+  contents: write
+jobs:
+  source:
+    if: github.repository == 'MathewCobley/Sixfl'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Inspect owning sources and related entry points (no production access)
+        run: |
+          git grep -n -E 'sendAdminMessageReplyAction|queueAdmin.*Reply|SMS reply|\.submit\(|cloneNode|outerHTML' -- src scripts || true
+          node - <<'JS'
+          const fs=require('node:fs');
+          const schema=fs.readFileSync('prisma/schema.prisma','utf8');
+          for(const name of ['MessageThread','MessageEntry','NotificationRecipient','NotificationPreference','NotificationDispatch','User','TeamMember']) {
+            const match=schema.match(new RegExp('model '+name+' \\{[\\s\\S]*?\\n\\}'));
+            console.log('\nSCHEMA '+name+'\n'+(match?.[0]||'missing'));
+          }
+          for(const p of ['src/lib/requireAdmin.ts','src/lib/notifications/service.ts','src/lib/messaging/phone.ts','tests/announcement-queue.test.cjs','tests/announcement-feedback.browser.cjs','docs/critical-feature-contracts.md','docs/regression-checklist.md']) {
+            console.log('\nSOURCE '+p+'\n'+fs.readFileSync(p,'utf8'));
+          }
+          JS
+      - name: Materialise native source edits, without updating any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f scripts/author-sms-repair.cjs ]; then exit 0; fi
+          node scripts/author-sms-repair.cjs
+          git diff --check
+          git diff --stat
+          git diff
+          node - <<'JS'
+          const fs=require('node:fs'); const cp=require('node:child_process');
+          const repo=process.env.GITHUB_REPOSITORY;
+          async function api(path,body){const r=await fetch('https://api.github.com/repos/'+repo+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(await r.text());return r.json();}
+          (async()=>{
+            const head=cp.execSync('git rev-parse HEAD',{encoding:'utf8'}).trim();
+            const base=await api('/git/commits/'+head);
+            const names=cp.execSync('git diff --name-only',{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+            const tree=[];
+            for(const path of names){if(!fs.existsSync(path)){tree.push({path,mode:'100644',type:'blob',sha:null});continue;}const blob=await api('/git/blobs',{content:fs.readFileSync(path,'utf8'),encoding:'utf-8'});tree.push({path,mode:'100644',type:'blob',sha:blob.sha});}
+            for(const path of ['scripts/author-sms-repair.cjs','.github/workflows/sms-repair-workbench.yml']) if(!tree.some(x=>x.path===path))tree.push({path,mode:'100644',type:'blob',sha:null});
+            const result=await api('/git/trees',{base_tree:base.tree.sha,tree});
+            console.log('NATIVE_SOURCE_PARENT='+head); console.log('NATIVE_SOURCE_TREE='+result.sha);
+            console.log('NATIVE_SOURCE_CHANGES='+JSON.stringify(tree));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
