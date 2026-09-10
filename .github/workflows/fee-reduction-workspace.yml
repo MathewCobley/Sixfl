@@ -1,0 +1,21 @@
+name: Temporary fee reduction source
+on:
+  push:
+    branches: [fix/completed-fixture-fee-reduction]
+    paths: [.github/workflows/fee-reduction-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive tracked source only, without credentials or production data
+        run: git archive --format=tar.gz -o /tmp/fee-source.tar.gz HEAD src prisma scripts tests config docs .github package.json package-lock.json tsconfig.json next-env.d.ts next.config.ts postcss.config.mjs eslint.config.mjs AGENTS.md ENGINEERING.md DEV_RULES.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fee-reduction-source
+          path: /tmp/fee-source.tar.gz
+          retention-days: 1
