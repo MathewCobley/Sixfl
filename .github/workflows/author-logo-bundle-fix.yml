@@ -1,0 +1,78 @@
+name: Author logo bundle fix
+on:
+  push:
+    branches: [fix/logo-export-function-bundles]
+    paths: [.github/workflows/author-logo-bundle-fix.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/logo-export-function-bundles
+      - name: Apply native changes without touching production data
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def replace(s, old, new):
+            assert s.count(old)==1,old
+            return s.replace(old,new)
+          p=Path('src/lib/exports/team-logos.ts');s=p.read_text()
+          start=s.index('/** Read-only artwork catalogue');end=s.index('export async function buildTeamLogoExport')
+          query=s[start:end]
+          catalogue=Path('src/lib/exports/team-logo-catalogue.ts');assert not catalogue.exists()
+          catalogue.write_text('import { Prisma } from "@prisma/client";\nimport { prisma } from "@/lib/prisma";\nimport type { TeamLogoExportChoice } from "@/lib/team-logo-export-contract";\n\n'+query)
+          s=s[:start]+s[end:]
+          s=replace(s,'import { Prisma } from "@prisma/client";\nimport { prisma } from "@/lib/prisma";','import { getTeamLogoExportChoices } from "@/lib/exports/team-logo-catalogue";')
+          p.write_text(s)
+          p=Path('src/app/(admin)/admin/teams/logos/page.tsx');s=p.read_text();p.write_text(replace(s,'from "@/lib/exports/team-logos"','from "@/lib/exports/team-logo-catalogue"'))
+          p=Path('src/lib/exports/team-logo-assets.ts');s=p.read_text()
+          s=replace(s,'import { readFile, realpath, stat } from "node:fs/promises";\nimport path from "node:path";\n','')
+          s=replace(s,'async function localLogo(url: URL): Promise<Buffer> {','async function localLogo(url: URL, signal: AbortSignal): Promise<Buffer> {')
+          start=s.index('  const decoded = decodeURIComponent(url.pathname);');end=s.index('\n}\n\nasync function remoteLogo',start)
+          s=s[:start]+'''  const decoded = decodeURIComponent(url.pathname);
+            if (!/\\.(png|jpe?g|webp|gif|svg)$/i.test(decoded) || decoded.includes("\\\\") || decoded.includes("\\0") || decoded.split("/").includes("..")) {
+              throw new Error("Unsupported stored logo format.");
+            }
+            // Public artwork is already served as static assets. Read its original
+            // public URL through the same bounded, DNS-pinned HTTPS reader instead
+            // of tracing the repository/public catalogue into this server function.
+            // Database-uploaded badges above still use their full-size stored bytes.
+            // Ignore query transforms, matching the previous public-file behaviour.
+            const publicUrl = new URL(url.pathname, publicArtworkOrigin());
+            return remoteLogo(publicUrl, signal);'''+s[end:]
+          s=replace(s,'      local ? localLogo(url) : remoteLogo(url, timeout),','      local ? localLogo(url, timeout) : remoteLogo(url, timeout),')
+          anchor='export function parseLogoLocation(value: string) {'
+          s=replace(s,anchor,'''function publicArtworkOrigin(): string {
+            for (const value of [process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXTAUTH_URL, "https://sixfl.co.uk"]) {
+              try {
+                const url = new URL(value ?? "");
+                if (url.protocol === "https:" && !url.username && !url.password && !url.port) return url.origin;
+              } catch { /* Ignore invalid/local-development origins. */ }
+            }
+            return "https://sixfl.co.uk";
+          }
+          '''+anchor)
+          p.write_text(s)
+          p=Path('next.config.ts');s=p.read_text()
+          s=replace(s,'  outputFileTracingExcludes: {','''  outputFileTracingExcludes: {
+              // Version-control history is never a runtime dependency.
+              "/*": ["./.git/**/*"],
+              // These routes list database metadata or fetch original artwork via
+              // bounded HTTPS / the badge store; public files remain static assets.
+              "/api/admin/teams/logo-export": ["./public/**/*"],
+              "/admin/teams/logos": ["./public/**/*"],''')
+          p.write_text(s)
+          # Preserve the existing full export/security/browser regression suite.
+          # The dedicated packaging workflow additionally measures Vercel output.
+          PY
+          git rm .github/workflows/author-logo-bundle-fix.yml
+          git add next.config.ts src/lib/exports 'src/app/(admin)/admin/teams/logos/page.tsx'
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Isolate read-only logo catalogue and keep public artwork out of function bundles'
+          git push origin HEAD:fix/logo-export-function-bundles
