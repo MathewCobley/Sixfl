@@ -157,3 +157,36 @@ test('post-prebuild native contracts retain the exact reply owner, status and at
   const page = fs.readFileSync(path.join(root, 'src/app/(admin)/admin/messaging/page.tsx'), 'utf8'); assert.match(page, /providerStatus: message\.providerStatus/); assert.match(page, /status: message\.dispatch\.status/); assert.match(page, /smsReplyPhone: smsReplyTarget/);
   const actions = fs.readFileSync(path.join(root, 'src/app/(admin)/admin/messages/actions.ts'), 'utf8'); assert.match(actions, /queueAdminSmsReply/); assert.doesNotMatch(actions, /sendEmailWithResend|queueDirectNotification/);
 });
+
+
+test('lost-reference history is authenticated, bounded, thread-specific and read-only', async () => {
+  const saved=await queue();
+  const historyRequest=()=>new NextRequest('https://app.example.test/api/admin/messages/sms-reply?'+new URLSearchParams({threadId:thread.id,recent:'1'}));
+  const other=await raw.messageThread.create({data:{contactName:'Other thread',channel:'SMS'}});
+  const copy={threadId:thread.id,channel:'SMS',direction:'OUTBOUND',participantRole:'ADMIN',body:'Synthetic history record',createdByUserId:actor};
+  await raw.messageEntry.createMany({data:[
+    {...copy,id:'history-other',threadId:other.id},
+    {...copy,id:'history-old',createdAt:new Date(Date.now()-8*86400000)},
+    {...copy,id:'history-inbound',direction:'INBOUND'},
+    {...copy,id:'history-system',participantRole:'SYSTEM'},
+    {...copy,id:'history-email',channel:'EMAIL'},
+  ]});
+  const before=JSON.stringify([await raw.messageEntry.findMany(),await raw.notificationDispatch.findMany()]);
+  const response=await route.GET(historyRequest());assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
+  const data=await response.json();assert.deepEqual(data.records.map(r=>r.messageId),[saved.messageId]);assert.ok(data.records[0].createdAt);
+  assert.equal(JSON.stringify([await raw.messageEntry.findMany(),await raw.notificationDispatch.findMany()]),before);
+  await raw.messageEntry.createMany({data:Array.from({length:12},(_,i)=>({...copy,id:'history-recent-'+i}))});
+  assert.equal((await (await route.GET(historyRequest())).json()).records.length,10);
+  authorised=false;assert.equal((await route.GET(historyRequest())).status,401);
+});
+
+test('both inbox routes retain reply identity and recent-history diagnostics after preparation',()=>{
+  for(const name of ['messaging','messages']){
+    const source=fs.readFileSync(path.join(root,`src/app/(admin)/admin/${name}/page.tsx`),'utf8');
+    assert.match(source,/smsReplyActorId: replyActor/);assert.match(source,/smsReplyPhone: smsReplyTarget/);
+    assert.match(source,/status: message\.dispatch\.status/);
+  }
+  const source=fs.readFileSync(path.join(root,'src/components/admin/messages/AdminSmsReplyForm.tsx'),'utf8');
+  assert.match(source,/:receipt/);assert.match(source,/Find recent SMS replies/);
+  assert.match(source,/Reply reference:/);assert.match(source,/Last checked/);
+});

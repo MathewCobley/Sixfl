@@ -39,6 +39,7 @@ export async function getAdminSmsReplyTarget(thread: ReplyThread) {
 
 export type SmsReplyInput = { threadId: string; requestId: string; body: string; expectedPhone: string };
 export type SmsReplyReceipt = {
+  createdAt?: string;
   messageId: string;
   dispatchId: string | null;
   status: string;
@@ -68,6 +69,7 @@ const receiptInclude = { dispatch: true } as const;
 type Entry = Prisma.MessageEntryGetPayload<{ include: typeof receiptInclude }>;
 function receipt(entry: Entry): SmsReplyReceipt {
   return {
+    createdAt: entry.createdAt.toISOString(),
     messageId: entry.id, dispatchId: entry.notificationDispatchId,
     status: entry.dispatch?.status ?? "UNKNOWN", providerStatus: entry.providerStatus,
     failureReason: entry.dispatch?.failureReason ?? null,
@@ -87,6 +89,20 @@ export async function readAdminSmsReply(input: { threadId: string; requestId: st
   return entry ? receipt(entry) : null;
 }
 
+/** Lost browser references are not a dead end. An administrator can read the
+ * latest recorded manual SMS replies in this exact thread, including attempts
+ * made by another administrator. No queue, repair or provider calls occur. */
+export async function readRecentAdminSmsReplies(threadId: string): Promise<SmsReplyReceipt[]> {
+  await actorId();
+  validateIdentity({ threadId, requestId: "recent-sms-history" });
+  const entries = await prisma.messageEntry.findMany({
+    where: { threadId, channel: "SMS", direction: "OUTBOUND", participantRole: "ADMIN",
+      createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10, include: receiptInclude,
+  });
+  return entries.map(receipt);
+}
+
 export async function queueAdminSmsReply(input: SmsReplyInput): Promise<SmsReplyReceipt> {
   const actor = await actorId();
   validateIdentity(input);
@@ -97,7 +113,10 @@ export async function queueAdminSmsReply(input: SmsReplyInput): Promise<SmsReply
   const id = messageId(actor, input.threadId, input.requestId);
   const requestHash = hash(JSON.stringify([input.body.trim(), expectedPhone]));
 
-  return prisma.$transaction(async (tx) => {
+  // Trace identifiers only, after authentication/validation. Never log the
+  // message body, phone number, session, or provider credentials.
+  console.info("[admin-sms-reply]", { event: "request_received", threadId: input.threadId, requestId: input.requestId });
+  const saved = await prisma.$transaction(async (tx) => {
     // Serialize both different drafts and simultaneous retries on this thread.
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "MessageThread" WHERE "id" = ${input.threadId} FOR UPDATE`);
     const existing = await tx.messageEntry.findUnique({ where: { id }, include: receiptInclude });
@@ -160,4 +179,7 @@ export async function queueAdminSmsReply(input: SmsReplyInput): Promise<SmsReply
     } });
     return receipt(entry);
   }, { maxWait: 10000, timeout: 15000 });
+  console.info("[admin-sms-reply]", { event: "reply_recorded", threadId: input.threadId, requestId: input.requestId,
+    messageId: saved.messageId, dispatchId: saved.dispatchId, status: saved.status });
+  return saved;
 }
