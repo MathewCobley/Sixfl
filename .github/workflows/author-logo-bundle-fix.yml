@@ -22,7 +22,7 @@ jobs:
             return s.replace(old,new)
           p=Path('src/lib/exports/team-logos.ts');s=p.read_text()
           start=s.index('/** Read-only artwork catalogue');end=s.index('export async function buildTeamLogoExport')
-          query=s[start:end]
+          query=s[start:end].rstrip()+'\n'
           catalogue=Path('src/lib/exports/team-logo-catalogue.ts');assert not catalogue.exists()
           catalogue.write_text('import { Prisma } from "@prisma/client";\nimport { prisma } from "@/lib/prisma";\nimport type { TeamLogoExportChoice } from "@/lib/team-logo-export-contract";\n\n'+query)
           s=s[:start]+s[end:]
@@ -66,8 +66,6 @@ jobs:
               "/api/admin/teams/logo-export": ["./public/**/*"],
               "/admin/teams/logos": ["./public/**/*"],''')
           p.write_text(s)
-          # Preserve the existing full export/security/browser regression suite.
-          # The dedicated packaging workflow additionally measures Vercel output.
           PY
           git rm .github/workflows/author-logo-bundle-fix.yml
           git add next.config.ts src/lib/exports 'src/app/(admin)/admin/teams/logos/page.tsx'
