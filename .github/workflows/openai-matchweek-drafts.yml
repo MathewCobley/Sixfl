@@ -34,11 +34,11 @@ jobs:
           psql "$REPORT_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE TABLE "League" (id TEXT PRIMARY KEY)'
           psql "$REPORT_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910224500_openai_matchweek_drafts/migration.sql
       - name: Test OpenAI request, factual boundaries, auth and real draft transactions
-        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs
+        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs
       - run: npm run prebuild
       - run: npx prisma generate
       - name: Repeat tests against the production-prepared source
-        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs
+        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs
       - name: Check critical contracts and types
         run: |
           node scripts/check-critical-feature-contracts.mjs
