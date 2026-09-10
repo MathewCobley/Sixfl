@@ -1,0 +1,94 @@
+name: Vercel function bundle budget
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: vercel-bundle-budget-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  function-bundles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-logo-bundle-tests-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+      VERCEL_TELEMETRY_DISABLED: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Native export, asset, catalogue and budget guard regressions
+        run: node --test tests/team-logo-export.test.cjs tests/team-logo-bundle.test.cjs tests/vercel-function-bundles.test.mjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Prepared export safeguards and byte-preserving asset reads
+        run: node --test tests/team-logo-export.test.cjs tests/team-logo-bundle.test.cjs tests/vercel-function-bundles.test.mjs
+      - name: Shared source contracts and TypeScript
+        run: |
+          node scripts/check-critical-feature-contracts.mjs
+          npm run audit:dom
+          npx tsc --noEmit
+          test ! -f .github/workflows/author-logo-bundle-fix.yml
+          git grep -nE 'getTeamLogoExportChoices|readTeamLogo|buildTeamLogoExport' -- src
+      - name: Install pinned Vercel packaging tool outside the application
+        run: npm install --prefix /tmp/sixfl-vercel-bundle-tools --no-save --package-lock=false vercel@59.11.7
+      - name: Configure isolated local packaging (no account, token, pull or deploy)
+        run: |
+          mkdir -p .vercel
+          node <<'JS'
+          const fs = require('node:fs');
+          fs.writeFileSync('.vercel/project.json', JSON.stringify({
+            projectId: 'prj_sixfl_isolated_bundle_check', orgId: 'team_sixfl_isolated_bundle_check', projectName: 'sixfl-isolated-bundle-check',
+            settings: { framework: 'nextjs', nodeVersion: '22.x', rootDirectory: null, outputDirectory: null,
+              installCommand: 'echo Dependencies already installed',
+              buildCommand: 'npx prisma generate && npx next build', devCommand: null },
+          }));
+          JS
+      - name: Produce actual Vercel function packages
+        run: /tmp/sixfl-vercel-bundle-tools/node_modules/.bin/vercel build --standalone
+      - name: Measure all Vercel function packages and retain the report
+        run: |
+          mkdir -p /tmp/sixfl-bundle-verification
+          node scripts/check-vercel-function-bundles.mjs .vercel/output/functions /tmp/sixfl-bundle-verification/function-sizes.json
+      - name: Public artwork is still deployed as byte-exact static assets
+        run: |
+          node <<'JS'
+          const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+          const files=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(path.join(d,e.name)):[path.join(d,e.name)]);
+          const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+          let checked=0;
+          for(const file of files('public').filter(f=>/\.(png|jpe?g|webp|gif|svg)$/i.test(f))){
+            const dest=path.join('.vercel/output/static',path.relative('public',file));
+            assert.ok(fs.existsSync(dest),'Missing static artwork: '+file);assert.equal(hash(dest),hash(file),file);checked++;
+          }
+          assert.ok(checked>0);console.log('Verified '+checked+' public artwork files, including the kit catalogue, unchanged as static assets.');
+          fs.writeFileSync('/tmp/sixfl-bundle-verification/static-artwork.json',JSON.stringify({checked,unchanged:true}));
+          JS
+      - name: Capture native prepared sources (never runtime secrets)
+        if: always()
+        run: |
+          mkdir -p /tmp/sixfl-bundle-verification
+          tar -czf /tmp/sixfl-bundle-verification/prepared-source.tgz next.config.ts src/lib/exports 'src/app/(admin)/admin/teams/logos/page.tsx' src/app/api/admin/teams/logo-export/route.ts tests/team-logo-bundle.test.cjs scripts/check-vercel-function-bundles.mjs
+          git diff --stat > /tmp/sixfl-bundle-verification/prepared-diff-stat.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vercel-function-bundle-verification
+          path: /tmp/sixfl-bundle-verification
+          retention-days: 7
