@@ -1,3 +1,4 @@
+import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/app/captain/team/[teamid]/rules/page.tsx
 // ========================================
@@ -16,6 +17,10 @@ export const metadata = {
 };
 
 const ruleSections = [
+  {
+    title: "Matchday player limits",
+    items: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],
+  },
   {
     title: "Core format",
     items: [
@@ -194,7 +199,7 @@ export default async function CaptainRulesPage({
       <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
         <h2 className="text-lg font-semibold text-white">Important</h2>
         <p className="mt-3 text-sm leading-6 text-amber-50/75">
-          These are the standard SIXFL playing rules. If a league, venue or referee gives a specific instruction for a fixture, that instruction applies for that match.
+          These are the standard SIXFL playing rules. Follow venue safety requirements and the referee’s on-pitch instructions. Competition limits and exceptions remain governed by the League Rules; agreement from the referee or opposition alone does not authorise a tenth participant.
         </p>
       </section>
     </div>

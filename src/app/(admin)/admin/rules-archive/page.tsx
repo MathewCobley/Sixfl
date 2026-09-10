@@ -18,7 +18,7 @@ import {
   KIT_OFFER_TERMS_VERSION,
   archivedKitOfferTermsDocuments,
 } from "@/lib/kits/terms";
-import { MATCH_RULES_VERSION } from "@/lib/match-rules";
+import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE } from "@/lib/match-rules";
 import { archivedRuleDocuments } from "@/lib/rules-archive";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -38,7 +38,7 @@ const currentDocuments = [
   {
     document: "Match Rules",
     version: MATCH_RULES_VERSION.replace("Version ", ""),
-    effectiveDate: "22 August 2026",
+    effectiveDate: MATCH_RULES_EFFECTIVE_DATE,
   },
   {
     document: "League Participation Agreement",

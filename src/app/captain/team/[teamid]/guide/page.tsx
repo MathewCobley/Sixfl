@@ -1,3 +1,4 @@
+import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/app/captain/team/[teamid]/guide/page.tsx
 // ========================================
@@ -23,6 +24,10 @@ export const metadata = {
 };
 
 const guideSections = [
+  {
+    title: "Matchday player limits",
+    items: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],
+  },
   {
     title: "Before your first game",
     items: [
