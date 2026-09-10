@@ -1,0 +1,50 @@
+name: Retire obsolete captain ledger rewrite
+on:
+  push:
+    branches: [fix/consistent-player-fixture-ledger]
+    paths: [.github/workflows/author-ledger-compat.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/fix/consistent-player-fixture-ledger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retire the legacy captain presentation block only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply-team-charge-waiver-accounting.cjs');s=p.read_text()
+          start=s.index('const captainPagePath = "src/app/captain/team/[teamid]/payments/page.tsx";')
+          end=s.index('write(captainPagePath, captainPage);',start)+len('write(captainPagePath, captainPage);')
+          replacement='''// Native captain waiver presentation owns its markup and arithmetic.
+          // Keep the existing accounting preparation below, but never rewrite an
+          // evolved captain page or restore the old capped settlement equation.
+          const captainPage = read("src/app/captain/team/[teamid]/payments/page.tsx");
+          for (const marker of [
+            "getCurrentSettlementText(entry)",
+            "getPlayerSettlementBreakdown(entry)",
+            "entry.waivedPence",
+            "entry.settledPence",
+            "SIXFL waiver",
+            'return "Settled"',
+          ]) {
+            if (!captainPage.includes(marker)) throw new Error(`Native captain waiver presentation missing: ${marker}`);
+          }'''
+          p.write_text(s[:start]+replacement+s[end:])
+          PY
+          git diff --check
+          git diff -- scripts/apply-team-charge-waiver-accounting.cjs
+          echo '--- RELATED PREPARATION / CONTRACT INVENTORY ---'
+          git grep -n -E 'zeroFeeSettledPence|captainSettledPence|captainPlayerSettledPence|formatChargeStatus\(entry.displayStatus' -- scripts tests | cut -c1-450 || true
+      - name: Commit bounded retirement and remove this authoring workflow
+        run: |
+          test "$GITHUB_REF" = refs/heads/fix/consistent-player-fixture-ledger
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add scripts/apply-team-charge-waiver-accounting.cjs
+          git rm .github/workflows/author-ledger-compat.yml
+          git commit -m 'Keep native captain settlement UI authoritative over legacy waiver preparation'
+          git push origin HEAD:refs/heads/fix/consistent-player-fixture-ledger
