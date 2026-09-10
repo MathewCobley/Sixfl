@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Native presentation replaces the legacy page-only patch, not cap policy
+      - name: Native presentation replaces legacy page-only patches, not accounting policy
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -40,6 +40,15 @@ jobs:
             // snippets left to rewrite; admin cap policy compatibility above remains.
           '''+s[end:]
           p.write_text(s)
+          p=Path('scripts/apply-waiver-payment-ui-consistency.cjs');s=p.read_text()
+          label=s.index('"captain player collection settled summary"')
+          start=s.rindex('playerCollection = replaceRequired(',0,label)
+          end=s.index('\n);',label)+len('\n);')
+          s=s[:start]+'''// The native summary now reports canonical settlement and retains the
+          // recoverable-waiver explanation. Do not replace it with older arithmetic.
+          if (!playerCollection.includes("getCurrentSettlementText(selectedEntry)")) {
+          '''+s[start:end]+'\n}\n'+s[end:]
+          p.write_text(s)
           p=Path('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');s=p.read_text()
           s='import { getCaptainAssignedPlayerFeePence } from "@/lib/payments/player-fee-coverage";\nimport { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";\n'+s
           anchor='  const selectedFees = selectedFixture\n    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)'
@@ -48,6 +57,18 @@ jobs:
           anchor='  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) => sum + fee.amountPence,\n    0,\n  );'
           assert s.count(anchor)==1
           s=s.replace(anchor,'  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) => sum + getCaptainAssignedPlayerFeePence(fee),\n    0,\n  );',1)
+          anchor='  const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,'  const sixflWaivedPence = selectedEntry?.waivedPence ?? 0;\n'+anchor,1)
+          anchor='    summaryTitle = "This fixture fee is fully covered.";\n    summaryText = `${getCurrentSettlementText(selectedEntry)} Player contributions: ${playerSettlement.detail}. Any direct team payments, credit or waivers are included in the team ledger.`;'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,'''    summaryTitle = sixflWaivedPence > 0 && playerOutstandingPence > 0
+                ? "Team balance settled — player links remain open."
+                : sixflWaivedPence > 0 ? "This fixture fee is settled." : "This fixture fee is fully covered.";
+              summaryText = `${getCurrentSettlementText(selectedEntry)} Player contributions: ${playerSettlement.detail}. Any direct team payments, credit or waivers are included in the team ledger.`;
+              if (sixflWaivedPence > 0 && playerOutstandingPence > 0) {
+                summaryText += ` A ${formatMoney(sixflWaivedPence)} SIXFL waiver is included in that settlement. ${formatMoney(playerOutstandingPence)} remains collectible through the existing player links. Later player payments reduce the waiver first and do not become team credit while a waiver remains.`;
+              }'''.replace('              ','    ').replace('                ','      '),1)
           p.write_text(s)
           p=Path('.github/workflows/payment-ledger-consistency.yml');s=p.read_text()
           old="['node','--test','tests/payment-ledger-consistency.test.cjs']"
@@ -55,9 +76,14 @@ jobs:
           s=s.replace(old,"['node','--test','--test-reporter=tap','tests/payment-ledger-consistency.test.cjs']")
           s=s.replace('          test ! -f .github/workflows/author-ledger-consistency.yml','          test ! -f .github/workflows/author-ledger-consistency.yml\n          test ! -f .github/workflows/author-ledger-cap-compat.yml\n          test ! -f .github/workflows/author-ledger-compat.yml')
           p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.test.cjs');s=p.read_text()
+          anchor="  assert.match(s,/getPlayerSettlementBreakdown\\(selectedEntry/);"
+          assert s.count(anchor)==1
+          s=s.replace(anchor,"  assert.match(s,/Team balance settled — player links remain open/);\n  assert.match(s,/Later player payments reduce the waiver first/);\n"+anchor,1)
+          p.write_text(s)
           PY
           git diff --check
-          git add scripts/apply-player-match-fee-cap.cjs scripts/apply-modern-payment-script-compatibility.cjs 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' .github/workflows/payment-ledger-consistency.yml
+          git add scripts/apply-player-match-fee-cap.cjs scripts/apply-modern-payment-script-compatibility.cjs scripts/apply-waiver-payment-ui-consistency.cjs 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' .github/workflows/payment-ledger-consistency.yml tests/payment-ledger-consistency.test.cjs
           git rm .github/workflows/author-ledger-cap-compat.yml
       - run: npm ci
       - run: npx prisma generate
@@ -77,5 +103,5 @@ jobs:
           git config user.email 'noreply@users.noreply.github.com'
           git diff --cached --check
           git diff --cached --stat
-          git commit -m 'Use canonical cap presentation and preserve assigned shares without legacy boost rewrites'
+          git commit -m 'Use canonical cap presentation and preserve recoverable waivers without legacy boost rewrites'
           git push origin HEAD:refs/heads/fix/consistent-player-fixture-ledger
