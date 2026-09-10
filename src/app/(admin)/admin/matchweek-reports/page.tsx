@@ -42,7 +42,7 @@ export default async function AdminMatchweekReportsPage() {
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Comms & media · Admin only</p>
         <h1 className="mt-3 text-3xl font-black text-white sm:text-4xl">Matchweek reports</h1>
         <p className="mt-3 max-w-3xl leading-7 text-white/70">
-          Choose a league to review its latest matchweek report. These are private previews using recorded results — they are not published on the public website.
+          Choose a league, then generate a genuine OpenAI match-night report. Review the article, edit the wording and save your private draft. Nothing is published automatically.
         </p>
       </header>
 
@@ -63,7 +63,7 @@ export default async function AdminMatchweekReportsPage() {
                     ? `Latest completed fixture: ${formatDateTimeInLondon(latestResult.kickoffAt, { day: "numeric", month: "long", year: "numeric" })}`
                     : "No published completed results yet"}
                 </p>
-                <span className="mt-5 inline-flex font-semibold text-emerald-300">Open private preview →</span>
+                <span className="mt-5 inline-flex font-semibold text-emerald-300">Open report editor →</span>
               </Link>
             );
           })}
