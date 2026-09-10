@@ -430,7 +430,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;
   const directPaidPence = selectedEntry?.directPaidPence ?? 0;
   const collectedPence = selectedEntry?.playerPaidPence ?? 0;
-  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: 0, playerSubsidyPence: 0 });
+  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: collectedPence, playerSubsidyPence: selectedFees.reduce((sum, fee) => sum + getPlayerPaymentDisplay(fee).adjustmentPence, 0) });
   const captainSettledPence = playerSettlement.totalPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
   const sixflWaivedPence = selectedEntry?.waivedPence ?? 0;

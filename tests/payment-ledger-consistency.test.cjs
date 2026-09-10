@@ -167,3 +167,16 @@ test('native squad-payment summaries share the full adjustment split and contrib
   assert.match(read(pagePath),/payment\.outstandingPence/);assert.match(read(pagePath),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
   assert.doesNotMatch(read(presentationPath),/prisma|\.update\(|\.create\(|fetch\(/);
 });
+
+test('actual squad settlement expression preserves historical player cash when no team charge exists',()=>{
+  const source=read('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');
+  const declaration=source.match(/const playerSettlement = ([^\n]+);/)[1];
+  const js=ts.transpileModule(`module.exports=(${declaration});`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+  const load=loader(),module={exports:{}};
+  const evaluate=new Function('module','selectedEntry','collectedPence','selectedFees','getPlayerPaymentDisplay','getPlayerSettlementBreakdown',js);
+  const getDisplay=load(displayPath).getPlayerPaymentDisplay, getSplit=load(presentationPath).getPlayerSettlementBreakdown;
+  evaluate(module,null,1800,fixtureFees(),getDisplay,getSplit);
+  assert.deepEqual([module.exports.cashPence,module.exports.adjustmentPence,module.exports.totalPence],[1800,1900,3700]);
+  evaluate(module,{playerPaidPence:900,playerSubsidyPence:200},1800,fixtureFees(),getDisplay,getSplit);
+  assert.equal(module.exports.totalPence,1100,'existing canonical team ledger takes precedence over fallback');
+});
