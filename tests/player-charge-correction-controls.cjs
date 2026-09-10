@@ -29,7 +29,16 @@ test('real correction endpoint takes actor and fee from authentication/route, ne
  state.calls=[];const blocked=await route.POST(request({action:'confirm',token:'x'}),{params:Promise.resolve({feeId:'fee-one'})});assert.equal(blocked.status,400);assert.equal(state.calls.length,0);
 });
 test('all three native admin entry points survive production preparation; no public correction action',()=>{
- for(const path of ['src/app/captain/team/[teamid]/payments/page.tsx','src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx','src/app/captain/team/[teamid]/player-payments/account/[feeId]/page.tsx']){
+ // Team Payments now owns the link through PlayerContributionTable. Verify
+ // the import, authenticated prop handoff and the actual guarded link, rather
+ // than demanding the link's literal text still live in the parent file.
+ const payments=fs.readFileSync('src/app/captain/team/[teamid]/payments/page.tsx','utf8');
+ assert.match(payments,/import\s*\{[^}]*PlayerContributionTable[^}]*\}\s*from\s*["']@\/components\/payments\/PaymentLedgerReconciliation["']/);
+ assert.match(payments,/<PlayerContributionTable\s+rows=\{playerCollectionDetails\}\s+isAdmin=\{correctionAccess\.isAdmin\}\s*\/>/);
+ const table=fs.readFileSync('src/components/payments/PaymentLedgerReconciliation.tsx','utf8');
+ assert.match(table,/isAdmin\s*&&\s*row\.statusLabel\s*===\s*"Check balance"\s*\?\s*<Link\s+href=\{`\/admin\/payments\/player-fees\/\$\{row\.id\}\/correct-charge`\}/);
+ assert.ok(table.includes('Correct original charge'));
+ for(const path of ['src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx','src/app/captain/team/[teamid]/player-payments/account/[feeId]/page.tsx']){
   const s=fs.readFileSync(path,'utf8');assert.ok(s.includes('correctionAccess.isAdmin'));assert.ok(s.includes('Correct original charge'));assert.ok(s.includes('/correct-charge'));}
  const s=fs.readFileSync('src/app/api/admin/player-fees/[feeId]/correct-charge/route.ts','utf8');assert.ok(s.includes('getServerSession(authOptions)'));assert.ok(s.includes('user.role !== "ADMIN"'));
  const page=fs.readFileSync('src/app/(admin)/admin/payments/player-fees/[feeId]/correct-charge/page.tsx','utf8');assert.ok(page.includes('requireAdmin()'));assert.ok(page.includes('access.user.role !== "ADMIN"'));
