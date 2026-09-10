@@ -1,0 +1,79 @@
+name: Payment ledger consistency
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: payment-ledger-consistency-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  ledger-consistency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: ledger-display-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_ledger_display_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Real native arithmetic and server rendering
+        run: node --test tests/payment-ledger-consistency.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Real production-prepared arithmetic and server rendering
+        run: node --test tests/payment-ledger-consistency.test.cjs
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npm run audit:dom
+      - name: Prove old mixed-column and stale-description regressions fail
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/app/captain/team/[teamid]/payments/page.tsx'); original=p.read_text()
+          for old,new,label in [
+            ('const displayAmountPence = display.fixtureContributionPence;', 'const displayAmountPence = display.amountPence;', 'mixed £34/£37 column'),
+            ('getChargeDescriptionForDisplay(entry.description) || "No description"', 'entry.description || "No description"', 'stale £40 sentence'),
+          ]:
+            assert original.count(old)==1, label
+            try:
+              p.write_text(original.replace(old,new))
+              result=subprocess.run(['node','--test','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
+              assert result.returncode!=0, f'{label} was not detected'
+              assert 'not ok' in result.stdout, f'{label} did not fail an assertion'
+              print(f'Detected original regression: {label}')
+            finally:
+              p.write_text(original)
+          PY
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Final prepared markup for browser (restore positive fixture after negative controls)
+        run: node --test tests/payment-ledger-consistency.test.cjs
+      - name: Desktop and mobile browser checks with production CSS, no provider requests
+        run: |
+          npm install --prefix /tmp/ledger-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/ledger-browser/node_modules/.bin/playwright install --with-deps chromium
+          LEDGER_PLAYWRIGHT_MODULE=/tmp/ledger-browser/node_modules/playwright node --test tests/payment-ledger-consistency.browser.cjs
+      - name: Verify shared sources and no temporary authoring or financial mutation
+        run: |
+          test ! -f .github/workflows/inspect-ledger-consistency.yml
+          test ! -f .github/workflows/author-ledger-consistency.yml
+          git grep -nE 'fixtureContributionPence|getPlayerSettlementBreakdown|getChargeDescriptionForDisplay|getCurrentSettlementText' -- src > .tmp/ledger-consistency/source-inventory.txt
+          git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ledger-consistency-verification
+          path: .tmp/ledger-consistency/
+          retention-days: 14
