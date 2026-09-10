@@ -1,0 +1,39 @@
+name: Squad save source investigation
+on:
+  push:
+    branches: [fix/squad-collection-save-feedback]
+    paths: [.github/workflows/squad-save-investigation.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:5432/unused
+      NEXTAUTH_SECRET: isolated-test-only-not-a-production-secret
+      NEXTAUTH_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Capture native source and instructions
+        run: |
+          mkdir -p /tmp/squad-save-source/native /tmp/squad-save-source/prepared
+          git ls-files | grep -E '(^src/|^scripts/|^tests/|^docs/|^config/|^prisma/|^\.github/|^AGENTS\.md$|^package.*json$|^tsconfig.*json$|^next\.config)' | tar -czf /tmp/squad-save-source/native/source.tgz -T -
+          git grep -n -E 'Save player collection|createCaptainSquadPaymentCollectionAction|Default amount per player|Repayment balance protected' > /tmp/squad-save-source/native/search.txt || true
+      - run: npm ci
+      - run: npm run prebuild
+      - name: Capture prepared source
+        if: always()
+        run: |
+          git ls-files | grep -E '(^src/|^scripts/|^tests/|^docs/|^config/|^prisma/|^\.github/|^AGENTS\.md$|^package.*json$|^tsconfig.*json$|^next\.config)' | tar -czf /tmp/squad-save-source/prepared/source.tgz -T -
+          git diff --stat > /tmp/squad-save-source/prepared/diff-stat.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: squad-save-source
+          path: /tmp/squad-save-source
+          retention-days: 3
