@@ -1,7 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
 const crypto = require('node:crypto');
 const ts = require('typescript');
 const React = require('react');
@@ -25,7 +24,7 @@ const mocks = {
 function load(file) {
   if (cache.has(file)) return cache.get(file).exports;
   const m = { exports: {} }; cache.set(file, m);
-  const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   new Function('require', 'module', 'exports', js)(id => {
     if (Object.hasOwn(mocks, id)) return mocks[id];
     if (id.startsWith('react')) return require(id);
