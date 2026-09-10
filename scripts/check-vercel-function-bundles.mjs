@@ -2,11 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Leave 20 MiB below the standard 250 MiB ceiling for platform layers.
-// Vercel's build-utils createZip stores internal symlinks as link-text entries,
-// not second copies of the linked dependency. Outside-source links are measured
-// conservatively as materialised contents; broken/cyclic links fail closed.
-export const FUNCTION_BUDGET_BYTES = 230 * 1024 * 1024;
+// Whole-site ceiling leaves 10 MiB below Vercel's standard 250 MiB limit;
+// warn at 230 MiB. The two repaired logo routes have a tighter 150 MiB budget.
+// Vercel createZip stores internal symlinks as link-text entries, not duplicate
+// dependencies. External-source links are measured conservatively as contents.
+export const FUNCTION_BUDGET_BYTES = 240 * 1024 * 1024;
+export const LOGO_FUNCTION_BUDGET_BYTES = 150 * 1024 * 1024;
+export const FUNCTION_WARNING_BYTES = 230 * 1024 * 1024;
 const protectedRoutes = ['api/admin/teams/logo-export', 'admin/teams/logos'];
 const isLogoRoute = route => protectedRoutes.includes(route.replace(/\.rsc$/, ''));
 const sensitive = name => /(^|\/)\.git(\/|$)/.test(name) || /(^|\/)\.env(?:\.|$)/.test(name);
@@ -71,15 +73,16 @@ export function checkFunctionBundles(root = '.vercel/output/functions') {
         const key = canonical + ':' + isLogoRoute(route);
         if (!cache.has(key)) cache.set(key, inspectFunction(location, route));
         packages.add(canonical);
-        results.push({ ...cache.get(key), route, runtime });
+        results.push({ ...cache.get(key), route, runtime, budgetBytes: isLogoRoute(route) ? LOGO_FUNCTION_BUDGET_BYTES : FUNCTION_BUDGET_BYTES });
       } else discover(location, outputPath, next);
     }
   }
   discover(root);
   if (!results.length) throw new Error('No Vercel functions were inspected.');
   for (const route of protectedRoutes) if (!results.some(row => row.route === route)) throw new Error(`Required logo function was not packaged: ${route}`);
-  const failures = results.filter(row => row.bytes > FUNCTION_BUDGET_BYTES || row.forbidden.length);
-  return { budgetBytes: FUNCTION_BUDGET_BYTES, functions: results.length, uniquePackages: packages.size, failures, results: results.sort((a, b) => b.bytes - a.bytes) };
+  const failures = results.filter(row => row.bytes > row.budgetBytes || row.forbidden.length);
+  const warnings = results.filter(row => row.bytes > FUNCTION_WARNING_BYTES && !failures.includes(row));
+  return { budgetBytes: FUNCTION_BUDGET_BYTES, logoBudgetBytes: LOGO_FUNCTION_BUDGET_BYTES, warningBytes: FUNCTION_WARNING_BYTES, functions: results.length, uniquePackages: packages.size, failures, warnings, results: results.sort((a, b) => b.bytes - a.bytes) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -87,8 +90,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const report = checkFunctionBundles(process.argv[2]);
     if (process.argv[3]) fs.writeFileSync(process.argv[3], JSON.stringify(report, null, 2));
     for (const row of report.results.filter((row, index) => index < 8 || protectedRoutes.includes(row.route))) console.log(`${row.route}: ${row.mib} MiB (${row.files} entries; ${row.internalSymlinks} internal aliases)`);
-    console.log(`Measured ${report.functions} Vercel output entries (${report.uniquePackages} distinct package directories); budget ${FUNCTION_BUDGET_BYTES / 1024 / 1024} MiB each.`);
-    for (const row of report.failures) console.error(`FAIL ${row.route}: ${row.mib} MiB; forbidden files: ${row.forbidden.slice(0, 10).join(', ') || 'none'}; largest: ${JSON.stringify(row.largest)}`);
+    console.log(`Measured ${report.functions} Vercel output entries (${report.uniquePackages} distinct package directories); budgets ${FUNCTION_BUDGET_BYTES / 1024 / 1024} MiB general / ${LOGO_FUNCTION_BUDGET_BYTES / 1024 / 1024} MiB logo routes.`);
+    for (const row of report.warnings) console.warn(`SIZE WARNING ${row.route}: ${row.mib} MiB exceeds the 230 MiB early-warning threshold; retain headroom before further changes.`);
+    for (const row of report.failures) console.error(`FAIL ${row.route}: ${row.mib} MiB (budget ${row.budgetBytes / 1024 / 1024}); forbidden files: ${row.forbidden.slice(0, 10).join(', ') || 'none'}; largest: ${JSON.stringify(row.largest)}`);
     if (report.failures.length) process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);

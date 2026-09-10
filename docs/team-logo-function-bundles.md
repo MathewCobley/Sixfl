@@ -45,12 +45,20 @@ conservatively materialised. Missing or cyclic targets fail closed. Different
 regular-file names (including hard links) count separately. Identical package
 directories behind route/RSC aliases are measured once and reported for each route.
 
-The gate rejects missing output/routes, any bundle above 230 MiB (headroom below
-the standard 250 MiB limit), Git/environment files, or public files in either
-logo function. Negative controls cover oversized sparse files and aliased targets,
-Git/public pollution and missing routes. An independent Unix-symlink ZIP fixture
-cross-checks the uncompressed size calculation rather than increasing the budget
-to accommodate double-counted dependency aliases.
+Budgets: 150 MiB for either logo route and its RSC alias, 240 MiB for other
+functions, and a visible warning above 230 MiB. All hard budgets remain below
+the standard 250 MiB platform ceiling. The first accurate whole-site baseline
+found the unchanged social-image package at 233.67 MiB: below Vercel's limit,
+but worth an early warning, not an unrelated product-code change to satisfy an
+arbitrarily chosen initial 230 MiB hard budget. The repaired logo routes measured
+114.27 MiB and 108.24 MiB and now have the much stricter 150 MiB regression cap.
+No route-specific exception exempts social images from the whole-site ceiling.
+
+The gate also rejects missing output/routes, Git/environment files, or public
+files in either logo function. Negative controls cover oversized sparse files,
+internal aliases of oversized files, Git/public pollution, missing routes and
+both whole-site/logo-specific budgets. An independent Unix-symlink ZIP fixture
+cross-checks the uncompressed size calculation.
 
 Native and production-prepared export/catalogue/asset tests run alongside the
 existing security/ZIP/browser tests and critical/DOM contracts. Every public

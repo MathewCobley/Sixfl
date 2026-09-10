@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { checkFunctionBundles, inspectFunction, FUNCTION_BUDGET_BYTES } from '../scripts/check-vercel-function-bundles.mjs';
+import { checkFunctionBundles, inspectFunction, FUNCTION_BUDGET_BYTES, LOGO_FUNCTION_BUDGET_BYTES, FUNCTION_WARNING_BYTES } from '../scripts/check-vercel-function-bundles.mjs';
 
 function fixture(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sixfl-bundle-'));
@@ -17,14 +17,25 @@ function fixture(fn) {
     return fn(root, path.join(root, 'api/admin/teams/logo-export.func'));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
+function sparse(file, bytes) {
+  const fd = fs.openSync(file, 'w');
+  try { fs.ftruncateSync(fd, bytes); } finally { fs.closeSync(fd); }
+}
 test('inspects both actual function directories and fails closed without output', () => {
   assert.throws(() => checkFunctionBundles('/missing-sixfl-function-output'), /missing/);
   fixture(root => { const report = checkFunctionBundles(root); assert.equal(report.functions, 2); assert.equal(report.failures.length, 0); });
 });
-test('negative control: a sparse file exceeding budget is counted by uncompressed bytes', () => fixture((root, directory) => {
-  const file = path.join(directory, 'oversized.bin'); const fd = fs.openSync(file, 'w');
-  try { fs.ftruncateSync(fd, FUNCTION_BUDGET_BYTES + 1); } finally { fs.closeSync(fd); }
+test('negative control: logos fail at their tighter 150 MiB budget, not only at the platform ceiling', () => fixture((root, directory) => {
+  sparse(path.join(directory, 'oversized.bin'), LOGO_FUNCTION_BUDGET_BYTES + 1);
   assert.equal(checkFunctionBundles(root).failures[0].route, 'api/admin/teams/logo-export');
+}));
+test('whole-site ceiling rejects other oversized functions and reports near-limit packages', () => fixture(root => {
+  const directory=path.join(root,'other.func');fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(directory,'.vc-config.json'),JSON.stringify({runtime:'nodejs22.x'}));
+  const file=path.join(directory,'payload.bin');sparse(file,FUNCTION_WARNING_BYTES+1024);
+  let report=checkFunctionBundles(root);assert.equal(report.failures.length,0);assert.equal(report.warnings[0].route,'other');
+  sparse(file,FUNCTION_BUDGET_BYTES+1);report=checkFunctionBundles(root);
+  assert.equal(report.failures[0].route,'other');assert.equal(report.warnings.length,0);
 }));
 test('Git metadata is rejected even if a bundle is otherwise small', () => fixture((root, directory) => {
   fs.mkdirSync(path.join(directory, '.git/objects/pack'), { recursive: true });
@@ -65,8 +76,7 @@ with zipfile.ZipFile(buffer) as z: print(sum(i.file_size for i in z.infolist()))
   assert.equal(measured.bytes, sum); assert.equal(measured.internalSymlinks, 2);
 }));
 test('internal alias does not hide an oversized real target', () => fixture((root, directory) => {
-  const fd=fs.openSync(path.join(directory, 'large.bin'),'w');
-  try { fs.ftruncateSync(fd,FUNCTION_BUDGET_BYTES+1); } finally { fs.closeSync(fd); }
+  sparse(path.join(directory,'large.bin'),LOGO_FUNCTION_BUDGET_BYTES+1);
   fs.symlinkSync('large.bin',path.join(directory,'alias'));
   assert.equal(checkFunctionBundles(root).failures.length,1);
 }));
