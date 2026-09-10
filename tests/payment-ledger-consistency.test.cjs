@@ -254,3 +254,7 @@ test('history and fixture detail use the same classification; no old local playe
   assert.doesNotMatch(s,/notes.includes\("player match fee paid online"\)/);
   const helper=read(receiptPresentationPath);assert.doesNotMatch(helper,/prisma|\.update\(|\.create\(|fetch\(/);
 });
+
+
+// Related admin history consumers must use the same receipt provenance.
+require("./payment-receipt-admin.test.cjs");

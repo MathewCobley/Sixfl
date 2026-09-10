@@ -1,3 +1,5 @@
+import { getPaymentReceiptKind, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
+import { LEDGER_TRANSACTION_PREFIX } from "@/lib/payments/player-ledger-markers";
 import { NextResponse } from "next/server";
 import { PaymentMethod } from "@prisma/client";
 
@@ -58,16 +60,6 @@ function formatPaymentMethodLabel(method: PaymentMethod) {
   };
 
   return labels[method] ?? String(method).replaceAll("_", " ");
-}
-
-function extractPlayerFeeId(notes: string | null) {
-  const match = /Player fee ID:\s*([a-zA-Z0-9_-]+)/i.exec(notes ?? "");
-  return match?.[1] ?? null;
-}
-
-function isPlayerFeePaymentNotes(value: string | null) {
-  const notes = value?.toLowerCase() ?? "";
-  return notes.includes("player match fee paid online") || notes.includes("player fee id:");
 }
 
 function isRecurringTeamPayment(value: { notes: string | null; reference: string | null }) {
@@ -198,9 +190,10 @@ export async function GET(request: Request) {
         ? getPlayerFeeContact({ teamMember: playerFee.teamMember, prospect: playerFee.prospect })
         : null;
       const recurring = isRecurringTeamPayment({ notes: payment.notes, reference: payment.reference });
-      const hasPlayerFeeMarker = Boolean(playerFee) || isPlayerFeePaymentNotes(payment.notes);
-      const isSinglePlayerFeePayment = Boolean(playerFee) && payment.amountPence <= playerFee!.amountPence;
-      const isCaptainPaidTeamFeeViaPlayerRoute = Boolean(playerFee) && payment.amountPence > playerFee!.amountPence;
+      const hasPlayerFeeMarker = Boolean(playerFee) || getPaymentReceiptKind(payment) === "PLAYER";
+      const modernPlayerReceipt = (payment.notes ?? "").startsWith(LEDGER_TRANSACTION_PREFIX);
+      const isSinglePlayerFeePayment = modernPlayerReceipt || (Boolean(playerFee) && payment.amountPence <= playerFee!.amountPence);
+      const isCaptainPaidTeamFeeViaPlayerRoute = !modernPlayerReceipt && Boolean(playerFee) && payment.amountPence > playerFee!.amountPence;
 
       let typeLabel = "Unlinked / manual payment";
       let title = `${payment.team.name} payment`;
@@ -210,8 +203,10 @@ export async function GET(request: Request) {
         : "No league on team record";
 
       if (isSinglePlayerFeePayment || (hasPlayerFeeMarker && !isCaptainPaidTeamFeeViaPlayerRoute && !playerFee)) {
-        typeLabel = "Player match fee";
-        title = `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;
+        typeLabel = payment.amountPence < 0 ? "Player refund" : "Player match fee";
+        title = payment.amountPence < 0
+          ? `${playerName ?? "Player"} refunded ${formatMoney(-payment.amountPence)}`
+          : `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;
         line1 = [fixtureLabel, playerContact].filter(Boolean).join(" · ") || "Player match fee payment";
         line2 = `Team: ${playerFee?.team.name ?? payment.team.name}${fixtureDateLabel ? ` · ${fixtureDateLabel}` : ""}`;
       } else if (isCaptainPaidTeamFeeViaPlayerRoute) {

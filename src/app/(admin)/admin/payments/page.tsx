@@ -1,3 +1,4 @@
+import { getPaymentReceiptKind, getPaymentReceiptLabel } from "@/lib/payments/payment-receipt-presentation";
 // ========================================
 // File: src/app/(admin)/admin/payments/page.tsx
 // ========================================
@@ -189,11 +190,6 @@ function getPlayerFeeContact(input: {
     return [input.prospect.email, input.prospect.phone].filter(Boolean).join(" · ") || "No contact";
   }
   return "No contact";
-}
-
-function isPlayerFeePaymentNotes(value: string | null) {
-  const notes = value?.toLowerCase() ?? "";
-  return notes.includes("player match fee paid online") || notes.includes("player fee id:");
 }
 
 function normaliseSearch(value: string | null | undefined) {
@@ -1179,7 +1175,7 @@ export default async function AdminPaymentsPage({
                 <div>
                   <div className="font-semibold text-white">{payment.team.name}</div>
                   <div className="mt-1 text-sm text-white/55">
-                    {payment.charge?.title ?? (isPlayerFeePaymentNotes(payment.notes) ? "Squad player payment" : "Unlinked payment")} · {formatPaymentMethodLabel(payment.method)}
+                    {getPaymentReceiptLabel(payment)} · {payment.charge?.title ?? (getPaymentReceiptKind(payment) === "PLAYER" ? "Squad player payment" : "Unlinked payment")} · {formatPaymentMethodLabel(payment.method)}
                   </div>
                   {payment.reference ? <div className="mt-1 text-xs text-white/40">Ref {payment.reference}</div> : null}
                 </div>
