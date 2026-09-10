@@ -1,3 +1,5 @@
+import { PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
+import { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
 import { getChargeDescriptionForDisplay, getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
 import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/player-payment-display";
 // NATIVE_PLAYER_PAYMENT_HISTORY
@@ -155,11 +157,6 @@ function getCreditEntrySignedAmount(entry: TeamCreditLedgerEntry) {
   return entry.entryType === "CREDIT_ADDED" ? entry.amountPence : -entry.amountPence;
 }
 
-function extractPlayerFeeId(notes: string | null) {
-  const match = /Player fee ID:\s*([a-zA-Z0-9_-]+)/i.exec(notes ?? "");
-  return match?.[1] ?? null;
-}
-
 function getPayerName(input: {
   teamMember: { user: { name: string | null; email: string | null } } | null;
   prospect: { firstName: string; lastName: string | null; email: string | null; phone: string | null } | null;
@@ -187,8 +184,10 @@ function getPayerContact(input: {
   return null;
 }
 
-function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeePaymentInfo | null) {
-  if (playerFeeInfo) return "Player match fee paid online via Stripe Checkout.";
+function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeePaymentInfo | null, amountPence: number) {
+  if (playerFeeInfo || getPaymentReceiptKind({ notes }) === "PLAYER") return amountPence < 0
+    ? "Player refund allocated to the original fixture; already reflected in its player total."
+    : "Player payment allocated to the original fixture; already included in its player total, not an additional team payment.";
   return notes;
 }
 
@@ -365,7 +364,7 @@ export default async function CaptainPaymentsPage({
 
   const playerFeeIds = Array.from(
     new Set(
-      paymentTransactions
+      [...paymentTransactions, ...ledger.entries.flatMap(entry => entry.payments)]
         .map((transaction) => extractPlayerFeeId(transaction.notes))
         .filter((value): value is string => Boolean(value)),
     ),
@@ -476,6 +475,7 @@ export default async function CaptainPaymentsPage({
       contact: string | null;
       amountPence: number;
       outstandingPence: number;
+      captainReceivedPence: number;
       statusLabel: string;
       statusMeta: string;
       tone: string;
@@ -500,6 +500,7 @@ export default async function CaptainPaymentsPage({
       contact: getPayerContact({ teamMember: fee.teamMember, prospect: fee.prospect }),
       amountPence: displayAmountPence,
       outstandingPence: display.outstandingPence,
+      captainReceivedPence: display.captainReceivedPence,
       statusLabel,
       statusMeta,
       tone,
@@ -805,6 +806,7 @@ export default async function CaptainPaymentsPage({
           <h2 className="mt-2 text-xl font-semibold text-white">
             Team payment ledger
           </h2>
+          <div className="mt-4"><TeamBalanceReconciliation entries={ledger.openEntries} outstandingPence={ledger.outstandingPence} /></div>
         </div>
 
         <div className="divide-y divide-white/10">
@@ -838,13 +840,7 @@ export default async function CaptainPaymentsPage({
               const playerCollectionDetails = entry.fixtureId
                 ? playerCollectionsByTeamFixture.get(entry.teamId + ":" + entry.fixtureId) ?? []
                 : [];
-              const nonPlayerChargePayments = entry.payments.filter((payment) => {
-                const notes = (payment.notes ?? "").toLowerCase();
-                return (
-                  !notes.includes("player match fee paid online") &&
-                  !notes.includes("player fee id:")
-                );
-              });
+              const nonPlayerChargePayments = entry.payments.filter(payment => getPaymentReceiptKind(payment) !== "PLAYER");
               const teamCreditUsedPence = nonPlayerChargePayments
                 .filter((payment) => {
                   const notes = (payment.notes ?? "").toLowerCase();
@@ -971,6 +967,7 @@ export default async function CaptainPaymentsPage({
                           <div data-player-contributions-total={displayedPlayerTotalPence} className="flex items-center justify-between gap-4 border-t border-white/10 px-3 py-3 text-sm font-semibold text-white">
                             <span className="min-w-0">Total player contributions shown</span><span className="shrink-0 whitespace-nowrap">{formatMoney(displayedPlayerTotalPence)}</span>
                           </div>
+                          <PlayerCollectionReconciliation rows={playerCollectionDetails} chargePence={entry.amountPence} outstandingPence={entry.outstandingPence} />
                           {displayedPlayerTotalPence !== playerSettledPence ? (
                             <p role="status" className="px-3 pb-3 text-xs text-amber-100">The player rows total {formatMoney(displayedPlayerTotalPence)}, but the fixture ledger records {formatMoney(playerSettledPence)} from players and adjustments. SIXFL needs to review the linked records; no balancing adjustment has been assumed.</p>
                           ) : null}
@@ -1015,7 +1012,7 @@ export default async function CaptainPaymentsPage({
                             </div>
                             </>
                           ) : null}
-                          <div className="flex items-center justify-between gap-4">
+                          <div data-direct-team-paid-pence={teamPaymentPence} className="flex items-center justify-between gap-4">
                             <span>{isKitCharge ? "Paid" : "Team paid"}</span>
                             <span className="font-semibold text-white">
                               {formatMoney(teamPaymentPence)}
@@ -1115,54 +1112,12 @@ export default async function CaptainPaymentsPage({
                           </div>
                         ) : null}
 
-                        {nonPlayerChargePayments.length > 0 ? (
-                          <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                              {isKitCharge
-                                ? "Kit payment details"
-                                : entry.fixtureId
-                                  ? "Team payment and credit details"
-                                  : "Payment details"}
-                            </div>
-                            <div className="mt-2 space-y-2">
-                              {nonPlayerChargePayments.map((payment) => {
-                                const notes = (payment.notes ?? "").toLowerCase();
-                                const isTeamCredit =
-                                  payment.reference === "TEAM_CREDIT" ||
-                                  notes.includes("team credit used");
-
-                                return (
-                                  <div
-                                    key={payment.id}
-                                    className="flex items-start justify-between gap-4 text-xs leading-5"
-                                  >
-                                    <div>
-                                      <div className="font-semibold text-white">
-                                        {isTeamCredit
-                                          ? isKitCharge
-                                            ? "Credit used"
-                                            : "Team credit used"
-                                          : isKitCharge
-                                            ? "Kit payment"
-                                            : "Team payment"}
-                                      </div>
-                                      <div className="text-white/40">
-                                        {isTeamCredit
-                                          ? "Applied from the team credit balance"
-                                          : payment.method.replaceAll("_", " ") +
-                                            " · " +
-                                            formatUkDateTime(payment.paidAt)}
-                                      </div>
-                                    </div>
-                                    <span className="shrink-0 font-semibold text-white">
-                                      {formatMoney(payment.amountPence)}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
+                        <PaymentReceiptDetails
+                          payments={entry.payments}
+                          playerNames={playerFeeInfoById}
+                          isKitCharge={isKitCharge}
+                          title={isKitCharge ? "Kit payment details" : "Receipt details — already included above"}
+                        />
 
                         <div className="mt-3">
                           <span
@@ -1316,7 +1271,7 @@ export default async function CaptainPaymentsPage({
             paymentTransactions.map((tx) => {
               const playerFeeId = extractPlayerFeeId(tx.notes);
               const playerFeeInfo = playerFeeId ? playerFeeInfoById.get(playerFeeId) ?? null : null;
-              const paymentNote = formatPlayerPaymentNote(tx.notes, playerFeeInfo);
+              const paymentNote = formatPlayerPaymentNote(tx.notes, playerFeeInfo, tx.amountPence);
 
               return (
                 <div key={tx.id} className="px-6 py-5">
@@ -1324,6 +1279,7 @@ export default async function CaptainPaymentsPage({
                     <div>
                       <div className="text-base font-semibold text-white">
                         {tx.charge?.title ?? "Unallocated payment"}
+                        <p data-payment-history-kind={getPaymentReceiptKind(tx)} className="mt-1 text-xs font-medium text-emerald-100/80">{getPaymentReceiptLabel(tx)}</p>
                       </div>
 
                       {playerFeeInfo ? (

@@ -33,3 +33,19 @@ test('actual prepared page markup and production CSS reconcile at desktop and mo
     }
   } finally {await browser.close();}
 });
+
+
+test('receipt groups, captain reports and the £56 breakdown are readable at desktop and phone widths',async()=>{
+  const css=cssFiles('.next/static').map(p=>fs.readFileSync(p,'utf8')).join('\n');const browser=await chromium.launch({headless:true});
+  try{for(const width of [1440,390])for(const scenario of ['modern-receipts','captain-records','two-charge-balance']){
+    const page=await browser.newPage({viewport:{width,height:1000}});await page.route('**/*',r=>r.abort());
+    const markup=fs.readFileSync(path.join(out,scenario+'.html'),'utf8');
+    await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body class="bg-black text-white"><main class="mx-auto max-w-7xl px-4 py-8">${markup}</main></body></html>`);
+    const detail=page.locator('[data-payment-receipt-details]');for(let i=0;i<await detail.count();i++)await detail.nth(i).locator('summary').click();
+    if(scenario!=='captain-records'){assert.equal(await page.locator('[data-receipt-kind="PLAYER"]').count(),4);assert.equal(await page.locator('[data-receipt-kind="TEAM"]').count(),0);}
+    if(scenario==='captain-records'){assert.match(await page.locator('[data-captain-reported-pence]').innerText(),/£35.00/);assert.match(await page.locator('[data-player-collection-excess]').innerText(),/£48.00/);}
+    if(scenario==='two-charge-balance'){const values=await page.locator('[data-due-pence]').evaluateAll(es=>es.map(e=>Number(e.getAttribute('data-due-pence'))));assert.equal(values.reduce((a,b)=>a+b,0),5600);}
+    const sizing=await page.evaluate(()=>[document.documentElement.scrollWidth,innerWidth]);assert.ok(sizing[0]<=sizing[1]+1,`${scenario} overflow at ${width}: ${sizing}`);
+    await page.screenshot({path:path.join(out,`${scenario}-${width}.png`),fullPage:true});await page.close();
+  }}finally{await browser.close();}
+});

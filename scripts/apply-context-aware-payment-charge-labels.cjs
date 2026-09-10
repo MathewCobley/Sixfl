@@ -63,7 +63,7 @@ if (
   !source.includes('? "Kit charge"') ||
   !source.includes('? "Total applied to kit"') ||
   !source.includes('? "Kit payment details"') ||
-  !source.includes('? "Kit payment"')
+  (!source.includes('? "Kit payment"') && !source.includes('<PaymentReceiptDetails'))
 ) {
   throw new Error("Context-aware payment charge labels were not applied correctly.");
 }
