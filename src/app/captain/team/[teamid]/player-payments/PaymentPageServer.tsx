@@ -1,3 +1,6 @@
+import SquadPaymentCollectionForm from "@/components/payments/SquadPaymentCollectionForm";
+import { getInitialCollectionDefaultPence } from "@/lib/payments/squad-collection-form";
+import { saveCaptainSquadPaymentCollectionWithFeedback } from "./collection-feedback-action";
 import { getCaptainAssignedPlayerFeePence } from "@/lib/payments/player-fee-coverage";
 import { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";
 import { getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
@@ -402,8 +405,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     })),
   ];
 
-  const defaultAmount =
-    currentTeamFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;
+  const defaultAmount = getInitialCollectionDefaultPence(currentTeamFees);
   const selectedSettledPlayerCount = selectedFees.filter(
     (fee) => fee.status === "PAID" || isZeroFeeCaptainSettled(fee.status, fee.note),
   ).length;
@@ -681,8 +683,11 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
             rows; it does not mark the team fee as paid.
           </p>
           {selectedFixture && selectedFixtureEditable ? (
-            <form
+            <SquadPaymentCollectionForm
+              key={selectedFixture.id}
               action={createCaptainSquadPaymentCollectionAction}
+              saveAction={saveCaptainSquadPaymentCollectionWithFeedback}
+              reviewHref={`/captain/team/${team.id}/player-payments?fixtureId=${selectedFixture.id}`}
               className="mt-5 space-y-5"
             >
               <input type="hidden" name="teamId" value={team.id} />
@@ -702,6 +707,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                 <label className="text-sm text-white/60" htmlFor="amount">
                   Default amount per player
                 </label>
+                <p id="collection-default-help" className="mt-1 text-xs text-white/55">
+                  Only used for selected players whose individual amount is blank.
+                </p>
                 <div className="relative mt-2">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/45">
                     £
@@ -710,6 +718,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     id="amount"
                     type="number"
                     name="amount"
+                    aria-describedby="collection-default-help"
                     min="0.01"
                     step="0.01"
                     defaultValue={(defaultAmount / 100).toFixed(2)}
@@ -763,6 +772,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                           <input
                             type="number"
                             name={amountName}
+                            aria-label={`Amount for ${player.label}`}
                             disabled={ledgerControlled}
                             min="0"
                             step="0.01"
@@ -801,13 +811,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                   );
                 })}
               </div>
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"
-              >
-                Save player collection
-              </button>
-            </form>
+            </SquadPaymentCollectionForm>
           ) : selectedEntry ? (
             <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100/80">
               This is a historical or migrated fixture charge for {selectedEntry.fixtureLabel}.

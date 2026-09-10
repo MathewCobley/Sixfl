@@ -5,6 +5,7 @@
 "use server";
 
 import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
+import { parseSquadCollectionAmount, validateSquadCollectionAmounts } from "@/lib/payments/squad-collection-form";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlayerMatchFeeStatus } from "@prisma/client";
@@ -35,14 +36,7 @@ function getPlayerPaymentsPath(teamId: string, fixtureId?: string, suffix = "") 
 }
 
 function parseAmountPence(value: string, options?: { allowZero?: boolean }) {
-  const cleaned = value.replace(/[£,\s]/g, "").trim();
-  const numeric = Number(cleaned);
-
-  if (!Number.isFinite(numeric)) return null;
-  if (numeric < 0) return null;
-  if (!options?.allowZero && numeric <= 0) return null;
-
-  return Math.round(numeric * 100);
+  return parseSquadCollectionAmount(value, options?.allowZero);
 }
 
 function formatMoney(amountPence: number) {
@@ -72,7 +66,7 @@ function getPlayerAmountPence(input: {
   formData: FormData;
   type: string;
   id: string;
-  defaultAmountPence: number;
+  defaultAmountPence: number | null;
 }) {
   const fieldName = `amount_${input.type}_${input.id}`;
   const rawValue = getString(input.formData, fieldName);
@@ -325,8 +319,11 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
   await requireCaptain(teamId);
 
-  if (!defaultAmountPence) {
-    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_amount"));
+  // Validate every selected amount before any collection write. A default is
+  // required only for blank individual amounts, not for eight explicit £5 shares.
+  const amountError = validateSquadCollectionAmounts(formData);
+  if (amountError) {
+    redirect(getPlayerPaymentsPath(teamId, fixtureId, `&error=${amountError.code}`));
   }
 
   if (players.length === 0) {
