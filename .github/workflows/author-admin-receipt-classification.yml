@@ -1,0 +1,44 @@
+name: Prepare admin receipt classification
+on:
+  push:
+    branches: [fix/receipt-classification-and-balance-reconciliation]
+    paths: [.github/workflows/author-admin-receipt-classification.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native admin page and read-only history route
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(s,old,new):
+              assert s.count(old)==1,(old[:100],s.count(old))
+              return s.replace(old,new,1)
+          p=Path('src/app/api/admin/payments/recent-details/route.ts');s=p.read_text()
+          s='import { getPaymentReceiptKind, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";\nimport { LEDGER_TRANSACTION_PREFIX } from "@/lib/payments/player-ledger-markers";\n'+s
+          start=s.index('function extractPlayerFeeId(');end=s.index('function isRecurringTeamPayment',start)
+          s=s[:start]+s[end:]
+          s=once(s,'      const hasPlayerFeeMarker = Boolean(playerFee) || isPlayerFeePaymentNotes(payment.notes);','      const hasPlayerFeeMarker = Boolean(playerFee) || getPaymentReceiptKind(payment) === "PLAYER";\n      const modernPlayerReceipt = (payment.notes ?? "").startsWith(LEDGER_TRANSACTION_PREFIX);')
+          s=once(s,'const isSinglePlayerFeePayment = Boolean(playerFee) && payment.amountPence <= playerFee!.amountPence;', 'const isSinglePlayerFeePayment = modernPlayerReceipt || (Boolean(playerFee) && payment.amountPence <= playerFee!.amountPence);')
+          s=once(s,'const isCaptainPaidTeamFeeViaPlayerRoute = Boolean(playerFee) && payment.amountPence > playerFee!.amountPence;', 'const isCaptainPaidTeamFeeViaPlayerRoute = !modernPlayerReceipt && Boolean(playerFee) && payment.amountPence > playerFee!.amountPence;')
+          s=once(s,'        typeLabel = "Player match fee";\n        title = `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;', '        typeLabel = payment.amountPence < 0 ? "Player refund" : "Player match fee";\n        title = payment.amountPence < 0\n          ? `${playerName ?? "Player"} refunded ${formatMoney(-payment.amountPence)}`\n          : `${playerName ?? "Player"} paid ${formatMoney(payment.amountPence)}`;')
+          p.write_text(s)
+          p=Path('src/app/(admin)/admin/payments/page.tsx');s=p.read_text()
+          s='import { getPaymentReceiptKind, getPaymentReceiptLabel } from "@/lib/payments/payment-receipt-presentation";\n'+s
+          start=s.index('function isPlayerFeePaymentNotes(');end=s.index('function normaliseSearch',start);s=s[:start]+s[end:]
+          s=once(s,'{payment.charge?.title ?? (isPlayerFeePaymentNotes(payment.notes) ? "Squad player payment" : "Unlinked payment")}', '{getPaymentReceiptLabel(payment)} · {payment.charge?.title ?? (getPaymentReceiptKind(payment) === "PLAYER" ? "Squad player payment" : "Unlinked payment")}')
+          p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.test.cjs');s=p.read_text()
+          s+='\n\n// Related admin history consumers must use the same receipt provenance.\nrequire("./payment-receipt-admin.test.cjs");\n';p.write_text(s)
+          PY
+          git diff --check
+          test "$GITHUB_REF" = refs/heads/fix/receipt-classification-and-balance-reconciliation
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src tests
+          git commit -m 'Preserve player receipt identity in native admin history and its read-only details API'
+          git push origin HEAD:refs/heads/fix/receipt-classification-and-balance-reconciliation
