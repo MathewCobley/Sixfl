@@ -17,6 +17,12 @@ const deploymentId = rawDeploymentId
 const nextConfig: NextConfig = {
   ...(deploymentId ? { deploymentId } : {}),
   outputFileTracingExcludes: {
+    // Version-control history is never a runtime dependency.
+    "/*": ["./.git/**/*"],
+    // These routes list database metadata or fetch original artwork via
+    // bounded HTTPS / the badge store; public files remain static assets.
+    "/api/admin/teams/logo-export": ["./public/**/*"],
+    "/admin/teams/logos": ["./public/**/*"],
     "/api/admin/night-board/night-fixtures": ["./public/Kits/**/*"],
     "/api/social/image/**": ["./public/Kits/**/*"],
   },

@@ -1,5 +1,3 @@
-import { readFile, realpath, stat } from "node:fs/promises";
-import path from "node:path";
 import { resolve4 } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { get } from "node:https";
@@ -21,6 +19,15 @@ function ownHosts() {
   }
   return hosts;
 }
+function publicArtworkOrigin(): string {
+  for (const value of [process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXTAUTH_URL, "https://sixfl.co.uk"]) {
+    try {
+      const url = new URL(value ?? "");
+      if (url.protocol === "https:" && !url.username && !url.password && !url.port) return url.origin;
+    } catch { /* Ignore invalid/local-development origins. */ }
+  }
+  return "https://sixfl.co.uk";
+}
 export function parseLogoLocation(value: string) {
   const raw = value.trim();
   if (!raw || raw.includes("\\") || raw.startsWith("//")) throw new Error("Unsupported logo address.");
@@ -29,7 +36,7 @@ export function parseLogoLocation(value: string) {
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.port) throw new Error("Unsupported logo address.");
   return { url, local: relative || ownHosts().has(url.hostname) };
 }
-async function localLogo(url: URL): Promise<Buffer> {
+async function localLogo(url: URL, signal: AbortSignal): Promise<Buffer> {
   const imageId = /^\/api\/team-badges\/([0-9a-f-]{36})$/i.exec(url.pathname)?.[1];
   if (imageId) {
     const data = await getTeamBadgeImage(imageId, false); // Always full-size, never thumbnail.
@@ -38,15 +45,16 @@ async function localLogo(url: URL): Promise<Buffer> {
     return Buffer.from(data);
   }
   const decoded = decodeURIComponent(url.pathname);
-  if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(decoded)) throw new Error("Unsupported stored logo format.");
-  const root = await realpath(path.join(process.cwd(), "public"));
-  const file = await realpath(path.resolve(root, `.${decoded}`));
-  if (!file.startsWith(root + path.sep)) throw new Error("Logo is outside public artwork storage.");
-  const info = await stat(file);
-  if (!info.isFile() || info.size > MAX_LOGO_BYTES) throw new Error("Logo is unavailable or exceeds 8 MB.");
-  const data = await readFile(file);
-  if (data.length > MAX_LOGO_BYTES) throw new Error("Logo exceeds the 8 MB per-image limit.");
-  return data;
+  if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(decoded) || decoded.includes("\\") || decoded.includes("\0") || decoded.split("/").includes("..")) {
+    throw new Error("Unsupported stored logo format.");
+  }
+  // Public artwork is already served as static assets. Read its original
+  // public URL through the same bounded, DNS-pinned HTTPS reader instead
+  // of tracing the repository/public catalogue into this server function.
+  // Database-uploaded badges above still use their full-size stored bytes.
+  // Ignore query transforms, matching the previous public-file behaviour.
+  const publicUrl = new URL(url.pathname, publicArtworkOrigin());
+  return remoteLogo(publicUrl, signal);
 }
 
 async function remoteLogo(url: URL, signal: AbortSignal, redirects = 0): Promise<Buffer> {
@@ -114,7 +122,7 @@ export async function readTeamLogo(value: string, signal: AbortSignal) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const data = await Promise.race([
-      local ? localLogo(url) : remoteLogo(url, timeout),
+      local ? localLogo(url, timeout) : remoteLogo(url, timeout),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Logo could not be read within 8 seconds.")), 8000); }),
     ]);
     signal.throwIfAborted();

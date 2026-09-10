@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { getTeamLogoExportChoices } from "@/lib/exports/team-logos";
+import { getTeamLogoExportChoices } from "@/lib/exports/team-logo-catalogue";
 import TeamLogoExportSelector from "@/components/admin/teams/TeamLogoExportSelector";
 
 export const dynamic = "force-dynamic";
