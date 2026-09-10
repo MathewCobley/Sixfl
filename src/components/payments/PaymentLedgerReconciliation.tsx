@@ -58,7 +58,7 @@ export function PaymentReceiptDetails({ payments, playerNames, title, isKitCharg
   payments: PaymentReceipt[]; playerNames: Map<string, { payerName: string }>; title: string; isKitCharge?: boolean;
 }) {
   if (!payments.length) return null;
-  return <details className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4" data-payment-receipt-details>
+  return <details aria-label={`${title} — ${isKitCharge ? "Kit payment ledger" : "Team payment ledger"}`} className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4" data-payment-receipt-details>
     <summary className="cursor-pointer text-sm font-semibold text-white/85">{title}</summary>
     <p className="mt-2 text-sm leading-5 text-white/65">Receipt history only. These amounts are already in the totals above — do not add them again.</p>
     <div className="mt-3 divide-y divide-white/10">{payments.map(payment => {
