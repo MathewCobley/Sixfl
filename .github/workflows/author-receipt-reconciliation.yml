@@ -1,0 +1,180 @@
+name: Prepare native receipt reconciliation
+on:
+  push:
+    branches: [fix/receipt-classification-and-balance-reconciliation]
+    paths: [.github/workflows/author-receipt-reconciliation.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Integrate native sources (no production credentials or services)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(s,old,new):
+              assert s.count(old)==1,(old[:100],s.count(old))
+              return s.replace(old,new,1)
+          p=Path('src/app/captain/team/[teamid]/payments/page.tsx');s=p.read_text()
+          s='import { PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";\nimport { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";\n'+s
+          start=s.index('function extractPlayerFeeId(');end=s.index('\nfunction getPayerName(',start)
+          s=s[:start]+s[end+1:]
+          s=once(s,'function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeePaymentInfo | null) {\n  if (playerFeeInfo) return "Player match fee paid online via Stripe Checkout.";', 'function formatPlayerPaymentNote(notes: string | null, playerFeeInfo: PlayerFeePaymentInfo | null, amountPence: number) {\n  if (playerFeeInfo || getPaymentReceiptKind({ notes }) === "PLAYER") return amountPence < 0\n    ? "Player refund allocated to the original fixture; already reflected in its player total."\n    : "Player payment allocated to the original fixture; already included in its player total, not an additional team payment.";')
+          s=once(s,'      paymentTransactions\n        .map((transaction) => extractPlayerFeeId(transaction.notes))','      [...paymentTransactions, ...ledger.entries.flatMap(entry => entry.payments)]\n        .map((transaction) => extractPlayerFeeId(transaction.notes))')
+          s=once(s,'      outstandingPence: number;\n      statusLabel: string;', '      outstandingPence: number;\n      captainReceivedPence: number;\n      statusLabel: string;')
+          s=once(s,'      outstandingPence: display.outstandingPence,\n      statusLabel,', '      outstandingPence: display.outstandingPence,\n      captainReceivedPence: display.captainReceivedPence,\n      statusLabel,')
+          s=once(s,'            Team payment ledger\n          </h2>','            Team payment ledger\n          </h2>\n          <div className="mt-4"><TeamBalanceReconciliation entries={ledger.openEntries} outstandingPence={ledger.outstandingPence} /></div>')
+          start=s.index('              const nonPlayerChargePayments = entry.payments.filter(');end=s.index('              const teamCreditUsedPence',start)
+          s=s[:start]+'              const nonPlayerChargePayments = entry.payments.filter(payment => getPaymentReceiptKind(payment) !== "PLAYER");\n'+s[end:]
+          s=once(s,'                          {displayedPlayerTotalPence !== playerSettledPence ? (','                          <PlayerCollectionReconciliation rows={playerCollectionDetails} chargePence={entry.amountPence} outstandingPence={entry.outstandingPence} />\n                          {displayedPlayerTotalPence !== playerSettledPence ? (')
+          s=once(s,'                          <div className="flex items-center justify-between gap-4">\n                            <span>{isKitCharge ? "Paid" : "Team paid"}</span>', '                          <div data-direct-team-paid-pence={teamPaymentPence} className="flex items-center justify-between gap-4">\n                            <span>{isKitCharge ? "Paid" : "Team paid"}</span>')
+          start=s.index('                        {nonPlayerChargePayments.length > 0 ? (');end=s.index('\n\n                        <div className="mt-3">',start)
+          s=s[:start]+'''                        <PaymentReceiptDetails
+                                    payments={entry.payments}
+                                    playerNames={playerFeeInfoById}
+                                    isKitCharge={isKitCharge}
+                                    title={isKitCharge ? "Kit payment details" : "Receipt details — already included above"}
+                                  />'''+s[end:]
+          s=once(s,'const paymentNote = formatPlayerPaymentNote(tx.notes, playerFeeInfo);','const paymentNote = formatPlayerPaymentNote(tx.notes, playerFeeInfo, tx.amountPence);')
+          s=once(s,'                        {tx.charge?.title ?? "Unallocated payment"}','                        {tx.charge?.title ?? "Unallocated payment"}\n                        <p data-payment-history-kind={getPaymentReceiptKind(tx)} className="mt-1 text-xs font-medium text-emerald-100/80">{getPaymentReceiptLabel(tx)}</p>')
+          p.write_text(s)
+          # Existing compatibility scripts must recognise the native replacement,
+          # not insist on the obsolete, misleading team-only receipt heading.
+          p=Path('scripts/apply-clear-fixture-payment-breakdown.cjs');s=p.read_text()
+          s=once(s,'!source.includes("Team payment and credit details") ||','(!source.includes("Team payment and credit details") && !source.includes("<PaymentReceiptDetails")) ||');p.write_text(s)
+          p=Path('scripts/apply-context-aware-payment-charge-labels.cjs');s=p.read_text()
+          s=once(s,"!source.includes('? \"Kit payment\"')", "(!source.includes('? \"Kit payment\"') && !source.includes('<PaymentReceiptDetails'))");p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.test.cjs');s=p.read_text()
+          s=once(s,"'src/lib/payments/player-ledger-markers.ts','src/lib/payments/charge-summary.ts','src/lib/payments/team-charge-waivers.ts'", "'src/lib/payments/player-ledger-markers.ts','src/lib/payments/charge-summary.ts','src/lib/payments/team-charge-waivers.ts',\n    'src/lib/payments/payment-receipt-presentation.ts','src/components/payments/PaymentLedgerReconciliation.tsx'")
+          s=once(s,"if(!path.extname(file))file+='.ts';", "if(!path.extname(file))file+=file.startsWith('src/components/')?'.tsx':'.ts';")
+          s=once(s,"fees=fixtureFees(),creditPence=0,teamPaidPence=0}={}","fees=fixtureFees(),creditPence=0,teamPaidPence=0,transactionRows=null,extraEntries=[],receiptStates=[]}={}")
+          s=once(s,'  const transactions=[','  const transactions=transactionRows??[')
+          s=once(s,"entries:[entry],openEntries:[entry],outstandingPence:entry.outstandingPence,openChargeCount:entry.outstandingPence?1:0", "entries:[entry,...extraEntries],openEntries:[entry,...extraEntries].filter(e=>e.outstandingPence>0),outstandingPence:entry.outstandingPence+extraEntries.reduce((s,e)=>s+e.outstandingPence,0),openChargeCount:(entry.outstandingPence?1:0)+extraEntries.length")
+          s=once(s,'},$queryRaw:async()=>[]};','},$queryRaw:async()=>receiptStates};')
+          s+=r'''
+
+          // Synthetic reproduction of the two reported fixture balances. No live
+          // customer data, actual tokens, provider calls or mutations are used.
+          const receiptPresentationPath='src/lib/payments/payment-receipt-presentation.ts';
+          function modernFixture() {
+            const fees=Array.from({length:5},(_,i)=>({id:`modern-fee-${i}`,teamId:'test-team',fixtureId:'test-fixture',amountPence:600,
+              status:i===4?'OPEN':'PAID',note:i===4?null:'[SIXFL_PLAYER_LEDGER_RECEIPTS]',captainAssignedAmountPence:600,
+              teamMember:{user:{name:`Receipt player ${i+1}`,email:`receipt-${i}@example.invalid`}},prospect:null}));
+            const transactions=fees.slice(0,4).map((f,i)=>({amountPence:600,notes:`Player ledger repayment. Player: Receipt player ${i+1}. Account fee reference: ${f.id}. Request: synthetic-${i}.`,reference:`test-receipt-${i}`}));
+            const receiptStates=fees.slice(0,4).map(f=>({feeId:f.id,controlled:true,receivedPence:600,captainReceivedPence:0,balancePence:0}));
+            return {fees,transactions,receiptStates};
+          }
+          function capture(name,html){const out=path.join(process.cwd(),'.tmp/ledger-consistency');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,name+'.html'),html);}
+          test('receipt classification: modern four £6 allocations remain player receipts, never another £24 team payment',async()=>{
+            const {fees,transactions,receiptStates}=modernFixture();const before=JSON.stringify({fees,transactions});
+            const summary=summaryFor(fees,transactions);assert.deepEqual([summary.playerPaidPence,summary.directPaidPence,summary.outstandingPence],[2400,0,1600]);
+            const html=await renderPage({fees,transactionRows:transactions,receiptStates});
+            assert.equal((html.match(/data-receipt-kind="PLAYER"/g)||[]).length,4);assert.doesNotMatch(html,/data-receipt-kind="TEAM"/);
+            assert.match(html,/data-direct-team-paid-pence="0"/);assert.match(html,/data-player-cash-pence="2400"/);
+            assert.match(html,/Player payment.*Receipt player 1/);assert.match(html,/not a second team payment/);
+            assert.match(html,/data-uncovered-after-player-balances="1000"/);assert.doesNotMatch(html,/Team payment and credit details/);
+            assert.equal(JSON.stringify({fees,transactions}),before);capture('modern-receipts',html);
+          });
+          test('captain £35 plus open £13 is shown as £48 of collection records, not £48 received or extra team debt',async()=>{
+            const fees=fixtureFees().map((f,i)=>({...f,amountPence:700,captainAssignedAmountPence:700,status:'WAIVED',note:'captain/organiser marked paid'}));
+            fees.push({...fees[0],id:'open-captain-fixture',amountPence:1300,captainAssignedAmountPence:1300,status:'OPEN',note:null});
+            const before=JSON.stringify(fees),summary=summaryFor(fees);assert.equal(summary.outstandingPence,4000);assert.equal(summary.paidPence,0);
+            const html=await renderPage({fees});assert.match(html,/data-captain-reported-pence="3500"/);assert.match(html,/data-open-player-balance="1300"/);
+            assert.match(html,/data-player-collection-excess="800"/);assert.match(html,/£48.00/);assert.match(html,/£0.00 applied to £40.00 charge; £40.00 outstanding/);
+            assert.match(html,/This does not increase the fixture fee/);assert.equal(JSON.stringify(fees),before);capture('captain-records',html);
+          });
+          test('£40 older charge plus £16 current remainder reconciles to the £56 headline exactly once',async()=>{
+            const {fees,transactions,receiptStates}=modernFixture();
+            const older={chargeId:'older-test-charge',teamId:'test-team',fixtureId:null,fixtureLabel:'Older test fixture',title:'Older test fixture',amountPence:4000,outstandingPence:4000,
+              dueDate:new Date('2026-08-25T18:00:00Z'),kickoffAt:null,createdAt:new Date(),description:null,displayStatus:'OPEN',payments:[],directPaidPence:0,
+              playerPaidPence:0,playerSubsidyPence:0,playerOpenPence:0,coveredPence:0,settledPence:0,waivedPence:0,overpaidPence:0};
+            const html=await renderPage({fees,transactionRows:transactions,receiptStates,extraEntries:[older]});
+            const due=[...html.matchAll(/data-due-pence="(\d+)"/g)].map(m=>Number(m[1]));assert.deepEqual(due,[1600,4000]);
+            assert.equal(due.reduce((s,n)=>s+n,0),5600);assert.match(html,/data-reconciled-team-balance="5600"/);capture('two-charge-balance',html);
+          });
+          test('modern and legacy receipt identifiers resolve the payer, including refunds and historical corrections',()=>{
+            const p=loader()(receiptPresentationPath);
+            for(const notes of ['Player ledger repayment. Account fee reference: fee-a. Request: r.', 'Player ledger repayment refund. Account fee reference: fee-a. Request: r.',
+              'Player ledger repayment. Historical receipt reconciled. Account fee reference: fee-a. Request: r.', 'Player match fee paid online. Player fee ID: fee-a.']){
+              assert.equal(p.getPaymentReceiptKind({notes}),'PLAYER');assert.equal(p.getPaymentReceiptPlayerFeeId(notes),'fee-a');
+            }
+            assert.equal(p.getPaymentReceiptPlayerFeeId('Unrelated payment'),null);
+            assert.equal(p.getPaymentReceiptKind({notes:'Admin report mentions Player ledger repayment but is not a ledger entry'}),'TEAM');
+            assert.equal(p.getPaymentReceiptKind({reference:'TEAM_CREDIT'}),'TEAM_CREDIT');
+            assert.equal(p.getPaymentReceiptLabel({amountPence:600,notes:'Bank payment'}),'Direct team payment');
+            assert.equal(p.getPaymentReceiptLabel({amountPence:600,notes:'Bank payment'},true),'Kit payment');
+          });
+          test('net player refund remains in player receipts; a separate team payment and credit still count once',async()=>{
+            const {fees,transactions}=modernFixture();const refund={amountPence:-200,notes:'Player ledger repayment refund. Account fee reference: modern-fee-0. Request: synthetic-0.'};
+            const actual=[...transactions,refund,{amountPence:500,notes:'Separate bank transfer'},{amountPence:300,reference:'TEAM_CREDIT',notes:'Team credit used'}];
+            const summary=summaryFor(fees,actual);assert.deepEqual([summary.playerPaidPence,summary.directPaidPence,summary.outstandingPence],[2200,800,1000]);
+            const html=await renderPage({fees,transactionRows:actual});assert.match(html,/Player refund/);assert.match(html,/-£2.00/);
+            assert.equal((html.match(/data-receipt-kind="PLAYER"/g)||[]).length,5);assert.equal((html.match(/data-receipt-kind="TEAM"/g)||[]).length,1);
+            assert.equal((html.match(/data-receipt-kind="TEAM_CREDIT"/g)||[]).length,1);assert.match(html,/data-direct-team-paid-pence="500"/);
+          });
+          test('captain reports are not claimed still held after a separately received remittance',async()=>{
+            const fees=[{...fixtureFees()[0],amountPence:3500,captainAssignedAmountPence:3500,status:'WAIVED',note:'captain/organiser marked paid'}];
+            const html=await renderPage({fees,teamPaidPence:3500});assert.match(html,/£35.00 applied to £40.00 charge; £5.00 outstanding/);
+            assert.match(html,/Recorded paid to captain/);assert.match(html,/Any money subsequently forwarded to SIXFL/);
+            assert.doesNotMatch(html,/£35.00 still held|£35.00 still to forward/);
+          });
+          test('history and fixture detail use the same classification; no old local player receipt detector remains',()=>{
+            const s=read(pagePath);assert.match(s,/getPaymentReceiptKind\(payment\) !== "PLAYER"/);assert.match(s,/getPaymentReceiptLabel\(tx\)/);
+            assert.match(s,/ledger.entries.flatMap\(entry => entry.payments\)/);assert.doesNotMatch(s,/function extractPlayerFeeId\(/);
+            assert.doesNotMatch(s,/notes.includes\("player match fee paid online"\)/);
+            const helper=read(receiptPresentationPath);assert.doesNotMatch(helper,/prisma|\.update\(|\.create\(|fetch\(/);
+          });
+          '''
+          p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.browser.cjs');s=p.read_text()
+          s+=r'''
+
+          test('receipt groups, captain reports and the £56 breakdown are readable at desktop and phone widths',async()=>{
+            const css=cssFiles('.next/static').map(p=>fs.readFileSync(p,'utf8')).join('\n');const browser=await chromium.launch({headless:true});
+            try{for(const width of [1440,390])for(const scenario of ['modern-receipts','captain-records','two-charge-balance']){
+              const page=await browser.newPage({viewport:{width,height:1000}});await page.route('**/*',r=>r.abort());
+              const markup=fs.readFileSync(path.join(out,scenario+'.html'),'utf8');
+              await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body class="bg-black text-white"><main class="mx-auto max-w-7xl px-4 py-8">${markup}</main></body></html>`);
+              const detail=page.locator('[data-payment-receipt-details]');for(let i=0;i<await detail.count();i++)await detail.nth(i).locator('summary').click();
+              if(scenario!=='captain-records'){assert.equal(await page.locator('[data-receipt-kind="PLAYER"]').count(),4);assert.equal(await page.locator('[data-receipt-kind="TEAM"]').count(),0);}
+              if(scenario==='captain-records'){assert.match(await page.locator('[data-captain-reported-pence]').innerText(),/£35.00/);assert.match(await page.locator('[data-player-collection-excess]').innerText(),/£48.00/);}
+              if(scenario==='two-charge-balance'){const values=await page.locator('[data-due-pence]').evaluateAll(es=>es.map(e=>Number(e.getAttribute('data-due-pence'))));assert.equal(values.reduce((a,b)=>a+b,0),5600);}
+              const sizing=await page.evaluate(()=>[document.documentElement.scrollWidth,innerWidth]);assert.ok(sizing[0]<=sizing[1]+1,`${scenario} overflow at ${width}: ${sizing}`);
+              await page.screenshot({path:path.join(out,`${scenario}-${width}.png`),fullPage:true});await page.close();
+            }}finally{await browser.close();}
+          });
+          '''
+          p.write_text(s)
+          p=Path('.github/workflows/payment-ledger-consistency.yml');s=p.read_text()
+          s=once(s,'      - run: npx tsc --noEmit', '''      - name: Prove modern receipt misclassification is detected
+                  run: |
+                    python3 - <<'PYNEG'
+                    from pathlib import Path
+                    import subprocess
+                    p=Path('src/lib/payments/payment-receipt-presentation.ts');original=p.read_text()
+                    old='(payment.notes ?? "").startsWith(LEDGER_TRANSACTION_PREFIX) || '
+                    assert original.count(old)==1
+                    try:
+                        p.write_text(original.replace(old,''))
+                        result=subprocess.run(['node','--test','--test-name-pattern=receipt classification','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
+                        assert result.returncode!=0 and 'not ok' in result.stdout, 'Modern receipt misclassification was not detected'
+                        print('Original player-as-team receipt classification regression detected')
+                    finally:
+                        p.write_text(original)
+                    PYNEG
+                - run: npx tsc --noEmit'''.replace('\n          ','\n'))
+          s=once(s,'          git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts', '          git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts src/lib/payments/payment-receipt-presentation.ts src/components/payments/PaymentLedgerReconciliation.tsx\n          test ! -f .github/workflows/author-receipt-reconciliation.yml\n          git grep -nE "getPaymentReceiptKind|getPaymentReceiptPlayerFeeId|PaymentReceiptDetails|TeamBalanceReconciliation" -- src >> .tmp/ledger-consistency/source-inventory.txt')
+          p.write_text(s)
+          p=Path('docs/critical-feature-contracts.md');s=p.read_text();s+='\n\n## Receipt provenance and visible balance reconciliation\n\nModern player-ledger allocations and their signed refunds must remain player receipts in both fixture details and recent history; they are not additional direct team payments. The native shared receipt presentation reuses modern accounting markers and the legacy classifier. Player names resolve from both historic Player fee ID and modern Account fee reference formats, including older fixture receipts outside the latest 20 history rows. A canonical due-charge breakdown sums to the headline. Captain-reported receipts are shown separately from SIXFL receipts, without claiming they are still held after remittance; open player balances and allocation discrepancies do not create extra team debt. Tests cover four £6 player receipts, £35 captain reports plus £13 unpaid, £40 + £16 = £56, signed refunds, team credit, real separate team receipts and production-prepared browser layouts. These presentation changes never fabricate a missing remittance or edit historical charges.\n';p.write_text(s)
+          PY
+          git diff --check
+          git diff --stat
+          test "$GITHUB_REF" = refs/heads/fix/receipt-classification-and-balance-reconciliation
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src scripts tests docs .github/workflows/payment-ledger-consistency.yml
+          git commit -m 'Integrate native receipt classification, explicit collection reconciliation and full regression scenarios'
+          git push origin HEAD:refs/heads/fix/receipt-classification-and-balance-reconciliation
