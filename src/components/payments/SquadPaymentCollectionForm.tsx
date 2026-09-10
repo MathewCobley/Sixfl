@@ -60,7 +60,9 @@ export default function SquadPaymentCollectionForm({ action, saveAction, reviewH
   }
 
   return (
-    <form action={action} noValidate onSubmit={submit} className={className} aria-busy={pending}>
+    <form action={action} noValidate onSubmit={submit} className={className} aria-busy={pending}
+      onChange={() => { if (feedback?.status === "saved") setFeedback(null); }}
+    >
       <fieldset disabled={pending} className="min-w-0 space-y-5">
         {children}
         <div className="space-y-3">
