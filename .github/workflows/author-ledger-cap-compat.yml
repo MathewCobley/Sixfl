@@ -1,0 +1,73 @@
+name: Retire legacy cap presentation rewrite
+on:
+  push:
+    branches: [fix/consistent-player-fixture-ledger]
+    paths: [.github/workflows/author-ledger-cap-compat.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/fix/consistent-player-fixture-ledger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Native presentation replaces the legacy page-only patch, not cap policy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply-player-match-fee-cap.cjs');s=p.read_text()
+          start=s.index('let collectionPage = read(collectionPagePath);')
+          end=s.index('write(collectionPagePath, collectionPage);',start)+len('write(collectionPagePath, collectionPage);')
+          s=s[:start]+'''// Native page uses the same canonical cash/adjustment split as Team Payments.
+          // Preserve the admin cap rules and collection actions above, but do not
+          // restore page-local boost arithmetic or count pending caps as receipts.
+          const collectionPage = read(collectionPagePath);
+          for (const marker of ["getPlayerSettlementBreakdown(selectedEntry", "getPlayerSettlementBreakdown(entry)", "getCaptainAssignedPlayerFeePence", "getCurrentSettlementText(selectedEntry)"]) {
+            if (!collectionPage.includes(marker)) throw new Error(`Native cap presentation missing: ${marker}`);
+          }'''+s[end:]
+          p.write_text(s)
+          p=Path('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');s=p.read_text()
+          s='import { getCaptainAssignedPlayerFeePence } from "@/lib/payments/player-fee-coverage";\nimport { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";\n'+s
+          anchor='  const selectedFees = selectedFixture\n    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,'  const feesWithAssignedShares = await hydrateCaptainAssignedPlayerFees(fees);\n  const selectedFees = selectedFixture\n    ? feesWithAssignedShares.filter((fee) => fee.fixtureId === selectedFixture.id)',1)
+          anchor='  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) => sum + fee.amountPence,\n    0,\n  );'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,'  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) => sum + getCaptainAssignedPlayerFeePence(fee),\n    0,\n  );',1)
+          p.write_text(s)
+          p=Path('.github/workflows/payment-ledger-consistency.yml');s=p.read_text()
+          old="['node','--test','tests/payment-ledger-consistency.test.cjs']"
+          assert s.count(old)==1
+          s=s.replace(old,"['node','--test','--test-reporter=tap','tests/payment-ledger-consistency.test.cjs']")
+          s=s.replace('          test ! -f .github/workflows/author-ledger-consistency.yml','          test ! -f .github/workflows/author-ledger-consistency.yml\n          test ! -f .github/workflows/author-ledger-cap-compat.yml\n          test ! -f .github/workflows/author-ledger-compat.yml')
+          p.write_text(s)
+          PY
+          git diff --check
+          git add scripts/apply-player-match-fee-cap.cjs 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' .github/workflows/payment-ledger-consistency.yml
+          git rm .github/workflows/author-ledger-cap-compat.yml
+      - run: npm ci
+      - run: npx prisma generate
+      - run: node --test tests/payment-ledger-consistency.test.cjs
+      - name: Full production preparation and final contracts
+        run: |
+          npm run prebuild > /tmp/ledger-prebuild.log 2>&1 || { tail -60 /tmp/ledger-prebuild.log; exit 1; }
+          tail -10 /tmp/ledger-prebuild.log
+          npx prisma generate
+          node --test tests/payment-ledger-consistency.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+      - name: Commit only staged authored source, never generated prebuild output
+        run: |
+          test "$GITHUB_REF" = refs/heads/fix/consistent-player-fixture-ledger
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'Use canonical cap presentation and preserve assigned shares without legacy boost rewrites'
+          git push origin HEAD:refs/heads/fix/consistent-player-fixture-ledger
