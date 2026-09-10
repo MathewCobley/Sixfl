@@ -13,6 +13,7 @@ const root = path.resolve(__dirname, "..");
 const indexPath = "src/app/(admin)/admin/matchweek-reports/page.tsx";
 const detailPath = "src/app/(admin)/admin/matchweek-reports/[slug]/page.tsx";
 const legacyPath = "src/app/(public)/leagues/[slug]/weekly-report/page.tsx";
+const layoutPath = "src/app/(admin)/admin/layout.tsx";
 const pages = [indexPath, detailPath, legacyPath];
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const load = (file, mocks, transform = (source) => source) => {
@@ -59,11 +60,14 @@ function harness(role = null, email = "example@example.test") {
     "next-auth": { getServerSession: async () => state.session },
     "next-auth/react": { useSession: () => ({ data: state.session }) },
     "@/auth": { authOptions: {} },
-    "@prisma/client": { UserRole: { ADMIN: "ADMIN" } },
+    "@prisma/client": { UserRole: { ADMIN: "ADMIN" }, ResultDisputeStatus: { OPEN: "OPEN", REVIEW: "REVIEW" } },
     "@vercel/analytics": { track() {} },
+    "@/lib/messaging/service": { getAdminInboxSummary: async () => ({ unreadThreads: 0 }) },
+    "@/lib/night-board/next-night-issues": { getNextNightBoardIssueSummary: async () => ({ count: 0, level: null, dateLabel: null }) },
     "@/lib/datetime/london": { formatDateTimeInLondon: (value, options) => new Date(value).toLocaleString("en-GB", { ...options, timeZone: "Europe/London" }) },
     "@/lib/prisma": { prisma: {
       user: { findUnique: async () => state.user },
+      resultDispute: { count: async () => 0 },
       league: {
         findMany: async (query) => { state.queries.push(query); return state.leagues; },
         findFirst: async (query) => { state.queries.push(query); return state.league; },
@@ -123,7 +127,7 @@ test("private empty states and unknown league are handled", async () => {
   await assert.rejects(load(detailPath, mocks).default(props()), (error) => error.destination === "404");
 });
 
-test("report navigation is present in admin sidebar and menus but absent publicly", () => {
+test("report navigation is present in desktop and small-screen admin navigation but absent publicly", async () => {
   const { mocks } = harness("ADMIN");
   const Sidebar = load("src/components/admin/AdminSidebar.tsx", mocks).default;
   const sidebar = renderToStaticMarkup(React.createElement(Sidebar, {}));
@@ -131,8 +135,18 @@ test("report navigation is present in admin sidebar and menus but absent publicl
   assert.match(sidebar, /href="\/admin\/matchweek-reports"/);
   assert.match(sidebar, /Private previews/);
   const Header = load("src/components/layout/AppHeader.tsx", mocks).default;
-  const admin = renderToStaticMarkup(React.createElement(Header, { variant: "admin" }));
-  assert.equal((admin.match(/href="\/admin\/matchweek-reports"/g) || []).length, 2, "desktop and mobile menus both contain the link");
+  // Isolate unrelated layout widgets, but render the actual sidebar and header.
+  for (const [, dependency] of read(layoutPath).matchAll(/from ["'](@\/components\/[^"']+)["']/g)) {
+    mocks[dependency] = { __esModule: true, default: () => null };
+  }
+  mocks["@/components/admin/AdminSidebar"] = { __esModule: true, default: Sidebar };
+  mocks["@/components/layout/AppHeader"] = { __esModule: true, default: Header };
+  const Layout = load(layoutPath, mocks).default;
+  const admin = renderToStaticMarkup(await Layout({ children: React.createElement("p", null, "Test content") }));
+  assert.equal((admin.match(/href="\/admin\/matchweek-reports"/g) || []).length, 2, "desktop sidebar and mobile/tablet quick navigation both contain the link");
+  const smallScreenNav = admin.match(/<nav aria-label="Admin reports"[^>]*>[\s\S]*?<\/nav>/)?.[0] || "";
+  assert.match(smallScreenNav, /xl:hidden/);
+  assert.match(smallScreenNav, /href="\/admin\/matchweek-reports"/);
   const publicHeader = renderToStaticMarkup(React.createElement(Header, { variant: "public" }));
   assert.doesNotMatch(publicHeader, /matchweek-reports|weekly-report/);
   const QuickLinks = load("src/components/leagues/LeagueQuickLinks.tsx", mocks).default;

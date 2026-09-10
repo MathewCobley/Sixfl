@@ -54,7 +54,6 @@ const adminDesktopLinks: HeaderLink[] = [
   { label: "Fixtures", href: "/admin/fixtures" },
   { label: "Leads", href: "/admin/leads" },
   { label: "Messaging", href: "/admin/messaging" },
-  { label: "Matchweek reports", href: "/admin/matchweek-reports" },
 ];
 
 const adminMobileLinks: HeaderLink[] = [
@@ -66,7 +65,6 @@ const adminMobileLinks: HeaderLink[] = [
   { label: "Venues", href: "/admin/venues" },
   { label: "Fixtures", href: "/admin/fixtures" },
   { label: "Social", href: "/admin/social" },
-  { label: "Matchweek reports", href: "/admin/matchweek-reports" },
   { label: "Result Disputes", href: "/admin/results" },
   { label: "Payments", href: "/admin/payments" },
   { label: "Subscriptions", href: "/admin/payments/subscriptions" },

@@ -3,6 +3,7 @@
 // ========================================
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ResultDisputeStatus } from "@prisma/client";
 
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -110,6 +111,15 @@ export default async function AdminLayout({
       <AdminRefereeCommsHistoryBridge />
       <RefereeWelcomeInviteBridge />
       <AppHeader variant="admin" />
+
+      <nav aria-label="Admin reports" className="border-b border-white/10 px-3 py-3 sm:px-6 lg:px-8 xl:hidden">
+        <Link
+          href="/admin/matchweek-reports"
+          className="inline-flex min-h-10 items-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-400"
+        >
+          Matchweek reports
+        </Link>
+      </nav>
 
       <div className="flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
         <aside className="hidden w-[34rem] shrink-0 xl:block 2xl:w-[38rem]">
