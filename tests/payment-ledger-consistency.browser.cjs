@@ -26,8 +26,10 @@ test('actual prepared page markup and production CSS reconcile at desktop and mo
       assert.ok(overflow.document<=overflow.viewport+1,`Ledger overflows at ${width}: ${JSON.stringify(overflow)}`);
       const subtotalAmount=page.locator('[data-player-contributions-total] > span').last();
       assert.equal(await subtotalAmount.evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap','Currency total must not split across lines');
+      assert.match(await page.locator('[data-readable-player-payments]').innerText(),/Paid to captain/);
+      assert.equal(await page.locator('[data-fixture-equation]').count(),1);
       const row=page.locator('[data-player-contribution-pence]').nth(3);
-      assert.match(await row.innerText(),/£8.00[\s\S]*Contribution to fixture[\s\S]*£5.00 received online \+ £3.00 SIXFL adjustment/);
+      assert.match(await row.innerText(),/£8.00[\s\S]*£5.00 received \+ £3.00 adjustment/);
       await page.screenshot({path:path.join(out,`ledger-${width}.png`),fullPage:true});
       await page.close();
     }

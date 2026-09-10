@@ -1,4 +1,4 @@
-import { PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
+import { PlayerContributionTable, PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
 import { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
 import { getChargeDescriptionForDisplay, getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
 import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/player-payment-display";
@@ -476,6 +476,8 @@ export default async function CaptainPaymentsPage({
       amountPence: number;
       outstandingPence: number;
       captainReceivedPence: number;
+      receivedPence: number;
+      adjustmentPence: number;
       statusLabel: string;
       statusMeta: string;
       tone: string;
@@ -501,6 +503,8 @@ export default async function CaptainPaymentsPage({
       amountPence: displayAmountPence,
       outstandingPence: display.outstandingPence,
       captainReceivedPence: display.captainReceivedPence,
+      receivedPence: display.receivedPence,
+      adjustmentPence: display.adjustmentPence,
       statusLabel,
       statusMeta,
       tone,
@@ -804,7 +808,7 @@ export default async function CaptainPaymentsPage({
             Charges
           </p>
           <h2 className="mt-2 text-xl font-semibold text-white">
-            Team payment ledger
+            Payments for {team.name}
           </h2>
           <div className="mt-4"><TeamBalanceReconciliation entries={ledger.openEntries} outstandingPence={ledger.outstandingPence} /></div>
         </div>
@@ -872,11 +876,11 @@ export default async function CaptainPaymentsPage({
 
               return (
                 <div key={entry.chargeId} className="px-6 py-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)] xl:items-start">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-base font-semibold text-white">
-                          {entry.title}
+                          {entry.fixtureId ? entry.fixtureLabel : entry.title}
                         </div>
 
                         {entry.fixtureId ? (
@@ -899,10 +903,6 @@ export default async function CaptainPaymentsPage({
                         </div>
                       ) : null}
 
-                      <div className="mt-2 text-sm text-emerald-100/75">
-                        {entry.fixtureLabel}
-                      </div>
-
                       {context ? (
                         <div className="mt-1 text-sm text-white/45">{context}</div>
                       ) : null}
@@ -916,57 +916,8 @@ export default async function CaptainPaymentsPage({
                       </div>
 
                       {playerCollectionDetails.length > 0 ? (
-                        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20 text-left">
-                          <div className="border-b border-white/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                            Player payment details
-                          </div>
-                          <p className="px-3 py-2 text-xs leading-5 text-white/60">
-                            Bold amounts are contributions received by SIXFL plus recorded SIXFL adjustments. Unpaid requests and money still held by the captain are not included.
-                          </p>
-                          <div className="divide-y divide-white/10">
-                            {playerCollectionDetails.map((payment) => (
-                              <div
-                                key={payment.id}
-                                data-player-contribution-pence={payment.amountPence}
-                                className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-white">{payment.name}</div>
-                                  {payment.contact ? (
-                                    <div className="mt-0.5 break-all text-xs text-white/45">
-                                      {payment.contact}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="flex min-w-0 flex-wrap items-center gap-3 sm:justify-end">
-                                  <div className="text-right">
-                                    <div className="font-semibold text-white">
-                                      {formatMoney(payment.amountPence)}
-                                    </div>
-                                    <div className="text-[10px] text-white/50">Contribution to fixture</div>
-                                    <div className="mt-0.5 max-w-md break-words text-[11px] text-white/50">
-                                      {payment.statusMeta}
-                                    </div>
-                                  </div>
-                                  <span
-                                    className={[
-                                      "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                                      payment.tone,
-                                    ].join(" ")}
-                                  >
-                                    {payment.statusLabel}
-                                  </span>
-                                  {correctionAccess.isAdmin && payment.statusLabel === "Check balance" ? <Link
-                                    href={`/admin/payments/player-fees/${payment.id}/correct-charge`}
-                                    className="rounded-xl border border-amber-300/35 px-3 py-2 text-xs font-semibold text-amber-100"
-                                  >Correct original charge</Link> : null}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <div data-player-contributions-total={displayedPlayerTotalPence} className="flex items-center justify-between gap-4 border-t border-white/10 px-3 py-3 text-sm font-semibold text-white">
-                            <span className="min-w-0">Total player contributions shown</span><span className="shrink-0 whitespace-nowrap">{formatMoney(displayedPlayerTotalPence)}</span>
-                          </div>
+                        <div className="min-w-0">
+                          <PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} />
                           <PlayerCollectionReconciliation rows={playerCollectionDetails} chargePence={entry.amountPence} outstandingPence={entry.outstandingPence} />
                           {displayedPlayerTotalPence !== playerSettledPence ? (
                             <p role="status" className="px-3 pb-3 text-xs text-amber-100">The player rows total {formatMoney(displayedPlayerTotalPence)}, but the fixture ledger records {formatMoney(playerSettledPence)} from players and adjustments. SIXFL needs to review the linked records; no balancing adjustment has been assumed.</p>
@@ -979,7 +930,7 @@ export default async function CaptainPaymentsPage({
                       ) : null}
                     </div>
 
-                    <div className="flex flex-col gap-3 lg:items-end">
+                    <div className="flex min-w-0 flex-col gap-3">
                       <TeamPaymentOrderNotice decision={paymentDecision} />
                       <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/20 p-4 text-left">
                         <div className="flex items-center justify-between gap-4">
@@ -997,23 +948,18 @@ export default async function CaptainPaymentsPage({
 
                         <div className="mt-3 space-y-2 text-sm text-white/65">
                           {!isKitCharge ? (
-                            <>
+                            <div aria-label="Player shares settled" data-player-settled-pence={playerSettledPence} className="space-y-2">
                               <div data-player-cash-pence={playerSettlement.cashPence} className="flex items-center justify-between gap-4">
                                 <span>Player payments received</span><span className="font-semibold text-white">{formatMoney(playerSettlement.cashPence)}</span>
                               </div>
                               <div data-player-adjustments-pence={playerSettlement.adjustmentPence} className="flex items-center justify-between gap-4">
                                 <span>SIXFL player adjustments</span><span className="font-semibold text-white">{formatMoney(playerSettlement.adjustmentPence)}</span>
                               </div>
-                            <div data-player-settled-pence={playerSettledPence} className="flex items-center justify-between gap-4 border-t border-white/10 pt-2">
-                              <span>Player shares settled</span>
-                              <span className="font-semibold text-white">
-                                {formatMoney(playerSettledPence)}
-                              </span>
+
                             </div>
-                            </>
                           ) : null}
                           <div data-direct-team-paid-pence={teamPaymentPence} className="flex items-center justify-between gap-4">
-                            <span>{isKitCharge ? "Paid" : "Team paid"}</span>
+                            <span>{isKitCharge ? "Paid" : "Direct team payments"}</span>
                             <span className="font-semibold text-white">
                               {formatMoney(teamPaymentPence)}
                             </span>
@@ -1042,6 +988,12 @@ export default async function CaptainPaymentsPage({
                           ) : null}
                         </div>
 
+                        {entry.amountPence - totalAppliedPence === entry.outstandingPence ? (
+                          <p data-fixture-equation className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-center text-base font-semibold tabular-nums text-white">
+                            {formatMoney(entry.amountPence)} − {formatMoney(totalAppliedPence)} = {formatMoney(entry.outstandingPence)}
+                            <span className="mt-1 block text-xs font-normal text-white/65">Charge − amount applied = remaining</span>
+                          </p>
+                        ) : null}
                         {entry.settledPence > totalAppliedPence ? (
                           <p className="mt-3 text-xs text-white/65">Recorded payments, credit and adjustments total {formatMoney(entry.settledPence)}. {formatMoney(entry.settledPence - totalAppliedPence)} is above this charge; only {formatMoney(totalAppliedPence)} is applied below. Adjustments do not create cash or team credit.</p>
                         ) : null}
@@ -1059,7 +1011,7 @@ export default async function CaptainPaymentsPage({
                             </span>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-4 text-sm">
-                            <span className="text-white/60">Outstanding</span>
+                            <span className="font-semibold text-white">Remaining due to SIXFL</span>
                             <span
                               className={
                                 entry.outstandingPence > 0

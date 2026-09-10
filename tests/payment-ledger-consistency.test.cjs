@@ -258,3 +258,15 @@ test('history and fixture detail use the same classification; no old local playe
 
 // Related admin history consumers must use the same receipt provenance.
 require("./payment-receipt-admin.test.cjs");
+
+test('legible player columns retain captain receipts, player debt and the canonical equation separately',async()=>{
+  const html=await renderPage();
+  assert.match(html,/Payments for Test team/);
+  assert.match(html,/data-readable-player-payments/);
+  assert.match(html,/Applied to fixture/);
+  assert.match(html,/Paid to captain/);
+  assert.match(html,/Player still owes/);
+  assert.match(html,/£40.00 − £37.00 = £3.00/);
+  assert.match(html,/Total applied from players and adjustments/);
+  assert.doesNotMatch(html,/Contribution to fixture/);
+});
