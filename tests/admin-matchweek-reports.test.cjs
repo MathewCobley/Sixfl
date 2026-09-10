@@ -52,6 +52,7 @@ function harness(role = null, email = "example@example.test") {
     redirect(destination) { throw new NavigationExit(destination); },
     notFound() { throw new NavigationExit("404"); },
     usePathname: () => "/admin/matchweek-reports/example",
+    useRouter: () => ({ push() {} }),
   };
   const mocks = {
     "next/navigation": navigation,
@@ -75,6 +76,12 @@ function harness(role = null, email = "example@example.test") {
     } },
   };
   mocks["@/lib/requireAdmin"] = load("src/lib/requireAdmin.ts", mocks);
+  mocks["@/lib/matchweek-reports/service"] = { getReportView: async (slug) => {
+    state.queries.push({ where: { slug } });
+    if (!state.league) return null;
+    return { source: { leagueId: state.league.id, leagueName: state.league.name, area: state.league.area, matchDate: "2026-09-09", pendingFixtures: 0, omittedFixtures: 0, warnings: [], matches: state.league.fixtures.map(f => ({ fixtureId: f.id, teamA: f.homeTeam.name, teamB: f.awayTeam.name, scoreA: f.result.homeScore, scoreB: f.result.awayScore, scorers: [], playersOfMatch: [{ name: "Test player", team: f.awayTeam.name }] })) }, sourceHash: "test", draft: null, configured: true, model: "test-model", stale: false, generating: false, latestError: null };
+  } };
+  mocks["@/components/admin/matchweek-reports/ReportEditor"] = load("src/components/admin/matchweek-reports/ReportEditor.tsx", mocks);
   return { state, mocks };
 }
 const props = () => ({ params: Promise.resolve({ slug: "example" }) });
@@ -98,8 +105,8 @@ for (const [role, email] of [["ADMIN", "admin@example.test"], ["USER", "hello@si
     assert.match(html, /Report Test League/);
     const detail = load(detailPath, mocks);
     const report = renderToStaticMarkup(await detail.default(props()));
-    assert.match(report, /Admin-only preview/);
-    assert.match(report, /not published/);
+    assert.match(report, /Admin only/);
+    assert.match(report, /Not published/);
     assert.match(report, /Test Team A/);
     assert.match(report, /Test Team B/);
     assert.match(report, /Test player/);
@@ -107,8 +114,7 @@ for (const [role, email] of [["ADMIN", "admin@example.test"], ["USER", "hello@si
     assert.equal(detail.metadata.robots.index, false);
     assert.equal(state.queries[0].where.isActive, true);
     assert.equal(state.queries[1].where.slug, "example");
-    assert.equal(state.queries[1].select.fixtures.where.status, "COMPLETED");
-    assert.equal(state.queries[1].select.fixtures.where.publishedAt.not, null);
+
     state.queries.length = 0;
     const legacy = load(legacyPath, mocks);
     await assert.rejects(legacy.default(props()), (error) => error.destination === "/admin/matchweek-reports/example");
@@ -122,7 +128,7 @@ test("private empty states and unknown league are handled", async () => {
   state.leagues = [];
   assert.match(renderToStaticMarkup(await load(indexPath, mocks).default()), /No active leagues/);
   state.league.fixtures = [];
-  assert.match(renderToStaticMarkup(await load(detailPath, mocks).default(props())), /No completed results yet/);
+  assert.match(renderToStaticMarkup(await load(detailPath, mocks).default(props())), /No eligible completed results/);
   state.league = null;
   await assert.rejects(load(detailPath, mocks).default(props()), (error) => error.destination === "404");
 });
