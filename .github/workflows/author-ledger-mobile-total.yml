@@ -1,0 +1,37 @@
+name: Keep mobile ledger total together
+on:
+  push:
+    branches: [fix/consistent-player-fixture-ledger]
+    paths: [.github/workflows/author-ledger-mobile-total.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.ref == 'refs/heads/fix/consistent-player-fixture-ledger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply the visual-review correction to the owned React subtotal
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/captain/team/[teamid]/payments/page.tsx');s=p.read_text()
+          old='<span>Total player contributions shown</span><span>{formatMoney(displayedPlayerTotalPence)}</span>'
+          new='<span className="min-w-0">Total player contributions shown</span><span className="shrink-0 whitespace-nowrap">{formatMoney(displayedPlayerTotalPence)}</span>'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          p=Path('tests/payment-ledger-consistency.browser.cjs');s=p.read_text()
+          old="      const row=page.locator('[data-player-contribution-pence]').nth(3);"
+          new="      const subtotalAmount=page.locator('[data-player-contributions-total] > span').last();\n      assert.equal(await subtotalAmount.evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap','Currency total must not split across lines');\n"+old
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          git diff --check
+          git diff
+          test "$GITHUB_REF" = refs/heads/fix/consistent-player-fixture-ledger
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add 'src/app/captain/team/[teamid]/payments/page.tsx' tests/payment-ledger-consistency.browser.cjs
+          git commit -m 'Prevent the player contribution subtotal from splitting its currency digits on mobile'
+          git push origin HEAD:refs/heads/fix/consistent-player-fixture-ledger
