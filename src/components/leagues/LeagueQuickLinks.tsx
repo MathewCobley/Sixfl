@@ -19,7 +19,6 @@ export default function LeagueQuickLinks({
     { href: `/leagues/${slug}/fixtures`, label: "Fixtures" },
     { href: `/leagues/${slug}/results`, label: "Results" },
     { href: `/leagues/${slug}/stats`, label: "Stats" },
-    { href: `/leagues/${slug}/weekly-report`, label: "Matchweek Report" },
   ];
 
   return (

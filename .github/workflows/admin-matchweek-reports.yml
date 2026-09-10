@@ -1,0 +1,32 @@
+name: Admin-only matchweek reports
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Find existing report routes and shared navigation
+        run: git grep -l -i -E 'weekly-report|matchweek.?report|LeagueQuickLinks' HEAD^ -- src scripts || true
+      - run: npm ci
+      - name: Test native report privacy and navigation
+        run: node --test tests/admin-matchweek-reports.test.cjs
+      - run: npm run prebuild
+      - name: Test final production-prepared report privacy and navigation
+        run: node --test tests/admin-matchweek-reports.test.cjs
+      - name: Search final source for report routes and navigation
+        run: git grep -l -i -E 'weekly-report|matchweek.?report|LeagueQuickLinks' -- src scripts
