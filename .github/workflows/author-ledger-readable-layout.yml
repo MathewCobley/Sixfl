@@ -1,0 +1,83 @@
+name: Prepare native legible payment ledger
+on:
+  push:
+    branches: [fix/receipt-classification-and-balance-reconciliation]
+    paths: [.github/workflows/author-ledger-readable-layout.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update native owning page and regression cases only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(s,old,new):
+              assert s.count(old)==1,(old[:100],s.count(old))
+              return s.replace(old,new,1)
+          p=Path('src/app/captain/team/[teamid]/payments/page.tsx');s=p.read_text()
+          s=once(s,'import { PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation }','import { PlayerContributionTable, PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation }')
+          s=once(s,'      captainReceivedPence: number;\n      statusLabel:', '      captainReceivedPence: number;\n      receivedPence: number;\n      adjustmentPence: number;\n      statusLabel:')
+          s=once(s,'      captainReceivedPence: display.captainReceivedPence,', '      captainReceivedPence: display.captainReceivedPence,\n      receivedPence: display.receivedPence,\n      adjustmentPence: display.adjustmentPence,')
+          start=s.index('                        <div className="mt-4 overflow-hidden',s.index('{playerCollectionDetails.length > 0 ? ('))
+          end=s.index('                          <PlayerCollectionReconciliation',start)
+          s=s[:start]+'                        <div className="min-w-0">\n                          <PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} />\n'+s[end:]
+          s=once(s,'                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">','                  <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)] xl:items-start">')
+          s=once(s,'                    <div className="flex flex-col gap-3 lg:items-end">','                    <div className="flex min-w-0 flex-col gap-3">')
+          s=once(s,'            Team payment ledger\n          </h2>', '            Payments for {team.name}\n          </h2>')
+          s=once(s,'                          {entry.title}\n                        </div>', '                          {entry.fixtureId ? entry.fixtureLabel : entry.title}\n                        </div>')
+          s=once(s,'                      <div className="mt-2 text-sm text-emerald-100/75">\n                        {entry.fixtureLabel}\n                      </div>\n\n','')
+          a=s.index('                          {!isKitCharge ? (',s.index('data-current-settlement'))
+          b=s.index('                          ) : null}',a)
+          group=s[a:b]
+          row_start=group.index('                            <div data-player-settled-pence=')
+          row_end=group.index('</div>',row_start)+len('</div>')
+          group=group[:row_start]+group[row_end:]
+          group=once(group,'<>','<div aria-label="Player shares settled" data-player-settled-pence={playerSettledPence} className="space-y-2">')
+          group=once(group,'</>','</div>')
+          s=s[:a]+group+s[b:]
+          s=once(s,'<span>{isKitCharge ? "Paid" : "Team paid"}</span>','<span>{isKitCharge ? "Paid" : "Direct team payments"}</span>')
+          s=once(s,'<span className="text-white/60">Outstanding</span>','<span className="font-semibold text-white">Remaining due to SIXFL</span>')
+          equation='\n'.join([
+            '                        {entry.amountPence - totalAppliedPence === entry.outstandingPence ? (',
+            '                          <p data-fixture-equation className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-center text-base font-semibold tabular-nums text-white">',
+            '                            {formatMoney(entry.amountPence)} − {formatMoney(totalAppliedPence)} = {formatMoney(entry.outstandingPence)}',
+            '                            <span className="mt-1 block text-xs font-normal text-white/65">Charge − amount applied = remaining</span>',
+            '                          </p>',
+            '                        ) : null}', '',
+          ])
+          s=once(s,'                        {entry.settledPence > totalAppliedPence ? (',equation+'                        {entry.settledPence > totalAppliedPence ? (')
+          p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.browser.cjs');s=p.read_text()
+          old=r'assert.match(await row.innerText(),/£8.00[\s\S]*Contribution to fixture[\s\S]*£5.00 received online \+ £3.00 SIXFL adjustment/);'
+          new=r'assert.match(await row.innerText(),/£8.00[\s\S]*£5.00 received \+ £3.00 adjustment/);'
+          s=once(s,old,new)
+          s=once(s,"      const row=page.locator('[data-player-contribution-pence]').nth(3);", "      assert.match(await page.locator('[data-readable-player-payments]').innerText(),/Paid to captain/);\n      assert.equal(await page.locator('[data-fixture-equation]').count(),1);\n      const row=page.locator('[data-player-contribution-pence]').nth(3);")
+          p.write_text(s)
+          p=Path('tests/payment-ledger-consistency.test.cjs');s=p.read_text()
+          s+='\n'+ '\n'.join([
+            "test('legible player columns retain captain receipts, player debt and the canonical equation separately',async()=>{",
+            '  const html=await renderPage();',
+            '  assert.match(html,/Payments for Test team/);',
+            '  assert.match(html,/data-readable-player-payments/);',
+            '  assert.match(html,/Applied to fixture/);',
+            '  assert.match(html,/Paid to captain/);',
+            '  assert.match(html,/Player still owes/);',
+            '  assert.match(html,/£40.00 − £37.00 = £3.00/);',
+            '  assert.match(html,/Total applied from players and adjustments/);',
+            '  assert.doesNotMatch(html,/Contribution to fixture/);',
+            '});', '',
+          ])
+          p.write_text(s)
+          p=Path('docs/critical-feature-contracts.md');s=p.read_text();s+='\nThe legible ledger uses explicit Applied to fixture, Paid to captain and Player still owes columns from the same canonical player display object. The fixture equation uses the canonical charge, applied amount and remaining balance. Team identity is named in the page heading. Receipt history is collapsed and marked already included. Desktop and mobile tests preserve 8 = 5 + 3 and keep all payment controls and read-only provenance checks.\n';p.write_text(s)
+          PY
+          git diff --check
+          test "$GITHUB_REF" = refs/heads/fix/receipt-classification-and-balance-reconciliation
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src tests docs
+          git commit -m 'Make team ledger readable with separate captain and player amounts and one balance equation'
+          git push origin HEAD:refs/heads/fix/receipt-classification-and-balance-reconciliation
