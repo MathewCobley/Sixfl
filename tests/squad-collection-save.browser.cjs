@@ -40,6 +40,9 @@ for(const width of [1440,390])test(`real owning form at ${width}px: zero default
   // An invalid required default is explained by Save, never a silent browser block.
   await page.getByLabel('Amount for Player 8',{exact:true}).fill('');await page.getByRole('button',{name:'Save player collection',exact:true}).click();await page.getByRole('alert').filter({hasText:/positive default/}).waitFor();assert.equal(await page.evaluate(()=>window.calls.length),1);
   await page.getByLabel('Amount for Player 8',{exact:true}).fill('5.001');await defaultField.fill('5');await page.getByRole('button',{name:'Save player collection',exact:true}).click();await page.getByRole('alert').filter({hasText:/fractions of a penny/}).waitFor();assert.equal(await page.evaluate(()=>window.calls.length),1);
+  // Invalid number text must not be silently emptied by the browser and fall back to the default.
+  await page.getByLabel('Amount for Player 8',{exact:true}).fill('oops');await page.getByRole('button',{name:'Save player collection',exact:true}).click();await page.getByRole('alert').filter({hasText:/fractions of a penny/}).waitFor();assert.equal(await page.evaluate(()=>window.calls.length),1);
+  assert.equal(await page.getByLabel('Amount for Player 8',{exact:true}).inputValue(),'oops');
   // Defaults/unselected controls are irrelevant if every selected amount is explicit.
   await page.getByLabel('Amount for Player 8',{exact:true}).fill('5.00');await defaultField.fill('');await page.getByLabel('Amount for No charge player',{exact:true}).fill('-12');await page.evaluate(()=>window.mode='reject');
   await page.getByRole('button',{name:'Save player collection',exact:true}).click();await page.getByRole('alert').filter({hasText:/Synthetic server rejection/}).waitFor();assert.equal(await page.evaluate(()=>window.calls.length),2);assert.equal(await defaultField.inputValue(),'');assert.equal(await page.getByLabel('Amount for Player 8',{exact:true}).inputValue(),'5.00');

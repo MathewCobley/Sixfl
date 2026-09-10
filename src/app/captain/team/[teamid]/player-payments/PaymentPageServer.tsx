@@ -716,11 +716,10 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                   </span>
                   <input
                     id="amount"
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     name="amount"
                     aria-describedby="collection-default-help"
-                    min="0.01"
-                    step="0.01"
                     defaultValue={(defaultAmount / 100).toFixed(2)}
                     className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 pl-8 text-white outline-none focus:border-emerald-400/40"
                   />
@@ -770,12 +769,11 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                             £
                           </span>
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             name={amountName}
                             aria-label={`Amount for ${player.label}`}
                             disabled={ledgerControlled}
-                            min="0"
-                            step="0.01"
                             defaultValue={
                               player.fee
                                 ? (player.fee.amountPence / 100).toFixed(2)
