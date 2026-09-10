@@ -1,0 +1,77 @@
+name: Squad collection save regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: squad-collection-save-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  collection-save:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-squad-form-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Native server action, validation and acknowledgement tests
+        run: node --test tests/squad-collection-save.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Production-prepared server action and unchanged protections
+        run: node --test tests/squad-collection-save.test.cjs
+      - name: Original-bug negative control
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/app/captain/team/[teamid]/player-payments/actions.ts');s=p.read_text()
+          anchor='  const amountError = validateSquadCollectionAmounts(formData);'
+          assert s.count(anchor)==1
+          try:
+            p.write_text(s.replace(anchor,'  if (!defaultAmountPence) redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_amount"));\n'+anchor))
+            r=subprocess.run(['node','--test','tests/squad-collection-save.test.cjs'],capture_output=True,text=True)
+            assert r.returncode!=0 and 'not ok' in r.stdout, 'Original zero-default defect was not caught'
+            print('Original zero-default save defect detected by real action tests')
+          finally:
+            p.write_text(s)
+          PY
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: node scripts/check-standard-team-player-payment-links.mjs
+      - run: npm run audit:dom
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Desktop/mobile browser on actual prepared form inputs, no provider calls
+        run: |
+          npm install --prefix /tmp/squad-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/squad-browser/node_modules/.bin/playwright install --with-deps chromium
+          SQUAD_PLAYWRIGHT_MODULE=/tmp/squad-browser/node_modules/playwright node --test tests/squad-collection-save.browser.cjs
+      - name: Capture prepared-source verification
+        if: always()
+        run: |
+          mkdir -p .tmp/squad-save
+          tar -czf .tmp/squad-save/prepared.tgz src/lib/payments/squad-collection-form.ts src/components/payments/SquadPaymentCollectionForm.tsx 'src/app/captain/team/[teamid]/player-payments' tests/squad-collection-save.*
+          git diff -- 'src/app/captain/team/[teamid]/player-payments' > .tmp/squad-save/prepared-diff.txt
+          git grep -nE 'Save player collection|saveCaptainSquadPaymentCollectionWithFeedback|validateSquadCollectionAmounts|getInitialCollectionDefaultPence' -- src > .tmp/squad-save/source-inventory.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: squad-collection-save-verification
+          path: .tmp/squad-save
+          retention-days: 7
