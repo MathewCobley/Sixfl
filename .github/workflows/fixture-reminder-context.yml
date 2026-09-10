@@ -1,0 +1,73 @@
+name: Fixture reminder context
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fixture-reminder-context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_fixture_reminder_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_fixture_reminder_test
+      FIXTURE_TEMPLATE_TEST_DB: '1'
+      NEXTAUTH_SECRET: fixture-reminder-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_fixture_reminder_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      CRON_SECRET: fixture-reminder-ci-unused
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Real native sender, renderer and publish paths
+        run: node --test tests/fixture-reminder-context.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Final production-prepared sender, renderer, publishing and migration contracts
+        run: node --test tests/fixture-reminder-context.test.cjs tests/fixture-fee-inheritance.test.cjs
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npm run audit:dom
+      - name: Prove the original lost-field regression is detected
+        run: |
+          python3 - <<'PY'
+          import re, subprocess
+          from pathlib import Path
+          p=Path('src/lib/payments/fixture-match-fees.ts'); original=p.read_text()
+          broken, count=re.subn(r'^\s*reminderIntro: await getFixtureMatchFeeReminderIntro[^\n]*\n','\n',original,flags=re.M)
+          assert count==2
+          try:
+              p.write_text(broken)
+              result=subprocess.run(['node','--test','tests/fixture-reminder-context.test.cjs'],capture_output=True,text=True)
+              assert result.returncode!=0, 'Missing context was not detected'
+              assert 'unresolved template fields: reminderIntro' in result.stdout+result.stderr, 'Negative control failed for an unrelated reason'
+              print('Original missing reminderIntro regression reproduced and detected by real sender/renderer tests')
+          finally:
+              p.write_text(original)
+          PY
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Final source review and guard checks
+        run: |
+          test ! -f .github/workflows/inspect-fixture-reminder.yml
+          test ! -f .github/workflows/author-fixture-reminder-fix.yml
+          git grep -nE 'reminderIntro|queueFixtureMatchFeeEmails' -- src/lib/payments/fixture-match-fees.ts 'src/app/(admin)/admin/fixtures' src/app/api/admin/fixtures src/app/api/admin/night-board/update-match/route.ts
+          node --test tests/fixture-reminder-context.test.cjs
