@@ -1,3 +1,4 @@
+import { getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
 import { getPlayerPaymentDisplay } from "@/lib/payments/player-payment-display";
 // ========================================
 // File: src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx
@@ -426,7 +427,8 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;
   const directPaidPence = selectedEntry?.directPaidPence ?? 0;
   const collectedPence = selectedEntry?.playerPaidPence ?? 0;
-  const captainSettledPence = collectedPence + zeroFeeSettledPence;
+  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: 0, playerSubsidyPence: 0 });
+  const captainSettledPence = playerSettlement.totalPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
   const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;
   const savedMessage = messageForSaved(sp.saved, sp.emailsQueued);
@@ -447,7 +449,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
 
   if (selectedEntry && stillToCoverPence <= 0) {
     summaryTitle = "This fixture fee is fully covered.";
-    summaryText = `${formatMoney(selectedEntry.amountPence)} has been covered: ${formatMoney(directPaidPence)} paid directly by the team and ${formatMoney(captainSettledPence)} of player shares settled.`;
+    summaryText = `${getCurrentSettlementText(selectedEntry)} Player contributions: ${playerSettlement.detail}. Any direct team payments, credit or waivers are included in the team ledger.`;
   } else if (selectedEntry && !hasPlayerCollection) {
     summaryTitle = "No player collection has been set up yet.";
     summaryText = `The fixture fee is ${formatMoney(selectedEntry.amountPence)}. No amounts have been assigned to players and no player payment requests have been created. The team balance is currently ${formatMoney(stillToCoverPence)}.`;
@@ -542,7 +544,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           {
             label: "Player shares settled",
             value: formatMoney(captainSettledPence),
-            text: `${selectedSettledPlayerCount} player share${selectedSettledPlayerCount === 1 ? "" : "s"} settled.`,
+            text: playerSettlement.detail,
             tone: captainSettledPence > 0 ? ("emerald" as Tone) : ("white" as Tone),
           },
           {
@@ -602,7 +604,8 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
               const zeroFeeSettledPence = entry.fixtureId
                 ? zeroFeeSettledPenceByFixture.get(entry.fixtureId) ?? 0
                 : 0;
-              const captainPlayerSettledPence = entry.playerPaidPence + zeroFeeSettledPence;
+              const fixturePlayerSettlement = getPlayerSettlementBreakdown(entry);
+              const captainPlayerSettledPence = fixturePlayerSettlement.totalPence;
               const hasCollection = captainPlayerSettledPence > 0 || entry.playerOpenPence > 0;
               const badgeLabel =
                 entry.outstandingPence <= 0
@@ -643,6 +646,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     {hasCollection ? (
                       <>
                         <div>Player shares settled: {formatMoney(captainPlayerSettledPence)}</div>
+                        <div>{fixturePlayerSettlement.detail}</div>
                         <div>
                           Awaiting from players: {formatMoney(entry.playerOpenPence)}
                         </div>
