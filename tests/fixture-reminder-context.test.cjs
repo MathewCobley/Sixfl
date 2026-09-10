@@ -62,6 +62,7 @@ function harness() {
       update:async({where,data})=>{const row=dispatches.find(d=>d.id===where.id);Object.assign(row,data);return row;},
     },
     league:{findUnique:async()=>league},leagueDivision:{findFirst:async()=>({id:'division'})},
+    team:{findMany:async({select})=>teams.map(row=>project(row,select))},
     fixture:{
       findUnique:async({where,select})=>project(matches(fixture,where)?fixture:null,select),
       findMany:async({where,select})=>matches(fixture,where)?[project(fixture,select)]:[],
@@ -81,8 +82,11 @@ function harness() {
     'next/navigation':{redirect:url=>{const e=new Error('TEST_REDIRECT');e.url=url;throw e;}},
     '@/lib/resend/client':{getEmailReplyDomain:()=> 'replies.example.invalid'},
     '@/lib/stripe/client':{getPublicSiteUrl:()=> 'https://example.invalid'},
-    '@/lib/datetime/london':{formatDateTimeInLondon:()=> 'Test date'},
+    '@/lib/datetime/london':{formatDateTimeInLondon:()=> 'Test date',formatTimeInLondon:()=> '15:00',getLondonMinutesSinceMidnight:()=>900},
     '@/lib/payments/match-day-billing':{getMatchFeePaymentRequestScheduledFor:kickoff=>new Date(kickoff.getTime()-3600000)},
+    // Existing production preparation adds prediction and kick-off validation.
+    // Keep the real kick-off rule below, but isolate unrelated prediction I/O.
+    '@/lib/fixtures/storedAiPredictions':{refreshStoredAiPreviewForFixture:async()=>{},refreshStoredAiPreviewsForLeague:async()=>{}},
     '@/lib/teams/fixture-placeholders':{getFixturePlaceholderTeamIds:async()=>new Set()},
     '@/lib/notifications/team-contacts':{upsertTeamNotificationRecipient:async id=>({recipient:recipient(id),snapshot:{primaryContact:{name:'Test captain'}}})},
     '@/lib/fixtures/publishing':{getUnpublishedFixtureBlockReason:async()=>fixture.publishedAt?null:'Unpublished'},
@@ -92,7 +96,7 @@ function harness() {
     '@/lib/notifications/sms-short-links':{shortenSmsBodyLinks:({bodyText})=>({bodyText,links:[]})},
   };
   const allowed=new Set([feePath,batchPath,singlePath,'src/lib/notifications/service.ts','src/lib/notifications/renderer.ts','src/lib/payments/charge-status.ts','src/lib/payments/fixture-fee-policy.ts',
-    'src/lib/email/buildEmail.ts','src/lib/email/footer.ts','src/lib/email/inline-formatting.ts','src/lib/email/template-cta.ts']);
+    'src/lib/fixtures/kickoff-window.ts','src/lib/email/buildEmail.ts','src/lib/email/footer.ts','src/lib/email/inline-formatting.ts','src/lib/email/template-cta.ts']);
   const cache=new Map();
   function load(file) {
     if(!file.endsWith('.ts'))file+='.ts'; assert.ok(allowed.has(file),`Unexpected module ${file}`);

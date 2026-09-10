@@ -41,6 +41,7 @@ jobs:
       - name: Real native sender, renderer and publish paths
         run: node --test tests/fixture-reminder-context.test.cjs
       - run: npm run prebuild
+      - run: npx prisma generate
       - name: Final production-prepared sender, renderer, publishing and migration contracts
         run: node --test tests/fixture-reminder-context.test.cjs tests/fixture-fee-inheritance.test.cjs
       - run: node scripts/check-critical-feature-contracts.mjs
