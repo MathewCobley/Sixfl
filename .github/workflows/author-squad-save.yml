@@ -1,0 +1,47 @@
+name: Author native squad collection save fix
+on:
+  push:
+    branches: [fix/squad-collection-save-feedback]
+    paths: [.github/workflows/author-squad-save.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/squad-collection-save-feedback
+      - name: Implement native amount validation and owning form feedback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');s=p.read_text()
+          s='import SquadPaymentCollectionForm from "@/components/payments/SquadPaymentCollectionForm";\nimport { getInitialCollectionDefaultPence } from "@/lib/payments/squad-collection-form";\nimport { saveCaptainSquadPaymentCollectionWithFeedback } from "./collection-feedback-action";\n'+s
+          def once(s,old,new):
+            assert s.count(old)==1, old
+            return s.replace(old,new)
+          s=once(s,'  const defaultAmount =\n    currentTeamFees.find((fee) => fee.status !== "PAID")?.amountPence ?? 400;','  const defaultAmount = getInitialCollectionDefaultPence(currentTeamFees);')
+          s=once(s,'            <form\n              action={createCaptainSquadPaymentCollectionAction}\n              className="mt-5 space-y-5"\n            >','            <SquadPaymentCollectionForm\n              key={selectedFixture.id}\n              action={createCaptainSquadPaymentCollectionAction}\n              saveAction={saveCaptainSquadPaymentCollectionWithFeedback}\n              reviewHref={`/captain/team/${team.id}/player-payments?fixtureId=${selectedFixture.id}`}\n              className="mt-5 space-y-5"\n            >')
+          s=once(s,'              <button\n                type="submit"\n                className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300"\n              >\n                Save player collection\n              </button>\n            </form>','            </SquadPaymentCollectionForm>')
+          old='                  Default amount per player\n                </label>'
+          s=once(s,old,old+'\n                <p id="collection-default-help" className="mt-1 text-xs text-white/55">\n                  Only used for selected players whose individual amount is blank.\n                </p>')
+          s=once(s,'                    name="amount"\n                    min="0.01"','                    name="amount"\n                    aria-describedby="collection-default-help"\n                    min="0.01"')
+          s=once(s,'                            name={amountName}\n                            disabled={ledgerControlled}','                            name={amountName}\n                            aria-label={`Amount for ${player.label}`}\n                            disabled={ledgerControlled}')
+          p.write_text(s)
+          p=Path('src/app/captain/team/[teamid]/player-payments/actions.ts');s=p.read_text()
+          s=once(s,'import { revalidatePath } from "next/cache";','import { parseSquadCollectionAmount, validateSquadCollectionAmounts } from "@/lib/payments/squad-collection-form";\nimport { revalidatePath } from "next/cache";')
+          start=s.index('function parseAmountPence(');end=s.index('\nfunction formatMoney(',start)
+          s=s[:start]+'function parseAmountPence(value: string, options?: { allowZero?: boolean }) {\n  return parseSquadCollectionAmount(value, options?.allowZero);\n}\n'+s[end:]
+          s=once(s,'  defaultAmountPence: number;','  defaultAmountPence: number | null;')
+          s=once(s,'  if (!defaultAmountPence) {\n    redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=invalid_amount"));\n  }','  // Validate every selected amount before any collection write. A default is\n  // required only for blank individual amounts, not for eight explicit £5 shares.\n  const amountError = validateSquadCollectionAmounts(formData);\n  if (amountError) {\n    redirect(getPlayerPaymentsPath(teamId, fixtureId, `&error=${amountError.code}`));\n  }')
+          p.write_text(s)
+          PY
+          git rm .github/workflows/author-squad-save.yml .github/workflows/squad-save-investigation.yml
+          git add 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' 'src/app/captain/team/[teamid]/player-payments/actions.ts'
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Fix native squad collection default validation and connect local save feedback'
+          git push origin HEAD:fix/squad-collection-save-feedback
