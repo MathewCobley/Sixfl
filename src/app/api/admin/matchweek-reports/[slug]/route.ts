@@ -29,7 +29,15 @@ export async function POST(request: NextRequest, context: Context) {
     for (const url of [process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_APP_URL]) {
       try { if (url) allowed.add(new URL(url).origin); } catch { /* Ignore invalid configured origins. */ }
     }
-    if (!allowed.has(request.headers.get("origin") || "") || request.headers.get("x-sixfl-report") !== "1" || !request.headers.get("content-type")?.includes("application/json")) throw new ReportError("This request is not allowed. Reload the report page.", 403);
+    // Railway can expose its internal HTTP URL here. Match the actual forwarded
+    // browser host too, as in SIXFL's existing authenticated JSON mutation routes.
+    const hosts = [request.nextUrl.host, request.headers.get("host"), request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()];
+    let sameOrigin = false;
+    try {
+      const origin = new URL(request.headers.get("origin") || "");
+      sameOrigin = ["http:", "https:"].includes(origin.protocol) && (allowed.has(origin.origin) || hosts.includes(origin.host));
+    } catch { /* Deny missing or malformed origins. */ }
+    if (!sameOrigin || request.headers.get("sec-fetch-site") === "cross-site" || request.headers.get("x-sixfl-report") !== "1" || !request.headers.get("content-type")?.includes("application/json")) throw new ReportError("This request is not allowed. Reload the report page.", 403);
     const text = await request.text();
     if (text.length > 100000) throw new ReportError("The report is too long.", 413);
     let body: Record<string, unknown>;
