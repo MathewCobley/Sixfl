@@ -49,7 +49,7 @@ jobs:
             assert original.count(old)==1, label
             try:
               p.write_text(original.replace(old,new))
-              result=subprocess.run(['node','--test','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
+              result=subprocess.run(['node','--test','--test-reporter=tap','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
               assert result.returncode!=0, f'{label} was not detected'
               assert 'not ok' in result.stdout, f'{label} did not fail an assertion'
               print(f'Detected original regression: {label}')
@@ -69,8 +69,12 @@ jobs:
         run: |
           test ! -f .github/workflows/inspect-ledger-consistency.yml
           test ! -f .github/workflows/author-ledger-consistency.yml
-          git grep -nE 'fixtureContributionPence|getPlayerSettlementBreakdown|getChargeDescriptionForDisplay|getCurrentSettlementText' -- src > .tmp/ledger-consistency/source-inventory.txt
+          test ! -f .github/workflows/author-ledger-cap-compat.yml
+          test ! -f .github/workflows/author-ledger-compat.yml
+          test ! -f .github/workflows/author-ledger-source-only.yml
+          git grep -nE 'fixtureContributionPence|getPlayerSettlementBreakdown|getChargeDescriptionForDisplay|getCurrentSettlementText|Covered by player shares|Player shares settled|getPlayerPaymentDisplay' -- src > .tmp/ledger-consistency/source-inventory.txt
           git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts
+          git diff -- 'src/app/captain/team/[teamid]/payments/page.tsx' 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' > .tmp/ledger-consistency/prepared-page-diff.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
