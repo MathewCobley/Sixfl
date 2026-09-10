@@ -1,8 +1,11 @@
+import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE, PLAYER_LIMIT_RULES_EFFECTIVE_DATE, PLAYER_LIMIT_RULES_NEXT_REVIEW } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/lib/match-rules.ts
 // ========================================
 
-export const MATCH_RULES_VERSION = "Version 2.3 — September 2026";
+export const MATCH_RULES_VERSION = "Version 2.4 — September 2026";
+export const MATCH_RULES_EFFECTIVE_DATE = PLAYER_LIMIT_RULES_EFFECTIVE_DATE;
+export const MATCH_RULES_NEXT_REVIEW = PLAYER_LIMIT_RULES_NEXT_REVIEW;
 
 export type MatchRuleSection = {
   title: string;
@@ -39,13 +42,7 @@ export const matchRuleSections: MatchRuleSection[] = [
   },
   {
     title: "Players and Substitutes",
-    points: [
-      "There is no maximum registered squad size.",
-      "A maximum of nine players may take part for a team in any single fixture: six players on the pitch and up to three rolling substitutes.",
-      "Only six players may be on the pitch for a team at any one time. Fielding more than six players at any time may result in the fixture being forfeited and recorded as a 3–0 defeat, at SIXFL's discretion.",
-      "Every player who participates in the fixture, including any permitted guest player, counts towards the nine-player limit.",
-      "A team may only exceed the nine-player fixture limit with prior approval from SIXFL.",
-    ],
+    points: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],
   },
   {
     title: "Required Safety Equipment",

@@ -1,3 +1,4 @@
+import { archivedPlayerLimitRulesV23 } from "@/lib/archived-player-limit-rules-v2-3";
 // ========================================
 // File: src/lib/rules-archive.ts
 // ========================================
@@ -16,6 +17,7 @@ export type ArchivedRuleDocument = {
 };
 
 export const archivedRuleDocuments: ArchivedRuleDocument[] = [
+  ...archivedPlayerLimitRulesV23,
   {
     id: "league-rules-1-4",
     document: "League Rules",

@@ -1,17 +1,18 @@
+import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/app/(public)/match-rules/page.tsx
 // ========================================
 
 import Link from "next/link";
 
-import { MATCH_RULES_VERSION, matchRuleSections } from "@/lib/match-rules";
+import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE, MATCH_RULES_NEXT_REVIEW, matchRuleSections } from "@/lib/match-rules";
 
 const documentDetails = [
   { label: "Document", value: "Match Rules" },
   { label: "Version", value: MATCH_RULES_VERSION.replace("Version ", "") },
   { label: "Status", value: "Active" },
-  { label: "Effective", value: "22 August 2026" },
-  { label: "Next review", value: "22 August 2027" },
+  { label: "Effective", value: MATCH_RULES_EFFECTIVE_DATE },
+  { label: "Next review", value: MATCH_RULES_NEXT_REVIEW },
   { label: "Owner", value: "SIXFL League Operations" },
   { label: "Applies to", value: "All SIXFL matches and competitions" },
 ];
@@ -43,6 +44,9 @@ export default function MatchRulesPage() {
                 These match rules support fair play, safe match management and a
                 consistent experience across SIXFL fixtures. League administration,
                 payments and competition outcomes are governed by the League Rules.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-emerald-100">
+                {PLAYER_LIMIT_RULES_PUBLICATION_NOTE}
               </p>
             </div>
           </div>

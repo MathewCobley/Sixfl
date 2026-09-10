@@ -1,3 +1,4 @@
+import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/app/(public)/league-rules/page.tsx
 // ========================================
@@ -49,6 +50,9 @@ export default function LeagueRulesPage() {
                 Active rules are versioned and dated. SIXFL retains superseded
                 versions internally so the wording in force at an earlier date
                 can be identified.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-emerald-100">
+                {PLAYER_LIMIT_RULES_PUBLICATION_NOTE}
               </p>
             </div>
           </div>

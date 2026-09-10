@@ -1,3 +1,4 @@
+import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";
 // ========================================
 // File: src/app/(public)/referee/match-rules/page.tsx
 // ========================================
@@ -6,7 +7,7 @@ import Link from "next/link";
 
 import RefereeTabs from "@/components/referee/RefereeTabs";
 import { requireReferee } from "@/lib/admin";
-import { MATCH_RULES_VERSION, matchRuleSections } from "@/lib/match-rules";
+import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE, matchRuleSections } from "@/lib/match-rules";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -105,6 +106,8 @@ export default async function RefereeMatchRulesPage() {
               Referee match guide
             </h1>
             <p className="mt-2 text-sm text-white/45">{MATCH_RULES_VERSION}</p>
+            <p className="mt-2 text-sm text-white/60">Effective {MATCH_RULES_EFFECTIVE_DATE}</p>
+            <p className="mt-2 text-sm leading-6 text-white/60">{PLAYER_LIMIT_RULES_PUBLICATION_NOTE}</p>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
               A simple reference for how SIXFL matches should be run on the night. Keep the game moving, apply the same playing rules shown to teams, record scores clearly, and flag anything that needs admin review.
             </p>

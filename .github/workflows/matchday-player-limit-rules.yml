@@ -1,0 +1,149 @@
+name: Matchday player-limit rules
+on:
+  pull_request:
+    paths:
+      - 'src/lib/*rules*.ts'
+      - 'src/app/**/rules/**'
+      - 'src/app/**/league-rules/**'
+      - 'src/app/**/match-rules/**'
+      - 'src/app/**/rules-archive/**'
+      - 'src/app/**/guide/**'
+      - 'tests/matchday-player-limit-rules.test.cjs'
+      - '.github/workflows/matchday-player-limit-rules.yml'
+      - 'scripts/apply-rules-v2-hardening.cjs'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/*rules*.ts'
+      - 'src/app/**/rules/**'
+      - 'src/app/**/league-rules/**'
+      - 'src/app/**/match-rules/**'
+      - '.github/workflows/matchday-player-limit-rules.yml'
+permissions:
+  contents: read
+concurrency:
+  group: player-limit-rules-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-rule-render-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Native rules and six owning page renders
+        run: node --test --test-reporter=tap tests/matchday-player-limit-rules.test.cjs
+      - name: Preserve native source fingerprints
+        run: |
+          mkdir -p .tmp/player-limit-rules
+          sha256sum src/lib/matchday-player-limit-rules.ts src/lib/archived-player-limit-rules-v2-3.ts > .tmp/player-limit-rules/native-hashes.txt
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Prepared rules, archive integrity, six page renders and unchanged unrelated sections
+        run: PLAYER_LIMIT_PREPARED=1 node --test --test-reporter=tap tests/matchday-player-limit-rules.test.cjs
+      - name: Discretionary-forfeit negative control
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,re
+          p=Path('src/lib/matchday-player-limit-rules.ts');s=p.read_text()
+          try:
+            assert s.count('Either breach may result')==1
+            p.write_text(s.replace('Either breach may result','Either breach will result'))
+            r=subprocess.run(['node','--test','--test-reporter=tap','--test-name-pattern=either breach','tests/matchday-player-limit-rules.test.cjs'],capture_output=True,text=True)
+            print(r.stdout)
+            assert r.returncode!=0 and re.search(r'not ok \d+ - either breach',r.stdout)
+          finally:
+            p.write_text(s)
+          PY
+      - name: Check full production contracts and immutable shared/archive files
+        run: |
+          node scripts/check-critical-feature-contracts.mjs
+          sha256sum -c .tmp/player-limit-rules/native-hashes.txt
+          npm run audit:dom
+          if git grep -n 'Fielding more than six players at any time may result' -- src ':!src/lib/archived-*'; then
+            echo 'Stale six-only sanction remains outside the archive'; exit 1
+          fi
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Inspect actual rendered public rules at desktop and mobile sizes
+        run: |
+          npm install --prefix /tmp/rules-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/rules-browser/node_modules/.bin/playwright install --with-deps chromium
+          node <<'JS'
+          const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+          const {chromium}=require('/tmp/rules-browser/node_modules/playwright');
+          const files=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(path.join(d,e.name)):[path.join(d,e.name)]);
+          const css=files('.next/static').filter(f=>f.endsWith('.css')).map(f=>fs.readFileSync(f,'utf8')).join('\n');assert.ok(css.length);
+          (async()=>{const browser=await chromium.launch();try{for(const width of [1440,390])for(const label of ['league','match']){
+            const page=await browser.newPage({viewport:{width,height:1000}});await page.route('**/*',r=>r.abort());
+            const html=fs.readFileSync('.tmp/player-limit-rules/'+label+'.html','utf8');
+            await page.setContent('<!doctype html><html><head><style>'+css+'</style></head><body style="background:#07130f;color:white"><main style="max-width:1180px;margin:auto;padding:16px">'+html+'</main></body></html>');
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+            await page.getByRole('heading',{name:label==='league'?'4. Squad Size and Matchday Player Limit':'Players and Substitutes',exact:true}).scrollIntoViewIfNeeded();
+            await page.screenshot({path:'.tmp/player-limit-rules/'+label+'-'+width+'.png'});
+            await page.close();console.log(label+' rules render at '+width+'px without horizontal overflow');
+          }}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Capture prepared native sources and final search inventory
+        if: always()
+        run: |
+          mkdir -p .tmp/player-limit-rules
+          tar -czf .tmp/player-limit-rules/prepared-source.tgz src/lib/*rules*.ts 'src/app/(public)/league-rules/page.tsx' 'src/app/(public)/match-rules/page.tsx' 'src/app/(public)/referee/match-rules/page.tsx' 'src/app/(admin)/admin/rules-archive/page.tsx' 'src/app/captain/team/[teamid]/rules/page.tsx' 'src/app/captain/team/[teamid]/guide/page.tsx' tests/matchday-player-limit-rules.test.cjs scripts/apply-rules-v2-hardening.cjs
+          git grep -nE 'MATCHDAY_PLAYER_LIMIT|PLAYER_LIMIT_RULES|Fielding more than six players at any time may result' -- src > .tmp/player-limit-rules/source-inventory.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-limit-rules-verification
+          path: .tmp/player-limit-rules
+          retention-days: 7
+  live-publication:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the published public rule pages (anonymous read-only GET)
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request,re,html,os
+          from pathlib import Path
+          shared=Path('src/lib/matchday-player-limit-rules.ts').read_text()
+          note=re.search(r'PLAYER_LIMIT_RULES_PUBLICATION_NOTE = "([^"]+)"',shared).group(1)
+          expected={'/league-rules':['nine different players across the whole fixture','Either breach may result','reasonable opportunity to respond',note],'/match-rules':['nine different players across the whole fixture','section 4 of the League Rules',note]}
+          for attempt in range(30):
+            results=[]
+            for route,phrases in expected.items():
+              try:
+                url='https://sixfl.co.uk'+route+'?rules_revision='+os.environ['GITHUB_SHA']
+                req=urllib.request.Request(url,headers={'User-Agent':'SIXFL-rules-release-verification','Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=12) as response: raw=response.read().decode();status=response.status
+                text=html.unescape(re.sub('<[^>]+>',' ',raw));text=re.sub(r'\s+',' ',text)
+                ok=status==200 and all(p in text for p in phrases)
+                results.append({'route':route,'httpStatus':status,'matches':ok,'checkedAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())})
+              except Exception as e: results.append({'route':route,'matches':False,'error':str(e)})
+            if all(r['matches'] for r in results):
+              Path('live-rule-pages.json').write_text(json.dumps({'revision':os.environ['GITHUB_SHA'],'checks':results},indent=2));print(json.dumps(results));break
+            print('Awaiting publication:',json.dumps(results),flush=True);time.sleep(15)
+          else: raise SystemExit('New rule wording not yet verified on both live pages')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-rule-pages
+          path: live-rule-pages.json
+          retention-days: 7
