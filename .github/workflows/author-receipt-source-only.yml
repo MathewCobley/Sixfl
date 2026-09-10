@@ -1,0 +1,34 @@
+name: Prepare native receipt sources only
+on:
+  push:
+    branches: [fix/receipt-classification-and-balance-reconciliation]
+    paths: [.github/workflows/author-receipt-source-only.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply previously reviewed native edits only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          lines=Path('.github/workflows/author-receipt-reconciliation.yml').read_text().splitlines()
+          start=lines.index("          python3 - <<'PY'")+1
+          end=lines.index('          PY',start)
+          source='\n'.join(line[10:] if line.startswith('          ') else line for line in lines[start:end])
+          exec(compile(source,'reviewed-receipt-authoring','exec'))
+          PY
+          # Workflow updates use the owner's GitHub connector separately. The
+          # repository Actions token is intentionally not granted that permission.
+          git restore .github/workflows/payment-ledger-consistency.yml
+          git diff --check
+          git diff --stat
+          test "$GITHUB_REF" = refs/heads/fix/receipt-classification-and-balance-reconciliation
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src scripts tests docs
+          git commit -m 'Use canonical receipt classification and reconcile visible captain/player/team balances'
+          git push origin HEAD:refs/heads/fix/receipt-classification-and-balance-reconciliation
