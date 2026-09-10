@@ -24,6 +24,8 @@ test('actual prepared page markup and production CSS reconcile at desktop and mo
       assert.doesNotMatch(await page.locator('body').innerText(),/Covered by player shares totalling/);
       const overflow=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:innerWidth}));
       assert.ok(overflow.document<=overflow.viewport+1,`Ledger overflows at ${width}: ${JSON.stringify(overflow)}`);
+      const subtotalAmount=page.locator('[data-player-contributions-total] > span').last();
+      assert.equal(await subtotalAmount.evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap','Currency total must not split across lines');
       const row=page.locator('[data-player-contribution-pence]').nth(3);
       assert.match(await row.innerText(),/£8.00[\s\S]*Contribution to fixture[\s\S]*£5.00 received online \+ £3.00 SIXFL adjustment/);
       await page.screenshot({path:path.join(out,`ledger-${width}.png`),fullPage:true});

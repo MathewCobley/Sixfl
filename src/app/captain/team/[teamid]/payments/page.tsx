@@ -969,7 +969,7 @@ export default async function CaptainPaymentsPage({
                             ))}
                           </div>
                           <div data-player-contributions-total={displayedPlayerTotalPence} className="flex items-center justify-between gap-4 border-t border-white/10 px-3 py-3 text-sm font-semibold text-white">
-                            <span>Total player contributions shown</span><span>{formatMoney(displayedPlayerTotalPence)}</span>
+                            <span className="min-w-0">Total player contributions shown</span><span className="shrink-0 whitespace-nowrap">{formatMoney(displayedPlayerTotalPence)}</span>
                           </div>
                           {displayedPlayerTotalPence !== playerSettledPence ? (
                             <p role="status" className="px-3 pb-3 text-xs text-amber-100">The player rows total {formatMoney(displayedPlayerTotalPence)}, but the fixture ledger records {formatMoney(playerSettledPence)} from players and adjustments. SIXFL needs to review the linked records; no balancing adjustment has been assumed.</p>
