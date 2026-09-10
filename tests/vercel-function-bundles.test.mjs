@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkFunctionBundles, FUNCTION_BUDGET_BYTES } from '../scripts/check-vercel-function-bundles.mjs';
+import { execFileSync } from 'node:child_process';
+import { checkFunctionBundles, inspectFunction, FUNCTION_BUDGET_BYTES } from '../scripts/check-vercel-function-bundles.mjs';
 
 function fixture(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sixfl-bundle-'));
@@ -35,12 +36,39 @@ test('public kit images cannot be accidentally reintroduced to logo function pac
   fs.writeFileSync(path.join(directory, 'public/Kits/test.jpg'), 'artwork');
   assert.match(checkFunctionBundles(root).failures[0].forbidden[0], /public\/Kits/);
 }));
-test('symlink targets and duplicate packaged names are measured, not symlink lengths', () => fixture((root, directory) => {
+test('external source links are conservatively materialised; cycles fail closed', () => fixture((root, directory) => {
   const target = path.join(root, 'shared.bin'); fs.writeFileSync(target, Buffer.alloc(1024));
-  const baseline = checkFunctionBundles(root).results.find(r => r.route.startsWith('api/')).bytes;
+  const baseline = inspectFunction(directory, 'api/admin/teams/logo-export').bytes;
   fs.symlinkSync(target, path.join(directory, 'one.bin')); fs.symlinkSync(target, path.join(directory, 'two.bin'));
-  assert.equal(checkFunctionBundles(root).results.find(r => r.route.startsWith('api/')).bytes, baseline + 2048);
+  assert.equal(inspectFunction(directory, 'api/admin/teams/logo-export').bytes, baseline + 2048);
   fs.symlinkSync(directory, path.join(directory, 'loop')); assert.throws(() => checkFunctionBundles(root), /cycle/);
+}));
+test('internal aliases match ZIP uncompressed entry sizes, not duplicated dependency contents', () => fixture((root, directory) => {
+  fs.mkdirSync(path.join(directory, 'node_modules/pkg'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'node_modules/pkg/data.bin'), Buffer.alloc(4096));
+  fs.symlinkSync('node_modules/pkg', path.join(directory, 'package-alias'));
+  fs.symlinkSync('node_modules/pkg/data.bin', path.join(directory, 'file-alias'));
+  // Independent ZIP accounting: Vercel build-utils createZip represents a Unix
+  // symlink as an entry containing its link target (lambda.ts), not its contents.
+  const sum = Number(execFileSync('python3', ['-c', `import os,sys,zipfile,stat,io
+root=sys.argv[1];buffer=io.BytesIO()
+with zipfile.ZipFile(buffer,'w') as z:
+ for base,dirs,files in os.walk(root,followlinks=False):
+  for name in dirs+files:
+   p=os.path.join(base,name);relative=os.path.relpath(p,root)
+   if os.path.islink(p):
+    entry=zipfile.ZipInfo(relative);entry.create_system=3;entry.external_attr=(stat.S_IFLNK|0o777)<<16
+    z.writestr(entry,os.readlink(p).encode())
+   elif os.path.isfile(p): z.write(p,relative)
+with zipfile.ZipFile(buffer) as z: print(sum(i.file_size for i in z.infolist()))`, directory], { encoding: 'utf8' }));
+  const measured = inspectFunction(directory, 'api/admin/teams/logo-export');
+  assert.equal(measured.bytes, sum); assert.equal(measured.internalSymlinks, 2);
+}));
+test('internal alias does not hide an oversized real target', () => fixture((root, directory) => {
+  const fd=fs.openSync(path.join(directory, 'large.bin'),'w');
+  try { fs.ftruncateSync(fd,FUNCTION_BUDGET_BYTES+1); } finally { fs.closeSync(fd); }
+  fs.symlinkSync('large.bin',path.join(directory,'alias'));
+  assert.equal(checkFunctionBundles(root).failures.length,1);
 }));
 test('a missing required route cannot produce a false green result', () => fixture(root => {
   fs.rmSync(path.join(root, 'admin/teams/logos.func'), { recursive: true });

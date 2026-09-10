@@ -37,12 +37,20 @@ Night Fixtures/social-image exclusions are retained.
 `.github/workflows/vercel-function-bundles.yml` builds the actual Vercel output
 with pinned CLI 59.11.7 and isolated local project settings. It uses no account,
 Vercel token, production database, `vercel pull` or deployment action.
-`scripts/check-vercel-function-bundles.mjs` measures every `.func` tree by logical
-uncompressed file size, following symlinks and detecting cycles. It fails closed
-on missing output/routes, any bundle above 230 MiB (headroom below the standard
-250 MiB limit), Git/environment files, or public files in either logo function.
-It emits a per-function size/dependency report. Negative controls prove oversized
-sparse files, Git pollution and symlinked contents cannot escape the check.
+`scripts/check-vercel-function-bundles.mjs` measures every `.func` package by
+uncompressed ZIP-entry size. Internal dependency aliases count as UTF-8 symlink
+entries, matching `createZip` in Vercel's `packages/build-utils/src/lambda.ts`;
+they are not additional copies of Prisma/canvas. Outside-source links are
+conservatively materialised. Missing or cyclic targets fail closed. Different
+regular-file names (including hard links) count separately. Identical package
+directories behind route/RSC aliases are measured once and reported for each route.
+
+The gate rejects missing output/routes, any bundle above 230 MiB (headroom below
+the standard 250 MiB limit), Git/environment files, or public files in either
+logo function. Negative controls cover oversized sparse files and aliased targets,
+Git/public pollution and missing routes. An independent Unix-symlink ZIP fixture
+cross-checks the uncompressed size calculation rather than increasing the budget
+to accommodate double-counted dependency aliases.
 
 Native and production-prepared export/catalogue/asset tests run alongside the
 existing security/ZIP/browser tests and critical/DOM contracts. Every public
