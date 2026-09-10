@@ -33,6 +33,13 @@ jobs:
             if (!collectionPage.includes(marker)) throw new Error(`Native cap presentation missing: ${marker}`);
           }'''+s[end:]
           p.write_text(s)
+          p=Path('scripts/apply-modern-payment-script-compatibility.cjs');s=p.read_text()
+          start=s.index('  // The modern squad-payment page has a no-ledger OPEN fallback')
+          end=s.index('\n}\n\n// The predictor monitor',start)
+          s=s[:start]+'''  // Cap-page presentation is now native. There are no page-local cap boost
+            // snippets left to rewrite; admin cap policy compatibility above remains.
+          '''+s[end:]
+          p.write_text(s)
           p=Path('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');s=p.read_text()
           s='import { getCaptainAssignedPlayerFeePence } from "@/lib/payments/player-fee-coverage";\nimport { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";\n'+s
           anchor='  const selectedFees = selectedFixture\n    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)'
@@ -50,18 +57,19 @@ jobs:
           p.write_text(s)
           PY
           git diff --check
-          git add scripts/apply-player-match-fee-cap.cjs 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' .github/workflows/payment-ledger-consistency.yml
+          git add scripts/apply-player-match-fee-cap.cjs scripts/apply-modern-payment-script-compatibility.cjs 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' .github/workflows/payment-ledger-consistency.yml
           git rm .github/workflows/author-ledger-cap-compat.yml
       - run: npm ci
       - run: npx prisma generate
       - run: node --test tests/payment-ledger-consistency.test.cjs
       - name: Full production preparation and final contracts
         run: |
-          npm run prebuild > /tmp/ledger-prebuild.log 2>&1 || { tail -60 /tmp/ledger-prebuild.log; exit 1; }
+          npm run prebuild > /tmp/ledger-prebuild.log 2>&1 || { tail -45 /tmp/ledger-prebuild.log; exit 1; }
           tail -10 /tmp/ledger-prebuild.log
           npx prisma generate
           node --test tests/payment-ledger-consistency.test.cjs
           node scripts/check-critical-feature-contracts.mjs
+          npx tsc --noEmit
       - name: Commit only staged authored source, never generated prebuild output
         run: |
           test "$GITHUB_REF" = refs/heads/fix/consistent-player-fixture-ledger
