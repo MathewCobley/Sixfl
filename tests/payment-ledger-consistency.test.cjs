@@ -160,6 +160,8 @@ test('team payment and credit are separate from player contribution subtotal',as
 });
 test('native squad-payment summaries share the full adjustment split and contribution columns do not replace open debts',()=>{
   const s=read('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');
+  assert.match(s,/Team balance settled — player links remain open/);
+  assert.match(s,/Later player payments reduce the waiver first/);
   assert.match(s,/getPlayerSettlementBreakdown\(selectedEntry/);assert.match(s,/getPlayerSettlementBreakdown\(entry\)/);
   assert.doesNotMatch(s,/const captainSettledPence = collectedPence \+ zeroFeeSettledPence/);
   assert.match(read(pagePath),/payment\.outstandingPence/);assert.match(read(pagePath),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);

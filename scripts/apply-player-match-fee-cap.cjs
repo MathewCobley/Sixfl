@@ -179,66 +179,13 @@ write(collectionActionPath, collectionAction);
 // Captain collection page: capped fees show the normal captain allocation,
 // while the underlying paid/open amounts remain the real amounts owed to SIXFL.
 // ---------------------------------------------------------------------------
-let collectionPage = read(collectionPagePath);
-collectionPage = replaceRequired(
-  collectionPage,
-  'const ZERO_FEE_WAIVER_NOTE = "Zero-fee player share waived by SIXFL";',
-  'const ZERO_FEE_WAIVER_NOTE = "Zero-fee player share waived by SIXFL";\nconst PLAYER_FEE_CAP_NOTE = "Player fee cap applied";',
-  "cap page note constant",
-);
-collectionPage = replaceRequired(
-  collectionPage,
-  'function isZeroFeeCaptainSettled(status?: string | null, note?: string | null) {\n  return status === "WAIVED" && Boolean(note?.includes(ZERO_FEE_WAIVER_NOTE));\n}\n\nfunction statusLabel',
-  `function isZeroFeeCaptainSettled(status?: string | null, note?: string | null) {\n  return status === "WAIVED" && Boolean(note?.includes(ZERO_FEE_WAIVER_NOTE));\n}\n\nfunction getCaptainAllocatedAmountPence(amountPence: number, note?: string | null) {\n  const match = /Player fee cap applied: captain share £([0-9,.]+); player charged £([0-9,.]+)\\./i.exec(\n    note ?? "",\n  );\n  if (!match) return amountPence;\n\n  const captainAmount = Number(match[1].replace(/,/g, ""));\n  if (!Number.isFinite(captainAmount) || captainAmount < 0) return amountPence;\n  return Math.round(captainAmount * 100);\n}\n\nfunction getCaptainCapBoostPence(input: {\n  amountPence: number;\n  note?: string | null;\n}) {\n  return Math.max(\n    getCaptainAllocatedAmountPence(input.amountPence, input.note) - input.amountPence,\n    0,\n  );\n}\n\nfunction statusLabel`,
-  "cap page helpers",
-);
-
-const oldFixtureBoost = `  const zeroFeeSettledPenceByFixture = new Map<string, number>();\n  for (const fee of fees) {\n    if (!isZeroFeeCaptainSettled(fee.status, fee.note)) continue;\n    zeroFeeSettledPenceByFixture.set(\n      fee.fixtureId,\n      (zeroFeeSettledPenceByFixture.get(fee.fixtureId) ?? 0) + fee.amountPence,\n    );\n  }`;
-
-const newFixtureBoost = `  const captainSettledBoostPenceByFixture = new Map<string, number>();\n  const captainOpenBoostPenceByFixture = new Map<string, number>();\n  for (const fee of fees) {\n    if (isZeroFeeCaptainSettled(fee.status, fee.note)) {\n      captainSettledBoostPenceByFixture.set(\n        fee.fixtureId,\n        (captainSettledBoostPenceByFixture.get(fee.fixtureId) ?? 0) + fee.amountPence,\n      );\n    }\n\n    const capBoostPence = getCaptainCapBoostPence({\n      amountPence: fee.amountPence,\n      note: fee.note,\n    });\n    if (capBoostPence <= 0) continue;\n\n    if (fee.status === "PAID") {\n      captainSettledBoostPenceByFixture.set(\n        fee.fixtureId,\n        (captainSettledBoostPenceByFixture.get(fee.fixtureId) ?? 0) + capBoostPence,\n      );\n    } else if (fee.status === "OPEN") {\n      captainOpenBoostPenceByFixture.set(\n        fee.fixtureId,\n        (captainOpenBoostPenceByFixture.get(fee.fixtureId) ?? 0) + capBoostPence,\n      );\n    }\n  }`;
-
-collectionPage = replaceRequired(
-  collectionPage,
-  oldFixtureBoost,
-  newFixtureBoost,
-  "fixture cap boosts",
-);
-collectionPage = replaceRequired(
-  collectionPage,
-  '  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) => sum + fee.amountPence,\n    0,\n  );\n  const zeroFeeSettledPence = selectedFees.reduce(\n    (sum, fee) =>\n      sum + (isZeroFeeCaptainSettled(fee.status, fee.note) ? fee.amountPence : 0),\n    0,\n  );',
-  '  const playerAllocationPence = selectedFees.reduce(\n    (sum, fee) =>\n      sum + getCaptainAllocatedAmountPence(fee.amountPence, fee.note),\n    0,\n  );\n  const captainSettledBoostPence = selectedFees.reduce((sum, fee) => {\n    if (isZeroFeeCaptainSettled(fee.status, fee.note)) {\n      return sum + fee.amountPence;\n    }\n    if (fee.status !== "PAID") return sum;\n    return sum + getCaptainCapBoostPence({ amountPence: fee.amountPence, note: fee.note });\n  }, 0);\n  const captainOpenBoostPence = selectedFees.reduce((sum, fee) => {\n    if (fee.status !== "OPEN") return sum;\n    return sum + getCaptainCapBoostPence({ amountPence: fee.amountPence, note: fee.note });\n  }, 0);',
-  "selected cap totals",
-);
-collectionPage = replaceRequired(
-  collectionPage,
-  '  const captainSettledPence = collectedPence + zeroFeeSettledPence;\n  const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;',
-  '  const captainSettledPence = collectedPence + captainSettledBoostPence;\n  const playerOutstandingPence =\n    (selectedEntry?.playerOpenPence ?? 0) + captainOpenBoostPence;',
-  "selected cap settled/open",
-);
-
-const oldFixtureDisplay = `              const zeroFeeSettledPence = entry.fixtureId\n                ? zeroFeeSettledPenceByFixture.get(entry.fixtureId) ?? 0\n                : 0;\n              const captainPlayerPaidPence = entry.playerPaidPence + zeroFeeSettledPence;\n              const hasCollection = captainPlayerPaidPence > 0 || entry.playerOpenPence > 0;`;
-
-const newFixtureDisplay = `              const settledBoostPence = entry.fixtureId\n                ? captainSettledBoostPenceByFixture.get(entry.fixtureId) ?? 0\n                : 0;\n              const openBoostPence = entry.fixtureId\n                ? captainOpenBoostPenceByFixture.get(entry.fixtureId) ?? 0\n                : 0;\n              const captainPlayerPaidPence = entry.playerPaidPence + settledBoostPence;\n              const captainPlayerOpenPence = entry.playerOpenPence + openBoostPence;\n              const hasCollection = captainPlayerPaidPence > 0 || captainPlayerOpenPence > 0;`;
-
-collectionPage = replaceRequired(
-  collectionPage,
-  oldFixtureDisplay,
-  newFixtureDisplay,
-  "fixture cap display",
-);
-collectionPage = replaceRequired(
-  collectionPage,
-  '{formatMoney(entry.playerOpenPence)}',
-  '{formatMoney(captainPlayerOpenPence)}',
-  "fixture capped open display",
-);
-collectionPage = replaceRequired(
-  collectionPage,
-  '{formatMoney(fee.amountPence)} ·{" "}',
-  '{formatMoney(getCaptainAllocatedAmountPence(fee.amountPence, fee.note))} ·{" "}',
-  "player capped nominal display",
-);
-write(collectionPagePath, collectionPage);
+// Native page uses the same canonical cash/adjustment split as Team Payments.
+// Preserve the admin cap rules and collection actions above, but do not
+// restore page-local boost arithmetic or count pending caps as receipts.
+const collectionPage = read(collectionPagePath);
+for (const marker of ["getPlayerSettlementBreakdown(selectedEntry", "getPlayerSettlementBreakdown(entry)", "getCaptainAssignedPlayerFeePence", "getCurrentSettlementText(selectedEntry)"]) {
+  if (!collectionPage.includes(marker)) throw new Error(`Native cap presentation missing: ${marker}`);
+}
 
 console.log(
   "Applied admin-only maximum player charge support with captain-facing nominal settlement display.",

@@ -1,3 +1,5 @@
+import { getCaptainAssignedPlayerFeePence } from "@/lib/payments/player-fee-coverage";
+import { hydrateCaptainAssignedPlayerFees } from "@/lib/payments/player-fee-assigned-share";
 import { getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
 import { getPlayerPaymentDisplay } from "@/lib/payments/player-payment-display";
 // ========================================
@@ -316,8 +318,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     );
   }
 
+  const feesWithAssignedShares = await hydrateCaptainAssignedPlayerFees(fees);
   const selectedFees = selectedFixture
-    ? fees.filter((fee) => fee.fixtureId === selectedFixture.id)
+    ? feesWithAssignedShares.filter((fee) => fee.fixtureId === selectedFixture.id)
     : [];
   const missingLinkIds = selectedFees
     .filter(
@@ -414,7 +417,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
       !isZeroFeeCaptainSettled(fee.status, fee.note),
   ).length;
   const playerAllocationPence = selectedFees.reduce(
-    (sum, fee) => sum + fee.amountPence,
+    (sum, fee) => sum + getCaptainAssignedPlayerFeePence(fee),
     0,
   );
   const zeroFeeSettledPence = selectedFees.reduce(
@@ -430,6 +433,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: 0, playerSubsidyPence: 0 });
   const captainSettledPence = playerSettlement.totalPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
+  const sixflWaivedPence = selectedEntry?.waivedPence ?? 0;
   const stillToCoverPence = selectedEntry?.outstandingPence ?? 0;
   const savedMessage = messageForSaved(sp.saved, sp.emailsQueued);
   const errorMessage = messageForError(sp.error);
@@ -448,8 +452,13 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   let summaryNextStep: string | null = null;
 
   if (selectedEntry && stillToCoverPence <= 0) {
-    summaryTitle = "This fixture fee is fully covered.";
+    summaryTitle = sixflWaivedPence > 0 && playerOutstandingPence > 0
+      ? "Team balance settled — player links remain open."
+      : sixflWaivedPence > 0 ? "This fixture fee is settled." : "This fixture fee is fully covered.";
     summaryText = `${getCurrentSettlementText(selectedEntry)} Player contributions: ${playerSettlement.detail}. Any direct team payments, credit or waivers are included in the team ledger.`;
+    if (sixflWaivedPence > 0 && playerOutstandingPence > 0) {
+      summaryText += ` A ${formatMoney(sixflWaivedPence)} SIXFL waiver is included in that settlement. ${formatMoney(playerOutstandingPence)} remains collectible through the existing player links. Later player payments reduce the waiver first and do not become team credit while a waiver remains.`;
+    }
   } else if (selectedEntry && !hasPlayerCollection) {
     summaryTitle = "No player collection has been set up yet.";
     summaryText = `The fixture fee is ${formatMoney(selectedEntry.amountPence)}. No amounts have been assigned to players and no player payment requests have been created. The team balance is currently ${formatMoney(stillToCoverPence)}.`;
