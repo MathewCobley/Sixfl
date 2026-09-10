@@ -68,6 +68,10 @@ test('waived first row cannot supply a zero default; positive OPEN share wins',(
   assert.equal(helper.getInitialCollectionDefaultPence([{status:'WAIVED',amountPence:0},{status:'OPEN',amountPence:500}]),500);
   assert.ok(helper.getInitialCollectionDefaultPence([{status:'WAIVED',amountPence:0}])>0);
 });
+test('currency parser accepts exact UK amounts and legitimate grouping without changing decimal intent',()=>{
+  for(const [raw,pence] of [['5',500],['5.50',550],[' £ 5.50 ',550],['1,000.50',100050],['.50',50]])assert.equal(helper.parseSquadCollectionAmount(raw),pence,raw);
+  assert.equal(helper.parseSquadCollectionAmount('0'),null);assert.equal(helper.parseSquadCollectionAmount('0',true),0);assert.equal(helper.parseSquadCollectionAmount('',true),null);
+});
 for(const defaultAmount of ['0','','-1','not used'])test(`eight explicit £5 shares do not require the unused default (${JSON.stringify(defaultAmount)})`,async()=>{
   const h=harness(),data=form(defaultAmount);assert.equal(helper.validateSquadCollectionAmounts(data),null);
   const result=await h.save(data);assert.equal(result.status,'saved');assert.match(result.message,/8 payment link emails queued/);
@@ -82,7 +86,7 @@ test('valid default fills a blank share, preserving explicitly entered shares',a
   const data=form('6');data.set('amount_member_m8','');
   const withHeadroom=harness({headroom:100});await withHeadroom.save(data);assert.equal(withHeadroom.rows.find(r=>r.teamMemberId==='m8').amountPence,600);
 });
-for(const value of ['-5','5.001','NaN','Infinity','3e9'])test(`invalid selected amount ${value} is rejected before writes`,async()=>{
+for(const value of ['-5','5.001','NaN','Infinity','3e9','5,50','5 50','££5','1,23.45'])test(`invalid selected amount ${value} is rejected before writes`,async()=>{
   const h=harness(),data=form('5');data.set('amount_member_m8',value);
   const result=await h.save(data);assert.equal(result.status,'error');assert.equal(h.writes.length,0);assert.equal(h.emails.length,0);
 });
