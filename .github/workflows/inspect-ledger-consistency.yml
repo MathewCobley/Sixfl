@@ -1,0 +1,25 @@
+name: Inspect ledger consistency
+on:
+  push:
+    branches: [fix/consistent-player-fixture-ledger]
+    paths: [.github/workflows/inspect-ledger-consistency.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source and contracts only
+        run: |
+          cat DEV_RULES.md ENGINEERING.md docs/critical-feature-contracts.md
+          find src tests scripts .github -name AGENTS.md -print
+          echo '--- SHARED DISPLAY AND TEXT CONSUMERS ---'
+          git grep -n -E 'getPlayerPaymentDisplay|Player shares settled|Covered by player shares|Covered by player payments|playerSettledPence|Total applied to fixture|entry\.description' -- src scripts tests || true
+          echo '--- TESTS / WORKFLOWS ---'
+          ls tests/*{ledger,payment,fee}* .github/workflows/*{ledger,payment,fee}* 2>/dev/null || true
+          echo '--- LEDGER PREPARATION ---'
+          git grep -n -E 'settledPence|description:' -- scripts/apply*ledger* scripts/apply*payment* scripts/apply*fee* | head -140
+          echo '--- NATIVE DISPLAY ---'
+          cat src/lib/payments/player-payment-display.ts src/lib/payments/charge-summary.ts src/lib/payments/player-ledger-markers.ts
