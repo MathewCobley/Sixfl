@@ -175,39 +175,9 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     "player match-fee cap protected insert compatibility",
   );
 
-  // The modern squad-payment page has a no-ledger OPEN fallback between the
-  // settled and outstanding totals. Preserve it when the cap patch adds the
-  // captain-facing nominal boost for capped players.
-  patchFile(
-    feeCapScriptPath,
-    '  \'  const captainSettledPence = collectedPence + zeroFeeSettledPence;\\n  const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;\',',
-    '  \'  const captainSettledPence = collectedPence + zeroFeeSettledPence;\\n  const playerOpenWithoutLedgerPence = selectedFees\\n    .filter((fee) => fee.status === "OPEN")\\n    .reduce((sum, fee) => sum + fee.amountPence, 0);\\n  const playerOutstandingPence =\\n    selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence;\',',
-    "player match-fee cap modern open fallback input",
-  );
+  // Cap-page presentation is now native. There are no page-local cap boost
+  // snippets left to rewrite; admin cap policy compatibility above remains.
 
-  patchFile(
-    feeCapScriptPath,
-    '  \'  const captainSettledPence = collectedPence + captainSettledBoostPence;\\n  const playerOutstandingPence =\\n    (selectedEntry?.playerOpenPence ?? 0) + captainOpenBoostPence;\',',
-    '  \'  const captainSettledPence = collectedPence + captainSettledBoostPence;\\n  const playerOpenWithoutLedgerPence = selectedFees\\n    .filter((fee) => fee.status === "OPEN")\\n    .reduce((sum, fee) => sum + fee.amountPence, 0);\\n  const playerOutstandingPence =\\n    (selectedEntry?.playerOpenPence ?? playerOpenWithoutLedgerPence) +\\n    captainOpenBoostPence;\',',
-    "player match-fee cap modern open fallback output",
-  );
-
-  // The fixture-card wording was renamed from "paid" to "settled" before the
-  // cap feature was added. Keep the current variable name in both the expected
-  // and generated fixture-card snippets so later JSX continues to reference it.
-  patchFile(
-    feeCapScriptPath,
-    '              const captainPlayerPaidPence = entry.playerPaidPence + zeroFeeSettledPence;\\n              const hasCollection = captainPlayerPaidPence > 0 || entry.playerOpenPence > 0;',
-    '              const captainPlayerSettledPence = entry.playerPaidPence + zeroFeeSettledPence;\\n              const hasCollection = captainPlayerSettledPence > 0 || entry.playerOpenPence > 0;',
-    "player match-fee cap settled fixture input",
-  );
-
-  patchFile(
-    feeCapScriptPath,
-    '              const captainPlayerPaidPence = entry.playerPaidPence + settledBoostPence;\\n              const captainPlayerOpenPence = entry.playerOpenPence + openBoostPence;\\n              const hasCollection = captainPlayerPaidPence > 0 || captainPlayerOpenPence > 0;',
-    '              const captainPlayerSettledPence = entry.playerPaidPence + settledBoostPence;\\n              const captainPlayerOpenPence = entry.playerOpenPence + openBoostPence;\\n              const hasCollection = captainPlayerSettledPence > 0 || captainPlayerOpenPence > 0;',
-    "player match-fee cap settled fixture output",
-  );
 }
 
 // The predictor monitor filters rows to those with stored scores before creating

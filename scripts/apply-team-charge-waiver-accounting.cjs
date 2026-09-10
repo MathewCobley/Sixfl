@@ -115,45 +115,20 @@ write(ledgerPath, ledger);
 // ---------------------------------------------------------------------------
 // Captain payment breakdown: show a visible SIXFL waiver line and SETTLED status.
 // ---------------------------------------------------------------------------
-const captainPagePath = "src/app/captain/team/[teamid]/payments/page.tsx";
-let captainPage = read(captainPagePath);
-
-captainPage = replaceRequired(
-  captainPage,
-  `function formatChargeStatus(status: string) {\n  switch (status) {`,
-  `function formatChargeStatus(status: string, waivedPence = 0) {\n  if (status === \"PAID\" && waivedPence > 0) return \"Settled\";\n\n  switch (status) {`,
-  "captain settled status label",
-);
-
-captainPage = replaceRequired(
-  captainPage,
-  `              const totalAppliedPence = Math.min(\n                entry.coveredPence,\n                entry.amountPence,\n              );`,
-  `              const totalAppliedPence = Math.min(\n                entry.settledPence,\n                entry.amountPence,\n              );`,
-  "captain total applied waiver inclusion",
-);
-
-captainPage = replaceRequired(
-  captainPage,
-  `                          <div className="flex items-center justify-between gap-4">\n                            <span>Team credit used</span>\n                            <span className="font-semibold text-white">\n                              {formatMoney(teamCreditUsedPence)}\n                            </span>\n                          </div>`,
-  `                          <div className="flex items-center justify-between gap-4">\n                            <span>Team credit used</span>\n                            <span className="font-semibold text-white">\n                              {formatMoney(teamCreditUsedPence)}\n                            </span>\n                          </div>\n                          {entry.waivedPence > 0 ? (\n                            <div className="flex items-center justify-between gap-4">\n                              <span>SIXFL waiver</span>\n                              <span className="font-semibold text-sky-100">\n                                {formatMoney(entry.waivedPence)}\n                              </span>\n                            </div>\n                          ) : null}`,
-  "captain waiver row",
-);
-
-captainPage = replaceRequired(
-  captainPage,
-  `{formatChargeStatus(entry.displayStatus)}`,
-  `{formatChargeStatus(entry.displayStatus, entry.waivedPence)}`,
-  "captain settled status rendering",
-);
-
-captainPage = replaceRequired(
-  captainPage,
-  `{formatMoney(playerSettledPence)} player shares + {formatMoney(teamPaymentPence)} team payment + {formatMoney(teamCreditUsedPence)} team credit = {formatMoney(totalAppliedPence)} applied.`,
-  `{formatMoney(playerSettledPence)} player shares + {formatMoney(teamPaymentPence)} team payment + {formatMoney(teamCreditUsedPence)} team credit + {formatMoney(entry.waivedPence)} SIXFL waiver = {formatMoney(totalAppliedPence)} settled.`,
-  "captain settled warning arithmetic",
-);
-
-write(captainPagePath, captainPage);
+// Native captain waiver presentation owns its markup and arithmetic.
+// Keep the existing accounting preparation below, but never rewrite an
+// evolved captain page or restore the old capped settlement equation.
+const captainPage = read("src/app/captain/team/[teamid]/payments/page.tsx");
+for (const marker of [
+  "getCurrentSettlementText(entry)",
+  "getPlayerSettlementBreakdown(entry)",
+  "entry.waivedPence",
+  "entry.settledPence",
+  "SIXFL waiver",
+  'return "Settled"',
+]) {
+  if (!captainPage.includes(marker)) throw new Error(`Native captain waiver presentation missing: ${marker}`);
+}
 
 // ---------------------------------------------------------------------------
 // Admin endpoint: waive some/all of the OUTSTANDING amount without changing the

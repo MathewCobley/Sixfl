@@ -69,12 +69,17 @@ playerCollection = replaceRequired(
   "captain player collection waiver amount",
 );
 
+// The native summary now reports canonical settlement and retains the
+// recoverable-waiver explanation. Do not replace it with older arithmetic.
+if (!playerCollection.includes("getCurrentSettlementText(selectedEntry)")) {
 playerCollection = replaceRequired(
   playerCollection,
   `  if (selectedEntry && stillToCoverPence <= 0) {\n    summaryTitle = "This fixture fee is fully covered.";\n    summaryText = \`${'${formatMoney(selectedEntry.amountPence)}'} has been covered: ${'${formatMoney(directPaidPence)}'} paid directly by the team and ${'${formatMoney(captainSettledPence)}'} of player shares settled.\`;\n  } else if (selectedEntry && !hasPlayerCollection) {`,
   `  if (selectedEntry && stillToCoverPence <= 0) {\n    if (sixflWaivedPence > 0 && playerOutstandingPence > 0) {\n      summaryTitle = "Team balance settled — player links remain open.";\n      summaryText = \`${'${formatMoney(selectedEntry.amountPence)}'} is currently settled: ${'${formatMoney(directPaidPence)}'} paid directly by the team, ${'${formatMoney(captainSettledPence)}'} of player shares settled and a ${'${formatMoney(sixflWaivedPence)}'} SIXFL waiver. ${'${formatMoney(playerOutstandingPence)}'} is still available to collect through the existing player links. Any later player payment reduces the SIXFL waiver first and does not become team credit while a waiver remains.\`;\n    } else {\n      summaryTitle = sixflWaivedPence > 0\n        ? "This fixture fee is settled."\n        : "This fixture fee is fully covered.";\n      summaryText = sixflWaivedPence > 0\n        ? \`${'${formatMoney(selectedEntry.amountPence)}'} is settled: ${'${formatMoney(directPaidPence)}'} paid directly by the team, ${'${formatMoney(captainSettledPence)}'} of player shares settled and a ${'${formatMoney(sixflWaivedPence)}'} SIXFL waiver.\`\n        : \`${'${formatMoney(selectedEntry.amountPence)}'} has been covered: ${'${formatMoney(directPaidPence)}'} paid directly by the team and ${'${formatMoney(captainSettledPence)}'} of player shares settled.\`;\n    }\n  } else if (selectedEntry && !hasPlayerCollection) {`,
   "captain player collection settled summary",
 );
+}
+
 
 playerCollection = replaceRequired(
   playerCollection,

@@ -24,7 +24,12 @@ export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null) {
     : `${money(received)} received online${captainReceived ? ` + ${money(captainReceived)} received by captain` : ""}${subsidy ? ` + ${money(subsidy)} SIXFL adjustment` : ""} · ${money(balance)} outstanding`;
   // On a settled row display receipts, not a larger nominal assigned share.
   const amountPence = balance > 0 ? balance + paid : paid || fee.amountPence;
+  // Fixture contribution is distinct from the player-facing charge/receipt
+  // amount above. Captain-held money is not received by SIXFL until remitted.
+  // Pending liabilities and unverified historic differences add no coverage.
+  const fixtureContributionPence = received + subsidy;
   return { statusLabel, detail, amountPence, receivedPence: received, captainReceivedPence: captainReceived,
+    fixtureContributionPence, adjustmentPence: subsidy, assignedPence: assigned,
     outstandingPence: balance, review: historyMismatch, tone: historyMismatch || balance > 0 ? "amber" : paid > 0 || subsidy > 0 ? "emerald" : "neutral" };
 }
 
