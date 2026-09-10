@@ -1,0 +1,32 @@
+name: Complete SMS inbox dispatch selection
+on:
+  push:
+    branches: [fix/sms-receipt-recovery]
+    paths: [.github/workflows/author-sms-inbox-state.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/fix/sms-receipt-recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select real dispatch state for related-thread history
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/(admin)/admin/messages/page.tsx');s=p.read_text()
+          old='                  id: true,\n                  metadata: true,\n                  template: {'
+          new='                  id: true,\n                  status: true,\n                  failureReason: true,\n                  scheduledFor: true,\n                  sentAt: true,\n                  metadata: true,\n                  template: {'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new,1))
+          PY
+          git diff --check
+          git diff
+          test "$GITHUB_REF" = refs/heads/fix/sms-receipt-recovery
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add 'src/app/(admin)/admin/messages/page.tsx'
+          git commit -m 'Select real SMS dispatch state for legacy related-thread inbox history'
+          git push origin HEAD:refs/heads/fix/sms-receipt-recovery
