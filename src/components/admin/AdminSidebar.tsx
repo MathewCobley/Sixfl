@@ -120,6 +120,12 @@ const navigationGroups = [
         description: "Cards",
       },
       {
+        name: "Matchweek reports",
+        href: "/admin/matchweek-reports",
+        icon: DocumentTextIcon,
+        description: "Private previews",
+      },
+      {
         name: "SIXFL TV",
         href: "/admin/sixfl-tv",
         icon: PhotoIcon,
