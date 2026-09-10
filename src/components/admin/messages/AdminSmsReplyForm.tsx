@@ -12,7 +12,7 @@ function newDraft(phone: string | null): Draft {
   return { body: "", requestId: crypto.randomUUID(), expectedPhone: phone || "", attempted: false, updatedAt: Date.now() };
 }
 function queueTime(value: string | null) {
-  if (!value) return "the next queue run";
+  if (!value || !Number.isFinite(Date.parse(value))) return "the next queue run";
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) + " (UK)";
 }
 export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }: Props) {
@@ -25,6 +25,10 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
   const [notice, setNotice] = useState("");
   const [record, setRecord] = useState<SmsReplyReceipt | null>(null);
   const [recordRequestId, setRecordRequestId] = useState("");
+  const [recordCheckedAt, setRecordCheckedAt] = useState<string | null>(null);
+  const [recent, setRecent] = useState<SmsReplyReceipt[] | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [recentNotice, setRecentNotice] = useState("");
   const inFlight = useRef(false);
   const alive = useRef(true);
   const draftRef = useRef<Draft | null>(null);
@@ -41,6 +45,18 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as Draft | null;
       if (saved && typeof saved.body === "string" && typeof saved.requestId === "string" && typeof saved.expectedPhone === "string" && typeof saved.attempted === "boolean" && Date.now() - saved.updatedAt < 24 * 60 * 60 * 1000) initial = saved;
     } catch { /* Unavailable/corrupt browser storage must not prevent replying. */ }
+    try {
+      const last = JSON.parse(sessionStorage.getItem(`${storageKey}:receipt`) || "null");
+      if (last && typeof last.requestId === "string" && /^[a-zA-Z0-9_-]{16,100}$/.test(last.requestId)
+        && typeof last.checkedAt === "string" && Date.now() - Date.parse(last.checkedAt) < 24 * 60 * 60 * 1000
+        && last.record && typeof last.record.messageId === "string" && typeof last.record.body === "string"
+        && typeof last.record.status === "string") {
+        setRecord(last.record as SmsReplyReceipt);
+        setRecordRequestId(last.requestId);
+        setRecordCheckedAt(last.checkedAt);
+        setNotice("Your last saved reply has been restored. Check status for its latest progress; it has not been resent.");
+      }
+    } catch { /* Recent replies can still be recovered from the server without browser storage. */ }
     draftRef.current = initial;
     setDraft(initial);
     setUncertain(initial.attempted);
@@ -52,8 +68,13 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
   }, [storageKey]);
 
   function accept(saved: SmsReplyReceipt, requestId: string) {
+    // Persist the acknowledgement before replacing the submitted draft. React
+    // state alone is lost on a reload or when another conversation is selected.
+    const checkedAt = new Date().toISOString();
+    try { sessionStorage.setItem(`${storageKey}:receipt`, JSON.stringify({ requestId, checkedAt, record: saved })); } catch { /* Server-side recent history remains available. */ }
     setRecord(saved);
     setRecordRequestId(requestId);
+    setRecordCheckedAt(checkedAt);
     setUncertain(false);
     if (["QUEUED", "PROCESSING", "SENT"].includes(saved.status)) {
       if (draftRef.current?.requestId === requestId) save(newDraft(phone));
@@ -84,9 +105,32 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
     } finally { if (alive.current) setChecking(false); }
   }
 
+  async function findRecentReplies() {
+    if (finding || busy || !actorId) return;
+    setFinding(true);
+    setRecentNotice("Checking recorded SMS replies…");
+    try {
+      const response = await fetch(`${ENDPOINT}?${new URLSearchParams({ threadId, recent: "1" })}`, {
+        cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(20000),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || !Array.isArray(data.records)) throw new Error(data.error || "Recorded replies could not be checked. Nothing has been resent.");
+      if (!alive.current) return;
+      setRecent(data.records as SmsReplyReceipt[]);
+      setRecentNotice(data.records.length ? "Latest recorded administrator SMS replies in this conversation (up to 10 from the last seven days). This check has not sent or retried anything."
+        : "No recorded administrator SMS replies were found in this conversation in the last seven days. This does not establish what happened to a missing submission. Nothing has been resent.");
+    } catch (error) {
+      if (alive.current) setRecentNotice(error instanceof Error ? error.message : "Recorded replies could not be checked. Nothing has been resent.");
+    } finally { if (alive.current) setFinding(false); }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlight.current || !draftRef.current || !canReply || !actorId || uncertain) return;
+    if (inFlight.current) return; // Ignore repeated clicks on the same in-flight request.
+    if (!draftRef.current) { setNotice("The reply form is still loading. No reply has been submitted."); return; }
+    if (!actorId) { setNotice("Please sign in as an administrator before sending. Your draft is kept."); return; }
+    if (!canReply) { setNotice("This conversation cannot receive an SMS reply. Check its contact number and open status. Your draft is kept."); return; }
+    if (uncertain) { setNotice("Check the previous attempt's status before retrying. Your draft is kept."); return; }
     const current = draftRef.current;
     if (!current.body.trim()) { setNotice("Type your SMS reply before sending."); return; }
     if (current.body.length > 1500) { setNotice("Please shorten the reply to 1,500 characters or fewer."); return; }
@@ -139,16 +183,33 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
           {busy ? "Queueing reply…" : draft?.attempted ? "Retry this reply safely" : "Send SMS reply"}
         </button>
         {(draft?.attempted || record) ? <button type="button" onClick={checkStatus} disabled={checking || busy} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">{checking ? "Checking…" : "Check status"}</button> : null}
-        {record && ["FAILED", "SKIPPED", "CANCELLED"].includes(record.status) ? <button type="button" disabled={busy || checking || uncertain} onClick={() => { save(newDraft(phone)); setRecord(null); setRecordRequestId(""); setUncertain(false); setNotice("New empty draft opened. The previous reply has not been retried."); }} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">Write another reply</button> : null}
+        {record && ["FAILED", "SKIPPED", "CANCELLED"].includes(record.status) ? <button type="button" disabled={busy || checking || uncertain} onClick={() => { save(newDraft(phone)); try { sessionStorage.removeItem(`${storageKey}:receipt`); } catch { /* No send. */ } setRecord(null); setRecordRequestId(""); setRecordCheckedAt(null); setUncertain(false); setNotice("New empty draft opened. The previous reply has not been retried."); }} className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">Write another reply</button> : null}
       </div>
       {record ? <div className="space-y-2 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
         <div className="font-semibold text-white">{smsReplyStatusLabel(record.status, record.providerStatus)}</div>
+        {recordCheckedAt ? <p className="text-xs text-white/60">Last checked {queueTime(recordCheckedAt)}. Use Check status for the latest result.</p> : null}
+        <p className="break-all text-xs text-white/60">Reply reference: {record.messageId}</p>
         {record.status === "QUEUED" ? <p className="text-white/65">Eligible to send from {queueTime(record.scheduledFor)}. Normal SMS quiet hours still apply.</p> : null}
         {record.failureReason ? <p className="text-amber-200">{record.failureReason}</p> : null}
         <p className="whitespace-pre-wrap break-words text-white/75">{record.body}</p>
         <a href={`/admin/queue?q=${encodeURIComponent(record.dispatchId || record.messageId)}`} className="inline-block text-emerald-200 underline">View this reply in Queue</a>
       </div> : null}
-      <p className="text-xs text-white/45">A queued reply is saved, not yet delivered. Check status only reads its progress and never sends another copy.</p>
+      <div className="space-y-3 border-t border-white/10 pt-4">
+        <button type="button" onClick={findRecentReplies} disabled={finding || busy || !actorId}
+          className="min-h-11 rounded-xl border border-white/20 px-3 text-sm text-white disabled:opacity-50">
+          {finding ? "Checking recorded replies…" : "Find recent SMS replies"}
+        </button>
+        {recentNotice ? <p role="status" className="text-sm text-white/70">{recentNotice}</p> : null}
+        {recent?.map(reply => <div key={reply.messageId} className="space-y-2 rounded-xl border border-white/10 p-3 text-sm">
+          <div className="font-semibold text-white">{smsReplyStatusLabel(reply.status, reply.providerStatus)}</div>
+          {reply.createdAt ? <p className="text-xs text-white/60">Recorded {queueTime(reply.createdAt)}</p> : null}
+          <p className="whitespace-pre-wrap break-words text-white/75">{reply.body}</p>
+          {reply.failureReason ? <p className="text-amber-200">{reply.failureReason}</p> : null}
+          <p className="break-all text-xs text-white/60">Reply reference: {reply.messageId}</p>
+          {reply.dispatchId ? <a href={`/admin/queue?q=${encodeURIComponent(reply.dispatchId)}`} className="inline-block text-emerald-200 underline">View recorded reply in Queue</a> : null}
+        </div>)}
+      </div>
+      <p className="text-xs text-white/45">A queued reply is saved, not yet delivered. Status and recent-history checks only read records and never send another copy.</p>
     </form>
   );
 }

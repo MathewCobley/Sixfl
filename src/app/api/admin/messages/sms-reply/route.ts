@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { queueAdminSmsReply, readAdminSmsReply, SmsReplyError } from "@/lib/messaging/admin-sms-reply";
+import { queueAdminSmsReply, readAdminSmsReply, readRecentAdminSmsReplies, SmsReplyError } from "@/lib/messaging/admin-sms-reply";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +15,10 @@ function failure(error: unknown) {
 }
 export async function GET(request: NextRequest) {
   try {
+    if (request.nextUrl.searchParams.get("recent") === "1") {
+      const records = await readRecentAdminSmsReplies(request.nextUrl.searchParams.get("threadId") || "");
+      return NextResponse.json({ ok: true, records }, { headers });
+    }
     const record = await readAdminSmsReply({ threadId: request.nextUrl.searchParams.get("threadId") || "", requestId: request.nextUrl.searchParams.get("requestId") || "" });
     return NextResponse.json({ ok: true, record }, { headers });
   } catch (error) { return failure(error); }

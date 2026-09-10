@@ -131,3 +131,10 @@ All ordinary player checkouts and repayment checkouts must use the same independ
 ## Administrator SMS replies
 
 The native inbox reply form uses an explicit authenticated JSON POST, not a redirecting server-action form. A controlled per-actor/per-thread draft and stable request reference survive errors and reloads. The shared SMS service saves notification, message and thread update in one transaction, serializes thread submissions, and uses a deterministic message ID to make same-request retries idempotent. Recovery GET never queues or sends. Existing SMS opt-outs, suppression, quiet hours, mixed email/SMS history and member-only identity boundaries remain enforced. Queued/failed messages are never labelled sent from their creation time. Tests run the real service and route against disposable PostgreSQL with all provider traffic blocked, plus real browser submission/recovery and post-prebuild source contracts. No historical messages are replayed.
+
+
+### SMS reply receipt recovery
+
+A saved SMS acknowledgement and request reference must survive a reload and returning to the conversation, not just a failed-send draft. The last checked status is dated and is never described as a new delivery confirmation. Browser storage remains per administrator and per thread. A read-only, authenticated recent-history GET retrieves up to ten manual outbound SMS entries from the exact conversation in the last seven days even when the browser reference has been lost. It never repairs, requeues or calls the provider. Both inbox entry routes pass authenticated reply identity and the real queue status to the shared native form. Trace logging contains only request/thread/message/dispatch identifiers and saved status; no phone numbers, message text or credentials. New browser and real PostgreSQL tests preserve duplicates, lost responses, separate actors/threads, opt-outs and quiet hours.
+
+These safeguards address verified receipt-loss and recovery gaps. They do not assert that an untraced historical reply was delivered or replay it. Deployment/startup and historical provider delivery remain separate verification steps.

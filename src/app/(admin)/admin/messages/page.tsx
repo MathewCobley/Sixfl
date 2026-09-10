@@ -6,6 +6,7 @@ import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-c
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getAdminSmsReplyTarget } from "@/lib/messaging/admin-sms-reply";
 import {
   getAdminInboxSummary,
   getAdminInboxThreads,
@@ -79,7 +80,7 @@ export default async function AdminMessagesPage({
     composeTeam?: string;
   }>;
 }) {
-  await requireAdmin();
+  const { user: replyActor } = await requireAdmin();
 
   const sp = (await searchParams) ?? {};
   const selectedFilter = normaliseFilter(sp.filter);
@@ -374,6 +375,8 @@ export default async function AdminMessagesPage({
     };
   });
 
+  const smsReplyTarget = fallbackThread ? await getAdminSmsReplyTarget(fallbackThread) : null;
+
   return (
     <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-8">
@@ -587,6 +590,8 @@ export default async function AdminMessagesPage({
               fallbackThread
                 ? {
                     id: fallbackThread.id,
+                    smsReplyPhone: smsReplyTarget?.phone ?? null,
+                    smsReplyActorId: replyActor?.id ?? "",
                     channel: fallbackThread.channel ?? "SMS",
                     status: fallbackThread.status,
                     contactName: fallbackThread.contactName,
@@ -645,6 +650,10 @@ export default async function AdminMessagesPage({
                       dispatch: message.dispatch
                         ? {
                             id: message.dispatch.id,
+                            status: message.dispatch.status,
+                            failureReason: message.dispatch.failureReason,
+                            scheduledFor: message.dispatch.scheduledFor?.toISOString() ?? null,
+                            sentAt: message.dispatch.sentAt?.toISOString() ?? null,
                             template: message.dispatch.template
                               ? {
                                   id: message.dispatch.template.id,
