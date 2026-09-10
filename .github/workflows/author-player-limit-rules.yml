@@ -1,0 +1,117 @@
+name: Author native player-limit rule clarification
+on:
+  push:
+    branches: [fix/clarify-matchday-player-limits-v24]
+    paths: [.github/workflows/author-player-limit-rules.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/clarify-matchday-player-limits-v24
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Snapshot outgoing production-prepared rule wording without a database connection
+        run: |
+          npm run prebuild
+          node <<'JS'
+          const fs=require('node:fs'),ts=require('typescript'),crypto=require('node:crypto');
+          function load(file){const m={exports:{}};const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;new Function('exports','require','module',js)(m.exports,()=>{throw Error('Unexpected outgoing rules dependency');},m);return m.exports;}
+          const league=load('src/lib/league-rules.ts'),match=load('src/lib/match-rules.ts');
+          if(league.LEAGUE_RULES_VERSION!=='2.3'||match.MATCH_RULES_VERSION!=='Version 2.3 — September 2026')throw Error('Outgoing rules changed; review before archiving');
+          const docs=[{id:'league-rules-2-3',document:'League Rules',version:'2.3',effectiveDate:league.LEAGUE_RULES_EFFECTIVE_DATE,supersededDate:'10 September 2026 (on publication of v2.4)',status:'Superseded',sections:league.leagueRuleSections},{id:'match-rules-2-3',document:'Match Rules',version:'2.3',effectiveDate:'22 August 2026 (date displayed; version label said September 2026)',supersededDate:'10 September 2026 (on publication of v2.4)',status:'Superseded',sections:match.matchRuleSections}];
+          const fingerprints=Object.fromEntries(docs.map(d=>[d.id,crypto.createHash('sha256').update(JSON.stringify(d.sections)).digest('hex')]));
+          fs.writeFileSync('/tmp/outgoing-player-limit-rules.ts','import type { ArchivedRuleDocument } from "@/lib/rules-archive";\n\n// Immutable snapshots of the COMPLETE outgoing production-prepared documents.\n// Base revision: 5061e943ce03b62dd6d990ef3498a6a1cdd1bf8e.\n// Match Rules v2.3 displayed an August effective date despite its September label;\n// retain that discrepancy rather than inventing a retrospective effective date.\nexport const archivedPlayerLimitRulesV23: ArchivedRuleDocument[] = '+JSON.stringify(docs,null,2)+';\n\nexport const archivedPlayerLimitRulesV23Fingerprints = '+JSON.stringify(fingerprints,null,2)+';\n');
+          console.log(JSON.stringify(docs.map(d=>({id:d.id,sections:d.sections.length,sha256:fingerprints[d.id]})),null,2));
+          JS
+          # Discard only this disposable job's prebuild rewrites; author native sources below.
+          git restore .
+      - name: Wire shared source, dated pages, captain guidance and operational archive
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(s,old,new):
+            assert s.count(old)==1, old
+            return s.replace(old,new)
+          def change(file,fn):
+            p=Path(file);p.write_text(fn(p.read_text()))
+          def league(s):
+            s='import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_SANCTION_POINTS, PLAYER_LIMIT_RULES_EFFECTIVE_DATE, PLAYER_LIMIT_RULES_NEXT_REVIEW } from "@/lib/matchday-player-limit-rules";\n'+s
+            s=once(s,'LEAGUE_RULES_VERSION = "2.3"','LEAGUE_RULES_VERSION = "2.4"')
+            s=once(s,'LEAGUE_RULES_EFFECTIVE_DATE = "4 September 2026"','LEAGUE_RULES_EFFECTIVE_DATE = PLAYER_LIMIT_RULES_EFFECTIVE_DATE')
+            s=once(s,'LEAGUE_RULES_NEXT_REVIEW = "4 September 2027"','LEAGUE_RULES_NEXT_REVIEW = PLAYER_LIMIT_RULES_NEXT_REVIEW')
+            start=s.index('    points: [',s.index('title: "4. Squad Size and Matchday Player Limit"'));end=s.index('    ],',start)+6
+            s=s[:start]+'    points: [...MATCHDAY_PLAYER_LIMIT_POINTS, ...MATCHDAY_PLAYER_LIMIT_SANCTION_POINTS],'+s[end:]
+            return s
+          change('src/lib/league-rules.ts',league)
+          def match(s):
+            s='import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE, PLAYER_LIMIT_RULES_EFFECTIVE_DATE, PLAYER_LIMIT_RULES_NEXT_REVIEW } from "@/lib/matchday-player-limit-rules";\n'+s
+            s=once(s,'export const MATCH_RULES_VERSION = "Version 2.3 — September 2026";','export const MATCH_RULES_VERSION = "Version 2.4 — September 2026";\nexport const MATCH_RULES_EFFECTIVE_DATE = PLAYER_LIMIT_RULES_EFFECTIVE_DATE;\nexport const MATCH_RULES_NEXT_REVIEW = PLAYER_LIMIT_RULES_NEXT_REVIEW;')
+            start=s.index('    points: [',s.index('title: "Players and Substitutes"'));end=s.index('    ],',start)+6
+            return s[:start]+'    points: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],'+s[end:]
+          change('src/lib/match-rules.ts',match)
+          notice='import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";\n'
+          def public_league(s):
+            s=notice+s
+            anchor='                can be identified.\n              </p>'
+            return once(s,anchor,anchor+'\n              <p className="mt-3 text-sm leading-6 text-emerald-100">\n                {PLAYER_LIMIT_RULES_PUBLICATION_NOTE}\n              </p>')
+          change('src/app/(public)/league-rules/page.tsx',public_league)
+          def public_match(s):
+            s=notice+s
+            s=once(s,'import { MATCH_RULES_VERSION, matchRuleSections }','import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE, MATCH_RULES_NEXT_REVIEW, matchRuleSections }')
+            s=once(s,'{ label: "Effective", value: "22 August 2026" }','{ label: "Effective", value: MATCH_RULES_EFFECTIVE_DATE }')
+            s=once(s,'{ label: "Next review", value: "22 August 2027" }','{ label: "Next review", value: MATCH_RULES_NEXT_REVIEW }')
+            anchor='                payments and competition outcomes are governed by the League Rules.\n              </p>'
+            return once(s,anchor,anchor+'\n              <p className="mt-3 text-sm leading-6 text-emerald-100">\n                {PLAYER_LIMIT_RULES_PUBLICATION_NOTE}\n              </p>')
+          change('src/app/(public)/match-rules/page.tsx',public_match)
+          def referee(s):
+            s=notice+s
+            s=once(s,'import { MATCH_RULES_VERSION, matchRuleSections }','import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE, matchRuleSections }')
+            anchor='<p className="mt-2 text-sm text-white/45">{MATCH_RULES_VERSION}</p>'
+            return once(s,anchor,anchor+'\n            <p className="mt-2 text-sm text-white/60">Effective {MATCH_RULES_EFFECTIVE_DATE}</p>\n            <p className="mt-2 text-sm leading-6 text-white/60">{PLAYER_LIMIT_RULES_PUBLICATION_NOTE}</p>')
+          change('src/app/(public)/referee/match-rules/page.tsx',referee)
+          imports='import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } from "@/lib/matchday-player-limit-rules";\n'
+          def captain_rules(s):
+            s=imports+s
+            anchor='const ruleSections = [\n'
+            s=once(s,anchor,anchor+'  {\n    title: "Matchday player limits",\n    items: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],\n  },\n')
+            s=once(s,'These are the standard SIXFL playing rules. If a league, venue or referee gives a specific instruction for a fixture, that instruction applies for that match.','These are the standard SIXFL playing rules. Follow venue safety requirements and the referee’s on-pitch instructions. Competition limits and exceptions remain governed by the League Rules; agreement from the referee or opposition alone does not authorise a tenth participant.')
+            return s
+          change('src/app/captain/team/[teamid]/rules/page.tsx',captain_rules)
+          def guide(s):
+            s=imports+s
+            anchor='const guideSections = [\n'
+            return once(s,anchor,anchor+'  {\n    title: "Matchday player limits",\n    items: [...MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE],\n  },\n')
+          change('src/app/captain/team/[teamid]/guide/page.tsx',guide)
+          Path('src/lib/archived-player-limit-rules-v2-3.ts').write_text(Path('/tmp/outgoing-player-limit-rules.ts').read_text())
+          def archive(s):
+            s='import { archivedPlayerLimitRulesV23 } from "@/lib/archived-player-limit-rules-v2-3";\n'+s
+            return once(s,'export const archivedRuleDocuments: ArchivedRuleDocument[] = [','export const archivedRuleDocuments: ArchivedRuleDocument[] = [\n  ...archivedPlayerLimitRulesV23,')
+          change('src/lib/rules-archive.ts',archive)
+          def admin_archive(s):
+            s=once(s,'import { MATCH_RULES_VERSION }','import { MATCH_RULES_VERSION, MATCH_RULES_EFFECTIVE_DATE }')
+            return once(s,'    effectiveDate: "22 August 2026",','    effectiveDate: MATCH_RULES_EFFECTIVE_DATE,')
+          change('src/app/(admin)/admin/rules-archive/page.tsx',admin_archive)
+          def contract(s):
+            s=once(s,'leagueRules.includes(\'LEAGUE_RULES_VERSION = "2.3"\'),','leagueRules.includes(\'LEAGUE_RULES_VERSION = "2.3"\') ||\n      leagueRules.includes(\'LEAGUE_RULES_VERSION = "2.4"\'),')
+            s=once(s,'supported v2.1/v2.2/v2.3','supported v2.1/v2.2/v2.3/v2.4')
+            s=once(s,'matchRules.includes(\'MATCH_RULES_VERSION = "Version 2.3 — September 2026"\'),','matchRules.includes(\'MATCH_RULES_VERSION = "Version 2.3 — September 2026"\') ||\n      matchRules.includes(\'MATCH_RULES_VERSION = "Version 2.4 — September 2026"\'),')
+            return once(s,'supported v2.2/v2.3','supported v2.2/v2.3/v2.4')
+          change('scripts/apply-rules-v2-hardening.cjs',contract)
+          PY
+          git rm .github/workflows/author-player-limit-rules.yml
+          git add src/lib/league-rules.ts src/lib/match-rules.ts src/lib/rules-archive.ts src/lib/archived-player-limit-rules-v2-3.ts 'src/app/(public)/league-rules/page.tsx' 'src/app/(public)/match-rules/page.tsx' 'src/app/(public)/referee/match-rules/page.tsx' 'src/app/(admin)/admin/rules-archive/page.tsx' 'src/app/captain/team/[teamid]/rules/page.tsx' 'src/app/captain/team/[teamid]/guide/page.tsx' scripts/apply-rules-v2-hardening.cjs
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Publish native shared v2.4 player-limit clarification and immutable outgoing v2.3 archive'
+          git push origin HEAD:fix/clarify-matchday-player-limits-v24
