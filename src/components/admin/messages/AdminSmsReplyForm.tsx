@@ -87,7 +87,7 @@ export default function AdminSmsReplyForm({ threadId, actorId, phone, canReply }
   }
 
   async function checkStatus() {
-    const requestId = uncertain ? draftRef.current?.requestId : recordRequestId || draftRef.current?.requestId;
+    const requestId = draftRef.current?.attempted ? draftRef.current.requestId : recordRequestId || draftRef.current?.requestId;
     if (!requestId || checking || inFlight.current) return;
     setChecking(true);
     try {

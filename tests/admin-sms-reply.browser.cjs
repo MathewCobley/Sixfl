@@ -69,6 +69,10 @@ const { chromium } = require('playwright');
       mode = 'lost-before-save'; await field.fill('Safe explicit retry'); await page.getByRole('button', { name: 'Send SMS reply', exact: true }).click(); await page.getByText(/connection ended without a confirmed result/).waitFor();
       const retryKey = posts.at(-1).requestId; const beforeCheck = posts.length;
       await page.getByRole('button', { name: 'Check status', exact: true }).click(); await page.getByText(/No saved reply was found/).waitFor(); assert.equal(posts.length, beforeCheck);
+      // A second lookup must remain on the current missing attempt, not fall back to an older saved reply.
+      const lookup = page.waitForRequest(req => req.method()==='GET' && new URL(req.url()).pathname===endpoint);
+      await page.getByRole('button',{name:'Check status',exact:true}).click();
+      assert.equal(new URL((await lookup).url()).searchParams.get('requestId'),retryKey);
       mode = 'save'; await page.getByRole('button', { name: 'Retry this reply safely' }).click(); await page.getByText(/Reply saved and queued/).waitFor(); assert.equal(posts.at(-1).requestId, retryKey);
       stored = { ...stored, status: 'FAILED', providerStatus: 'failed', failureReason: 'Synthetic provider failure' };
       await page.getByRole('button', { name: 'Check status', exact: true }).click(); await page.getByText('Failed', { exact: true }).waitFor(); assert.equal(posts.length, beforeCheck + 1);

@@ -310,6 +310,10 @@ export default async function AdminMessagesPage({
               dispatch: {
                 select: {
                   id: true,
+                  status: true,
+                  failureReason: true,
+                  scheduledFor: true,
+                  sentAt: true,
                   metadata: true,
                   template: {
                     select: {
