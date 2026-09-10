@@ -1,0 +1,48 @@
+name: Preserve no-charge player history
+on:
+  push:
+    branches: [fix/consistent-player-fixture-ledger]
+    paths: [.github/workflows/author-ledger-fallback.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.ref == 'refs/heads/fix/consistent-player-fixture-ledger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep the existing cash fallback and recognised adjustments without assuming a team charge
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');s=p.read_text()
+          old='  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: 0, playerSubsidyPence: 0 });'
+          new='  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: collectedPence, playerSubsidyPence: selectedFees.reduce((sum, fee) => sum + getPlayerPaymentDisplay(fee).adjustmentPence, 0) });'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          p=Path('tests/payment-ledger-consistency.test.cjs');s=p.read_text()
+          s+='''
+          test('actual squad settlement expression preserves historical player cash when no team charge exists',()=>{
+            const source=read('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');
+            const declaration=source.match(/const playerSettlement = ([^\\n]+);/)[1];
+            const js=ts.transpileModule(`module.exports=(${declaration});`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+            const load=loader(),module={exports:{}};
+            const evaluate=new Function('module','selectedEntry','collectedPence','selectedFees','getPlayerPaymentDisplay','getPlayerSettlementBreakdown',js);
+            const getDisplay=load(displayPath).getPlayerPaymentDisplay, getSplit=load(presentationPath).getPlayerSettlementBreakdown;
+            evaluate(module,null,1800,fixtureFees(),getDisplay,getSplit);
+            assert.deepEqual([module.exports.cashPence,module.exports.adjustmentPence,module.exports.totalPence],[1800,1900,3700]);
+            evaluate(module,{playerPaidPence:900,playerSubsidyPence:200},1800,fixtureFees(),getDisplay,getSplit);
+            assert.equal(module.exports.totalPence,1100,'existing canonical team ledger takes precedence over fallback');
+          });
+          '''
+          p.write_text(s)
+          PY
+          git diff --check
+          git diff
+          test "$GITHUB_REF" = refs/heads/fix/consistent-player-fixture-ledger
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' tests/payment-ledger-consistency.test.cjs
+          git commit -m 'Retain historical no-charge payment totals while preferring the canonical team ledger'
+          git push origin HEAD:refs/heads/fix/consistent-player-fixture-ledger
