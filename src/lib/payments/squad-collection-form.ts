@@ -6,7 +6,12 @@ export type CollectionFeedback = {
 };
 
 export function parseSquadCollectionAmount(value: string, allowZero = false): number | null {
-  const cleaned = value.replace(/[£,\s]/g, "");
+  const raw = value.trim().replace(/^£\s*/, "");
+  // Accept correctly grouped UK currency, but never turn "5,50" or "5 50"
+  // into £550 by silently deleting misplaced separators from a text input.
+  const cleaned = /^\d{1,3}(?:,\d{3})+(?:\.\d{0,2})?$/.test(raw)
+    ? raw.replaceAll(",", "")
+    : raw;
   // Empty is not zero. Reject partial pence rather than silently rounding a share.
   if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(cleaned)) return null;
   const pence = Math.round(Number(cleaned) * 100);
