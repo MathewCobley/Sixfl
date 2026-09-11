@@ -1,0 +1,195 @@
+name: Prepare native payment privacy correction
+on:
+  push:
+    branches: [fix/admin-only-payment-adjustment-visibility]
+    paths: [.github/workflows/author-payment-privacy.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Edit native presentation and tests only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(s,old,new):
+              assert s.count(old)==1,(old[:110],s.count(old))
+              return s.replace(old,new,1)
+          def edit(file,fn):
+              p=Path(file);p.write_text(fn(p.read_text()))
+          Path('src/lib/payments/payment-visibility.ts').write_text('''/** Use only the server-authenticated requireCaptain result. Never derive this
+           * permission from query strings, form fields or a client-supplied admin flag.
+           * Captain-only preview deliberately remains a customer view for administrators. */
+          export function mayViewPaymentAdjustments(access: {
+            isAdmin?: boolean;
+            user?: { role?: string } | null;
+            accessMode?: string;
+          } | null | undefined) {
+            return access?.isAdmin === true && access.user?.role === "ADMIN"
+              && access.accessMode !== "captain-preview";
+          }
+
+          export type PaymentAudience = "admin" | "captain" | "player";
+          ''')
+          def display(s):
+              s='import type { PaymentAudience } from "./payment-visibility";\n'+s
+              s=once(s,'export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null) {','export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null, audience: PaymentAudience = "player") {\n  const showInternal = audience === "admin";')
+              s=once(s,': subsidy > 0 ? "Settled with adjustment"',': subsidy > 0 ? showInternal ? "Settled with adjustment" : "Settled"')
+              start=s.index('  const detail = historyMismatch');end=s.index('  // On a settled row',start)
+              s=s[:start]+'''  // Text is audience-specific; the numeric accounting values below never change.
+            // The default is safe for the player's own dashboard, including admin preview.
+            const detail = historyMismatch
+              ? showInternal ? `${money(received)} recorded paid; ${money(assigned)} assigned — difference needs review` : "Payment record needs review."
+              : audience === "captain"
+                ? `${money(received + subsidy)} applied to fixture${captainReceived ? ` · ${money(captainReceived)} paid to captain` : ""} · ${money(balance)} outstanding`
+                : `${money(received)} received online${captainReceived ? ` + ${money(captainReceived)} received by captain` : ""}${showInternal && subsidy ? ` + ${money(subsidy)} SIXFL adjustment` : ""} · ${money(balance)} outstanding`;
+          '''+s[end:]
+              return s
+          edit('src/lib/payments/player-payment-display.ts',display)
+          def presentation(s):
+              s=once(s,'  playerSubsidyPence: number;\n}) {','  playerSubsidyPence: number;\n}, showInternal = false) {')
+              s=once(s,'    detail: `${money(entry.playerPaidPence)} received from players + ${money(entry.playerSubsidyPence)} SIXFL player adjustments`,','    detail: showInternal\n      ? `${money(entry.playerPaidPence)} received from players + ${money(entry.playerSubsidyPence)} SIXFL player adjustments`\n      : `${money(entry.playerPaidPence + entry.playerSubsidyPence)} player shares settled`,')
+              return once(s,'settlement above this charge; adjustments are not cash or team credit.','settlement above this charge.')
+          edit('src/lib/payments/payment-ledger-presentation.ts',presentation)
+          def component(s):
+              s=once(s,'export function PlayerContributionTable({ rows, isAdmin }: { rows: ContributionRow[]; isAdmin: boolean }) {','export function PlayerContributionTable({ rows, isAdmin, showAdjustmentDetails = false }: { rows: ContributionRow[]; isAdmin: boolean; showAdjustmentDetails?: boolean }) {\n  const showInternal = isAdmin && showAdjustmentDetails;')
+              s=once(s,'Only SIXFL receipts and recorded adjustments count towards the fixture.','{showInternal ? "Only SIXFL receipts and recorded adjustments count towards the fixture." : "Player shares applied to this fixture. Money paid to the captain is shown separately."}')
+              s=once(s,'>{row.statusLabel}</p>','>{!showInternal && row.statusLabel === "Settled with adjustment" ? "Settled" : row.statusLabel}</p>')
+              s=once(s,'{row.statusMeta}</p>','{showInternal ? row.statusMeta : "Payment record needs review."}</p>')
+              s=once(s,'{row.adjustmentPence > 0 ?','{showInternal && row.adjustmentPence > 0 ?')
+              return once(s,'Total applied from players and adjustments','{showInternal ? "Total applied from players and adjustments" : "Total player shares settled"}')
+          edit('src/components/payments/PaymentLedgerReconciliation.tsx',component)
+          def captain(s):
+              s='import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";\n'+s
+              s=once(s,'  const correctionAccess = await requireCaptain(teamid);','  const correctionAccess = await requireCaptain(teamid);\n  const showAdjustmentDetails = mayViewPaymentAdjustments(correctionAccess);')
+              s=once(s,'const display = getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id));','const display = getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id), showAdjustmentDetails ? "admin" : "captain");')
+              s=once(s,'const playerSettlement = getPlayerSettlementBreakdown(entry);','const playerSettlement = getPlayerSettlementBreakdown(entry, showAdjustmentDetails);')
+              s=once(s,'{getChargeDescriptionForDisplay(entry.description) || "No description"}','{showAdjustmentDetails ? getChargeDescriptionForDisplay(entry.description) || "No description" : context || "Match fee"}')
+              s=once(s,'<PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} />','<PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} showAdjustmentDetails={showAdjustmentDetails} />')
+              s=once(s,'from players and adjustments. SIXFL needs to review the linked records; no balancing adjustment has been assumed.','from player shares. SIXFL needs to review the linked records.')
+              start=s.index('                              <div data-player-cash-pence=');end=s.index('\n\n                            </div>',start)
+              body=s[start:end]
+              s=s[:start]+'''                              {showAdjustmentDetails ? <>
+          '''+body+'''
+                                        </> : <div className="flex items-center justify-between gap-4">
+                                          <span>Player shares settled</span><span className="font-semibold text-white">{formatMoney(playerSettledPence)}</span>
+                                        </div>}'''+s[end:]
+              s=once(s,'Recorded payments, credit and adjustments total {formatMoney(entry.settledPence)}.','Recorded settlement totals {formatMoney(entry.settledPence)}.')
+              s=once(s,'Adjustments do not create cash or team credit.','')
+              return once(s,'{paymentNote ? (','{showAdjustmentDetails && paymentNote ? (')
+          edit('src/app/captain/team/[teamid]/payments/page.tsx',captain)
+          def squad(s):
+              s='import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";\n'+s
+              s=once(s,'  const correctionAccess = await requireCaptain(teamid);','  const correctionAccess = await requireCaptain(teamid);\n  const showAdjustmentDetails = mayViewPaymentAdjustments(correctionAccess);')
+              s=once(s,'const fixturePlayerSettlement = getPlayerSettlementBreakdown(entry);','const fixturePlayerSettlement = getPlayerSettlementBreakdown(entry, showAdjustmentDetails);')
+              line=next(l for l in s.splitlines() if 'const playerSettlement = getPlayerSettlementBreakdown(selectedEntry' in l)
+              s=once(s,line,line[:-2]+', showAdjustmentDetails);')
+              for attr in ['statusLabel','detail']:
+                  s=s.replace('getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).'+attr,'getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id), showAdjustmentDetails ? "admin" : "captain").'+attr)
+              return s
+          edit('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx',squad)
+          def tests(s):
+              s=once(s,"'src/lib/payments/payment-receipt-presentation.ts','src/components/payments/PaymentLedgerReconciliation.tsx'","'src/lib/payments/payment-receipt-presentation.ts','src/components/payments/PaymentLedgerReconciliation.tsx','src/lib/payments/payment-visibility.ts'")
+              s=once(s,'transactionRows=null,extraEntries=[],receiptStates=[]}={}','transactionRows=null,extraEntries=[],receiptStates=[],accessOverride={}}={}')
+              s=once(s,"requireCaptain:async()=>({isAdmin,user:{id:'test-actor'}})","requireCaptain:async()=>({isAdmin,user:{id:'test-actor',role:isAdmin?'ADMIN':'USER'},accessMode:'captain',...accessOverride})")
+              s=s.replace(r'getPlayerSettlementBreakdown\(entry\)',r'getPlayerSettlementBreakdown\(entry, showAdjustmentDetails\)')
+              s=s.replace(r'getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)',r'getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\), showAdjustmentDetails')
+              s=once(s,'module.exports=(${declaration});','const showAdjustmentDetails = false; module.exports=(${declaration});')
+              s+=r'''
+
+          // Private concessions must not leave the server in any customer view.
+          const privateCopy = /SIXFL player adjustments|SIXFL adjustment|Settled with adjustment|recorded adjustments|players and adjustments|received from players \+|data-player-adjustments-pence|data-player-cash-pence|£19\.00|£18\.00|Admin note must remain/;
+          for (const scenario of ['captain','captain-preview','untrusted-flag']) test(`adjustment privacy: ${scenario} keeps £37 settlement and £3 balance without internal copy or attributes`,async()=>{
+            const override=scenario==='captain-preview'?{isAdmin:false,user:{id:'test-admin',role:'ADMIN'},accessMode:'captain-preview'}:scenario==='untrusted-flag'?{isAdmin:true,user:{id:'test-user',role:'USER'}}:{};
+            const html=await renderPage({isAdmin:false,accessOverride:override});
+            assert.doesNotMatch(html,privateCopy);assert.doesNotMatch(html,/£5\.00 received \+ £3\.00/);
+            assert.match(html,/Total player shares settled/);assert.match(html,/data-player-settled-pence="3700"/);
+            assert.match(html,/£37.00 applied to £40.00 charge; £3.00 outstanding/);
+            assert.deepEqual([...html.matchAll(/data-player-contribution-pence="(\d+)"/g)].map(m=>+m[1]),[800,800,800,800,500]);
+            capture(`privacy-${scenario}`,html);
+          });
+          test('adjustment privacy: verified administrator still sees the exact private cash and adjustment split',async()=>{
+            const html=await renderPage();assert.match(html,/data-player-adjustments-pence="1900"/);assert.match(html,/data-player-cash-pence="1800"/);
+            assert.match(html,/£5.00 received \+ £3.00 adjustment/);assert.match(html,/Settled with adjustment/);
+          });
+          test('adjustment privacy: permission is server-role based and preview-aware, not a submitted boolean',()=>{
+            const allow=loader()('src/lib/payments/payment-visibility.ts').mayViewPaymentAdjustments;
+            for(const access of [null,{}, {isAdmin:true}, {isAdmin:true,user:{role:'USER'}},{isAdmin:false,user:{role:'ADMIN'}},{isAdmin:true,user:{role:'ADMIN'},accessMode:'captain-preview'}])assert.equal(allow(access),false);
+            assert.equal(allow({isAdmin:true,user:{role:'ADMIN'},accessMode:'captain'}),true);
+          });
+          test('adjustment privacy: player default and captain text are safe while numerical receipts and debt are unchanged',()=>{
+            const get=loader()(displayPath).getPlayerPaymentDisplay;
+            for(const fee of fixtureFees()) {
+              const player=get(fee), captain=get(fee,null,'captain'), admin=get(fee,null,'admin');
+              for(const view of [player,captain]) {
+                assert.doesNotMatch(view.statusLabel+' '+view.detail,/adjustment|subsid|captain share|assigned/i);
+                for(const key of ['receivedPence','captainReceivedPence','adjustmentPence','fixtureContributionPence','outstandingPence','assignedPence'])assert.equal(view[key],admin[key]);
+              }
+            }
+            const capped=fixtureFees()[3];assert.match(get(capped).detail,/£5.00 received online/);assert.doesNotMatch(get(capped).detail,/£8.00|£3.00/);
+            const split=loader()(presentationPath).getPlayerSettlementBreakdown;
+            assert.equal(split({playerPaidPence:1800,playerSubsidyPence:1900}).detail,'£37.00 player shares settled');
+            assert.match(split({playerPaidPence:1800,playerSubsidyPence:1900},true).detail,/£18.00.*£19.00/);
+          });
+          test('adjustment privacy: shared table fails closed even when handed unsanitised admin status text',()=>{
+            const load=loader({'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)}});
+            const Table=load('src/components/payments/PaymentLedgerReconciliation.tsx').PlayerContributionTable;
+            const rows=[{id:'fee',name:'Example',contact:null,amountPence:800,receivedPence:500,adjustmentPence:300,captainReceivedPence:0,outstandingPence:0,statusLabel:'Settled with adjustment',statusMeta:'Private adjustment of £3.00',tone:'emerald'}];
+            const html=renderToStaticMarkup(React.createElement(Table,{rows,isAdmin:true}));
+            assert.doesNotMatch(html,/adjustment|£3.00|£5.00/);assert.match(html,/£8.00/);
+          });
+          '''
+              return s
+          edit('tests/payment-ledger-consistency.test.cjs',tests)
+          edit('tests/player-charge-correction-controls.cjs',lambda s:once(s,r'isAdmin=\{correctionAccess\.isAdmin\}\s*\/>',r'isAdmin=\{correctionAccess\.isAdmin\}\s+showAdjustmentDetails=\{showAdjustmentDetails\}\s*\/>'))
+          edit('tests/player-ledger.test.ts',lambda s:once(s,'const d=getPlayerPaymentDisplay(await feeRow(t),await state(t));assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");','const d=getPlayerPaymentDisplay(await feeRow(t),await state(t),"admin");assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");'))
+          edit('tests/payment-ledger-consistency.browser.cjs',lambda s:s+r'''
+
+          test('captain and captain-only preview never contain private adjustments, including collapsed content, at desktop/mobile widths',async()=>{
+            const css=cssFiles('.next/static').map(p=>fs.readFileSync(p,'utf8')).join('\n');const browser=await chromium.launch({headless:true});
+            try{for(const width of [1440,390])for(const scenario of ['captain','captain-preview']){
+              const page=await browser.newPage({viewport:{width,height:1000}});await page.route('**/*',r=>r.abort());
+              const markup=fs.readFileSync(path.join(out,`privacy-${scenario}.html`),'utf8');
+              await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body class="bg-black text-white"><main class="mx-auto max-w-7xl px-4 py-8">${markup}</main></body></html>`);
+              for(const detail of await page.locator('details').all())await detail.locator('summary').first().click();
+              assert.doesNotMatch(await page.locator('body').innerHTML(),/SIXFL player adjustments|SIXFL adjustment|Settled with adjustment|data-player-adjustments-pence|data-player-cash-pence|£19\.00|£18\.00/);
+              assert.match(await page.locator('[data-player-contributions-total]').innerText(),/£37.00/);
+              assert.match(await page.locator('[data-fixture-equation]').innerText(),/£40.00.*£37.00.*£3.00/);
+              await page.screenshot({path:path.join(out,`privacy-${scenario}-${width}.png`),fullPage:true});await page.close();
+            }}finally{await browser.close();}
+          });
+          ''')
+          edit('docs/critical-feature-contracts.md',lambda s:s+'''
+
+          ## Internal player concessions are administrator-only
+
+          Player caps, subsidies and SIXFL player adjustments are private administrative
+          information. Customer Team Payments and Squad Payments show the settled
+          nominal player share, not its internal cash/subsidy split. Never call a
+          non-cash settlement money received. Player dashboards show the player's actual
+          receipt and liability, not an adjustment against the team's nominal share.
+          Only server-verified administrator access may opt into internal status/copy.
+          Captain-only preview stays a customer view even for an administrator. Private
+          breakdowns must be absent from returned markup and attributes, including
+          collapsed content; CSS hiding is not sufficient. Actual receipts, liabilities,
+          fee waivers and credit arithmetic remain unchanged.
+
+          The ledger-consistency workflow renders both roles and captain-only preview,
+          verifies entire HTML before/after full production preparation, and opens
+          collapsed sections in browsers at desktop/phone widths. Tests also cover
+          fail-closed helper defaults and an admin boolean without the server role.
+          The example remains £37 settled / £3 due; only the administrator sees the
+          £18 cash / £19 internal adjustment breakdown.
+          ''')
+          PY
+          git diff --check
+          git diff --stat
+          test "$GITHUB_REF" = refs/heads/fix/admin-only-payment-adjustment-visibility
+          git config user.name 'SIXFL maintenance'
+          git config user.email 'noreply@users.noreply.github.com'
+          git add src tests docs
+          git commit -m 'Keep internal player adjustments behind verified admin access without changing balances'
+          git push origin HEAD:refs/heads/fix/admin-only-payment-adjustment-visibility
