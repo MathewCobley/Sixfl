@@ -152,3 +152,7 @@ if (fs.existsSync(path.join(root, reminderTestPath))) {
 }
 
 console.log("Applied team-lead decline queue and provider safeguards to final prepared source.");
+
+// This runs last so current kick-off, fee, AI-prediction and notification
+// preparation stays authoritative while scheduling/admin wording becomes venue-neutral.
+require("./apply-venue-neutral-fixtures-current.cjs");
