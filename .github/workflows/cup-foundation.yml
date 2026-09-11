@@ -34,6 +34,13 @@ jobs:
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
+      - name: Archive clean tracked source for native implementation review
+        run: git archive --format=tar.gz -o /tmp/sixfl-native-review-source.tar.gz HEAD src scripts tests prisma .github package.json package-lock.json tsconfig.json next.config.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sixfl-native-review-source
+          path: /tmp/sixfl-native-review-source.tar.gz
+          retention-days: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
