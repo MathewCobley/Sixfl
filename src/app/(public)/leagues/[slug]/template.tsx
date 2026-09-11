@@ -2,5 +2,5 @@ import type { ReactNode } from "react";
 import LatestNews from "@/components/news/LatestNews";
 
 export default function NewsDiscoveryTemplate({ children }: { children: ReactNode }) {
-  return <>{children}<LatestNews scope="league" /></>;
+  return <><LatestNews scope="league" />{children}</>;
 }
