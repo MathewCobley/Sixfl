@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getStripeServerClient } from "@/lib/stripe/client";
+import { PLAYER_FEE_CAP_NOTE } from "./player-fee-coverage";
 import { lockLedgerFees, money, readPlayerLedgerState, setLedgerContext } from "./player-ledger";
 import { LEDGER_TRANSACTION_PREFIX } from "./player-ledger-markers";
 
@@ -75,8 +76,9 @@ function secret() {
   if (!value) throw new Error("A signing secret is required for charge corrections.");
   return value;
 }
+type Resolution = "outstanding" | "adjustment";
 type Confirmation = { id: string; actorUserId: string; feeId: string; teamId: string; originalPence: number;
-  receivedPence: number; reason: string; fingerprint: string; expiresAt: number };
+  receivedPence: number; reason: string; fingerprint: string; expiresAt: number; resolution: Resolution };
 function sign(data: Confirmation) {
   const body = Buffer.from(JSON.stringify(data)).toString("base64url");
   return `${body}.${createHmac("sha256", secret()).update(body).digest("base64url")}`;
@@ -88,7 +90,8 @@ function readConfirmation(token: string, actorUserId: string, feeId: string): Co
   const expected = createHmac("sha256", secret()).update(parts[0]).digest();
   const actual = Buffer.from(parts[1], "base64url");
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return fail("Correction preview was changed. Preview again.");
-  const value = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as Confirmation;
+  const parsed = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as Omit<Confirmation, "resolution"> & { resolution?: Resolution };
+  const value: Confirmation = { ...parsed, resolution: parsed.resolution === "adjustment" ? "adjustment" : "outstanding" };
   if (value.actorUserId !== actorUserId || value.feeId !== feeId || value.expiresAt < Date.now()) return fail("This preview has expired or belongs to another administrator or fee. Preview again.");
   return value;
 }
@@ -120,24 +123,33 @@ export async function getOriginalChargeCorrectionCandidate(feeId: string, actorU
     kickoffAt: c.fee.fixture.kickoffAt.toISOString(), assignedPence: c.assigned, receivedPence: c.receivedPence };
 }
 
-export async function previewOriginalPlayerCharge(input: { feeId: string; actorUserId: string; originalPence: number; reason: string; noWaiver: boolean }, stripe = getStripeServerClient()) {
+export async function previewOriginalPlayerCharge(input: {
+  feeId: string; actorUserId: string; originalPence: number; reason: string; noWaiver?: boolean;
+  resolution?: Resolution; adjustmentConfirmed?: boolean;
+}, stripe = getStripeServerClient()) {
   await assertPlayerChargeCorrectionAdmin(input.actorUserId);
   const reason = input.reason.trim();
-  if (!input.noWaiver || reason.length < 10 || reason.length > 1000) return fail("Confirm that no balance was forgiven and enter a reason of 10–1,000 characters.");
+  const resolution: Resolution = input.resolution === "adjustment" ? "adjustment" : "outstanding";
+  if (reason.length < 10 || reason.length > 1000) return fail("Enter a reason of 10–1,000 characters.");
+  if (resolution === "outstanding" && !input.noWaiver) return fail("Confirm that no balance was forgiven before restoring an unpaid remainder.");
+  if (resolution === "adjustment" && !input.adjustmentConfirmed) return fail("Confirm that the difference is a genuine SIXFL adjustment and the player should owe nothing further.");
   const c = await loadCandidate(input.feeId);
   if (!Number.isSafeInteger(input.originalPence) || input.originalPence > 500000 || input.originalPence <= c.receivedPence) return fail("The correct original charge must exceed the verified payments and be no more than £5,000.");
   await verifyReceipts(c, stripe);
+  const difference = input.originalPence - c.receivedPence;
   const data: Confirmation = { id: randomUUID(), actorUserId: input.actorUserId, feeId: c.fee.id, teamId: c.fee.teamId,
-    originalPence: input.originalPence, receivedPence: c.receivedPence, reason, fingerprint: fingerprint(c), expiresAt: Date.now() + 10 * 60_000 };
+    originalPence: input.originalPence, receivedPence: c.receivedPence, reason, fingerprint: fingerprint(c), expiresAt: Date.now() + 10 * 60_000, resolution };
   return { token: sign(data), originalPence: data.originalPence, receivedPence: data.receivedPence,
-    outstandingPence: data.originalPence - data.receivedPence, reason, expiresAt: data.expiresAt };
+    outstandingPence: resolution === "outstanding" ? difference : 0, adjustmentPence: resolution === "adjustment" ? difference : 0,
+    resolution, reason, expiresAt: data.expiresAt };
 }
 
 export async function confirmOriginalPlayerCharge(input: { feeId: string; actorUserId: string; token: string }, stripe = getStripeServerClient()) {
   await assertPlayerChargeCorrectionAdmin(input.actorUserId);
   const p = readConfirmation(input.token, input.actorUserId, input.feeId);
   const existing = await prisma.playerLedgerEntry.findUnique({ where: { sourceKey: correctionKey(p.id) } });
-  if (existing) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: existing.balanceAfterPence, alreadySaved: true };
+  if (existing) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: existing.balanceAfterPence,
+    adjustmentPence: p.resolution === "adjustment" ? p.originalPence - p.receivedPence : 0, resolution: p.resolution, alreadySaved: true };
   try {
   const snapshot = await loadCandidate(p.feeId);
   if (fingerprint(snapshot) !== p.fingerprint) return fail("The charge or its payments changed since preview. Preview again; nothing was changed.");
@@ -147,11 +159,34 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
     await db.$queryRaw(Prisma.sql`SELECT id FROM "Team" WHERE id=${p.teamId} FOR UPDATE`);
     await lockLedgerFees(db, [p.feeId]);
     const repeated = await db.playerLedgerEntry.findUnique({ where: { sourceKey: correctionKey(p.id) } });
-    if (repeated) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: repeated.balanceAfterPence, alreadySaved: true };
+    if (repeated) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: repeated.balanceAfterPence,
+      adjustmentPence: p.resolution === "adjustment" ? p.originalPence - p.receivedPence : 0, resolution: p.resolution, alreadySaved: true };
     await db.$queryRaw(Prisma.sql`SELECT id FROM "PaymentTransaction" WHERE id IN (${Prisma.join(snapshot.transactions.map(t => t.id))}) ORDER BY id FOR UPDATE`);
     const c = await loadCandidate(p.feeId, db);
     if (fingerprint(c) !== p.fingerprint) return fail("The balance changed during verification. Preview again; no correction was saved.");
     const balance = p.originalPence - c.receivedPence;
+
+    if (p.resolution === "adjustment") {
+      const capNote = `${PLAYER_FEE_CAP_NOTE}: captain share ${money(p.originalPence)}; player charged ${money(c.receivedPence)}.`;
+      const note = [c.fee.note?.trim(), capNote].filter(Boolean).join("\n");
+      await db.playerMatchFee.update({ where: { id: p.feeId }, data: {
+        captainAssignedAmountPence: p.originalPence,
+        note,
+      } });
+      await db.playerLedgerEntry.create({ data: {
+        feeId: p.feeId, teamId: p.teamId, kind: "CORRECTION", amountPence: 0, balanceAfterPence: 0,
+        actorUserId: input.actorUserId, sourceKey: correctionKey(p.id),
+        reason: `Historical paid share reconciled as ${money(p.originalPence)} assigned, ${money(c.receivedPence)} verified paid and ${money(balance)} genuine SIXFL adjustment. ${p.reason}`,
+        reference: JSON.stringify({ originalPence: p.originalPence, receivedPence: c.receivedPence, adjustmentPence: balance,
+          previousAssignedPence: c.assigned, previousAmountPence: c.fee.amountPence, receiptIds: c.transactions.map(t => t.id) }),
+      } });
+      const after = await db.playerMatchFee.findUnique({ where: { id: p.feeId }, select: { amountPence: true, status: true, note: true, captainAssignedAmountPence: true } });
+      if (!after || after.status !== "PAID" || after.amountPence !== c.receivedPence || after.captainAssignedAmountPence !== p.originalPence || !after.note?.includes(capNote)) {
+        throw new Error("Adjustment correction did not preserve the paid receipt; transaction rolled back.");
+      }
+      return { teamId: p.teamId, feeId: p.feeId, outstandingPence: 0, adjustmentPence: balance, resolution: p.resolution, alreadySaved: false };
+    }
+
     // Adopt the SAME receipts into the shared ledger allocation mechanism. Never
     // insert a second PaymentTransaction or modify its amount/provider reference.
     for (const t of c.transactions) {
@@ -159,7 +194,7 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
       await db.playerRepaymentRequest.create({ data: { id, teamId: p.teamId, feeId: p.feeId, status: "PAID",
         amountPence: t.amountPence, dueAt: t.paidAt, expiresAt: t.paidAt, paidAt: t.paidAt,
         checkoutSessionId: t.stripeCheckoutSessionId, paymentIntentId: t.stripePaymentIntentId,
-        allocations: [{ feeId: p.feeId, fixtureId: c.fee.fixtureId, chargeId: c.charge.id, amountPence: t.amountPence, version: c.state.version }],
+        allocations: [{ feeId: p.fee.id, fixtureId: c.fee.fixtureId, chargeId: c.charge.id, amountPence: t.amountPence, version: c.state.version }],
         failureReason: "Existing verified receipt adopted during admin charge correction; no new payment taken." } });
       await db.paymentTransaction.update({ where: { id: t.id }, data: { chargeId: c.charge.id,
         notes: `${LEDGER_TRANSACTION_PREFIX}. Historical receipt reconciled. Account fee reference: ${p.feeId}. Request: ${id}.` } });
@@ -175,13 +210,14 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
       "waivedAt"=NULL, "cancelledAt"=NULL, "captainAssignedAmountPence"=${p.originalPence}, "updatedAt"=NOW() WHERE id=${p.feeId}`);
     const after = await readPlayerLedgerState(p.feeId, db);
     if (!after || after.balancePence !== balance || after.receivedPence !== c.receivedPence) throw new Error("Correction did not balance; transaction rolled back.");
-    return { teamId: p.teamId, feeId: p.feeId, outstandingPence: balance, alreadySaved: false };
+    return { teamId: p.teamId, feeId: p.feeId, outstandingPence: balance, adjustmentPence: 0, resolution: p.resolution, alreadySaved: false };
   }, { maxWait: 5000, timeout: 20000 });
   } catch (error) {
     // Another confirmation can finish while this request is verifying provider
     // receipts. The signed nonce identifies that same save, not a new adjustment.
     const saved = await prisma.playerLedgerEntry.findUnique({ where: { sourceKey: correctionKey(p.id) } });
-    if (saved) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: saved.balanceAfterPence, alreadySaved: true };
+    if (saved) return { teamId: p.teamId, feeId: p.feeId, outstandingPence: saved.balanceAfterPence,
+      adjustmentPence: p.resolution === "adjustment" ? p.originalPence - p.receivedPence : 0, resolution: p.resolution, alreadySaved: true };
     throw error;
   }
 }
