@@ -54,6 +54,10 @@ function formatPoundsForNote(pence: number) {
   return (pence / 100).toFixed(2);
 }
 
+function capNote(assignedPence: number, chargedPence: number) {
+  return `Player fee cap applied: captain share £${formatPoundsForNote(assignedPence)}; player charged £${formatPoundsForNote(chargedPence)}.`;
+}
+
 async function assertAdmin(actorUserId: string, db: Db) {
   const actor = actorUserId
     ? await db.user.findUnique({
@@ -119,9 +123,9 @@ async function loadCandidate(feeId: string, actorUserId: string, db: Db) {
     profile = profiles[0] ?? null;
   }
 
-  const capNote = CAP_NOTE_PATTERN.exec(fee.note ?? "");
-  const noteAssignedPence = parsePoundsToPence(capNote?.[2]);
-  const hasFeeCapEvidence = Boolean(capNote);
+  const capMatch = CAP_NOTE_PATTERN.exec(fee.note ?? "");
+  const noteAssignedPence = parsePoundsToPence(capMatch?.[2]);
+  const hasFeeCapEvidence = Boolean(capMatch);
   const hasCurrentConcession =
     (profile?.cap !== null && profile?.cap !== undefined) ||
     (profile?.override !== null && profile?.override !== undefined);
@@ -137,6 +141,12 @@ async function loadCandidate(feeId: string, actorUserId: string, db: Db) {
       .trim() ||
     fee.prospect?.email?.trim() ||
     "Player";
+
+  const currentCapMatchesCharge =
+    profile?.cap !== null &&
+    profile?.cap !== undefined &&
+    profile.cap === fee.amountPence &&
+    currentAssignedPence > fee.amountPence;
 
   return {
     fee,
@@ -155,6 +165,7 @@ async function loadCandidate(feeId: string, actorUserId: string, db: Db) {
     capPence: profile?.cap ?? null,
     overridePence: profile?.override ?? null,
     hasFeeCapEvidence,
+    canApplyCurrentCapToFixture: !hasFeeCapEvidence && currentCapMatchesCharge,
   };
 }
 
@@ -226,7 +237,11 @@ export async function correctCaptainAssignedShare(input: {
         );
       }
 
-      if (input.assignedPence === candidate.currentAssignedPence) {
+      const applyCurrentCap =
+        candidate.canApplyCurrentCapToFixture &&
+        input.assignedPence === candidate.currentAssignedPence;
+
+      if (input.assignedPence === candidate.currentAssignedPence && !applyCurrentCap) {
         return {
           teamId: candidate.teamId,
           feeId: candidate.feeId,
@@ -234,25 +249,19 @@ export async function correctCaptainAssignedShare(input: {
           assignedPence: input.assignedPence,
           playerChargePence: candidate.playerChargePence,
           unchanged: true,
+          adjustmentRecorded: candidate.hasFeeCapEvidence,
         };
       }
 
       const previousStatus = candidate.fee.status;
       const previousAmountPence = candidate.fee.amountPence;
       const previousNote = candidate.fee.note ?? null;
-      const nextNote =
-        previousNote?.replace(
-          CAP_NOTE_PATTERN,
-          (
-            _match,
-            prefix: string,
-            _oldShare: string,
-            middle: string,
-            charged: string,
-            suffix: string,
-          ) =>
-            `${prefix}${formatPoundsForNote(input.assignedPence)}${middle}${charged}${suffix}`,
-        ) ?? null;
+      const nextCapNote = capNote(input.assignedPence, candidate.playerChargePence);
+      const nextNote = candidate.hasFeeCapEvidence
+        ? previousNote?.replace(CAP_NOTE_PATTERN, nextCapNote) ?? nextCapNote
+        : candidate.canApplyCurrentCapToFixture
+          ? [previousNote?.trim(), nextCapNote].filter(Boolean).join("\n")
+          : previousNote;
 
       await db.$executeRaw(Prisma.sql`
         UPDATE "PlayerMatchFee"
@@ -264,7 +273,7 @@ export async function correctCaptainAssignedShare(input: {
 
       const after = await db.playerMatchFee.findUnique({
         where: { id: input.feeId },
-        select: { amountPence: true, status: true },
+        select: { amountPence: true, status: true, note: true },
       });
       const assignedAfter = await db.$queryRaw<AssignedRow[]>(Prisma.sql`
         SELECT "captainAssignedAmountPence" AS assigned
@@ -276,7 +285,8 @@ export async function correctCaptainAssignedShare(input: {
         !after ||
         after.amountPence !== previousAmountPence ||
         after.status !== previousStatus ||
-        Number(assignedAfter[0]?.assigned) !== input.assignedPence
+        Number(assignedAfter[0]?.assigned) !== input.assignedPence ||
+        ((applyCurrentCap || candidate.hasFeeCapEvidence) && !after.note?.includes(nextCapNote))
       ) {
         throw new Error(
           "Captain-share correction changed an unexpected payment field; transaction rolled back.",
@@ -298,7 +308,9 @@ export async function correctCaptainAssignedShare(input: {
             balanceAfterPence: state.balancePence,
             receiptPence: 0,
             actorUserId: input.actorUserId,
-            reason: `SIXFL corrected the captain-assigned share from ${money(candidate.currentAssignedPence)} to ${money(input.assignedPence)}. The player's charge, payments and outstanding balance were not changed.`,
+            reason: applyCurrentCap
+              ? `SIXFL applied the player's existing ${money(candidate.playerChargePence)} cap to this historical fixture. Captain share ${money(input.assignedPence)}, player charge ${money(candidate.playerChargePence)}, difference ${money(input.assignedPence - candidate.playerChargePence)} recorded as the fixture adjustment. Payment status, receipts and outstanding balance were unchanged.`
+              : `SIXFL corrected the captain-assigned share from ${money(candidate.currentAssignedPence)} to ${money(input.assignedPence)}. The player's charge, payments and outstanding balance were not changed.`,
             sourceKey: `captain-share-correction:${input.feeId}:${randomUUID()}`,
           },
         });
@@ -311,6 +323,7 @@ export async function correctCaptainAssignedShare(input: {
         assignedPence: input.assignedPence,
         playerChargePence: candidate.playerChargePence,
         unchanged: false,
+        adjustmentRecorded: applyCurrentCap || candidate.hasFeeCapEvidence,
       };
     },
     { maxWait: 5000, timeout: 15000 },
