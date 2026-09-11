@@ -16,6 +16,12 @@ const fail = (message: string, status = 400): never => {
 
 const CAP_NOTE_PATTERN = /(Player fee cap applied: captain share £)([0-9,.]+)(; player charged £)([0-9,.]+)(\.)/i;
 
+/**
+ * SIXFL extends Prisma at runtime, so the generated PrismaClient and the
+ * transaction callback client are not structurally assignable even though the
+ * delegates used here have the same runtime contract. Keep the adapter local
+ * to this correction service rather than weakening the application's client.
+ */
 type Db = Pick<
   Prisma.TransactionClient,
   | "$queryRaw"
@@ -25,6 +31,8 @@ type Db = Pick<
   | "playerFeeLedgerState"
   | "playerLedgerEntry"
 >;
+
+const correctionDb = (db: unknown) => db as Db;
 
 type ProfileRow = {
   override: number | null;
@@ -115,16 +123,20 @@ async function loadCandidate(feeId: string, actorUserId: string, db: Db) {
   const noteAssignedPence = parsePoundsToPence(capNote?.[2]);
   const hasFeeCapEvidence = Boolean(capNote);
   const hasCurrentConcession =
-    profile?.cap !== null && profile?.cap !== undefined ||
-    profile?.override !== null && profile?.override !== undefined;
+    (profile?.cap !== null && profile?.cap !== undefined) ||
+    (profile?.override !== null && profile?.override !== undefined);
 
   if (!hasFeeCapEvidence && !hasCurrentConcession) return null;
 
-  const playerName = fee.teamMember?.user.name?.trim()
-    || fee.teamMember?.user.email?.trim()
-    || [fee.prospect?.firstName, fee.prospect?.lastName].filter(Boolean).join(" ").trim()
-    || fee.prospect?.email?.trim()
-    || "Player";
+  const playerName =
+    fee.teamMember?.user.name?.trim() ||
+    fee.teamMember?.user.email?.trim() ||
+    [fee.prospect?.firstName, fee.prospect?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    fee.prospect?.email?.trim() ||
+    "Player";
 
   return {
     fee,
@@ -150,7 +162,11 @@ export async function getCaptainAssignedShareCorrectionCandidate(
   feeId: string,
   actorUserId: string,
 ) {
-  const candidate = await loadCandidate(feeId, actorUserId, prisma);
+  const candidate = await loadCandidate(
+    feeId,
+    actorUserId,
+    correctionDb(prisma),
+  );
   if (!candidate) return null;
 
   const { fee: _fee, ...publicCandidate } = candidate;
@@ -167,107 +183,136 @@ export async function correctCaptainAssignedShare(input: {
   if (!input.confirmed) {
     fail("Confirm that this is only a captain-share correction before saving.");
   }
-  if (!Number.isSafeInteger(input.assignedPence) || input.assignedPence < 0 || input.assignedPence > 500000) {
+  if (
+    !Number.isSafeInteger(input.assignedPence) ||
+    input.assignedPence < 0 ||
+    input.assignedPence > 500000
+  ) {
     fail("Enter a valid captain-assigned share of no more than £5,000.");
   }
-  if (!Number.isSafeInteger(input.expectedAssignedPence) || input.expectedAssignedPence < 0) {
+  if (
+    !Number.isSafeInteger(input.expectedAssignedPence) ||
+    input.expectedAssignedPence < 0
+  ) {
     fail("The current assigned share could not be verified. Reload the page.");
   }
 
-  return prisma.$transaction(async (db) => {
-    await assertAdmin(input.actorUserId, db);
-    await db.$queryRaw(Prisma.sql`
-      SELECT id FROM "PlayerMatchFee" WHERE id=${input.feeId} FOR UPDATE
-    `);
+  return prisma.$transaction(
+    async (transaction) => {
+      const db = correctionDb(transaction);
+      await assertAdmin(input.actorUserId, db);
+      await db.$queryRaw(Prisma.sql`
+        SELECT id FROM "PlayerMatchFee" WHERE id=${input.feeId} FOR UPDATE
+      `);
 
-    const candidate = await loadCandidate(input.feeId, input.actorUserId, db);
-    if (!candidate) {
-      fail("This player fee no longer has a cap or override. Nothing was changed.");
-    }
-    if (candidate.currentAssignedPence !== input.expectedAssignedPence) {
-      fail("The captain-assigned share changed after this page was opened. Reload before correcting it.");
-    }
-    if (input.assignedPence < candidate.playerChargePence) {
-      fail(
-        `The captain-assigned share cannot be lower than the player's recorded charge of ${money(candidate.playerChargePence)}.`,
+      const candidate = await loadCandidate(
+        input.feeId,
+        input.actorUserId,
+        db,
       );
-    }
+      if (!candidate) {
+        throw new PlayerAssignedShareCorrectionError(
+          "This player fee no longer has a cap or override. Nothing was changed.",
+        );
+      }
+      if (candidate.currentAssignedPence !== input.expectedAssignedPence) {
+        fail(
+          "The captain-assigned share changed after this page was opened. Reload before correcting it.",
+        );
+      }
+      if (input.assignedPence < candidate.playerChargePence) {
+        fail(
+          `The captain-assigned share cannot be lower than the player's recorded charge of ${money(candidate.playerChargePence)}.`,
+        );
+      }
 
-    if (input.assignedPence === candidate.currentAssignedPence) {
+      if (input.assignedPence === candidate.currentAssignedPence) {
+        return {
+          teamId: candidate.teamId,
+          feeId: candidate.feeId,
+          previousAssignedPence: candidate.currentAssignedPence,
+          assignedPence: input.assignedPence,
+          playerChargePence: candidate.playerChargePence,
+          unchanged: true,
+        };
+      }
+
+      const previousStatus = candidate.fee.status;
+      const previousAmountPence = candidate.fee.amountPence;
+      const previousNote = candidate.fee.note ?? null;
+      const nextNote =
+        previousNote?.replace(
+          CAP_NOTE_PATTERN,
+          (
+            _match,
+            prefix: string,
+            _oldShare: string,
+            middle: string,
+            charged: string,
+            suffix: string,
+          ) =>
+            `${prefix}${formatPoundsForNote(input.assignedPence)}${middle}${charged}${suffix}`,
+        ) ?? null;
+
+      await db.$executeRaw(Prisma.sql`
+        UPDATE "PlayerMatchFee"
+        SET "captainAssignedAmountPence"=${input.assignedPence},
+            "note"=${nextNote},
+            "updatedAt"=NOW()
+        WHERE id=${input.feeId}
+      `);
+
+      const after = await db.playerMatchFee.findUnique({
+        where: { id: input.feeId },
+        select: { amountPence: true, status: true },
+      });
+      const assignedAfter = await db.$queryRaw<AssignedRow[]>(Prisma.sql`
+        SELECT "captainAssignedAmountPence" AS assigned
+        FROM "PlayerMatchFee"
+        WHERE id=${input.feeId}
+      `);
+
+      if (
+        !after ||
+        after.amountPence !== previousAmountPence ||
+        after.status !== previousStatus ||
+        Number(assignedAfter[0]?.assigned) !== input.assignedPence
+      ) {
+        throw new Error(
+          "Captain-share correction changed an unexpected payment field; transaction rolled back.",
+        );
+      }
+
+      const state = await db.playerFeeLedgerState.findUnique({
+        where: { feeId: input.feeId },
+        select: { balancePence: true },
+      });
+
+      if (state) {
+        await db.playerLedgerEntry.create({
+          data: {
+            feeId: input.feeId,
+            teamId: candidate.teamId,
+            kind: "CAPTAIN_SHARE_CORRECTION",
+            amountPence: 0,
+            balanceAfterPence: state.balancePence,
+            receiptPence: 0,
+            actorUserId: input.actorUserId,
+            reason: `SIXFL corrected the captain-assigned share from ${money(candidate.currentAssignedPence)} to ${money(input.assignedPence)}. The player's charge, payments and outstanding balance were not changed.`,
+            sourceKey: `captain-share-correction:${input.feeId}:${randomUUID()}`,
+          },
+        });
+      }
+
       return {
         teamId: candidate.teamId,
         feeId: candidate.feeId,
         previousAssignedPence: candidate.currentAssignedPence,
         assignedPence: input.assignedPence,
         playerChargePence: candidate.playerChargePence,
-        unchanged: true,
+        unchanged: false,
       };
-    }
-
-    const previousStatus = candidate.fee.status;
-    const previousAmountPence = candidate.fee.amountPence;
-    const previousNote = candidate.fee.note ?? null;
-    const nextNote = previousNote?.replace(
-      CAP_NOTE_PATTERN,
-      (_match, prefix: string, _oldShare: string, middle: string, charged: string, suffix: string) =>
-        `${prefix}${formatPoundsForNote(input.assignedPence)}${middle}${charged}${suffix}`,
-    ) ?? null;
-
-    await db.$executeRaw(Prisma.sql`
-      UPDATE "PlayerMatchFee"
-      SET "captainAssignedAmountPence"=${input.assignedPence},
-          "note"=${nextNote},
-          "updatedAt"=NOW()
-      WHERE id=${input.feeId}
-    `);
-
-    const after = await db.playerMatchFee.findUnique({
-      where: { id: input.feeId },
-      select: { amountPence: true, status: true },
-    });
-    const assignedAfter = await db.$queryRaw<AssignedRow[]>(Prisma.sql`
-      SELECT "captainAssignedAmountPence" AS assigned
-      FROM "PlayerMatchFee"
-      WHERE id=${input.feeId}
-    `);
-
-    if (
-      !after ||
-      after.amountPence !== previousAmountPence ||
-      after.status !== previousStatus ||
-      Number(assignedAfter[0]?.assigned) !== input.assignedPence
-    ) {
-      throw new Error("Captain-share correction changed an unexpected payment field; transaction rolled back.");
-    }
-
-    const state = await db.playerFeeLedgerState.findUnique({
-      where: { feeId: input.feeId },
-      select: { balancePence: true },
-    });
-
-    if (state) {
-      await db.playerLedgerEntry.create({
-        data: {
-          feeId: input.feeId,
-          teamId: candidate.teamId,
-          kind: "CAPTAIN_SHARE_CORRECTION",
-          amountPence: 0,
-          balanceAfterPence: state.balancePence,
-          receiptPence: 0,
-          actorUserId: input.actorUserId,
-          reason: `SIXFL corrected the captain-assigned share from ${money(candidate.currentAssignedPence)} to ${money(input.assignedPence)}. The player's charge, payments and outstanding balance were not changed.`,
-          sourceKey: `captain-share-correction:${input.feeId}:${randomUUID()}`,
-        },
-      });
-    }
-
-    return {
-      teamId: candidate.teamId,
-      feeId: candidate.feeId,
-      previousAssignedPence: candidate.currentAssignedPence,
-      assignedPence: input.assignedPence,
-      playerChargePence: candidate.playerChargePence,
-      unchanged: false,
-    };
-  }, { maxWait: 5000, timeout: 15000 });
+    },
+    { maxWait: 5000, timeout: 15000 },
+  );
 }
