@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import AdminSelect from "@/components/admin/AdminSelect";
 import TeamBadge from "@/components/admin/TeamBadge";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -184,22 +185,18 @@ export default async function AdminCupPage({ params }: Props) {
 
         <form action={addCupEntrantAction} className="mt-5 flex flex-col gap-3 md:flex-row md:items-end">
           <input type="hidden" name="leagueId" value={cup.leagueId} />
-          <label className="min-w-0 flex-1 text-sm text-white/70">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Team</span>
-            <select
-              name="teamId"
-              required
-              defaultValue=""
-              className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/50"
-            >
-              <option value="" disabled>Choose a team…</option>
-              {availableTeams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.sourceLeagueName ? `${team.sourceLeagueName} — ` : ""}{team.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AdminSelect
+            name="teamId"
+            label="Team"
+            required
+            disabled={availableTeams.length === 0}
+            placeholder={availableTeams.length === 0 ? "No eligible teams available" : "Choose a team…"}
+            className="min-w-0 flex-1"
+            options={availableTeams.map((team) => ({
+              value: team.id,
+              label: `${team.sourceLeagueName ? `${team.sourceLeagueName} — ` : ""}${team.name}`,
+            }))}
+          />
           <button
             type="submit"
             disabled={availableTeams.length === 0}
