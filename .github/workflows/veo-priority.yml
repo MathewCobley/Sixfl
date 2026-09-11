@@ -1,0 +1,102 @@
+name: Veo Priority safety
+on:
+  pull_request:
+    paths:
+      - 'src/lib/veo/**'
+      - 'src/app/**/veo-priority/**'
+      - 'src/app/(admin)/admin/fixtures/publish-actions.ts'
+      - 'src/app/captain/team/[teamid]/fixtures/layout.tsx'
+      - 'prisma/migrations/20260912001500_veo_priority_pilot/**'
+      - 'tests/veo-priority/**'
+      - '.github/workflows/veo-priority.yml'
+  push:
+    branches: [feature/veo-priority-pilot]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: veo-priority-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_veo_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_veo_test
+      VEO_TEST_DATABASE: '1'
+      NEXTAUTH_SECRET: isolated-veo-safety-test-only
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pure allocation and fee tests
+        run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
+      - name: Prepare generated application schema
+        run: npm run prebuild && npx prisma generate
+      - name: Create isolated test schema and apply additive Veo migration
+        shell: bash
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
+          ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;
+          ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "isFixturePlaceholder" BOOLEAN NOT NULL DEFAULT false;
+          SQL
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912001500_veo_priority_pilot/migration.sql
+      - name: Real database safety checks
+        run: npx tsx tests/veo-priority/database.ts
+      - name: Production build
+        run: npm run build
+      - name: Install browser test dependencies
+        run: npm install --no-save --package-lock=false playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Start isolated development app
+        shell: bash
+        run: |
+          npx next dev --hostname 127.0.0.1 --port 3100 > veo-dev.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl --silent http://127.0.0.1:3100/login > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat veo-dev.log
+          exit 1
+      - name: Mobile and completed-video edit browser checks
+        run: node tests/veo-priority/browser.mjs
+      - name: Check production authentication boundary
+        shell: bash
+        run: |
+          NODE_ENV=production npx next start --hostname 127.0.0.1 --port 3101 > veo-production.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --silent http://127.0.0.1:3101/login > /dev/null; then break; fi
+            sleep 1
+          done
+          LEAGUE=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/veo/seed.json','utf8')).leagueId")
+          curl --silent --dump-header veo-auth-headers.txt --output /dev/null "http://127.0.0.1:3101/admin/leagues/$LEAGUE/veo-priority"
+          grep -i 'location: /login' veo-auth-headers.txt
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veo-safety-${{ github.sha }}
+          path: |
+            artifacts/veo/
+            veo-dev.log
+            veo-production.log
+            veo-auth-headers.txt
+          retention-days: 14
