@@ -17,6 +17,29 @@ function replaceRequired(source, before, after, label) {
   return source.replace(before, after);
 }
 
+// Keep the prepared Prisma schema aware of cup metadata. The database migration
+// remains the durable production change; this avoids leaving the generated
+// client blind to columns that now belong to LeagueCompetition.
+const schemaPath = "prisma/schema.prisma";
+let schema = read(schemaPath);
+if (!schema.includes('competitionType String @default("LEAGUE")')) {
+  schema = replaceRequired(
+    schema,
+    `  venueName String?\n  isActive Boolean @default(true)\n\n  currentLeagueId String?`,
+    `  venueName String?\n  isActive Boolean @default(true)\n\n  competitionType String  @default("LEAGUE")\n  cupFormat       String?\n  isInterLeague   Boolean @default(false)\n\n  currentLeagueId String?`,
+    "LeagueCompetition metadata anchor",
+  );
+}
+if (!schema.includes("@@index([competitionType])")) {
+  schema = replaceRequired(
+    schema,
+    `  @@index([isActive])\n  @@index([area])`,
+    `  @@index([isActive])\n  @@index([competitionType])\n  @@index([competitionType, isActive])\n  @@index([area])`,
+    "LeagueCompetition cup indexes",
+  );
+}
+write(schemaPath, schema);
+
 // Keep Cups visible as a separate admin concept rather than mixing them into
 // the normal Leagues list.
 const sidebarPath = "src/components/admin/AdminSidebar.tsx";
@@ -63,4 +86,4 @@ adminLeagues = replaceRequired(
 );
 write(adminLeaguesPath, adminLeagues);
 
-console.log("Cup admin navigation applied and cup seasons kept separate from normal league selectors.");
+console.log("Cup metadata is modeled, admin navigation is applied and cup seasons stay separate from normal league selectors.");
