@@ -1,0 +1,31 @@
+name: News source inspection
+on:
+  push:
+    branches: [feat/league-news-publishing]
+    paths: [.github/workflows/news-source-inspection.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Capture tracked application source, no secrets or Git history
+        run: |
+          mkdir -p /tmp/news-inspection
+          git ls-files | grep -E '(^src/|^scripts/|^tests/|^docs/|^config/|^prisma/|^\.github/|(^|/)AGENTS\.md$|^package.*json$|^tsconfig.*json$|^next\.config|^postcss\.config)' | tar -czf /tmp/news-inspection/source.tgz -T -
+          git grep -nE 'ReportEditor|getReportSource|LeagueQuickLinks|Latest.*[Nn]ews|MatchweekReport' -- src scripts tests > /tmp/news-inspection/source-inventory.txt
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Capture isolated development dependencies
+        run: tar -czf /tmp/news-inspection/dependencies.tgz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: news-source-inspection
+          path: /tmp/news-inspection
+          retention-days: 1
