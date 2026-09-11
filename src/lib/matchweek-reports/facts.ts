@@ -48,19 +48,18 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
   if (fixtures.length > 40) throw new ReportError("This match night is too large for one report. Please contact SIXFL support.");
   const ids = fixtures.map(f => f.id);
   const placeholders = await getFixturePlaceholderTeamIds(fixtures.flatMap(f => [f.homeTeam.id, f.awayTeam.id]));
-  // Read only fixture IDs and a fixed category, never conduct narratives, contacts
-  // or payment information. These details stay in the private editorial view.
+  // A resolved replacement is successful scheduling history, not a result
+  // blocker. Report the teams currently assigned to the completed fixture.
+  // Only abandonment records need this extra review; all normal result checks
+  // below still apply. Read no private narratives, contacts or payment data.
   const exceptions = ids.length ? await prisma.$queryRaw<Array<{ fixtureId: string; reason: string }>>(Prisma.sql`
     SELECT "fixtureId", 'abandonment'::text AS "reason" FROM "FixtureAbandonment" WHERE "fixtureId" IN (${Prisma.join(ids)})
-    UNION SELECT "fixtureId", 'replacement'::text AS "reason" FROM "LastMinuteReplacementResolution" WHERE "fixtureId" IN (${Prisma.join(ids)})
   `) : [];
   const exceptionReasons = new Map<string, ReportSkippedFixture["reasons"]>();
   for (const row of exceptions) {
     const reason = row.reason === "abandonment"
       ? { code: "abandonment", message: "An abandonment record is attached to this fixture; its administrative outcome needs editorial review." }
-      : row.reason === "replacement"
-        ? { code: "replacement", message: "A last-minute replacement is recorded for this fixture; it needs editorial review before inclusion." }
-        : { code: "administrative_record", message: "An administrative exception is recorded for this fixture and needs editorial review." };
+      : { code: "administrative_record", message: "An administrative exception is recorded for this fixture and needs editorial review." };
     const reasons = exceptionReasons.get(row.fixtureId) ?? [];
     if (!reasons.some(r => r.code === reason.code)) reasons.push(reason);
     exceptionReasons.set(row.fixtureId, reasons);
@@ -92,7 +91,7 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
       skippedFixtures.push({ fixtureId: f.id, teamA: teamA || "Unnamed team", teamB: teamB || "Unnamed team", kickoffAt: f.kickoffAt.toISOString(), disposition: pending ? "pending" : "omitted", reasons });
       continue;
     }
-    // Same eligibility rules as before; only the explanations above are new.
+    // Completed replacement games reach this same path as any other valid result.
     const result = r!;
     const a = result.teamMetadata.find(m => m.teamId === f.homeTeam.id), b = result.teamMetadata.find(m => m.teamId === f.awayTeam.id);
     const scorers = [...recordedScorers(a?.scorers, teamA, result.homeScore), ...recordedScorers(b?.scorers, teamB, result.awayScore)];
@@ -103,7 +102,8 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
     matches.push({ fixtureId: f.id, teamA, teamB, scoreA: result.homeScore, scoreB: result.awayScore, scorers, playersOfMatch });
   }
   // Preserve legacy summary fields for saved source hashes. The editor renders
-  // the structured fixture explanations, not this old catch-all warning.
+  // the structured fixture explanations, not this old catch-all warning. Its
+  // historic replacement label is NOT an eligibility rule or displayed reason.
   if (pendingFixtures) warnings.push(`${pendingFixtures} published fixture(s) still await a completed result. This will be a partial round-up.`);
   if (omittedFixtures) warnings.push(`${omittedFixtures} fixture(s) omitted: postponed, cancelled, disputed, placeholder, abandonment, replacement or invalid result. Review these separately.`);
   return { leagueId: league.id, leagueName: name(league.name), area: name(league.area) || null, matchDate, matches, pendingFixtures, omittedFixtures, warnings, skippedFixtures };

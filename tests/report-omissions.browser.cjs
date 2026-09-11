@@ -6,8 +6,9 @@ let browser, server, origin;
 before(async () => {
   const view = JSON.parse(fs.readFileSync('.tmp/report-omissions/view.json', 'utf8'));
   const savedView = JSON.parse(fs.readFileSync('.tmp/report-omissions/saved-view.json', 'utf8'));
+  const replacements = JSON.parse(fs.readFileSync('.tmp/report-omissions/replacement-views.json', 'utf8'));
   const entry = `import React from 'react';import{createRoot}from'react-dom/client';import Editor from './src/components/admin/matchweek-reports/ReportEditor';
-    const root=createRoot(document.getElementById('root'));window.base=${JSON.stringify(view)};window.saved=${JSON.stringify(savedView)};window.nextView=window.base;window.calls=[];
+    const root=createRoot(document.getElementById('root'));window.base=${JSON.stringify(view)};window.saved=${JSON.stringify(savedView)};window.nextView=window.base;window.replacements=${JSON.stringify(replacements)};window.calls=[];
     window.fetch=async(url,opts={})=>{window.calls.push({url,method:opts.method||'GET'});if(opts.method==='POST')throw Error('No generation or save allowed in this test');return new Response(JSON.stringify({ok:true,view:window.nextView}),{headers:{'content-type':'application/json'}})};
     let key=0;window.show=(view)=>root.render(<Editor key={++key} slug='example' initialView={view}/>);window.show(window.base);`;
   const bundle = (await build({ stdin: { contents: entry, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', plugins: [{ name: 'test-router', setup(b) { b.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'router', namespace: 'mock' })); b.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'export const useRouter=()=>({push(url){window.lastRoute=url}})' })); } }] })).outputFiles[0].text;
@@ -29,7 +30,7 @@ for (const width of [1440, 390]) test(`current omitted matches are visible and r
     await page.goto(origin);
     const panel = page.getByRole('region', { name: 'Matches not included (2)' }); await panel.waitFor();
     assert.equal(await panel.getByText('Example City', { exact: false }).first().isVisible(), true);
-    assert.equal(await panel.getByText(/last-minute replacement/).isVisible(), true);
+    assert.equal(await panel.getByText(/marked postponed/).isVisible(), true);
     assert.equal(await panel.getByText(/marked cancelled/).isVisible(), true);
     assert.equal(await page.evaluate(() => window.calls.length), 0);
     const link = panel.getByRole('link', { name: /Review Example City/ });
@@ -38,12 +39,12 @@ for (const width of [1440, 390]) test(`current omitted matches are visible and r
     await panel.scrollIntoViewIfNeeded(); await page.screenshot({ path: `.tmp/report-omissions/omissions-${width}.png`, fullPage: true });
     // An older saved draft must not replace the CURRENT review list.
     await page.evaluate(() => window.show(window.saved)); await page.getByRole('heading', { name: 'Saved article' }).waitFor();
-    assert.equal(await panel.getByText(/last-minute replacement/).isVisible(), true);
+    assert.equal(await panel.getByText(/marked postponed/).isVisible(), true);
     assert.equal(await page.getByText('STALE OMITTED LABEL', { exact: false }).count(), 0);
     await page.evaluate(() => { window.nextView = structuredClone(window.saved); window.nextView.source.skippedFixtures = [window.nextView.source.skippedFixtures[0]]; window.nextView.source.omittedFixtures = 1; });
     await page.getByRole('button', { name: 'Check saved status', exact: true }).click();
     await page.getByRole('region', { name: 'Matches not included (1)' }).waitFor();
-    assert.equal(await page.getByText(/last-minute replacement/).count(), 0);
+    assert.equal(await page.getByText(/marked postponed/).count(), 0);
     assert.equal(await page.getByRole('heading', { name: 'Saved article' }).isVisible(), true);
     await page.evaluate(() => { window.nextView = structuredClone(window.saved); window.nextView.source.skippedFixtures = []; window.nextView.source.omittedFixtures = 0; });
     await page.getByRole('button', { name: 'Check saved status', exact: true }).click();
@@ -51,6 +52,21 @@ for (const width of [1440, 390]) test(`current omitted matches are visible and r
     assert.equal(await page.evaluate(() => window.calls.length), 2); assert.ok((await page.evaluate(() => window.calls)).every(c => c.method === 'GET'));
     await page.getByLabel('Match night', { exact: true }).fill('2026-09-09'); await page.getByRole('button', { name: 'Load night', exact: true }).click();
     assert.equal(await page.evaluate(() => window.lastRoute), '/admin/matchweek-reports/example?date=2026-09-09');
+    // Refresh an actual four-to-six source transition without a paid generation
+    // or overwriting the saved four-match article.
+    await page.evaluate(() => { window.show(window.replacements.before); window.nextView = window.replacements.after; });
+    await page.getByRole('region', { name: 'Matches not included (2)' }).waitFor();
+    await page.getByRole('button', { name: 'Check saved status', exact: true }).click();
+    await page.getByRole('region', { name: /Matches not included/ }).waitFor({ state: 'detached' });
+    await page.getByText(/6 included results/).waitFor();
+    await page.getByRole('heading', { name: 'Previously saved four-match draft' }).waitFor();
+    assert.equal(await page.getByText('Keep my original text.', { exact: true }).isVisible(), true);
+    await page.getByText(/recorded results have changed since this draft/).waitFor();
+    await page.getByText('Current source facts (6 results)', { exact: true }).click();
+    assert.equal(await page.getByText(/Example early opponent 1–2 Example Stand-ins/).isVisible(), true);
+    assert.equal(await page.getByText(/Example late opponent 2–3 Example Stand-ins/).isVisible(), true);
+    assert.ok((await page.evaluate(() => window.calls)).every(c => c.method === 'GET'));
+    await page.screenshot({ path: `.tmp/report-omissions/replacements-${width}.png`, fullPage: true });
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
