@@ -20,10 +20,15 @@ jobs:
           source = Path('.github/workflows/report-badge-integrate.yml').read_text()
           encoded = re.search("encoded = '''(.*?)'''", source, re.S).group(1)
           encoded = encoded.replace('70XIjoYcIpGW', '70XIjoYIpGW').replace('jKRenEPnbPP9hCt', 'jKRenEPnbP9hCt')
-          Path('/tmp/report-badge-encoded.txt').write_text(encoded)
           patch = zlib.decompress(base64.b64decode(encoded))
           assert hashlib.sha256(patch).hexdigest() == '573ea0147e272b44f401d2300c93e181d05f854ab085308629534801edc64ee1'
-          Path('/tmp/report-badge.patch').write_bytes(patch)
+          fixed = ''
+          for block in patch.decode().split('diff --git ')[1:]:
+              head, rest = block.split('\n', 1)
+              mode = 'new file mode 100644\n' if rest.startswith('--- /dev/null\n') else 'deleted file mode 100644\n' if '\n+++ /dev/null\n' in '\n' + rest else ''
+              fixed += 'diff --git ' + head + '\n' + mode + rest
+          assert hashlib.sha256(fixed.encode()).hexdigest() == '20125830cd591b2f4aef987af8cbc75b19282022d0fa121e77caf85a46c809c4'
+          Path('/tmp/report-badge.patch').write_text(fixed)
           PY
           git apply --check /tmp/report-badge.patch
           git apply --index /tmp/report-badge.patch
@@ -35,7 +40,5 @@ jobs:
         if: always()
         with:
           name: report-badge-verified-patch
-          path: |
-            /tmp/report-badge.patch
-            /tmp/report-badge-encoded.txt
+          path: /tmp/report-badge.patch
           retention-days: 1
