@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ReportContent, ReportView } from "@/lib/matchweek-reports/types";
+import ReportSkippedFixtures from "./ReportSkippedFixtures";
 
 const inputClass = "mt-2 w-full rounded-xl border border-white/15 bg-black/40 p-3 text-base leading-7 text-white focus:border-emerald-400 focus:outline-none";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
@@ -88,11 +89,12 @@ export default function ReportEditor({ slug, initialView }: { slug: string; init
         {view.generating ? <p className="mt-3 text-amber-200">A generation is in progress. Use Check saved status to retrieve it; do not start another.</p> : null}
         {view.latestError ? <p className="mt-3 text-amber-200">Last generation: {view.latestError}</p> : null}
         {view.stale ? <p className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/10 p-3 text-amber-100">The recorded results have changed since this draft was generated. The article and its scorecards still show its saved source snapshot. Review the current facts below and regenerate before using it.</p> : null}
-        {view.source.warnings.map(w => <p key={w} className="mt-3 text-sm text-amber-100">{w}</p>)}
         {dirty ? <p className="mt-3 font-semibold text-amber-200">Unsaved changes — save your draft before leaving.</p> : null}
         {notice ? <p role="status" className="mt-3 text-emerald-200">{notice}</p> : null}
         {error ? <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-red-100">{error}</p> : null}
       </section>
+
+      <ReportSkippedFixtures source={view.source} />
 
       {content ? <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 sm:p-10">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">SIXFL Matchnight · Private draft</p>
