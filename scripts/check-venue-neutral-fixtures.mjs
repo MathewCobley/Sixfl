@@ -42,12 +42,14 @@ expect(
     nextWeek.includes("team2Id: string") &&
     !nextWeek.includes("homeCounts") &&
     !nextWeek.includes("awayCounts") &&
-    nextWeek.includes("LeagueSeasonTeam") &&
-    nextWeek.includes('COALESCE(t."isFixturePlaceholder", false) = false') &&
-    nextWeek.includes("activeDivisionRows") &&
+    !nextWeek.includes("firstBalance") &&
+    !nextWeek.includes("opponentBalance") &&
+    nextWeek.includes("getFixturePlaceholderTeamIds") &&
+    nextWeek.includes("linkedTeams.filter") &&
+    !nextWeek.includes("Prisma.sql") &&
     nextWeek.includes("refreshStoredAiPreviewsForLeague") &&
     nextWeek.includes("snapshotFixtureMatchFees"),
-  "one-week generation must be venue-neutral while preserving active-season, fee and AI-prediction safeguards",
+  "one-week generation must be venue-neutral while preserving the existing Prisma boundary, placeholder filtering, fees and AI predictions",
 );
 
 expect(
