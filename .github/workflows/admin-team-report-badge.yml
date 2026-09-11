@@ -70,7 +70,10 @@ jobs:
           sha256sum -c /tmp/badge.sha
           node --test tests/admin-team-match-report-badge.test.cjs
           node scripts/check-critical-feature-contracts.mjs
-          node --test tests/team-move-confirmation.test.cjs tests/team-move-confirmation-review.test.cjs
+      - name: Run existing team-move regressions with their own isolated database
+        run: |
+          psql "$REPORT_BADGE_TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE sixfl_team_move_test'
+          TEAM_MOVE_TEST_DATABASE_URL=postgresql://postgres:test_only_password@127.0.0.1:5432/sixfl_team_move_test node --test tests/team-move-confirmation.test.cjs tests/team-move-confirmation-review.test.cjs
       - run: npx tsc --noEmit
       - run: npx next build
       - name: Audit private placement and absence of temporary authoring
