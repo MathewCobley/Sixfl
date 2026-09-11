@@ -1,0 +1,30 @@
+name: Venue-neutral fixture scheduling
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  venue-neutral-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare final production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Check venue-neutral fixture contracts
+        run: node scripts/check-venue-neutral-fixtures.mjs
+      - name: Check critical feature contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+      - name: Type check
+        run: npx tsc --noEmit
