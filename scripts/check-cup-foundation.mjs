@@ -67,6 +67,14 @@ expect(
 );
 
 expect(
+  cupsPage.includes('import AdminSelect from "@/components/admin/AdminSelect"') &&
+    cupPage.includes('import AdminSelect from "@/components/admin/AdminSelect"') &&
+    !cupsPage.includes("<select") &&
+    !cupPage.includes("<select"),
+  "cup forms must use the SIXFL AdminSelect combobox instead of native selects",
+);
+
+expect(
   sidebar.includes('name: "Cups"') && sidebar.includes('href: "/admin/cups"'),
   "admin League setup navigation must expose the separate Cups area",
 );
