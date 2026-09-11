@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { refreshStoredAiPreviewForFixture } from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 
-const PREDICTOR_MODEL_VERSION = "opponent-adjusted-poisson-v2";
+const PREDICTOR_MODEL_VERSION = "opponent-adjusted-poisson-v3-min-one-game";
 
 type PredictionRepairRow = {
   fixtureId: string;
@@ -63,7 +63,8 @@ export async function repairUpcomingAiPredictionIntegrity(limit = 60) {
       });
 
       if (!preview) {
-        failed += 1;
+        // Null is expected for a team's first fixture: refresh removes any stale
+        // stored prediction and deliberately leaves the match without a predictor.
         continue;
       }
 
