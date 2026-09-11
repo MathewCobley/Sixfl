@@ -60,6 +60,41 @@ function buildFallbackBody(league: HomepageLeague) {
   return `A new ${day} SIXFL league is forming${venue ? ` at ${venue}` : ` in ${area}`}. Full teams and individual players can register now.`;
 }
 
+function buildLaunchNews(league: HomepageLeague, proposedStart: string | null) {
+  const teams = league.teamCount;
+  const target = league.targetTeamCount;
+  const remaining = target ? Math.max(target - teams, 0) : null;
+
+  if (target && teams >= target) {
+    return {
+      headline: "The line-up is taking shape",
+      body: `${teams} teams are now signed up. The league is at its planned size${proposedStart ? ` ahead of the ${proposedStart} start` : " and launch details are being finalised"}.`,
+    };
+  }
+
+  if (target && teams > 0 && remaining !== null) {
+    const gettingClose = teams / target >= 0.65;
+    return {
+      headline: gettingClose ? "Getting close to kick-off" : "Momentum is building",
+      body: `${teams} team${teams === 1 ? " is" : "s are"} already signed up${proposedStart ? ` for the league planned to start ${proposedStart}` : ""}. ${remaining} more team${remaining === 1 ? "" : "s"} would take us to the current ${target}-team target.`,
+    };
+  }
+
+  if (teams > 0) {
+    return {
+      headline: "The first teams are in",
+      body: `${teams} team${teams === 1 ? " has" : "s have"} already signed up${proposedStart ? ` ahead of the planned ${proposedStart} start` : ""}. New teams can still join the launch group now.`,
+    };
+  }
+
+  return {
+    headline: "Be part of the launch",
+    body: proposedStart
+      ? `We’re building the founding line-up now for a planned ${proposedStart} start. Register your team to be part of the first SIXFL season.`
+      : "We’re building the founding line-up now. Register your team to be part of the first SIXFL season.",
+  };
+}
+
 function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
   const copy = stageCopy(league.homepageStage);
   const proposedStart = formatStartDate(league.proposedStartDate);
@@ -76,6 +111,12 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
   const secondaryHref = isLive
     ? `/leagues/${league.slug}/fixtures`
     : `/leagues/${league.slug}?type=player#register`;
+  const newsHref = `/leagues/${league.slug}/news`;
+  const launchNews = isForming ? buildLaunchNews(league, proposedStart) : null;
+  const launchProgress =
+    isForming && league.targetTeamCount
+      ? Math.min(100, Math.round((league.teamCount / league.targetTeamCount) * 100))
+      : null;
 
   return (
     <article
@@ -130,7 +171,50 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
           {league.description?.trim() || buildFallbackBody(league)}
         </p>
 
-        {!isLive ? (
+        {isForming && launchNews ? (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-sky-300/20 bg-sky-400/[0.08]">
+            <div className="border-b border-white/10 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-200/75">
+                Launch news
+              </p>
+              <p className="mt-1 text-base font-black text-white">{launchNews.headline}</p>
+            </div>
+
+            <div className="grid gap-px bg-white/10 sm:grid-cols-2">
+              <div className="bg-[#08131a]/90 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
+                  Teams signed up
+                </p>
+                <p className="mt-1 text-lg font-black text-white">
+                  {league.teamCount}
+                  {league.targetTeamCount ? (
+                    <span className="text-sm font-bold text-white/40"> / {league.targetTeamCount}</span>
+                  ) : null}
+                </p>
+              </div>
+              <div className="bg-[#08131a]/90 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
+                  League start
+                </p>
+                <p className="mt-1 text-sm font-black text-white">
+                  {proposedStart || "Date being confirmed"}
+                </p>
+              </div>
+            </div>
+
+            <div className="px-4 py-4">
+              {launchProgress !== null ? (
+                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-black/35" aria-label={`${launchProgress}% of target teams signed up`}>
+                  <div
+                    className="h-full rounded-full bg-sky-300"
+                    style={{ width: `${launchProgress}%` }}
+                  />
+                </div>
+              ) : null}
+              <p className="text-sm leading-6 text-white/68">{launchNews.body}</p>
+            </div>
+          </div>
+        ) : !isLive ? (
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {proposedStart ? (
               <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
@@ -158,18 +242,24 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
         )}
 
         {isLive ? (
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <Link
               href={primaryHref}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-emerald-400 px-5 text-center text-sm font-black text-black transition hover:bg-emerald-300"
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-emerald-400 px-4 text-center text-sm font-black text-black transition hover:bg-emerald-300"
             >
               View league
             </Link>
             <Link
               href={secondaryHref}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-5 text-center text-sm font-black text-white transition hover:bg-white/[0.09]"
+              className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-4 text-center text-sm font-black text-white transition hover:bg-white/[0.09]"
             >
               View fixtures
+            </Link>
+            <Link
+              href={newsHref}
+              className="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/[0.08] px-4 text-center text-sm font-black text-emerald-100 transition hover:bg-emerald-400/[0.14]"
+            >
+              League news
             </Link>
           </div>
         ) : (
@@ -256,14 +346,14 @@ export default async function HomepageLeagueDirectory() {
         id="live-leagues"
         eyebrow="PLAYING NOW"
         title="Live SIXFL leagues"
-        copy="See the real fixtures, results and tables before deciding where you want to play."
+        copy="See the real fixtures, results, tables and weekly league news before deciding where you want to play."
         leagues={live}
       />
       <LeagueGroup
         id="forming-leagues"
         eyebrow="FORMING NOW"
         title="Leagues forming now"
-        copy="We’re actively building these new SIXFL leagues now. Register your team or join as a player."
+        copy="Follow each launch as teams sign up and the start date gets closer, then register your team or join as a player."
         leagues={forming}
       />
       <LeagueGroup
