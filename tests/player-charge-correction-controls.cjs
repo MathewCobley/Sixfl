@@ -28,6 +28,12 @@ test('real correction endpoint takes actor and fee from authentication/route, ne
  assert.equal(state.calls[0].actorUserId,'real-admin');assert.equal(state.calls[0].feeId,'fee-one');assert.equal(state.calls[0].originalPence,1200);
  state.calls=[];const blocked=await route.POST(request({action:'confirm',token:'x'}),{params:Promise.resolve({feeId:'fee-one'})});assert.equal(blocked.status,400);assert.equal(state.calls.length,0);
 });
+test('adjustment preview is explicit and remains bound to the authenticated fee',async()=>{
+ state.calls=[];state.session={user:{email:'admin@example.invalid'}};state.user={id:'real-admin',role:'ADMIN'};
+ const r=await route.POST(request({action:'preview',feeId:'forged',actorUserId:'forged',originalAmount:'8',reason:'Verified five pound payment plus genuine three pound adjustment.',resolution:'adjustment',adjustmentConfirmed:true,noWaiver:false}),{params:Promise.resolve({feeId:'fee-one'})});
+ assert.equal(r.status,200);assert.equal(state.calls.length,1);assert.equal(state.calls[0].feeId,'fee-one');assert.equal(state.calls[0].actorUserId,'real-admin');
+ assert.equal(state.calls[0].resolution,'adjustment');assert.equal(state.calls[0].adjustmentConfirmed,true);assert.equal(state.calls[0].noWaiver,false);assert.equal(state.calls[0].originalPence,800);
+});
 test('all three native admin entry points survive production preparation; no public correction action',()=>{
  // Team Payments now owns the link through PlayerContributionTable. Verify
  // the import, authenticated prop handoff and the actual guarded link, rather
@@ -42,7 +48,7 @@ test('all three native admin entry points survive production preparation; no pub
   const s=fs.readFileSync(path,'utf8');assert.ok(s.includes('correctionAccess.isAdmin'));assert.ok(s.includes('Correct original charge'));assert.ok(s.includes('/correct-charge'));}
  const s=fs.readFileSync('src/app/api/admin/player-fees/[feeId]/correct-charge/route.ts','utf8');assert.ok(s.includes('getServerSession(authOptions)'));assert.ok(s.includes('user.role !== "ADMIN"'));
  const page=fs.readFileSync('src/app/(admin)/admin/payments/player-fees/[feeId]/correct-charge/page.tsx','utf8');assert.ok(page.includes('requireAdmin()'));assert.ok(page.includes('access.user.role !== "ADMIN"'));
- const core=fs.readFileSync('src/lib/payments/player-charge-correction.ts','utf8');assert.ok(core.includes('assertPlayerChargeCorrectionAdmin(input.actorUserId, db)'));assert.ok(!core.includes('paymentTransaction.create('));assert.ok(!core.includes('queueNotification'));assert.ok(!core.includes('refunds.create'));assert.ok(!core.includes('sessions.create'));
+ const core=fs.readFileSync('src/lib/payments/player-charge-correction.ts','utf8');assert.ok(core.includes('assertPlayerChargeCorrectionAdmin(input.actorUserId, db)'));assert.ok(core.includes('PLAYER_FEE_CAP_NOTE'));assert.ok(core.includes('resolution === "adjustment"'));assert.ok(!core.includes('paymentTransaction.create('));assert.ok(!core.includes('queueNotification'));assert.ok(!core.includes('refunds.create'));assert.ok(!core.includes('sessions.create'));
 });
 
 test('configured public origin works behind Railway without accepting cross-site callers',async()=>{
