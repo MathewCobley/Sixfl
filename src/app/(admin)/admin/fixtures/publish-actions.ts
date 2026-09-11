@@ -131,7 +131,7 @@ function getTeamDetailsForFixture(fixture: PublishFixtureRecord, teamId: string)
 }
 
 function buildReminderSourceId(input: { fixtureId: string; teamId: string; scheduledFor: Date }) {
-  return `${input.fixtureId}:${input.teamId}:${scheduledFor.toISOString()}`;
+  return `${input.fixtureId}:${input.teamId}:${input.scheduledFor.toISOString()}`;
 }
 
 function isQueuedDispatch(status: NotificationDispatchStatus) {
@@ -139,7 +139,9 @@ function isQueuedDispatch(status: NotificationDispatchStatus) {
 }
 
 function isRetryablePublishError(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === "P2034";
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)));
+  }
   return error instanceof Error && error.message === PUBLISH_RETRY_ERROR;
 }
 
