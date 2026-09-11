@@ -121,7 +121,7 @@ write(ledgerPath, ledger);
 const captainPage = read("src/app/captain/team/[teamid]/payments/page.tsx");
 for (const marker of [
   "getCurrentSettlementText(entry)",
-  "getPlayerSettlementBreakdown(entry)",
+  "getPlayerSettlementBreakdown(entry, showAdjustmentDetails)", "mayViewPaymentAdjustments(correctionAccess)",
   "entry.waivedPence",
   "entry.settledPence",
   "SIXFL waiver",
