@@ -19,6 +19,7 @@ function expect(condition, message) {
 
 const migrationPath = "prisma/migrations/20260911233000_inter_league_cup_foundation/migration.sql";
 const migration = read(migrationPath);
+const schema = read("prisma/schema.prisma");
 const createActions = read("src/app/(admin)/admin/cups/actions.ts");
 const entrantActions = read("src/app/(admin)/admin/cups/[id]/actions.ts");
 const cupsPage = read("src/app/(admin)/admin/cups/page.tsx");
@@ -35,6 +36,15 @@ expect(
     migration.includes("'KNOCKOUT', 'GROUPS_THEN_KNOCKOUT'") &&
     !migration.includes('UPDATE "Team"'),
   "cup migration must add isolated competition metadata without moving teams",
+);
+
+expect(
+  schema.includes('competitionType String  @default("LEAGUE")') &&
+    schema.includes("cupFormat       String?") &&
+    schema.includes("isInterLeague   Boolean @default(false)") &&
+    schema.includes("@@index([competitionType])") &&
+    schema.includes("@@index([competitionType, isActive])"),
+  "prepared Prisma schema must model the cup metadata and indexes created by the migration",
 );
 
 expect(
