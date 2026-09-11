@@ -744,10 +744,7 @@ export async function sendLeadReassuranceEmailAction(formData: FormData) {
     }
 
     if (lead.status === LeadStatus.NEW) {
-      await prisma.interestLead.update({
-        where: { id: lead.id },
-        data: { status: LeadStatus.CONTACTED, contactedAt: new Date() },
-      });
+      await prisma.interestLead.updateMany({ where: { id: lead.id, status: LeadStatus.NEW }, data: { status: LeadStatus.CONTACTED, contactedAt: new Date() } });
     }
 
     revalidatePath("/admin/leads");

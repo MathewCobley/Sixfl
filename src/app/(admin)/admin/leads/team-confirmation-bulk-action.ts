@@ -386,8 +386,8 @@ export async function sendBulkTeamPlaceConfirmationEmailAction(
       await logNotificationDispatchToThread({ dispatch, recipient });
 
       if (lead.status === LeadStatus.NEW) {
-        await prisma.interestLead.update({
-          where: { id: lead.id },
+        await prisma.interestLead.updateMany({
+          where: { id: lead.id, status: LeadStatus.NEW },
           data: {
             status: LeadStatus.CONTACTED,
             contactedAt: new Date(),

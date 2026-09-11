@@ -70,7 +70,7 @@ function dispatchStatusLine(label: "First SMS" | "Final SMS", dispatch: Dispatch
 }
 function stopReason(row: TeamLeadSmsStatusRow) {
   if (row.confirmationStatus === "CONFIRMED") return "team place confirmed";
-  if (row.confirmationStatus === "DECLINED") return "place released";
+  if (row.confirmationStatus === "DECLINED") return "not interested — chases stopped";
   if (row.convertedTeamId) return "team created";
   if (row.leadStatus === "QUALIFIED") return "lead qualified";
   if (row.leadStatus === "CLOSED") return "lead closed";
@@ -160,6 +160,7 @@ export async function GET() {
     const evidence = evidenceByLead.get(row.leadId) ?? emptyLeadEvidence();
     const state = leadReplyState(evidence, row.latestRelevantEmailSentAt);
     const status = buildStatus({ ...row, latestInboundAt: evidence.automationHoldAt, replyReviewRequired: state === "review" }, now);
+    if (row.confirmationStatus === "DECLINED") status.lines.unshift({ text: "Not interested — registration chases stopped", tone: "muted" });
     if (state === "received" && evidence.latestReply) status.lines.push({
       text: `Incoming ${evidence.latestReply.channel} · ${formatDateTime(evidence.latestReply.occurredAt)} (UK) — view reply on lead`,
       tone: "success", title: evidence.latestReply.body.slice(0, 300), href: leadReplyHref(row.leadId), linkText: "View reply",
