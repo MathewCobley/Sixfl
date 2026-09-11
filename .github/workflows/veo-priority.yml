@@ -30,7 +30,7 @@ jobs:
           POSTGRES_DB: sixfl_veo_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -62,8 +62,23 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912001500_veo_priority_pilot/migration.sql
       - name: Real database safety checks
         run: npx tsx tests/veo-priority/database.ts
+      # Production runs prebuild -> prisma generate -> next build once. Preparation
+      # already ran above so that database checks use the same generated schema.
       - name: Production build
-        run: npm run build
+        run: npx next build
+      - name: Check production authentication boundary
+        shell: bash
+        run: |
+          NODE_ENV=production npx next start --hostname 127.0.0.1 --port 3101 > veo-production.log 2>&1 &
+          PROD_PID=$!
+          trap 'kill "$PROD_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --silent http://127.0.0.1:3101/login > /dev/null; then break; fi
+            sleep 1
+          done
+          LEAGUE=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/veo/seed.json','utf8')).leagueId")
+          curl --silent --dump-header veo-auth-headers.txt --output /dev/null "http://127.0.0.1:3101/admin/leagues/$LEAGUE/veo-priority"
+          grep -i 'location: /login' veo-auth-headers.txt
       - name: Install browser test dependencies
         run: npm install --no-save --package-lock=false playwright@1.55.0 && npx playwright install --with-deps chromium
       - name: Start isolated development app
@@ -78,17 +93,6 @@ jobs:
           exit 1
       - name: Mobile and completed-video edit browser checks
         run: node tests/veo-priority/browser.mjs
-      - name: Check production authentication boundary
-        shell: bash
-        run: |
-          NODE_ENV=production npx next start --hostname 127.0.0.1 --port 3101 > veo-production.log 2>&1 &
-          for attempt in $(seq 1 60); do
-            if curl --silent http://127.0.0.1:3101/login > /dev/null; then break; fi
-            sleep 1
-          done
-          LEAGUE=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/veo/seed.json','utf8')).leagueId")
-          curl --silent --dump-header veo-auth-headers.txt --output /dev/null "http://127.0.0.1:3101/admin/leagues/$LEAGUE/veo-priority"
-          grep -i 'location: /login' veo-auth-headers.txt
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
