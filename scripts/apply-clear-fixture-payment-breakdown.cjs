@@ -293,7 +293,7 @@ if (warningStart >= 0) {
 if (
   !source.includes("Total applied to fixture") ||
   !source.includes("Fixture paid — these player links are extra") ||
-  !source.includes("Team payment and credit details") ||
+  (!source.includes("Team payment and credit details") && !source.includes("<PaymentReceiptDetails")) ||
   !source.includes("Player shares settled") ||
   source.includes("Direct team payment details")
 ) {

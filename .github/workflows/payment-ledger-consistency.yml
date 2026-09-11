@@ -56,6 +56,22 @@ jobs:
             finally:
               p.write_text(original)
           PY
+      - name: Prove modern receipt misclassification is detected
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/lib/payments/payment-receipt-presentation.ts'); original=p.read_text()
+          old='(payment.notes ?? "").startsWith(LEDGER_TRANSACTION_PREFIX) || '
+          assert original.count(old)==1
+          try:
+              p.write_text(original.replace(old,''))
+              result=subprocess.run(['node','--test','--test-reporter=tap','--test-name-pattern=receipt classification','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
+              assert result.returncode!=0 and 'not ok' in result.stdout, 'Modern receipt misclassification was not detected'
+              print('Original player-as-team receipt classification regression detected')
+          finally:
+              p.write_text(original)
+          PY
       - run: npx tsc --noEmit
       - run: npx next build
       - name: Final prepared markup for browser (restore positive fixture after negative controls)
@@ -72,8 +88,10 @@ jobs:
           test ! -f .github/workflows/author-ledger-cap-compat.yml
           test ! -f .github/workflows/author-ledger-compat.yml
           test ! -f .github/workflows/author-ledger-source-only.yml
-          git grep -nE 'fixtureContributionPence|getPlayerSettlementBreakdown|getChargeDescriptionForDisplay|getCurrentSettlementText|Covered by player shares|Player shares settled|getPlayerPaymentDisplay' -- src > .tmp/ledger-consistency/source-inventory.txt
-          git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts
+          test ! -f .github/workflows/author-receipt-reconciliation.yml
+          test ! -f .github/workflows/author-receipt-source-only.yml
+          git grep -nE 'fixtureContributionPence|getPlayerSettlementBreakdown|getChargeDescriptionForDisplay|getCurrentSettlementText|Covered by player shares|Player shares settled|getPlayerPaymentDisplay|getPaymentReceiptKind|getPaymentReceiptPlayerFeeId|PaymentReceiptDetails|TeamBalanceReconciliation' -- src > .tmp/ledger-consistency/source-inventory.txt
+          git diff --exit-code -- src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts src/lib/payments/payment-receipt-presentation.ts src/components/payments/PaymentLedgerReconciliation.tsx
           git diff -- 'src/app/captain/team/[teamid]/payments/page.tsx' 'src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx' > .tmp/ledger-consistency/prepared-page-diff.txt
       - uses: actions/upload-artifact@v4
         if: always()
