@@ -377,7 +377,10 @@ test("final prepared source has no ordinary receipt-to-PAID fallback or implicit
   const webhook=readFileSync("src/app/api/stripe/webhook/route.ts","utf8");assert.doesNotMatch(webhook,/closePlayerMatchFeeFromStripeSession|handleCompletedPlayerMatchFeeCheckoutSession|shouldSyncAmount/);
   const service=readFileSync("src/lib/payments/player-repayment-checkout.ts","utf8");assert.match(service,/if\(!requestId&&!legacyFeeId\) return false/);
   assert.match(readFileSync("src/lib/payments/player-fee-coverage.ts","utf8"),/if \(!agreement\) return 0/);
-  assert.match(readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8"),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
+  const captainPayments=readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8");
+  assert.match(captainPayments,/const correctionAccess = await requireCaptain\(teamid\)/);
+  assert.match(captainPayments,/const showAdjustmentDetails = mayViewPaymentAdjustments\(correctionAccess\)/);
+  assert.match(captainPayments,/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\), showAdjustmentDetails \? "admin" : "captain"\)/);
 });
 
 // Admin historical corrections: use real database triggers and provider-read
