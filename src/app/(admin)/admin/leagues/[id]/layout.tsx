@@ -41,6 +41,12 @@ export default async function AdminLeagueLayout({
         >
           Advert video
         </Link>
+        <Link
+          href={`/admin/leagues/${league.id}/veo-priority`}
+          className="min-h-11 rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15"
+        >
+          Veo Priority
+        </Link>
       </div>
       <MergeLeagueDivisionsButton />
       <AdminLeagueSeasonTeamsPanel />
