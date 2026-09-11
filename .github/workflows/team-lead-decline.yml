@@ -1,0 +1,58 @@
+name: Team lead decline and stop chasing
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  decline:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_lead_decline_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_lead_decline_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_lead_decline_test
+      LEAD_DECLINE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_lead_decline_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Execute real decisions, cancellation SQL, admin endpoint and final processor gates
+        run: node --test tests/team-lead-decline.test.cjs
+      - name: Prove removal of the final delivery gates is detected
+        shell: bash
+        run: |
+          target=src/lib/notifications/processor.ts
+          original=$(mktemp)
+          cp "$target" "$original"
+          trap 'cp "$original" "$target"; rm -f "$original"' EXIT
+          node - <<'JS'
+          const fs = require('node:fs');
+          const file = 'src/lib/notifications/processor.ts';
+          const original = fs.readFileSync(file, 'utf8');
+          const anchor = 'const leadChaseBlock = await applyTeamLeadChaseDeliveryGate(dispatch);';
+          if (original.split(anchor).length !== 3) throw new Error('Expected both provider gates');
+          fs.writeFileSync(file, original.replaceAll(anchor, 'const leadChaseBlock = null;'));
+          JS
+          if node --test --test-name-pattern="actual processor stops" tests/team-lead-decline.test.cjs > negative-control.log 2>&1; then
+            cat negative-control.log
+            echo 'ERROR: missing provider gates were not detected'
+            exit 1
+          fi
+          grep -q 'AssertionError' negative-control.log
+          echo 'Negative control passed: both missing provider gates are detected.'
+      - run: npx tsc --noEmit
+      - run: node scripts/check-critical-feature-contracts.mjs

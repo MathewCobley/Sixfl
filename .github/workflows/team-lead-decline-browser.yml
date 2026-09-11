@@ -1,0 +1,27 @@
+name: Team lead decline browser controls
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - name: Install browser tooling outside the application dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/decline-browser-tools"
+          npm install --prefix "$RUNNER_TEMP/decline-browser-tools" --package-lock=false playwright esbuild
+          node "$RUNNER_TEMP/decline-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Exercise the real decision control with an isolated API boundary
+        env:
+          NODE_PATH: ${{ runner.temp }}/decline-browser-tools/node_modules
+        run: node tests/team-lead-decline.browser.cjs

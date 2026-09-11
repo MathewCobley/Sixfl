@@ -223,6 +223,8 @@ test('prepared lead layout requests the shared thread IDs and shows reply before
     '@/components/admin/email/EmailHtmlPreview': { default: Preview, __esModule: true },
     '@/components/admin/communications/CommunicationStatusBadge': { default: () => null, CommunicationStatusExplanation: () => null, __esModule: true },
     '@/components/admin/messages/CancelQueuedSmsButton': { default: () => null, __esModule: true },
+    // The decision panel is exercised by the separate decline suite; retain every reply assertion here.
+    '@/components/admin/leads/TeamLeadDecisionPanel': { default: () => null, __esModule: true },
     '@/components/admin/leads/LeadReplyEvidence': { default: ReplyPanel, __esModule: true },
     '@/lib/leads/communication-evidence': evidenceLib,
     '@/lib/requireAdmin': { requireAdmin: async () => {} },

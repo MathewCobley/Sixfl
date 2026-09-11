@@ -4,6 +4,8 @@
 
 "use server";
 
+import { getTeamLeadChaseBlockReason } from "@/lib/leads/team-lead-chases";
+
 import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
 
 
@@ -592,6 +594,11 @@ export async function sendLeadEmailAction(formData: FormData) {
   });
 
   try {
+    // Fixed-purpose registration links must also respect a decline on the legacy direct-email path.
+    if (ctaUrlKey === TEAM_PLACE_CONFIRMATION_CTA_KEY) {
+      const stopped = await getTeamLeadChaseBlockReason({ sourceType: "LEAD_TEAM_CONFIRMATION", sourceId: lead.id });
+      if (stopped) return { ok: false, error: stopped };
+    }
     await resend.emails.send({
       from: fromEmail,
       to: leadEmail,
