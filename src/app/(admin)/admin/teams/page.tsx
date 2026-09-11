@@ -9,6 +9,8 @@ import { UserRole } from "@prisma/client";
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
+import TeamMatchReportBadge from "@/components/admin/teams/TeamMatchReportBadge";
+import { getAdminTeamMatchReportActivity } from "@/lib/admin/team-match-report-activity";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { deleteTeamAction } from "./actions";
@@ -339,6 +341,9 @@ export default async function AdminTeamsPage({
   const allTeams = await getAdminTeams();
   const displayTeams = dedupeTeamsForDisplay(allTeams);
   const groups = groupTeams(allTeams);
+  const matchReportActivity = await getAdminTeamMatchReportActivity(
+    displayTeams.map((team) => team.id),
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
@@ -492,6 +497,7 @@ export default async function AdminTeamsPage({
                           <div className="truncate text-base font-semibold text-white">
                             {team.name}
                           </div>
+                          <TeamMatchReportBadge activity={matchReportActivity.get(team.id)} />
                           <span className={accessState.className}>{accessState.label}</span>
                           {isManagedTeam ? (
                             <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
