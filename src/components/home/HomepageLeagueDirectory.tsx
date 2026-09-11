@@ -90,8 +90,8 @@ function buildLaunchNews(league: HomepageLeague, proposedStart: string | null) {
   return {
     headline: "Be part of the launch",
     body: proposedStart
-      ? `We’re building the founding line-up now for a planned ${proposedStart} start. Register your team to be part of the first SIXFL season.`
-      : "We’re building the founding line-up now. Register your team to be part of the first SIXFL season.",
+      ? `Team registration is open for the founding line-up, with the league planned to start ${proposedStart}. Enter now to be part of the first SIXFL season.`
+      : "Team registration is open for the founding line-up. Enter now to be part of the first SIXFL season.",
   };
 }
 
@@ -114,7 +114,7 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
   const newsHref = `/leagues/${league.slug}/news`;
   const launchNews = isForming ? buildLaunchNews(league, proposedStart) : null;
   const launchProgress =
-    isForming && league.targetTeamCount
+    isForming && league.targetTeamCount && league.teamCount > 0
       ? Math.min(100, Math.round((league.teamCount / league.targetTeamCount) * 100))
       : null;
 
@@ -183,14 +183,18 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
             <div className="grid gap-px bg-white/10 sm:grid-cols-2">
               <div className="bg-[#08131a]/90 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
-                  Teams signed up
+                  {league.teamCount > 0 ? "Teams signed up" : "Recruitment"}
                 </p>
-                <p className="mt-1 text-lg font-black text-white">
-                  {league.teamCount}
-                  {league.targetTeamCount ? (
-                    <span className="text-sm font-bold text-white/40"> / {league.targetTeamCount}</span>
-                  ) : null}
-                </p>
+                {league.teamCount > 0 ? (
+                  <p className="mt-1 text-lg font-black text-white">
+                    {league.teamCount}
+                    {league.targetTeamCount ? (
+                      <span className="text-sm font-bold text-white/40"> / {league.targetTeamCount}</span>
+                    ) : null}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm font-black text-white">Founding teams wanted</p>
+                )}
               </div>
               <div className="bg-[#08131a]/90 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
