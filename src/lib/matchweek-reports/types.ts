@@ -7,6 +7,15 @@ export type ReportMatch = {
   scorers: Array<{ team: string; name: string; goals: number }>;
   playersOfMatch: Array<{ team: string; name: string }>;
 };
+/** Admin-only explanation of a published fixture excluded from the article. */
+export type ReportSkippedFixture = {
+  fixtureId: string;
+  teamA: string;
+  teamB: string;
+  kickoffAt: string;
+  disposition: "pending" | "omitted";
+  reasons: Array<{ code: string; message: string }>;
+};
 export type ReportSource = {
   leagueId: string;
   leagueName: string;
@@ -16,6 +25,9 @@ export type ReportSource = {
   omittedFixtures: number;
   pendingFixtures: number;
   warnings: string[];
+  // Older saved snapshots have only the counts. Fresh reads always include this.
+  // Never send administrative reasons to the article-writing provider.
+  skippedFixtures?: ReportSkippedFixture[];
 };
 export type ReportContent = {
   title: string;

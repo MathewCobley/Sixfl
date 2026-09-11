@@ -81,6 +81,7 @@ function harness(role = null, email = "example@example.test") {
     if (!state.league) return null;
     return { source: { leagueId: state.league.id, leagueName: state.league.name, area: state.league.area, matchDate: "2026-09-09", pendingFixtures: 0, omittedFixtures: 0, warnings: [], matches: state.league.fixtures.map(f => ({ fixtureId: f.id, teamA: f.homeTeam.name, teamB: f.awayTeam.name, scoreA: f.result.homeScore, scoreB: f.result.awayScore, scorers: [], playersOfMatch: [{ name: "Test player", team: f.awayTeam.name }] })) }, sourceHash: "test", draft: null, configured: true, model: "test-model", stale: false, generating: false, latestError: null };
   } };
+  mocks["./ReportSkippedFixtures"] = load("src/components/admin/matchweek-reports/ReportSkippedFixtures.tsx", mocks);
   mocks["@/components/admin/matchweek-reports/ReportEditor"] = load("src/components/admin/matchweek-reports/ReportEditor.tsx", mocks);
   return { state, mocks };
 }
