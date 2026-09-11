@@ -58,7 +58,7 @@ jobs:
         run: node --test tests/completed-fixture-fee-reduction.test.cjs
       - name: Prove the old completed-fixture failure is detected
         run: |
-          if FEE_REDUCTION_NEGATIVE_CONTROL=1 node --test --test-name-pattern='completed fixtures:' tests/completed-fixture-fee-reduction.test.cjs > /tmp/old-lock.log 2>&1; then
+          if FEE_REDUCTION_NEGATIVE_CONTROL=1 node --test --test-reporter=tap --test-name-pattern='completed fixtures:' tests/completed-fixture-fee-reduction.test.cjs > /tmp/old-lock.log 2>&1; then
             cat /tmp/old-lock.log
             echo 'The original regression was not detected'
             exit 1
