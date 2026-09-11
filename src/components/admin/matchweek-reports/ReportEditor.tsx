@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ReportContent, ReportView } from "@/lib/matchweek-reports/types";
+import NewsPublishingControls from "./NewsPublishingControls";
 import ReportSkippedFixtures from "./ReportSkippedFixtures";
 
 const inputClass = "mt-2 w-full rounded-xl border border-white/15 bg-black/40 p-3 text-base leading-7 text-white focus:border-emerald-400 focus:outline-none";
@@ -84,7 +85,7 @@ export default function ReportEditor({ slug, initialView }: { slug: string; init
           </> : null}
           <button type="button" onClick={checkSaved} disabled={Boolean(busy)} className={buttonClass}>Check saved status</button>
         </div>
-        <p className="mt-4 text-sm leading-6 text-white/65">Not published. OpenAI runs only when you press Generate. Each generation uses API credits; viewing and editing saved drafts do not. Check names, scores and wording before using the article.</p>
+        <p className="mt-4 text-sm leading-6 text-white/65">Generating and saving do not publish your report. OpenAI runs only when you press Generate. Each generation uses API credits; viewing and editing saved drafts do not. Check names, scores and wording before using the article.</p>
         {!view.configured ? <p className="mt-3 text-amber-200">OpenAI setup is missing. Add OPENAI_API_KEY to the SIXFL service in Railway; never paste the key into a report.</p> : null}
         {view.generating ? <p className="mt-3 text-amber-200">A generation is in progress. Use Check saved status to retrieve it; do not start another.</p> : null}
         {view.latestError ? <p className="mt-3 text-amber-200">Last generation: {view.latestError}</p> : null}
@@ -95,6 +96,7 @@ export default function ReportEditor({ slug, initialView }: { slug: string; init
       </section>
 
       <ReportSkippedFixtures source={view.source} />
+      <NewsPublishingControls slug={slug} date={view.source.matchDate} draftVersion={view.draft?.version ?? 0} sourceHash={view.sourceHash} blocked={Boolean(busy) || view.generating || dirty} stale={view.stale} />
 
       {content ? <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 sm:p-10">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">SIXFL Matchnight · Private draft</p>

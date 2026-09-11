@@ -1,0 +1,81 @@
+name: League News publication
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: league-news-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: sixfl_news_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      NEWS_TEST_DATABASE_URL: postgresql://postgres:test_only@localhost:5432/sixfl_news_test
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-news-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Create disposable news database only
+        run: |
+          psql "$NEWS_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE "League" (id TEXT PRIMARY KEY, name TEXT, slug TEXT UNIQUE);
+          CREATE TABLE "Team" (id TEXT PRIMARY KEY, name TEXT, "logoUrl" TEXT);
+          CREATE TABLE "Fixture" (id TEXT PRIMARY KEY, "leagueId" TEXT, "homeTeamId" TEXT, "awayTeamId" TEXT);
+          SQL
+          psql "$NEWS_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910224500_openai_matchweek_drafts/migration.sql
+          psql "$NEWS_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260911053000_league_news_publication/migration.sql
+          psql "$NEWS_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260911053000_league_news_publication/migration.sql
+      - name: Native publication, privacy, article and real transaction tests
+        run: node --test tests/league-news.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Prepared-source regressions and existing report tests
+        run: |
+          psql "$NEWS_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'TRUNCATE "LeagueNewsEvent", "LeagueNewsArticle", "MatchweekReportRevision", "MatchweekReportDraft", "Fixture", "Team", "League" CASCADE'
+          node --test tests/league-news.test.cjs tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs tests/report-omissions.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npm run audit:dom
+          npx tsc --noEmit
+      - run: npx next build
+      - name: Desktop and mobile real components with isolated browser requests
+        run: |
+          npm install --prefix /tmp/news-browser --no-save --package-lock=false playwright@1.58.2
+          /tmp/news-browser/node_modules/.bin/playwright install --with-deps chromium
+          NEWS_PLAYWRIGHT_MODULE=/tmp/news-browser/node_modules/playwright node --test tests/league-news.browser.cjs
+      - name: Capture prepared source and reference inventory
+        if: always()
+        run: |
+          mkdir -p .tmp/league-news
+          git grep -n -E 'LeagueNewsArticle|NewsPublishingControls|LatestNews|listPublishedNews' -- src > .tmp/league-news/source-inventory.txt
+          tar -czf .tmp/league-news/prepared.tgz src/lib/league-news src/components/news src/components/admin/matchweek-reports src/app/api/admin/matchweek-reports 'src/app/(admin)/admin/matchweek-reports' 'src/app/(public)/leagues/[slug]/news' 'src/app/(public)/teams/[id]/news' tests/league-news.*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: league-news-verification
+          path: .tmp/league-news
+          retention-days: 7

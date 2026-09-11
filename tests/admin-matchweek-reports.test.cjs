@@ -81,6 +81,7 @@ function harness(role = null, email = "example@example.test") {
     if (!state.league) return null;
     return { source: { leagueId: state.league.id, leagueName: state.league.name, area: state.league.area, matchDate: "2026-09-09", pendingFixtures: 0, omittedFixtures: 0, warnings: [], matches: state.league.fixtures.map(f => ({ fixtureId: f.id, teamA: f.homeTeam.name, teamB: f.awayTeam.name, scoreA: f.result.homeScore, scoreB: f.result.awayScore, scorers: [], playersOfMatch: [{ name: "Test player", team: f.awayTeam.name }] })) }, sourceHash: "test", draft: null, configured: true, model: "test-model", stale: false, generating: false, latestError: null };
   } };
+  mocks["./NewsPublishingControls"] = load("src/components/admin/matchweek-reports/NewsPublishingControls.tsx", { ...mocks, "@/lib/league-news/types": load("src/lib/league-news/types.ts", mocks) });
   mocks["./ReportSkippedFixtures"] = load("src/components/admin/matchweek-reports/ReportSkippedFixtures.tsx", mocks);
   mocks["@/components/admin/matchweek-reports/ReportEditor"] = load("src/components/admin/matchweek-reports/ReportEditor.tsx", mocks);
   return { state, mocks };
@@ -107,7 +108,7 @@ for (const [role, email] of [["ADMIN", "admin@example.test"], ["USER", "hello@si
     const detail = load(detailPath, mocks);
     const report = renderToStaticMarkup(await detail.default(props()));
     assert.match(report, /Admin only/);
-    assert.match(report, /Not published/);
+    assert.match(report, /Generating and saving do not publish/);
     assert.match(report, /Test Team A/);
     assert.match(report, /Test Team B/);
     assert.match(report, /Test player/);
@@ -180,7 +181,7 @@ test("repository-wide scan finds no alternate public report links or implementat
         if (!/weekly-report|matchweek.?report/i.test(source)) continue;
         matches.push(file);
         const publiclyReachable = file.startsWith("src/app/(public)/") || file.startsWith("src/app/captain/") || file.startsWith("src/app/player/") || file.startsWith("src/components/leagues/");
-        if (publiclyReachable) assert.equal(file, legacyPath, `Unexpected report exposure in ${file}`);
+        if (publiclyReachable) assert.equal(file, legacyPath, `Unexpected private-report exposure in ${file}`);
       }
     }
   }

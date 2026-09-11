@@ -1,3 +1,4 @@
+import { getNewsSitemap } from "@/lib/league-news/read";
 // ========================================
 // File: src/app/sitemap.ts
 // ========================================
@@ -8,7 +9,7 @@ import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 3600;
+export const revalidate = 0;
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://www.sixfl.co.uk";
@@ -104,5 +105,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       },
     ]);
 
-  return [...staticRoutes, ...leagueRoutes];
+  const news = await getNewsSitemap();
+  const newsRoutes: MetadataRoute.Sitemap = news.map(n => ({ url: absoluteUrl(n.path), lastModified: n.updatedAt, changeFrequency: "weekly", priority: 0.7 }));
+  const archives: MetadataRoute.Sitemap = leagues.filter(l => !isRetiredHeartlandsLeague(l.slug)).map(l => ({ url: absoluteUrl(`/leagues/${l.slug}/news`), changeFrequency: "weekly", priority: 0.7 }));
+  return [...staticRoutes, ...leagueRoutes, ...archives, ...newsRoutes];
 }
