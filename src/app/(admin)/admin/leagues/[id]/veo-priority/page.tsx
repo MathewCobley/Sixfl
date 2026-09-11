@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
-import { resolveTeamFixtureFeePence } from '@/lib/payments/fixture-fee-policy';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
 import { londonVeoDate, previewVeoNight, quoteVeoFixture, readVeoNight, readVeoSettings, readVeoSnapshots, readVeoTeams, validVeoDate, VeoAllocationError } from '@/lib/veo/service';
 import { saveVeoSettings, setVeoTeamPriority, saveVeoVideo } from './actions';
@@ -106,11 +105,11 @@ export default async function VeoPriorityPage({ params, searchParams }: {
         const q = !f.locked && f.eligible ? quoteVeoFixture(f, Boolean(choice)) : null;
         const fees = saved ? [{ name: f.homeName, base: saved.homeBasePence, extra: saved.homeSupplementPence }, { name: f.awayName, base: saved.awayBasePence, extra: saved.awaySupplementPence }]
           : q ? [{ name: f.homeName, base: q.home.basePence, extra: q.home.supplementPence }, { name: f.awayName, base: q.away.basePence, extra: q.away.supplementPence }]
-          : [{ name: f.homeName, base: resolveTeamFixtureFeePence(f.homeMatchFeePence, f.homeStandard, f.matchFeePence), extra: 0 }, { name: f.awayName, base: resolveTeamFixtureFeePence(f.awayMatchFeePence, f.awayStandard, f.matchFeePence), extra: 0 }];
+          : [];
         return <article key={f.id} className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{time(f.kickoffAt)} · {f.homeName} vs {f.awayName}</h3><p className="mt-1 text-sm text-white/60">Pitch {normaliseVeoPitch(saved?.pitch ?? newPitch ?? null) || 'not set'}{choice?.swapWithId || displaced ? ' · pitch swap proposed' : ''}</p></div><span className="rounded-full border border-white/20 px-3 py-1 text-xs">{filmed ? '📹 Veo / SIXFL TV' : 'Not allocated to Veo'}</span></div>
           <p className="text-xs text-white/50">{saved ? 'Saved at publication — original price snapshot' : f.locked ? 'Existing / locked fixture — unchanged by Veo' : 'Preview only — not yet saved'}</p>
-          <div className="grid gap-2 sm:grid-cols-2">{fees.map(fee => <p key={fee.name} className="text-sm leading-6"><span className="text-white/65">{fee.name}: </span>{money(fee.base)}{fee.extra > 0 && ` + ${money(fee.extra)} Veo Priority`}<strong> = {money(fee.base + fee.extra)}</strong></p>)}</div>
+          {fees.length > 0 ? <div className="grid gap-2 sm:grid-cols-2">{fees.map(fee => <p key={fee.name} className="text-sm leading-6"><span className="text-white/65">{fee.name}: </span>{money(fee.base)}{fee.extra > 0 && ` + ${money(fee.extra)} Veo Priority`}<strong> = {money(fee.base + fee.extra)}</strong></p>)}</div> : <p className="text-sm text-white/60">Veo has not changed this fixture’s fees. See Payments for any current charge.</p>}
           {saved?.allocated && <details className="text-sm"><summary className="cursor-pointer py-2 text-fuchsia-200">YouTube / SIXFL TV link</summary><form action={saveVeoVideo.bind(null, id)} className="mt-2 flex flex-col gap-3 sm:flex-row"><input type="hidden" name="date" value={date} /><input type="hidden" name="fixtureId" value={f.id} /><input aria-label={`Video link for ${f.homeName} vs ${f.awayName}`} type="url" name="videoUrl" defaultValue={f.sixflTvUrl ?? ''} placeholder="https://www.youtube.com/watch?v=…" className={input} /><SubmitButton>Save video link</SubmitButton></form></details>}
         </article>;
       })}{!fixtures.length && <p className="py-4 text-white/60">No fixtures on this date.</p>}</div>
