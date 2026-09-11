@@ -84,7 +84,7 @@ export async function setVeoTeamPriority(leagueId: string, form: FormData) {
   back(leagueId, form, error);
 }
 export async function saveVeoVideo(leagueId: string, form: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   let error: string | undefined;
   try {
     const fixtureId = String(form.get('fixtureId') ?? '');
@@ -97,9 +97,17 @@ export async function saveVeoVideo(leagueId: string, form: FormData) {
         throw new VeoAllocationError('Use an HTTPS YouTube or SIXFL TV link.');
       }
     }
-    const rows = await prisma.$queryRaw<{ fixtureId: string }[]>`SELECT "fixtureId" FROM "VeoFixtureSnapshot" WHERE "fixtureId" = ${fixtureId} AND "leagueId" = ${leagueId} AND allocated`;
-    if (!rows.length) throw new VeoAllocationError('No Veo allocation exists for this fixture in this league.');
-    await prisma.fixture.update({ where: { id: fixtureId }, data: { sixflTvUrl: raw || null }, select: { id: true } });
+    await prisma.$transaction(async tx => {
+      // Media-only edit: completed fixtures keep their result, schedule and financial locks.
+      const updated = await tx.$executeRaw`
+        UPDATE "Fixture" f SET "sixflTvUrl" = ${raw || null}, "updatedAt" = NOW()
+        FROM "VeoFixtureSnapshot" s WHERE s."fixtureId" = f.id AND f.id = ${fixtureId}
+          AND s."leagueId" = ${leagueId} AND f."leagueId" = ${leagueId} AND s.allocated
+      `;
+      if (updated !== 1) throw new VeoAllocationError('No Veo allocation exists for this fixture in this league.');
+      const details = JSON.stringify({ kind: 'video_link', fixtureId, url: raw || null });
+      await tx.$executeRaw`INSERT INTO "VeoSettingsAudit" (id, "leagueId", "actorId", details) VALUES (${randomUUID()}, ${leagueId}, ${user?.id ?? null}, ${details}::jsonb)`;
+    });
     revalidatePath('/captain/team/[teamid]/fixtures', 'layout');
     revalidatePath('/leagues/[slug]/fixtures', 'page');
     revalidatePath('/player/team/[teamid]', 'page');
