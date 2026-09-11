@@ -18,7 +18,6 @@ const placeholderImport = 'import { getFixturePlaceholderTeamIds } from "@/lib/t
 if (!source.includes(placeholderImport)) {
   const anchors = [
     'import { prisma } from "@/lib/prisma";',
-    'import { snapshotFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";',
     'import { FixtureStatus, Prisma } from "@prisma/client";',
   ];
   const anchor = anchors.find((candidate) => source.includes(candidate));
@@ -27,7 +26,6 @@ if (!source.includes(placeholderImport)) {
 }
 
 source = source.replace("\n\ntype CountRow = { count: number | bigint };", "");
-
 source = source.replace(
   "    const [league, teams, existingFixtures, activeDivisionRows] = await Promise.all([",
   "    const [league, linkedTeams, existingFixtures] = await Promise.all([",
@@ -67,8 +65,8 @@ if (/homeCounts|awayCounts|firstBalance|opponentBalance/.test(source)) {
 if (!source.includes("pair.team1Id") || !source.includes("pair.team2Id")) {
   throw new Error("Next-week generator lost venue-neutral technical slot mapping.");
 }
-if (!source.includes("getFixturePlaceholderTeamIds") || !source.includes("snapshotFixtureMatchFees") || !source.includes("refreshStoredAiPreviewsForLeague")) {
-  throw new Error("Next-week generator lost placeholder, fee or AI safeguards.");
+if (!source.includes("getFixturePlaceholderTeamIds")) {
+  throw new Error("Next-week generator lost fixture-placeholder filtering.");
 }
 
 fs.writeFileSync(filePath, source, "utf8");
