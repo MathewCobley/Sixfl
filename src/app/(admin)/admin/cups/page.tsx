@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 
+import AdminSelect from "@/components/admin/AdminSelect";
 import { createCupAction } from "./actions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -103,30 +104,28 @@ export default async function AdminCupsPage() {
             />
           </label>
 
-          <label className="text-sm text-white/70">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Format</span>
-            <select
-              name="cupFormat"
-              defaultValue="KNOCKOUT"
-              className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/50"
-            >
-              <option value="KNOCKOUT">Straight knockout</option>
-              <option value="GROUPS_THEN_KNOCKOUT">Groups then knockout</option>
-            </select>
-          </label>
+          <AdminSelect
+            name="cupFormat"
+            label="Format"
+            defaultValue="KNOCKOUT"
+            required
+            options={[
+              { value: "KNOCKOUT", label: "Straight knockout" },
+              { value: "GROUPS_THEN_KNOCKOUT", label: "Groups then knockout" },
+            ]}
+          />
 
-          <label className="text-sm text-white/70">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Teams</span>
-            <select
-              name="leagueType"
-              defaultValue="MENS"
-              className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/50"
-            >
-              <option value="MENS">Mens</option>
-              <option value="WOMENS">Womens</option>
-              <option value="YOUTH">Youth</option>
-            </select>
-          </label>
+          <AdminSelect
+            name="leagueType"
+            label="Teams"
+            defaultValue="MENS"
+            required
+            options={[
+              { value: "MENS", label: "Mens" },
+              { value: "WOMENS", label: "Womens" },
+              { value: "YOUTH", label: "Youth" },
+            ]}
+          />
 
           <label className="md:col-span-2 flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
             <input
