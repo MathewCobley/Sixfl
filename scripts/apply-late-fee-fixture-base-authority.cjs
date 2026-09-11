@@ -22,19 +22,8 @@ function replaceRequired(source, before, after, label) {
 // A PaymentCharge total can temporarily be stale after an old late-fee bug.
 // The fixture-side team fee is the authoritative BASE match fee. Never infer the
 // base solely as total minus late fee when fixture data is available.
-{
-  const file = "src/app/api/admin/payments/adjust-charge/route.ts";
-  let source = read(file);
-
-  source = replaceRequired(
-    source,
-    `    const currentBaseChargePence = Math.max(\n      charge.amountPence - appliedLateFeePence,\n      0,\n    );`,
-    `    const fixtureBaseChargePence = charge.fixture\n      ? charge.fixture.homeTeamId === charge.teamId\n        ? charge.fixture.homeMatchFeePence ?? charge.fixture.matchFeePence\n        : charge.fixture.awayTeamId === charge.teamId\n          ? charge.fixture.awayMatchFeePence ?? charge.fixture.matchFeePence\n          : null\n      : null;\n    const currentBaseChargePence =\n      fixtureBaseChargePence ??\n      Math.max(charge.amountPence - appliedLateFeePence, 0);`,
-    "fixture-authoritative base fee in reduce-match-fee action",
-  );
-
-  write(file, source);
-}
+// The native adjust-charge route already owns fixture-side base authority.
+// Keep the remaining legacy compatibility below without rewriting that route.
 
 {
   const file = "src/app/api/admin/payments/waive-late-fee/route.ts";

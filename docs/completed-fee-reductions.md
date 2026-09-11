@@ -1,0 +1,9 @@
+# Admin reductions on completed fixtures
+
+The shared `POST /api/admin/payments/adjust-charge` route is the native source of truth for **Reduce match fee**. Administrators can reduce a completed fixture's charge without reopening its sporting record. Only the charged team's base fee and the accounting timestamp can change on the fixture; the global Prisma completion lock is unchanged.
+
+The reduction uses the existing fixture-side base-fee authority. The opposite team's fee and shared default are not changed. Any applied late-payment fee remains separate; cash receipts and player-fee records are not rewritten and no payment/refund is fabricated. The existing charge summary and standard-team credit refresh remain authoritative. A reason, administrator ID and timestamp are appended to the charge note. Cached checkout details and queued old-amount reminders are cleared using the existing paths.
+
+The fee-only SQL and charge update are one transaction. Original fee and charge snapshots are compared so an intervening change returns a conflict and rolls back the entire correction instead of overwriting a newer amount. General completed-fixture edits, deletion, bulk edits and fee increases through the general fixture API remain locked. This change does not modify `requireAdmin`, reset data, create charges, send messages or make refunds.
+
+The two old preparation scripts no longer recreate the reduction route. Permanent tests exercise both sides, scheduled/completed fixtures, legacy shared fees, zero reductions of the remaining base, late fees, receipts, denied access, conflicts and the real Prisma completion lock. CI repeats tests after full prebuild and verifies the native route's fingerprint. The PostgreSQL test uses only a disposable localhost database and also checks a subsequent real fee sync keeps the reduced amount. Production fee changes are not performed as a test.

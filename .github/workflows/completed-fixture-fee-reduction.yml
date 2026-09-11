@@ -1,0 +1,76 @@
+name: Completed fixture fee reductions
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: completed-fee-reduction-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  reductions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_fee_reduction_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_fee_reduction_test
+      NEXTAUTH_SECRET: fee-reduction-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_fee_reduction_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+      CRON_SECRET: fee-reduction-ci-unused
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Test the native reduction route and retained payment controls
+        run: node --test tests/completed-fixture-fee-reduction.test.cjs
+      - name: Record native route and unchanged global lock
+        run: sha256sum src/app/api/admin/payments/adjust-charge/route.ts src/lib/prisma.ts > /tmp/fee-source.sha
+      - run: npm run prebuild
+      - name: Reject regenerated native route or changed fixture lock
+        run: sha256sum -c /tmp/fee-source.sha
+      - run: npx prisma generate
+      - name: Create schema in disposable localhost test database only
+        run: |
+          test "$DATABASE_URL" = 'postgresql://postgres:postgres@127.0.0.1:5432/sixfl_fee_reduction_test'
+          npx prisma db push --skip-generate
+      - name: Test real PostgreSQL correction, fixture lock, rollback, concurrency and fee resync
+        env:
+          FEE_REDUCTION_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_fee_reduction_test
+        run: node --test tests/completed-fixture-fee-reduction.test.cjs
+      - name: Prove the old completed-fixture failure is detected
+        run: |
+          if FEE_REDUCTION_NEGATIVE_CONTROL=1 node --test --test-reporter=tap --test-name-pattern='completed fixtures:' tests/completed-fixture-fee-reduction.test.cjs > /tmp/old-lock.log 2>&1; then
+            cat /tmp/old-lock.log
+            echo 'The original regression was not detected'
+            exit 1
+          fi
+          grep 'not ok' /tmp/old-lock.log
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx tsc --noEmit
+      - run: npx next build
+      - name: Verify shared route and absence of temporary workflows
+        run: |
+          test ! -f .github/workflows/fee-reduction-workspace.yml
+          test ! -f .github/workflows/fee-reduction-retire-legacy.yml
+          git grep -n 'payments/adjust-charge' -- src
+          if grep -n 'tx.fixture.update' src/app/api/admin/payments/adjust-charge/route.ts; then exit 1; fi
+          sha256sum -c /tmp/fee-source.sha

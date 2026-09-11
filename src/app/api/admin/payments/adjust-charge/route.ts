@@ -1,13 +1,10 @@
-// ========================================
-// File: src/app/api/admin/payments/adjust-charge/route.ts
-// ========================================
-
 import { PaymentChargeStatus, PlayerMatchFeeStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
 import { summariseChargesWithPlayerMatchFees } from "@/lib/payments/charge-summary";
+import { cancelQueuedMatchFeeNotificationDispatches } from "@/lib/payments/fixture-match-fees";
+import { syncTeamCreditLedgerSources } from "@/lib/payments/team-credits";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -18,7 +15,7 @@ function getString(value: unknown) {
 
 function getPositiveInt(value: unknown) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function formatMoney(amountPence: number) {
@@ -34,17 +31,21 @@ function getErrorMessage(error: unknown) {
     : "The charge could not be adjusted.";
 }
 
+// Native admin fee-reduction boundary. The completed-fixture lock remains intact;
+// only the two explicitly named accounting fields below may be reduced here.
+class FeeReductionConflict extends Error {}
+
 export async function POST(request: Request) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const body = await request.json().catch(() => null);
   const chargeId = getString((body as { chargeId?: unknown } | null)?.chargeId);
-  const waivePence = getPositiveInt((body as { waivePence?: unknown } | null)?.waivePence);
+  const reductionPence = getPositiveInt((body as { waivePence?: unknown } | null)?.waivePence);
   const reason = getString((body as { reason?: unknown } | null)?.reason);
 
-  if (!chargeId || !waivePence || !reason) {
+  if (!chargeId || !reductionPence || !reason) {
     return NextResponse.json(
-      { error: "Charge, waiver amount and reason are required." },
+      { error: "Charge, reduction amount and reason are required." },
       { status: 400 },
     );
   }
@@ -54,9 +55,16 @@ export async function POST(request: Request) {
       where: { id: chargeId },
       include: {
         transactions: {
+          select: { amountPence: true, notes: true },
+        },
+        fixture: {
           select: {
-            amountPence: true,
-            notes: true,
+            id: true,
+            homeTeamId: true,
+            awayTeamId: true,
+            homeMatchFeePence: true,
+            awayMatchFeePence: true,
+            matchFeePence: true,
           },
         },
       },
@@ -68,7 +76,7 @@ export async function POST(request: Request) {
 
     if (charge.status === PaymentChargeStatus.VOID) {
       return NextResponse.json(
-        { error: "A void charge cannot be reduced or waived." },
+        { error: "A void charge cannot be reduced." },
         { status: 409 },
       );
     }
@@ -91,85 +99,146 @@ export async function POST(request: Request) {
         })
       : [];
 
-    const [summary] = summariseChargesWithPlayerMatchFees([charge], playerMatchFees);
-
-    if (!summary || summary.outstandingPence <= 0) {
-      return NextResponse.json(
-        { error: "This charge has no outstanding amount to waive." },
-        { status: 409 },
-      );
+    if (charge.fixture && charge.fixture.homeTeamId !== charge.teamId && charge.fixture.awayTeamId !== charge.teamId) {
+      throw new FeeReductionConflict("This charge is not linked to a current participant in the fixture. Review the charge before reducing it.");
     }
 
-    if (waivePence > summary.outstandingPence) {
+    const [summary] = summariseChargesWithPlayerMatchFees([charge], playerMatchFees);
+    if (!summary) {
+      return NextResponse.json({ error: "Charge summary could not be calculated." }, { status: 409 });
+    }
+
+    const appliedLateFeePence =
+      charge.latePaymentFeeStatus === "APPLIED"
+        ? Math.max(charge.latePaymentFeeAmountPence, 0)
+        : 0;
+    const fixtureBaseChargePence = charge.fixture
+      ? charge.fixture.homeTeamId === charge.teamId
+        ? charge.fixture.homeMatchFeePence ?? charge.fixture.matchFeePence
+        : charge.fixture.awayTeamId === charge.teamId
+          ? charge.fixture.awayMatchFeePence ?? charge.fixture.matchFeePence
+          : null
+      : null;
+    const currentBaseChargePence =
+      fixtureBaseChargePence ??
+      Math.max(charge.amountPence - appliedLateFeePence, 0);
+
+    if (reductionPence > currentBaseChargePence) {
       return NextResponse.json(
         {
-          error: `You can waive up to ${formatMoney(summary.outstandingPence)} on this charge.`,
+          error: appliedLateFeePence > 0
+            ? `The base match fee is only ${formatMoney(currentBaseChargePence)}. Use Waive admin fee if you want to remove the separate ${formatMoney(appliedLateFeePence)} late-payment fee.`
+            : `You can reduce the match fee by up to ${formatMoney(currentBaseChargePence)}.`,
         },
         { status: 409 },
       );
     }
 
-    const oldAmountPence = charge.amountPence;
-    const newAmountPence = oldAmountPence - waivePence;
+    const newBaseChargePence = currentBaseChargePence - reductionPence;
+    const newAmountPence = newBaseChargePence + appliedLateFeePence;
+    const coveredPence = summary.coveredPence;
+    const settledPence = "settledPence" in summary ? Number(summary.settledPence) : coveredPence;
     const nextStatus =
-      newAmountPence <= summary.coveredPence
+      settledPence >= newAmountPence
         ? PaymentChargeStatus.PAID
-        : summary.coveredPence > 0
+        : settledPence > 0
           ? PaymentChargeStatus.PART_PAID
           : PaymentChargeStatus.OPEN;
 
     const adjustmentNote = [
-      `Admin fee adjustment: ${formatMoney(waivePence)} waived/reduced.`,
-      `Charge changed from ${formatMoney(oldAmountPence)} to ${formatMoney(newAmountPence)}.`,
+      `Admin match-fee reduction: ${formatMoney(reductionPence)}.`,
+      `Base fixture charge changed from ${formatMoney(currentBaseChargePence)} to ${formatMoney(newBaseChargePence)}.`,
+      appliedLateFeePence > 0
+        ? `Separate late-payment admin fee remains ${formatMoney(appliedLateFeePence)}.`
+        : null,
       `Reason: ${reason}`,
-    ].join(" ");
+      `Recorded at ${new Date().toISOString()} by admin ${user?.id ?? "administrator"}.`,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" ");
     const description = [charge.description?.trim(), adjustmentNote]
       .filter(Boolean)
       .join("\n");
 
-    await prisma.paymentCharge.update({
-      where: { id: charge.id },
-      data: {
-        amountPence: newAmountPence,
-        status: nextStatus,
-        description,
-        lastStripeCheckoutUrl: null,
-        lastStripeCheckoutSessionId: null,
-        lastStripeCheckoutCreatedAt: null,
-        lastStripeCheckoutAmountPence: null,
-      },
+    await prisma.$transaction(async (tx) => {
+      if (charge.fixture) {
+        // Deliberate fee-only accounting write, not a general fixture unlock.
+        // Parameterised SQL changes only this team's base fee and audit timestamp.
+        // Compare the original fee so concurrent reductions cannot overwrite one
+        // another. A later conflict rolls back BOTH the fixture fee and charge.
+        const changed = charge.fixture.homeTeamId === charge.teamId
+          ? await tx.$executeRaw`
+              UPDATE "Fixture" SET "homeMatchFeePence" = ${newBaseChargePence}, "updatedAt" = NOW()
+              WHERE "id" = ${charge.fixture.id} AND "homeTeamId" = ${charge.teamId}
+                AND COALESCE("homeMatchFeePence", "matchFeePence", ${currentBaseChargePence}) = ${currentBaseChargePence}
+            `
+          : await tx.$executeRaw`
+              UPDATE "Fixture" SET "awayMatchFeePence" = ${newBaseChargePence}, "updatedAt" = NOW()
+              WHERE "id" = ${charge.fixture.id} AND "awayTeamId" = ${charge.teamId}
+                AND COALESCE("awayMatchFeePence", "matchFeePence", ${currentBaseChargePence}) = ${currentBaseChargePence}
+            `;
+        if (changed !== 1) {
+          throw new FeeReductionConflict("The fixture fee changed while you were reducing it. Reload Payments and check the current amount.");
+        }
+      }
+
+      const changedCharge = await tx.paymentCharge.updateMany({
+        where: { id: charge.id, updatedAt: charge.updatedAt, amountPence: charge.amountPence, status: charge.status },
+        data: {
+          amountPence: newAmountPence,
+          status: nextStatus,
+          description,
+          lastStripeCheckoutUrl: null,
+          lastStripeCheckoutSessionId: null,
+          lastStripeCheckoutCreatedAt: null,
+          lastStripeCheckoutAmountPence: null,
+        },
+      });
+      if (changedCharge.count !== 1) {
+        throw new FeeReductionConflict("The charge changed while you were reducing it. Reload Payments and check the current amount.");
+      }
     });
 
-    // Any already queued reminder may contain the pre-adjustment amount. Cancel it
-    // so a captain is never chased for money that SIXFL has just waived.
     await cancelQueuedMatchFeeNotificationDispatches([charge.id], prisma, {
-      reason: `Team charge adjusted by admin: ${formatMoney(waivePence)} waived/reduced.`,
+      reason: `Base match fee reduced by admin: ${formatMoney(reductionPence)}.`,
     });
+
+    // If the team has already paid more than the newly reduced charge, refresh
+    // the standard-team credit ledger immediately. Managed teams are ignored by
+    // the credit policy.
+    await syncTeamCreditLedgerSources([charge.teamId]);
 
     revalidatePath("/admin/payments");
+    revalidatePath("/admin/fixtures");
+    revalidatePath("/admin/night-board");
+    revalidatePath("/admin/payments/team-credits");
+    revalidatePath("/admin/fixtures/late-fees");
     revalidatePath(`/captain/team/${charge.teamId}`);
     revalidatePath(`/captain/team/${charge.teamId}/payments`);
+    revalidatePath(`/captain/team/${charge.teamId}/player-payments`);
     revalidatePath(`/captain/team/${charge.teamId}/match-fees`);
 
     return NextResponse.json({
       ok: true,
       chargeId: charge.id,
-      waivedPence: waivePence,
-      oldAmountPence,
+      reductionPence,
+      oldBaseChargePence: currentBaseChargePence,
+      newBaseChargePence,
+      latePaymentFeePence: appliedLateFeePence,
       newAmountPence,
-      outstandingPence: Math.max(newAmountPence - summary.coveredPence, 0),
+      outstandingPence: Math.max(newAmountPence - settledPence, 0),
       status: nextStatus,
     });
   } catch (error) {
     console.error("Failed to adjust payment charge", {
       chargeId,
-      waivePence,
+      reductionPence,
       error,
     });
 
     return NextResponse.json(
       { error: getErrorMessage(error) },
-      { status: 500 },
+      { status: error instanceof FeeReductionConflict ? 409 : 500 },
     );
   }
 }
