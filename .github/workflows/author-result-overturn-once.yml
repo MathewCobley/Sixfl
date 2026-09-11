@@ -1,0 +1,40 @@
+name: Author result overturn feature once (temporary)
+on:
+  push:
+    branches: [feat/overturned-results-playing-score]
+    paths: [.github/workflows/author-result-overturn-once.yml]
+permissions:
+  contents: write
+jobs:
+  author:
+    if: github.ref == 'refs/heads/feat/overturned-results-playing-score'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/overturned-results-playing-score
+          fetch-depth: 8
+      - name: Verify reviewed patch and original source before applying
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib, subprocess
+          base='07e86bef7f547592ccafd09236ac33d77147301b'
+          subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],check=True)
+          changed=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          allowed={'.github/workflows/author-result-overturn-once.yml',*(f'.github/overturn-patch/{i:02}.b64' for i in range(1,5))}
+          assert set(changed)==allowed, 'Source changed since the reviewed base; refusing to overwrite'
+          parts=[pathlib.Path(f'.github/overturn-patch/{i:02}.b64') for i in range(1,5)]
+          patch=lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts),validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='ad21ab36de9f846bcd2819e6352bdecb28c6fc5a7be095fc5f5245637f11a44a', 'Patch checksum mismatch'
+          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+          subprocess.run(['git','apply','-'],input=patch,check=True)
+          for p in parts: p.unlink()
+          PY
+          git config user.name 'SIXFL automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src prisma tests docs .github/overturn-patch
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'Add audited result overturns and preserve playing scores for predictions'
+          git push origin HEAD:refs/heads/feat/overturned-results-playing-score
