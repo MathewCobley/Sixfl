@@ -172,15 +172,26 @@ test('real PostgreSQL and fixture lock: reduction, rollback, concurrency and sub
     await assert.rejects(db.fixture.updateMany({ where: { id: fixtureId }, data: { pitch: '2' } }), /locked/);
     await assert.rejects(db.fixture.deleteMany({ where: { id: fixtureId } }), /locked/);
     // An intervening charge change causes the already-executed fee SQL to roll back.
-    const conflictDb = { ...db, $transaction: cb => db.$transaction(async tx => cb({ ...tx, paymentCharge: { updateMany: async () => ({ count: 0 }) } })) };
-    assert.equal((await routeFor(conflictDb).post(chargeId, 100)).status, 409);
+    // Extend the real client instead of spreading its transaction proxy; Prisma
+    // methods must keep their transaction binding when a conflict is injected.
+    const conflictDb = db.$extends({ query: { paymentCharge: {
+      async updateMany() { return { count: 0 }; },
+    } } });
+    const rejected = await routeFor(conflictDb).post(chargeId, 100);
+    assert.equal(rejected.status, 409, await rejected.clone().text());
     assert.equal((await raw.fixture.findUnique({ where: { id: fixtureId } })).homeMatchFeePence, 3000);
     // Both calls read the same snapshot before either writes. Only one commits.
-    const originalFind = db.paymentCharge.findUnique.bind(db.paymentCharge);
     let count = 0, release; const barrier = new Promise(r => { release = r; });
-    const concurrentDb = { ...db, paymentCharge: { ...db.paymentCharge, findUnique: async args => { const value = await originalFind(args); if (++count === 2) release(); await barrier; return value; } } };
+    const concurrentDb = db.$extends({ query: { paymentCharge: {
+      async findUnique({ args, query }) {
+        const value = await query(args);
+        if (++count === 2) release();
+        await barrier;
+        return value;
+      },
+    } } });
     const pair = await Promise.all([routeFor(concurrentDb).post(chargeId, 100), routeFor(concurrentDb).post(chargeId, 100)]);
-    assert.deepEqual(pair.map(r => r.status).sort(), [200,409]);
+    assert.deepEqual(pair.map(r => r.status).sort(), [200,409], await Promise.all(pair.map(r => r.clone().text())));
     const current = await raw.fixture.findUnique({ where: { id: fixtureId } });
     assert.equal(current.homeMatchFeePence, 2900);
     // Exercise the real sync with updated source fees; no notification provider runs.
