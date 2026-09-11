@@ -169,10 +169,14 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
     if (p.resolution === "adjustment") {
       const capNote = `${PLAYER_FEE_CAP_NOTE}: captain share ${money(p.originalPence)}; player charged ${money(c.receivedPence)}.`;
       const note = [c.fee.note?.trim(), capNote].filter(Boolean).join("\n");
-      await db.playerMatchFee.update({ where: { id: p.feeId }, data: {
-        captainAssignedAmountPence: p.originalPence,
-        note,
-      } });
+      // captainAssignedAmountPence is a production-owned legacy column that is
+      // deliberately not exposed by Prisma's generated PlayerMatchFee type.
+      // Update and verify it with parameterised raw SQL, as the rest of the
+      // historical fee code does, rather than weakening Prisma types.
+      await db.$executeRaw(Prisma.sql`
+        UPDATE "PlayerMatchFee"
+        SET "captainAssignedAmountPence"=${p.originalPence}, note=${note}, "updatedAt"=NOW()
+        WHERE id=${p.feeId}`);
       await db.playerLedgerEntry.create({ data: {
         feeId: p.feeId, teamId: p.teamId, kind: "CORRECTION", amountPence: 0, balanceAfterPence: 0,
         actorUserId: input.actorUserId, sourceKey: correctionKey(p.id),
@@ -180,8 +184,10 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
         reference: JSON.stringify({ originalPence: p.originalPence, receivedPence: c.receivedPence, adjustmentPence: balance,
           previousAssignedPence: c.assigned, previousAmountPence: c.fee.amountPence, receiptIds: c.transactions.map(t => t.id) }),
       } });
-      const after = await db.playerMatchFee.findUnique({ where: { id: p.feeId }, select: { amountPence: true, status: true, note: true, captainAssignedAmountPence: true } });
-      if (!after || after.status !== "PAID" || after.amountPence !== c.receivedPence || after.captainAssignedAmountPence !== p.originalPence || !after.note?.includes(capNote)) {
+      const after = (await db.$queryRaw<Array<{ amountPence: number; status: string; note: string | null; assignedPence: number | null }>>(Prisma.sql`
+        SELECT "amountPence", status::text AS status, note, "captainAssignedAmountPence" AS "assignedPence"
+        FROM "PlayerMatchFee" WHERE id=${p.feeId}`))[0];
+      if (!after || after.status !== "PAID" || after.amountPence !== c.receivedPence || after.assignedPence !== p.originalPence || !after.note?.includes(capNote)) {
         throw new Error("Adjustment correction did not preserve the paid receipt; transaction rolled back.");
       }
       return { teamId: p.teamId, feeId: p.feeId, outstandingPence: 0, adjustmentPence: balance, resolution: p.resolution, alreadySaved: false };
