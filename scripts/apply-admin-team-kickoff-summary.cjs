@@ -183,3 +183,7 @@ require("./apply-same-league-player-registration-rule.cjs");
 // fixture-fee source and adds a saved-card cap so a stale £40 charge can never
 // debit a team whose agreed automatic match fee is £36.
 require("./apply-team-specific-fixture-fee-final-guard.cjs");
+
+// Team-lead decline delivery guards must see the final prepared notification
+// source, including all compatibility and payment-safety preparation above.
+require("./apply-team-lead-decline-stop-chasing.cjs");
