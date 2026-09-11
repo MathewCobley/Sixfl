@@ -18,6 +18,7 @@ function loader(mocks={}) {
   const defaults={
     '@/lib/prisma':{prisma:{$queryRaw:async()=>[]}},
     '@/lib/payments/player-ledger':{money},
+    '@/lib/datetime/london':{formatDateTimeInLondon:()=> '25 Aug 2026'},
   };
   const supplied={...defaults,...mocks};
   const allowed=new Set([pagePath,displayPath,presentationPath,'src/lib/payments/player-fee-coverage.ts',
