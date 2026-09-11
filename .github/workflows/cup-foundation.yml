@@ -1,0 +1,67 @@
+name: Inter-league cup foundation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cup-foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_cup_foundation_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_cup_foundation_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_cup_foundation_test
+      NEXTAUTH_SECRET: cup-foundation-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare final production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Check cup isolation contracts
+        run: node scripts/check-cup-foundation.mjs
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Create the normal schema
+        run: npx prisma db push --skip-generate
+      - name: Apply cup migration twice and verify metadata
+        run: |
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f prisma/migrations/20260911233000_inter_league_cup_foundation/migration.sql
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f prisma/migrations/20260911233000_inter_league_cup_foundation/migration.sql
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'LeagueCompetition' AND column_name = 'competitionType'
+            ) THEN RAISE EXCEPTION 'competitionType missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'LeagueCompetition' AND column_name = 'cupFormat'
+            ) THEN RAISE EXCEPTION 'cupFormat missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'LeagueCompetition' AND column_name = 'isInterLeague'
+            ) THEN RAISE EXCEPTION 'isInterLeague missing'; END IF;
+          END $$;
+          SQL
