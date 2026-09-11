@@ -20,7 +20,7 @@ export default async function Page({ params }: { params: Promise<{ feeId: string
     <Link href={`/captain/team/${candidate.teamId}/payments`} className="text-emerald-200 underline">Back to team payments</Link>
     <header><p className="text-sm uppercase text-amber-200">Admin only · Historical correction</p><h1 className="mt-2 text-3xl font-semibold">Correct original charge</h1>
       <p className="mt-3 font-semibold">{candidate.playerName} · {candidate.teamName}</p><p className="text-sm text-white/65">{candidate.fixtureLabel} · {formatDateTimeInLondon(new Date(candidate.kickoffAt), { day: "numeric", month: "short", year: "numeric" })}</p></header>
-    <p className="rounded-xl border border-amber-400/25 p-4 text-sm">This restores a historical unpaid remainder. It does not create another charge or payment, and must not be used to reverse a genuine discount or waiver. Existing receipts are verified with Stripe before preview and again before saving.</p>
+    <p className="rounded-xl border border-amber-400/25 p-4 text-sm">Use this only to reconcile an old paid player row where the recorded payment is real but the original assigned share was larger. You can either restore the difference as unpaid, or record it as a genuine SIXFL adjustment so the player remains settled. Existing Stripe receipts are verified before preview and again before saving; no new payment, refund or message is created.</p>
     <CorrectOriginalPlayerChargeForm feeId={feeId} teamId={candidate.teamId} assignedPence={candidate.assignedPence} receivedPence={candidate.receivedPence}/>
   </main>;
 }
