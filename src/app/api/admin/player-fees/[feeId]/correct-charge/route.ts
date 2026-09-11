@@ -29,7 +29,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ fee
     const body = JSON.parse(raw);
     if (body.action === "preview") {
       const preview = await previewOriginalPlayerCharge({ feeId, actorUserId: user.id,
-        originalPence: parseLedgerMoney(body.originalAmount), reason: String(body.reason ?? ""), noWaiver: body.noWaiver === true });
+        originalPence: parseLedgerMoney(body.originalAmount), reason: String(body.reason ?? ""),
+        resolution: body.resolution === "adjustment" ? "adjustment" : "outstanding",
+        noWaiver: body.noWaiver === true, adjustmentConfirmed: body.adjustmentConfirmed === true });
       return NextResponse.json({ preview }, { headers: { "Cache-Control": "no-store" } });
     }
     if (body.action !== "confirm" || body.confirmed !== true || typeof body.token !== "string") throw new PlayerChargeCorrectionError("Preview and explicitly confirm the correction first.");
