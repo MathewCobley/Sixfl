@@ -1,3 +1,4 @@
+import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";
 import { PlayerContributionTable, PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
 import { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
 import { getChargeDescriptionForDisplay, getCurrentSettlementText, getPlayerSettlementBreakdown } from "@/lib/payments/payment-ledger-presentation";
@@ -316,6 +317,7 @@ export default async function CaptainPaymentsPage({
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
   const correctionAccess = await requireCaptain(teamid);
+  const showAdjustmentDetails = mayViewPaymentAdjustments(correctionAccess);
   await reconcileZeroFeePlayerAdjustmentsForTeam(teamid);
 
   if (sp.autopay === "success") {
@@ -488,7 +490,7 @@ export default async function CaptainPaymentsPage({
   for (const fee of playerCollectionRowsWithAssignedShares) {
     const key = fee.teamId + ":" + fee.fixtureId;
     const rows = playerCollectionsByTeamFixture.get(key) ?? [];
-    const display = getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id));
+    const display = getPlayerPaymentDisplay(fee, playerReceiptStates.get(fee.id), showAdjustmentDetails ? "admin" : "captain");
     const displayAmountPence = display.fixtureContributionPence;
     const statusLabel = display.statusLabel;
     const statusMeta = display.detail;
@@ -858,7 +860,7 @@ export default async function CaptainPaymentsPage({
                 entry.directPaidPence - teamCreditUsedPence,
                 0,
               );
-              const playerSettlement = getPlayerSettlementBreakdown(entry);
+              const playerSettlement = getPlayerSettlementBreakdown(entry, showAdjustmentDetails);
               const playerSettledPence = playerSettlement.totalPence;
               const displayedPlayerTotalPence = playerCollectionDetails.reduce((sum, payment) => sum + payment.amountPence, 0);
               const playerLinksOpenPence = Math.max(
@@ -891,7 +893,7 @@ export default async function CaptainPaymentsPage({
                       </div>
 
                       <div className="mt-1 text-sm text-white/55">
-                        {getChargeDescriptionForDisplay(entry.description) || "No description"}
+                        {showAdjustmentDetails ? getChargeDescriptionForDisplay(entry.description) || "No description" : context || "Match fee"}
                       </div>
 
                       <p data-current-settlement className="mt-2 text-sm text-white/70">{getCurrentSettlementText(entry)}</p>
@@ -917,10 +919,10 @@ export default async function CaptainPaymentsPage({
 
                       {playerCollectionDetails.length > 0 ? (
                         <div className="min-w-0">
-                          <PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} />
+                          <PlayerContributionTable rows={playerCollectionDetails} isAdmin={correctionAccess.isAdmin} showAdjustmentDetails={showAdjustmentDetails} />
                           <PlayerCollectionReconciliation rows={playerCollectionDetails} chargePence={entry.amountPence} outstandingPence={entry.outstandingPence} />
                           {displayedPlayerTotalPence !== playerSettledPence ? (
-                            <p role="status" className="px-3 pb-3 text-xs text-amber-100">The player rows total {formatMoney(displayedPlayerTotalPence)}, but the fixture ledger records {formatMoney(playerSettledPence)} from players and adjustments. SIXFL needs to review the linked records; no balancing adjustment has been assumed.</p>
+                            <p role="status" className="px-3 pb-3 text-xs text-amber-100">The player rows total {formatMoney(displayedPlayerTotalPence)}, but the fixture ledger records {formatMoney(playerSettledPence)} from player shares. SIXFL needs to review the linked records.</p>
                           ) : null}
                         </div>
                       ) : entry.playerPaidPence > 0 || entry.playerOpenPence > 0 ? (
@@ -949,12 +951,16 @@ export default async function CaptainPaymentsPage({
                         <div className="mt-3 space-y-2 text-sm text-white/65">
                           {!isKitCharge ? (
                             <div aria-label="Player shares settled" data-player-settled-pence={playerSettledPence} className="space-y-2">
+                              {showAdjustmentDetails ? <>
                               <div data-player-cash-pence={playerSettlement.cashPence} className="flex items-center justify-between gap-4">
                                 <span>Player payments received</span><span className="font-semibold text-white">{formatMoney(playerSettlement.cashPence)}</span>
                               </div>
                               <div data-player-adjustments-pence={playerSettlement.adjustmentPence} className="flex items-center justify-between gap-4">
                                 <span>SIXFL player adjustments</span><span className="font-semibold text-white">{formatMoney(playerSettlement.adjustmentPence)}</span>
                               </div>
+                              </> : <div className="flex items-center justify-between gap-4">
+                                <span>Player shares settled</span><span className="font-semibold text-white">{formatMoney(playerSettledPence)}</span>
+                              </div>}
 
                             </div>
                           ) : null}
@@ -995,7 +1001,7 @@ export default async function CaptainPaymentsPage({
                           </p>
                         ) : null}
                         {entry.settledPence > totalAppliedPence ? (
-                          <p className="mt-3 text-xs text-white/65">Recorded payments, credit and adjustments total {formatMoney(entry.settledPence)}. {formatMoney(entry.settledPence - totalAppliedPence)} is above this charge; only {formatMoney(totalAppliedPence)} is applied below. Adjustments do not create cash or team credit.</p>
+                          <p className="mt-3 text-xs text-white/65">Recorded settlement totals {formatMoney(entry.settledPence)}. {formatMoney(entry.settledPence - totalAppliedPence)} is above this charge; only {formatMoney(totalAppliedPence)} is applied below. </p>
                         ) : null}
                         <div className="mt-3 border-t border-white/10 pt-3">
                           <div className="flex items-center justify-between gap-4 text-sm">
@@ -1267,7 +1273,7 @@ export default async function CaptainPaymentsPage({
                       <div className="text-base font-semibold text-white">
                         {formatMoney(tx.amountPence)}
                       </div>
-                      {paymentNote ? (
+                      {showAdjustmentDetails && paymentNote ? (
                         <div className="mt-1 max-w-2xl text-sm text-white/55">
                           {paymentNote}
                         </div>

@@ -145,3 +145,24 @@ These safeguards address verified receipt-loss and recovery gaps. They do not as
 Modern player-ledger allocations and their signed refunds must remain player receipts in both fixture details and recent history; they are not additional direct team payments. The native shared receipt presentation reuses modern accounting markers and the legacy classifier. Player names resolve from both historic Player fee ID and modern Account fee reference formats, including older fixture receipts outside the latest 20 history rows. A canonical due-charge breakdown sums to the headline. Captain-reported receipts are shown separately from SIXFL receipts, without claiming they are still held after remittance; open player balances and allocation discrepancies do not create extra team debt. Tests cover four £6 player receipts, £35 captain reports plus £13 unpaid, £40 + £16 = £56, signed refunds, team credit, real separate team receipts and production-prepared browser layouts. These presentation changes never fabricate a missing remittance or edit historical charges.
 
 The legible ledger uses explicit Applied to fixture, Paid to captain and Player still owes columns from the same canonical player display object. The fixture equation uses the canonical charge, applied amount and remaining balance. Team identity is named in the page heading. Receipt history is collapsed and marked already included. Desktop and mobile tests preserve 8 = 5 + 3 and keep all payment controls and read-only provenance checks.
+
+
+## Internal player concessions are administrator-only
+
+Player caps, subsidies and SIXFL player adjustments are private administrative
+information. Customer Team Payments and Squad Payments show the settled
+nominal player share, not its internal cash/subsidy split. Never call a
+non-cash settlement money received. Player dashboards show the player's actual
+receipt and liability, not an adjustment against the team's nominal share.
+Only server-verified administrator access may opt into internal status/copy.
+Captain-only preview stays a customer view even for an administrator. Private
+breakdowns must be absent from returned markup and attributes, including
+collapsed content; CSS hiding is not sufficient. Actual receipts, liabilities,
+fee waivers and credit arithmetic remain unchanged.
+
+The ledger-consistency workflow renders both roles and captain-only preview,
+verifies entire HTML before/after full production preparation, and opens
+collapsed sections in browsers at desktop/phone widths. Tests also cover
+fail-closed helper defaults and an admin boolean without the server role.
+The example remains £37 settled / £3 due; only the administrator sees the
+£18 cash / £19 internal adjustment breakdown.

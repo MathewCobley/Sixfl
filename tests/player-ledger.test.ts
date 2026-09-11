@@ -303,7 +303,7 @@ test("explicit £12/£8 cap preserves its authorised £4 allowance, but records 
   const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
   await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
   await receiveOrdinary(t,800);const e=(await getTeamPaymentLedger(t.team.id))!.entries[0];assert.equal(e.paidPence,3600);assert.equal(e.playerSubsidyPence,400);assert.equal(e.outstandingPence,0);
-  const d=getPlayerPaymentDisplay(await feeRow(t),await state(t));assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");assert.match(d.detail,/£8.00 received online.*£4.00 SIXFL adjustment/);
+  const d=getPlayerPaymentDisplay(await feeRow(t),await state(t),"admin");assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");assert.match(d.detail,/£8.00 received online.*£4.00 SIXFL adjustment/);
 });
 test("a partial payment of an explicitly capped fee cannot trigger the whole subsidy early",async()=>{
   const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
@@ -377,7 +377,10 @@ test("final prepared source has no ordinary receipt-to-PAID fallback or implicit
   const webhook=readFileSync("src/app/api/stripe/webhook/route.ts","utf8");assert.doesNotMatch(webhook,/closePlayerMatchFeeFromStripeSession|handleCompletedPlayerMatchFeeCheckoutSession|shouldSyncAmount/);
   const service=readFileSync("src/lib/payments/player-repayment-checkout.ts","utf8");assert.match(service,/if\(!requestId&&!legacyFeeId\) return false/);
   assert.match(readFileSync("src/lib/payments/player-fee-coverage.ts","utf8"),/if \(!agreement\) return 0/);
-  assert.match(readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8"),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
+  const captainPayments=readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8");
+  assert.match(captainPayments,/const correctionAccess = await requireCaptain\(teamid\)/);
+  assert.match(captainPayments,/const showAdjustmentDetails = mayViewPaymentAdjustments\(correctionAccess\)/);
+  assert.match(captainPayments,/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\), showAdjustmentDetails \? "admin" : "captain"\)/);
 });
 
 // Admin historical corrections: use real database triggers and provider-read

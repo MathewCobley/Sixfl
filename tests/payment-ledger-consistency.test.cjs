@@ -18,11 +18,12 @@ function loader(mocks={}) {
   const defaults={
     '@/lib/prisma':{prisma:{$queryRaw:async()=>[]}},
     '@/lib/payments/player-ledger':{money},
+    '@/lib/datetime/london':{formatDateTimeInLondon:()=> '25 Aug 2026'},
   };
   const supplied={...defaults,...mocks};
   const allowed=new Set([pagePath,displayPath,presentationPath,'src/lib/payments/player-fee-coverage.ts',
     'src/lib/payments/player-ledger-markers.ts','src/lib/payments/charge-summary.ts','src/lib/payments/team-charge-waivers.ts',
-    'src/lib/payments/payment-receipt-presentation.ts','src/components/payments/PaymentLedgerReconciliation.tsx']);
+    'src/lib/payments/payment-receipt-presentation.ts','src/components/payments/PaymentLedgerReconciliation.tsx','src/lib/payments/payment-visibility.ts']);
   function load(file) {
     if(!path.extname(file))file+=file.startsWith('src/components/')?'.tsx':'.ts';
     assert.ok(allowed.has(file),`Unexpected runtime module ${file}`);
@@ -101,7 +102,7 @@ test('current status uses canonical settlement, including waivers and excess rat
   assert.match(get({amountPence:4000,coveredPence:4500,settledPence:4500,outstandingPence:0}),/£5.00 settlement above this charge/);
 });
 
-async function renderPage({isAdmin=true,mismatch=false,fees=fixtureFees(),creditPence=0,teamPaidPence=0,transactionRows=null,extraEntries=[],receiptStates=[]}={}) {
+async function renderPage({isAdmin=true,mismatch=false,fees=fixtureFees(),creditPence=0,teamPaidPence=0,transactionRows=null,extraEntries=[],receiptStates=[],accessOverride={}}={}) {
   const transactions=transactionRows??[...(creditPence?[{amountPence:creditPence,notes:'Team credit used',reference:'TEAM_CREDIT'}]:[]),...(teamPaidPence?[{amountPence:teamPaidPence,notes:'Team payment'}]:[])];
   const summary=summaryFor(fees,transactions);
   const entry={...summary,chargeId:'test-charge',teamId:'test-team',teamName:'Test team',fixtureLabel:'Test team vs Opposition',
@@ -116,7 +117,7 @@ async function renderPage({isAdmin=true,mismatch=false,fees=fixtureFees(),credit
     playerMatchFee:{findMany:async({where})=>fees.filter(f=>typeof where.status==='string'?f.status===where.status:!where.status?.in||where.status.in.includes(f.status))},$queryRaw:async()=>receiptStates};
   const mocks={
     '@/lib/prisma':{prisma:db},
-    '@/lib/requireCaptain':{requireCaptain:async()=>({isAdmin,user:{id:'test-actor'}})},
+    '@/lib/requireCaptain':{requireCaptain:async()=>({isAdmin,user:{id:'test-actor',role:isAdmin?'ADMIN':'USER'},accessMode:'captain',...accessOverride})},
     'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)},
     'next/cache':{revalidatePath:()=>{throw new Error('No writes during rendering test');}},
     'next/navigation':{notFound:()=>{throw new Error('Not found');},redirect:()=>{throw new Error('Unexpected redirect');}},
@@ -163,16 +164,16 @@ test('native squad-payment summaries share the full adjustment split and contrib
   const s=read('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');
   assert.match(s,/Team balance settled — player links remain open/);
   assert.match(s,/Later player payments reduce the waiver first/);
-  assert.match(s,/getPlayerSettlementBreakdown\(selectedEntry/);assert.match(s,/getPlayerSettlementBreakdown\(entry\)/);
+  assert.match(s,/getPlayerSettlementBreakdown\(selectedEntry/);assert.match(s,/getPlayerSettlementBreakdown\(entry, showAdjustmentDetails\)/);
   assert.doesNotMatch(s,/const captainSettledPence = collectedPence \+ zeroFeeSettledPence/);
-  assert.match(read(pagePath),/payment\.outstandingPence/);assert.match(read(pagePath),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\)\)/);
+  assert.match(read(pagePath),/payment\.outstandingPence/);assert.match(read(pagePath),/getPlayerPaymentDisplay\(fee, playerReceiptStates.get\(fee.id\), showAdjustmentDetails/);
   assert.doesNotMatch(read(presentationPath),/prisma|\.update\(|\.create\(|fetch\(/);
 });
 
 test('actual squad settlement expression preserves historical player cash when no team charge exists',()=>{
   const source=read('src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx');
   const declaration=source.match(/const playerSettlement = ([^\n]+);/)[1];
-  const js=ts.transpileModule(`module.exports=(${declaration});`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+  const js=ts.transpileModule(`const showAdjustmentDetails = false; module.exports=(${declaration});`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
   const load=loader(),module={exports:{}};
   const evaluate=new Function('module','selectedEntry','collectedPence','selectedFees','getPlayerPaymentDisplay','getPlayerSettlementBreakdown',js);
   const getDisplay=load(displayPath).getPlayerPaymentDisplay, getSplit=load(presentationPath).getPlayerSettlementBreakdown;
@@ -269,4 +270,47 @@ test('legible player columns retain captain receipts, player debt and the canoni
   assert.match(html,/£40.00 − £37.00 = £3.00/);
   assert.match(html,/Total applied from players and adjustments/);
   assert.doesNotMatch(html,/Contribution to fixture/);
+});
+
+
+// Private concessions must not leave the server in any customer view.
+const privateCopy = /SIXFL player adjustments|SIXFL adjustment|Settled with adjustment|recorded adjustments|players and adjustments|received from players \+|data-player-adjustments-pence|data-player-cash-pence|£19\.00|£18\.00|Admin note must remain/;
+for (const scenario of ['captain','captain-preview','untrusted-flag']) test(`adjustment privacy: ${scenario} keeps £37 settlement and £3 balance without internal copy or attributes`,async()=>{
+  const override=scenario==='captain-preview'?{isAdmin:false,user:{id:'test-admin',role:'ADMIN'},accessMode:'captain-preview'}:scenario==='untrusted-flag'?{isAdmin:true,user:{id:'test-user',role:'USER'}}:{};
+  const html=await renderPage({isAdmin:false,accessOverride:override});
+  assert.doesNotMatch(html,privateCopy);assert.doesNotMatch(html,/£5\.00 received \+ £3\.00/);
+  assert.match(html,/Total player shares settled/);assert.match(html,/data-player-settled-pence="3700"/);
+  assert.match(html,/£37.00 applied to £40.00 charge; £3.00 outstanding/);
+  assert.deepEqual([...html.matchAll(/data-player-contribution-pence="(\d+)"/g)].map(m=>+m[1]),[800,800,800,800,500]);
+  capture(`privacy-${scenario}`,html);
+});
+test('adjustment privacy: verified administrator still sees the exact private cash and adjustment split',async()=>{
+  const html=await renderPage();assert.match(html,/data-player-adjustments-pence="1900"/);assert.match(html,/data-player-cash-pence="1800"/);
+  assert.match(html,/£5.00 received \+ £3.00 adjustment/);assert.match(html,/Settled with adjustment/);
+});
+test('adjustment privacy: permission is server-role based and preview-aware, not a submitted boolean',()=>{
+  const allow=loader()('src/lib/payments/payment-visibility.ts').mayViewPaymentAdjustments;
+  for(const access of [null,{}, {isAdmin:true}, {isAdmin:true,user:{role:'USER'}},{isAdmin:false,user:{role:'ADMIN'}},{isAdmin:true,user:{role:'ADMIN'},accessMode:'captain-preview'}])assert.equal(allow(access),false);
+  assert.equal(allow({isAdmin:true,user:{role:'ADMIN'},accessMode:'captain'}),true);
+});
+test('adjustment privacy: player default and captain text are safe while numerical receipts and debt are unchanged',()=>{
+  const get=loader()(displayPath).getPlayerPaymentDisplay;
+  for(const fee of fixtureFees()) {
+    const player=get(fee), captain=get(fee,null,'captain'), admin=get(fee,null,'admin');
+    for(const view of [player,captain]) {
+      assert.doesNotMatch(view.statusLabel+' '+view.detail,/adjustment|subsid|captain share|assigned/i);
+      for(const key of ['receivedPence','captainReceivedPence','adjustmentPence','fixtureContributionPence','outstandingPence','assignedPence'])assert.equal(view[key],admin[key]);
+    }
+  }
+  const capped=fixtureFees()[3];assert.match(get(capped).detail,/£5.00 received online/);assert.doesNotMatch(get(capped).detail,/£8.00|£3.00/);
+  const split=loader()(presentationPath).getPlayerSettlementBreakdown;
+  assert.equal(split({playerPaidPence:1800,playerSubsidyPence:1900}).detail,'£37.00 player shares settled');
+  assert.match(split({playerPaidPence:1800,playerSubsidyPence:1900},true).detail,/£18.00.*£19.00/);
+});
+test('adjustment privacy: shared table fails closed even when handed unsanitised admin status text',()=>{
+  const load=loader({'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)}});
+  const Table=load('src/components/payments/PaymentLedgerReconciliation.tsx').PlayerContributionTable;
+  const rows=[{id:'fee',name:'Example',contact:null,amountPence:800,receivedPence:500,adjustmentPence:300,captainReceivedPence:0,outstandingPence:0,statusLabel:'Settled with adjustment',statusMeta:'Private adjustment of £3.00',tone:'emerald'}];
+  const html=renderToStaticMarkup(React.createElement(Table,{rows,isAdmin:true}));
+  assert.doesNotMatch(html,/adjustment|£3.00|£5.00/);assert.match(html,/£8.00/);
 });

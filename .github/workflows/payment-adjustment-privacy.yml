@@ -1,0 +1,64 @@
+name: Admin-only payment adjustment visibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: payment-adjustment-privacy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: privacy-ci-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_privacy_nonfunctional
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: node --test tests/payment-ledger-consistency.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node --test tests/payment-ledger-consistency.test.cjs tests/player-charge-correction-controls.cjs
+      - name: Prove unconditional disclosure is detected
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/components/payments/PaymentLedgerReconciliation.tsx'); original=p.read_text()
+          old='const showInternal = isAdmin && showAdjustmentDetails;'
+          assert original.count(old)==1
+          try:
+              p.write_text(original.replace(old,'const showInternal = true;'))
+              result=subprocess.run(['node','--test','--test-reporter=tap','--test-name-pattern=adjustment privacy','tests/payment-ledger-consistency.test.cjs'],capture_output=True,text=True)
+              assert result.returncode!=0 and 'not ok' in result.stdout and 'adjustment privacy' in result.stdout
+              print('Unconditional adjustment disclosure reproduced and rejected by customer-role tests.')
+          finally:
+              p.write_text(original)
+          PY
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npm run audit:dom
+      - run: npx tsc --noEmit
+      - name: Review all payment presentation callers
+        run: |
+          test ! -f .github/workflows/author-payment-privacy.yml
+          git grep -nE 'getPlayerPaymentDisplay|getPlayerSettlementBreakdown|mayViewPaymentAdjustments|showAdjustmentDetails|SIXFL player adjustments|Settled with adjustment' -- src > /tmp/payment-visibility-callers.txt
+          git diff --exit-code -- src/lib/payments/payment-visibility.ts src/lib/payments/player-payment-display.ts src/lib/payments/payment-ledger-presentation.ts src/components/payments/PaymentLedgerReconciliation.tsx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: payment-visibility-source-inventory
+          path: /tmp/payment-visibility-callers.txt
+          retention-days: 7

@@ -183,7 +183,7 @@ write(collectionActionPath, collectionAction);
 // Preserve the admin cap rules and collection actions above, but do not
 // restore page-local boost arithmetic or count pending caps as receipts.
 const collectionPage = read(collectionPagePath);
-for (const marker of ["getPlayerSettlementBreakdown(selectedEntry", "getPlayerSettlementBreakdown(entry)", "getCaptainAssignedPlayerFeePence", "getCurrentSettlementText(selectedEntry)"]) {
+for (const marker of ["getPlayerSettlementBreakdown(selectedEntry", "getPlayerSettlementBreakdown(entry, showAdjustmentDetails)", "mayViewPaymentAdjustments(correctionAccess)", "getCaptainAssignedPlayerFeePence", "getCurrentSettlementText(selectedEntry)"]) {
   if (!collectionPage.includes(marker)) throw new Error(`Native cap presentation missing: ${marker}`);
 }
 

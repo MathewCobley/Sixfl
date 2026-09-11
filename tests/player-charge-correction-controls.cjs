@@ -34,7 +34,7 @@ test('all three native admin entry points survive production preparation; no pub
  // than demanding the link's literal text still live in the parent file.
  const payments=fs.readFileSync('src/app/captain/team/[teamid]/payments/page.tsx','utf8');
  assert.match(payments,/import\s*\{[^}]*PlayerContributionTable[^}]*\}\s*from\s*["']@\/components\/payments\/PaymentLedgerReconciliation["']/);
- assert.match(payments,/<PlayerContributionTable\s+rows=\{playerCollectionDetails\}\s+isAdmin=\{correctionAccess\.isAdmin\}\s*\/>/);
+ assert.match(payments,/<PlayerContributionTable\s+rows=\{playerCollectionDetails\}\s+isAdmin=\{correctionAccess\.isAdmin\}\s+showAdjustmentDetails=\{showAdjustmentDetails\}\s*\/>/);
  const table=fs.readFileSync('src/components/payments/PaymentLedgerReconciliation.tsx','utf8');
  assert.match(table,/isAdmin\s*&&\s*row\.statusLabel\s*===\s*"Check balance"\s*\?\s*<Link\s+href=\{`\/admin\/payments\/player-fees\/\$\{row\.id\}\/correct-charge`\}/);
  assert.ok(table.includes('Correct original charge'));
