@@ -134,4 +134,21 @@ if (!service.includes("cancelStoppedTeamLeadChases")) {
 }
 write(servicePath, service);
 
+// The fixture-reminder regression suite deliberately evaluates a very small
+// dependency graph with all unrelated notification policy I/O mocked. Once the
+// shared notification service gained the team-lead gate, teach that isolated
+// harness about the two new no-op boundaries rather than making it load lead
+// decision SQL that is tested separately by team-lead-decline.test.cjs.
+const reminderTestPath = "tests/fixture-reminder-context.test.cjs";
+if (fs.existsSync(path.join(root, reminderTestPath))) {
+  let reminderTest = read(reminderTestPath);
+  const leadMock = "    '@/lib/leads/team-lead-chases':{getTeamLeadChaseBlockReason:async()=>null,cancelStoppedTeamLeadChases:async()=>0},";
+  if (!reminderTest.includes(leadMock)) {
+    const mockAnchor = "    '@/lib/notifications/sms-short-links':{shortenSmsBodyLinks:({bodyText})=>({bodyText,links:[]})},";
+    if (!reminderTest.includes(mockAnchor)) throw new Error("Fixture reminder mock anchor was not found.");
+    reminderTest = reminderTest.replace(mockAnchor, `${leadMock}\n${mockAnchor}`);
+    write(reminderTestPath, reminderTest);
+  }
+}
+
 console.log("Applied team-lead decline queue and provider safeguards to final prepared source.");
