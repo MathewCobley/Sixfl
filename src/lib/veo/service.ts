@@ -1,9 +1,10 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveTeamFixtureFeePence } from '@/lib/payments/fixture-fee-policy';
 import { allocateVeoNight, veoFee, type VeoFixture, type VeoHistory, type VeoSettings } from './allocator';
 
-type Db = Prisma.TransactionClient;
+// Match the application's extended Prisma client, not the incompatible bare client.
+// A transaction supplies exactly these methods without exposing nested transactions.
+type Db = Pick<typeof prisma, '$queryRaw' | '$executeRaw' | 'fixture'>;
 export class VeoAllocationError extends Error {}
 export type LeagueVeoSettings = VeoSettings & { revision: number };
 export type VeoTeam = { id: string; name: string; teamMode: string; standardMatchFeePence: number | null; priority: boolean };
