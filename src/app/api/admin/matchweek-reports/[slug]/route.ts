@@ -18,6 +18,11 @@ function failure(error: unknown) {
 export async function GET(request: NextRequest, context: Context) {
   try {
     const { slug } = await context.params;
+    if (request.nextUrl.searchParams.get("publication") === "1") {
+      const { getNewsPublicationState } = await import("@/lib/league-news/manage");
+      const publication = await getNewsPublicationState(slug, request.nextUrl.searchParams.get("date") || "");
+      return NextResponse.json({ ok: true, publication }, { headers });
+    }
     const view = await getReportView(slug, request.nextUrl.searchParams.get("date") || undefined);
     return NextResponse.json({ ok: Boolean(view), view }, { status: view ? 200 : 404, headers });
   } catch (error) { return failure(error); }
@@ -44,6 +49,11 @@ export async function POST(request: NextRequest, context: Context) {
     try { body = JSON.parse(text); } catch { throw new ReportError("The report request could not be read."); }
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new ReportError("Invalid request.");
     const { slug } = await context.params;
+    if (["news-settings", "publish", "unpublish"].includes(String(body.action))) {
+      const { manageNewsPublication } = await import("@/lib/league-news/manage");
+      const publication = await manageNewsPublication(slug, body);
+      return NextResponse.json({ ok: true, publication }, { headers });
+    }
     const view = body.action === "generate" ? await generateReport(slug, body) : body.action === "save" ? await saveReport(slug, body) : null;
     if (!view) throw new ReportError("Choose Generate report or Save draft.");
     return NextResponse.json({ ok: true, view }, { headers });
