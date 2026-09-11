@@ -194,7 +194,7 @@ export async function confirmOriginalPlayerCharge(input: { feeId: string; actorU
       await db.playerRepaymentRequest.create({ data: { id, teamId: p.teamId, feeId: p.feeId, status: "PAID",
         amountPence: t.amountPence, dueAt: t.paidAt, expiresAt: t.paidAt, paidAt: t.paidAt,
         checkoutSessionId: t.stripeCheckoutSessionId, paymentIntentId: t.stripePaymentIntentId,
-        allocations: [{ feeId: p.fee.id, fixtureId: c.fee.fixtureId, chargeId: c.charge.id, amountPence: t.amountPence, version: c.state.version }],
+        allocations: [{ feeId: p.feeId, fixtureId: c.fee.fixtureId, chargeId: c.charge.id, amountPence: t.amountPence, version: c.state.version }],
         failureReason: "Existing verified receipt adopted during admin charge correction; no new payment taken." } });
       await db.paymentTransaction.update({ where: { id: t.id }, data: { chargeId: c.charge.id,
         notes: `${LEDGER_TRANSACTION_PREFIX}. Historical receipt reconciled. Account fee reference: ${p.feeId}. Request: ${id}.` } });
