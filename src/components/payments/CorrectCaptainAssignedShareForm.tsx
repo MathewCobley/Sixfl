@@ -21,6 +21,7 @@ type SaveResult = {
   assignedPence: number;
   playerChargePence: number;
   unchanged: boolean;
+  adjustmentRecorded?: boolean;
 };
 
 export default function CorrectCaptainAssignedShareForm({
@@ -32,6 +33,7 @@ export default function CorrectCaptainAssignedShareForm({
   capPence,
   overridePence,
   hasFeeCapEvidence,
+  canApplyCurrentCapToFixture,
 }: {
   feeId: string;
   teamId: string;
@@ -41,6 +43,7 @@ export default function CorrectCaptainAssignedShareForm({
   capPence: number | null;
   overridePence: number | null;
   hasFeeCapEvidence: boolean;
+  canApplyCurrentCapToFixture: boolean;
 }) {
   const [amount, setAmount] = useState((suggestedAssignedPence / 100).toFixed(2));
   const [confirmed, setConfirmed] = useState(false);
@@ -49,6 +52,7 @@ export default function CorrectCaptainAssignedShareForm({
   const [saved, setSaved] = useState<SaveResult | null>(null);
 
   const account = `/captain/team/${teamId}/player-payments/account/${feeId}`;
+  const adjustmentPence = Math.max(currentAssignedPence - playerChargePence, 0);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -96,17 +100,26 @@ export default function CorrectCaptainAssignedShareForm({
         className="space-y-4 rounded-2xl border border-emerald-400/30 p-5"
       >
         <h2 className="text-xl font-semibold">
-          {saved.unchanged ? "Captain share already correct" : "Captain share corrected"}
+          {saved.adjustmentRecorded
+            ? "Fixture adjustment recorded"
+            : saved.unchanged
+              ? "Captain share already correct"
+              : "Captain share corrected"}
         </h2>
         <p>
           Captain-assigned share: <strong>{money(saved.assignedPence)}</strong>.
           The player&apos;s recorded charge remains <strong>{money(saved.playerChargePence)}</strong>.
         </p>
+        {saved.adjustmentRecorded ? (
+          <p className="text-sm text-white/70">
+            The difference is now recorded on this fixture as the player&apos;s SIXFL cap adjustment, so the payment row can settle as the assigned share rather than showing “Check balance”.
+          </p>
+        ) : null}
         <p className="text-sm text-white/70">
           No payment was taken, no debt was created, no receipt was changed and no email or SMS was sent.
         </p>
-        <Link className="text-emerald-200 underline" href={account}>
-          Open player account
+        <Link className="text-emerald-200 underline" href={`/captain/team/${teamId}/payments`}>
+          Back to team payments
         </Link>
       </section>
     );
@@ -153,6 +166,15 @@ export default function CorrectCaptainAssignedShareForm({
         )}
       </div>
 
+      {canApplyCurrentCapToFixture ? (
+        <div className="rounded-xl border border-emerald-300/25 bg-emerald-400/[0.06] p-4 text-sm leading-6 text-emerald-50/90">
+          <p className="font-semibold">This is the missing step for this fixture.</p>
+          <p className="mt-1">
+            The captain share is already {money(currentAssignedPence)} and the player cap is {money(playerChargePence)}. Saving below will record the {money(adjustmentPence)} difference on this fixture as the SIXFL cap adjustment, without changing the £5 payment.
+          </p>
+        </div>
+      ) : null}
+
       <form className="space-y-5" onSubmit={submit}>
         <label className="block">
           Correct captain-assigned share (£)
@@ -176,12 +198,18 @@ export default function CorrectCaptainAssignedShareForm({
             className="mt-1"
           />
           <span>
-            I am correcting only what the captain originally assigned. Keep the player&apos;s cap/override, actual charge, payment status and outstanding balance unchanged.
+            {canApplyCurrentCapToFixture
+              ? `I confirm the player's ${money(playerChargePence)} cap applied to this fixture. Keep the real payment unchanged and record the ${money(adjustmentPence)} difference as the SIXFL adjustment.`
+              : "I am correcting only what the captain originally assigned. Keep the player's cap/override, actual charge, payment status and outstanding balance unchanged."}
           </span>
         </label>
 
         <button className={button} disabled={busy || !confirmed}>
-          {busy ? "Saving captain share…" : "Save captain share only"}
+          {busy
+            ? "Saving…"
+            : canApplyCurrentCapToFixture
+              ? `Apply ${money(adjustmentPence)} adjustment to this fixture`
+              : "Save captain share only"}
         </button>
       </form>
     </section>
