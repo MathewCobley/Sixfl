@@ -1,0 +1,38 @@
+name: Temporary retire legacy fee writer
+on:
+  push:
+    branches: [fix/completed-fixture-fee-reduction]
+    paths: [.github/workflows/fee-reduction-retire-legacy.yml]
+permissions:
+  contents: write
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/completed-fixture-fee-reduction
+      - name: Remove only the legacy route generator and its follow-up rewrite
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply-late-fee-adjustment-integrity.cjs')
+          s=p.read_text()
+          a=s.index('write(\n  "src/app/api/admin/payments/adjust-charge/route.ts",')
+          b=s.index('\n);',a)+3
+          s=s[:a]+'// The reduce-match-fee route is native. Never regenerate it: the fee-only\n// completed-fixture correction and optimistic conflict checks must survive prebuild.\n'+s[b:]
+          old='adjustRoute.includes("homeMatchFeePence: newBaseChargePence") && adjustRoute.includes("awayMatchFeePence: newBaseChargePence")'
+          new='adjustRoute.includes(\'SET "homeMatchFeePence" = ${newBaseChargePence}\') && adjustRoute.includes(\'SET "awayMatchFeePence" = ${newBaseChargePence}\')'
+          assert old in s
+          p.write_text(s.replace(old,new))
+          p=Path('scripts/apply-late-fee-fixture-base-authority.cjs')
+          s=p.read_text()
+          a=s.index('{\n  const file = "src/app/api/admin/payments/adjust-charge/route.ts";')
+          b=s.index('\n}\n',a)+3
+          p.write_text(s[:a]+'// The native adjust-charge route already owns fixture-side base authority.\n// Keep the remaining legacy compatibility below without rewriting that route.\n'+s[b:])
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/apply-late-fee-adjustment-integrity.cjs scripts/apply-late-fee-fixture-base-authority.cjs
+          git commit -m 'Retire build-time fee reduction route rewrites; preserve native accounting correction'
+          git push origin HEAD:fix/completed-fixture-fee-reduction
