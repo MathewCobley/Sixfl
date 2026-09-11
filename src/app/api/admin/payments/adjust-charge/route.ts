@@ -136,7 +136,8 @@ export async function POST(request: Request) {
 
     const newBaseChargePence = currentBaseChargePence - reductionPence;
     const newAmountPence = newBaseChargePence + appliedLateFeePence;
-    const settledPence = "settledPence" in summary ? Number(summary.settledPence) : summary.coveredPence;
+    const coveredPence = summary.coveredPence;
+    const settledPence = "settledPence" in summary ? Number(summary.settledPence) : coveredPence;
     const nextStatus =
       settledPence >= newAmountPence
         ? PaymentChargeStatus.PAID
