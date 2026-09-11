@@ -67,10 +67,10 @@ export default async function Page({
               This player has a fee cap or override, so the historical-debt correction is deliberately disabled.
             </p>
             <p className="text-white/75">
-              A cap is a genuine SIXFL concession. Turning the difference into player debt would be wrong. Use this control only to restore what the captain originally assigned — for example £8 assigned while the player was correctly charged £5.
+              A cap is a genuine SIXFL concession. Turning the difference into player debt would be wrong. Use this control to restore what the captain originally assigned and, when the current cap matches the player&apos;s recorded charge, to record that cap on this fixture.
             </p>
             <p className="text-white/65">
-              Saving here changes the captain-assigned share only. It does not change the player&apos;s charge, cap, payment status, receipts or outstanding balance.
+              The player&apos;s real charge, payment status, receipts and outstanding balance stay unchanged. Only the captain share and explicit fixture adjustment evidence can be corrected.
             </p>
           </div>
 
@@ -83,6 +83,7 @@ export default async function Page({
             capPence={shareCandidate.capPence}
             overridePence={shareCandidate.overridePence}
             hasFeeCapEvidence={shareCandidate.hasFeeCapEvidence}
+            canApplyCurrentCapToFixture={shareCandidate.canApplyCurrentCapToFixture}
           />
         </main>
       );
