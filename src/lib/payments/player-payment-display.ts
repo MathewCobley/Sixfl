@@ -1,3 +1,4 @@
+import type { PaymentAudience } from "./payment-visibility";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCaptainAssignedPlayerFeePence, getPlayerFeeSubsidyPence } from "./player-fee-coverage";
@@ -8,7 +9,8 @@ type ReceiptState = { controlled: boolean; balancePence: number; receivedPence: 
 
 /** Presentation only. Never repairs a historic amount, and never uses an assigned
  * share as proof that cash was received. All callers use the same receipt split. */
-export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null) {
+export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null, audience: PaymentAudience = "player") {
+  const showInternal = audience === "admin";
   const recordedByCaptain = fee.status === "WAIVED" && Boolean(fee.note?.includes("captain/organiser marked"));
   const received = state?.controlled ? state.receivedPence : fee.status === "PAID" ? fee.amountPence : 0;
   const captainReceived = state?.controlled ? state.captainReceivedPence : recordedByCaptain ? fee.amountPence : 0;
@@ -18,10 +20,15 @@ export function getPlayerPaymentDisplay(fee: Fee, state?: ReceiptState | null) {
   const historyMismatch = !state?.controlled && fee.status === "PAID" && assigned > received + subsidy;
   const paid = received + captainReceived;
   const statusLabel = historyMismatch ? "Check balance" : balance > 0 ? paid > 0 ? "Part-paid" : "Awaiting payment"
-    : subsidy > 0 ? "Settled with adjustment" : received > 0 && captainReceived === 0 ? "Paid online"
+    : subsidy > 0 ? showInternal ? "Settled with adjustment" : "Settled" : received > 0 && captainReceived === 0 ? "Paid online"
     : captainReceived > 0 ? received > 0 ? "Settled" : "Paid to captain" : fee.status === "CANCELLED" ? "Cancelled" : "No charge";
-  const detail = historyMismatch ? `${money(received)} recorded paid; ${money(assigned)} assigned — difference needs review`
-    : `${money(received)} received online${captainReceived ? ` + ${money(captainReceived)} received by captain` : ""}${subsidy ? ` + ${money(subsidy)} SIXFL adjustment` : ""} · ${money(balance)} outstanding`;
+  // Text is audience-specific; the numeric accounting values below never change.
+  // The default is safe for the player's own dashboard, including admin preview.
+  const detail = historyMismatch
+    ? showInternal ? `${money(received)} recorded paid; ${money(assigned)} assigned — difference needs review` : "Payment record needs review."
+    : audience === "captain"
+      ? `${money(received + subsidy)} applied to fixture${captainReceived ? ` · ${money(captainReceived)} paid to captain` : ""} · ${money(balance)} outstanding`
+      : `${money(received)} received online${captainReceived ? ` + ${money(captainReceived)} received by captain` : ""}${showInternal && subsidy ? ` + ${money(subsidy)} SIXFL adjustment` : ""} · ${money(balance)} outstanding`;
   // On a settled row display receipts, not a larger nominal assigned share.
   const amountPence = balance > 0 ? balance + paid : paid || fee.amountPence;
   // Fixture contribution is distinct from the player-facing charge/receipt

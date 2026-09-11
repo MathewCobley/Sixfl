@@ -303,7 +303,7 @@ test("explicit £12/£8 cap preserves its authorised £4 allowance, but records 
   const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});
   await prisma.paymentTransaction.create({data:{teamId:t.team.id,chargeId:t.charge.id,amountPence:2800,method:"STRIPE",paidAt:new Date()}});
   await receiveOrdinary(t,800);const e=(await getTeamPaymentLedger(t.team.id))!.entries[0];assert.equal(e.paidPence,3600);assert.equal(e.playerSubsidyPence,400);assert.equal(e.outstandingPence,0);
-  const d=getPlayerPaymentDisplay(await feeRow(t),await state(t));assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");assert.match(d.detail,/£8.00 received online.*£4.00 SIXFL adjustment/);
+  const d=getPlayerPaymentDisplay(await feeRow(t),await state(t),"admin");assert.equal(d.amountPence,800);assert.equal(d.statusLabel,"Settled with adjustment");assert.match(d.detail,/£8.00 received online.*£4.00 SIXFL adjustment/);
 });
 test("a partial payment of an explicitly capped fee cannot trigger the whole subsidy early",async()=>{
   const t=await target(800);await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{note:"Player fee cap applied: captain share £12.00; player charged £8.00."}});

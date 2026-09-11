@@ -51,3 +51,18 @@ test('receipt groups, captain reports and the £56 breakdown are readable at des
     await page.screenshot({path:path.join(out,`${scenario}-${width}.png`),fullPage:true});await page.close();
   }}finally{await browser.close();}
 });
+
+
+test('captain and captain-only preview never contain private adjustments, including collapsed content, at desktop/mobile widths',async()=>{
+  const css=cssFiles('.next/static').map(p=>fs.readFileSync(p,'utf8')).join('\n');const browser=await chromium.launch({headless:true});
+  try{for(const width of [1440,390])for(const scenario of ['captain','captain-preview']){
+    const page=await browser.newPage({viewport:{width,height:1000}});await page.route('**/*',r=>r.abort());
+    const markup=fs.readFileSync(path.join(out,`privacy-${scenario}.html`),'utf8');
+    await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body class="bg-black text-white"><main class="mx-auto max-w-7xl px-4 py-8">${markup}</main></body></html>`);
+    for(const detail of await page.locator('details').all())await detail.locator('summary').first().click();
+    assert.doesNotMatch(await page.locator('body').innerHTML(),/SIXFL player adjustments|SIXFL adjustment|Settled with adjustment|data-player-adjustments-pence|data-player-cash-pence|£19\.00|£18\.00/);
+    assert.match(await page.locator('[data-player-contributions-total]').innerText(),/£37.00/);
+    assert.match(await page.locator('[data-fixture-equation]').innerText(),/£40.00.*£37.00.*£3.00/);
+    await page.screenshot({path:path.join(out,`privacy-${scenario}-${width}.png`),fullPage:true});await page.close();
+  }}finally{await browser.close();}
+});

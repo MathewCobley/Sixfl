@@ -15,13 +15,14 @@ type ContributionRow = PlayerCollectionFigure & {
 /** One owned responsive grid: each amount has one explicit meaning. The same
  * canonical display object supplies online receipts, adjustments and debt.
  * Captain reports never become SIXFL receipts through presentation. */
-export function PlayerContributionTable({ rows, isAdmin }: { rows: ContributionRow[]; isAdmin: boolean }) {
+export function PlayerContributionTable({ rows, isAdmin, showAdjustmentDetails = false }: { rows: ContributionRow[]; isAdmin: boolean; showAdjustmentDetails?: boolean }) {
+  const showInternal = isAdmin && showAdjustmentDetails;
   const total = rows.reduce((sum, row) => sum + row.amountPence, 0);
   const columns = "grid grid-cols-3 gap-3 sm:grid-cols-[minmax(140px,1.6fr)_repeat(3,minmax(0,1fr))] sm:gap-4";
   return <section aria-label="Player payments" className="mt-5 min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/20" data-readable-player-payments>
     <div className="border-b border-white/10 px-4 py-3">
       <h3 className="text-base font-semibold text-white">Player payments</h3>
-      <p className="mt-1 text-sm leading-5 text-white/65">Only SIXFL receipts and recorded adjustments count towards the fixture.</p>
+      <p className="mt-1 text-sm leading-5 text-white/65">{showInternal ? "Only SIXFL receipts and recorded adjustments count towards the fixture." : "Player shares applied to this fixture. Money paid to the captain is shown separately."}</p>
     </div>
     <div className={`${columns} hidden border-b border-white/10 bg-white/[0.03] px-4 py-3 text-xs font-semibold text-white/70 sm:grid`} aria-hidden="true">
       <span>Player</span><span className="text-right">Applied to fixture</span><span className="text-right">Paid to captain</span><span className="text-right">Player still owes</span>
@@ -29,15 +30,15 @@ export function PlayerContributionTable({ rows, isAdmin }: { rows: ContributionR
     <div className="divide-y divide-white/10">{rows.map(row => <div key={row.id} data-player-contribution-pence={row.amountPence} className={`${columns} px-4 py-4`}>
       <div className="col-span-3 min-w-0 sm:col-span-1">
         <p className="break-words text-sm font-semibold text-white">{row.name}</p>
-        <p className={`mt-1 text-xs font-medium ${row.outstandingPence > 0 || row.statusLabel === "Check balance" ? "text-amber-100" : "text-emerald-100/80"}`}>{row.statusLabel}</p>
-        {row.statusLabel === "Check balance" ? <p className="mt-2 text-xs leading-5 text-amber-100">{row.statusMeta}</p> : null}
+        <p className={`mt-1 text-xs font-medium ${row.outstandingPence > 0 || row.statusLabel === "Check balance" ? "text-amber-100" : "text-emerald-100/80"}`}>{!showInternal && row.statusLabel === "Settled with adjustment" ? "Settled" : row.statusLabel}</p>
+        {row.statusLabel === "Check balance" ? <p className="mt-2 text-xs leading-5 text-amber-100">{showInternal ? row.statusMeta : "Payment record needs review."}</p> : null}
         {row.contact ? <details className="mt-1 text-xs text-white/55"><summary className="cursor-pointer">Contact</summary><p className="mt-1 break-all">{row.contact}</p></details> : null}
         {isAdmin && row.statusLabel === "Check balance" ? <Link href={`/admin/payments/player-fees/${row.id}/correct-charge`} className="mt-2 inline-flex rounded-lg border border-amber-300/35 px-2 py-2 text-xs font-semibold text-amber-100">Correct original charge</Link> : null}
       </div>
       <div className="min-w-0 sm:text-right">
         <p className="mb-1 text-xs text-white/65 sm:sr-only">Applied to fixture</p>
         <p className="whitespace-nowrap text-base font-semibold tabular-nums text-white">{money(row.amountPence)}</p>
-        {row.adjustmentPence > 0 ? <p className="mt-1 text-xs leading-5 text-white/65">{money(row.receivedPence)} received + {money(row.adjustmentPence)} adjustment</p> : null}
+        {showInternal && row.adjustmentPence > 0 ? <p className="mt-1 text-xs leading-5 text-white/65">{money(row.receivedPence)} received + {money(row.adjustmentPence)} adjustment</p> : null}
       </div>
       <div className="min-w-0 sm:text-right">
         <p className="mb-1 text-xs text-white/65 sm:sr-only">Paid to captain</p>
@@ -49,7 +50,7 @@ export function PlayerContributionTable({ rows, isAdmin }: { rows: ContributionR
       </div>
     </div>)}</div>
     <div data-player-contributions-total={total} className="flex items-center justify-between gap-4 border-t border-white/10 bg-white/[0.03] px-4 py-4 text-sm font-semibold text-white">
-      <span className="min-w-0">Total applied from players and adjustments</span><span className="shrink-0 whitespace-nowrap tabular-nums">{money(total)}</span>
+      <span className="min-w-0">{showInternal ? "Total applied from players and adjustments" : "Total player shares settled"}</span><span className="shrink-0 whitespace-nowrap tabular-nums">{money(total)}</span>
     </div>
   </section>;
 }

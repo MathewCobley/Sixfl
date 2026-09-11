@@ -1,3 +1,4 @@
+import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";
 import SquadPaymentCollectionForm from "@/components/payments/SquadPaymentCollectionForm";
 import { getInitialCollectionDefaultPence } from "@/lib/payments/squad-collection-form";
 import { saveCaptainSquadPaymentCollectionWithFeedback } from "./collection-feedback-action";
@@ -189,6 +190,7 @@ function messageForError(error?: string) {
 export default async function PaymentPageServer({ params, searchParams }: Props) {
   const { teamid } = await params;
   const correctionAccess = await requireCaptain(teamid);
+  const showAdjustmentDetails = mayViewPaymentAdjustments(correctionAccess);
   const sp = (await searchParams) ?? {};
 
   const team = await prisma.team.findUnique({
@@ -432,7 +434,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     selectedEntry?.amountPence ?? selectedFixture?.matchFeePence ?? 4000;
   const directPaidPence = selectedEntry?.directPaidPence ?? 0;
   const collectedPence = selectedEntry?.playerPaidPence ?? 0;
-  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: collectedPence, playerSubsidyPence: selectedFees.reduce((sum, fee) => sum + getPlayerPaymentDisplay(fee).adjustmentPence, 0) });
+  const playerSettlement = getPlayerSettlementBreakdown(selectedEntry ?? { playerPaidPence: collectedPence, playerSubsidyPence: selectedFees.reduce((sum, fee) => sum + getPlayerPaymentDisplay(fee).adjustmentPence, 0) }, showAdjustmentDetails);
   const captainSettledPence = playerSettlement.totalPence;
   const playerOutstandingPence = selectedEntry?.playerOpenPence ?? 0;
   const sixflWaivedPence = selectedEntry?.waivedPence ?? 0;
@@ -615,7 +617,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
               const zeroFeeSettledPence = entry.fixtureId
                 ? zeroFeeSettledPenceByFixture.get(entry.fixtureId) ?? 0
                 : 0;
-              const fixturePlayerSettlement = getPlayerSettlementBreakdown(entry);
+              const fixturePlayerSettlement = getPlayerSettlementBreakdown(entry, showAdjustmentDetails);
               const captainPlayerSettledPence = fixturePlayerSettlement.totalPence;
               const hasCollection = captainPlayerSettledPence > 0 || entry.playerOpenPence > 0;
               const badgeLabel =
@@ -853,10 +855,10 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     <span
                       className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses(captainStatus)}`}
                     >
-                      {getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).statusLabel}
+                      {getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id), showAdjustmentDetails ? "admin" : "captain").statusLabel}
                     </span>
                     <Link href={`/captain/team/${teamid}/player-payments/account/${fee.id}`} className="rounded-full border border-white/10 px-3 py-1 text-xs text-emerald-200">Player account</Link>
-                    <p className="mt-2 text-xs text-white/65">{getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).detail}</p>
+                    <p className="mt-2 text-xs text-white/65">{getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id), showAdjustmentDetails ? "admin" : "captain").detail}</p>
                     {correctionAccess.isAdmin && getPlayerPaymentDisplay(fee, ledgerByFee.get(fee.id)).review ? <Link
                       href={`/admin/payments/player-fees/${fee.id}/correct-charge`} className="mt-2 inline-block text-xs text-amber-100 underline"
                     >Correct original charge</Link> : null}

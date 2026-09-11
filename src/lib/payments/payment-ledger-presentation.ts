@@ -7,12 +7,14 @@ const money = (pence: number) => new Intl.NumberFormat("en-GB", {
 export function getPlayerSettlementBreakdown(entry: {
   playerPaidPence: number;
   playerSubsidyPence: number;
-}) {
+}, showInternal = false) {
   return {
     cashPence: entry.playerPaidPence,
     adjustmentPence: entry.playerSubsidyPence,
     totalPence: entry.playerPaidPence + entry.playerSubsidyPence,
-    detail: `${money(entry.playerPaidPence)} received from players + ${money(entry.playerSubsidyPence)} SIXFL player adjustments`,
+    detail: showInternal
+      ? `${money(entry.playerPaidPence)} received from players + ${money(entry.playerSubsidyPence)} SIXFL player adjustments`
+      : `${money(entry.playerPaidPence + entry.playerSubsidyPence)} player shares settled`,
   };
 }
 
@@ -25,7 +27,7 @@ export function getCurrentSettlementText(entry: {
   const recorded = entry.settledPence ?? entry.coveredPence;
   const applied = Math.min(recorded, entry.amountPence);
   const excess = Math.max(recorded - applied, 0);
-  return `${money(applied)} applied to ${money(entry.amountPence)} charge; ${money(entry.outstandingPence)} outstanding.${excess > 0 ? ` ${money(excess)} settlement above this charge; adjustments are not cash or team credit.` : ""}`;
+  return `${money(applied)} applied to ${money(entry.amountPence)} charge; ${money(entry.outstandingPence)} outstanding.${excess > 0 ? ` ${money(excess)} settlement above this charge.` : ""}`;
 }
 
 /** Old reconciliation wrote a settlement snapshot into a description. Strip
