@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 
 import { getFallbackFixtureAiPreview } from "@/lib/fixtures/aiPredictor";
 import { buildNameAwareWinChanceFixtures } from "@/lib/fixtures/winChanceHistory";
-import { calculateFixtureWinChance } from "@/lib/fixtures/winChance";
+import { calculateFixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
@@ -49,6 +49,15 @@ async function ensurePredictionScoreColumns() {
   );
   await prisma.$executeRawUnsafe(
     'ALTER TABLE "FixtureAiPrediction" ADD COLUMN IF NOT EXISTS "predictedAwayScore" INTEGER',
+  );
+}
+
+function hasPriorCompletedMatch(teamId: string, fixtures: WinChanceFixture[]) {
+  return fixtures.some(
+    (historyFixture) =>
+      historyFixture.status === "COMPLETED" &&
+      Boolean(historyFixture.result) &&
+      (historyFixture.homeTeam.id === teamId || historyFixture.awayTeam.id === teamId),
   );
 }
 
@@ -120,6 +129,17 @@ export async function recoverMissingHistoricalAiPredictions(fixtureIds: string[]
       historyFixtures,
       targetFixtures: [fixture],
     });
+
+    // A team's first match is deliberately not predicted. The historical repair
+    // path must obey the same rule so accuracy pages cannot later invent a call
+    // that was never eligible before kick-off.
+    if (
+      !hasPriorCompletedMatch(fixture.homeTeam.id, predictionHistory) ||
+      !hasPriorCompletedMatch(fixture.awayTeam.id, predictionHistory)
+    ) {
+      continue;
+    }
+
     const winChance = calculateFixtureWinChance({
       homeTeamId: fixture.homeTeam.id,
       awayTeamId: fixture.awayTeam.id,

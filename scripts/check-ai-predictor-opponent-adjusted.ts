@@ -130,13 +130,27 @@ assert.notEqual(
 );
 
 const repairSource = fs.readFileSync("src/lib/fixtures/aiPredictionIntegrity.ts", "utf8");
+const storedSource = fs.readFileSync("src/lib/fixtures/storedAiPredictions.ts", "utf8");
+const recoverySource = fs.readFileSync(
+  "src/lib/fixtures/recoverHistoricalAiPredictions.ts",
+  "utf8",
+);
 const migrationSource = fs.readFileSync(
   "prisma/migrations/20260820015500_ai_predictor_model_version/migration.sql",
   "utf8",
 );
-assert.match(repairSource, /opponent-adjusted-poisson-v2/);
+
+assert.match(repairSource, /opponent-adjusted-poisson-v3-min-one-game/);
 assert.match(repairSource, /prediction\."modelVersion" IS DISTINCT FROM/);
 assert.match(repairSource, /"modelVersion" = \$\{PREDICTOR_MODEL_VERSION\}/);
+assert.match(repairSource, /Null is expected for a team's first fixture/);
+assert.match(storedSource, /function hasAtLeastOneCompletedMatch/);
+assert.match(storedSource, /!homeHasHistory \|\| !awayHasHistory/);
+assert.match(storedSource, /DELETE FROM "FixtureAiPrediction"/);
+assert.match(storedSource, /prior_home\."kickoffAt" < fixture\."kickoffAt"/);
+assert.match(storedSource, /prior_away\."kickoffAt" < fixture\."kickoffAt"/);
+assert.match(recoverySource, /function hasPriorCompletedMatch/);
+assert.match(recoverySource, /A team's first match is deliberately not predicted/);
 assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "modelVersion" TEXT/);
 
 console.log("Opponent-adjusted Poisson predictor contract passed.");

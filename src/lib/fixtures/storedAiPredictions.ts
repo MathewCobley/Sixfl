@@ -133,6 +133,15 @@ function canReuseExistingPrediction(input: {
   return !hasOpenAiPredictorConfig();
 }
 
+function hasAtLeastOneCompletedMatch(teamId: string, fixtures: WinChanceFixture[]) {
+  return fixtures.some(
+    (fixture) =>
+      fixture.status === "COMPLETED" &&
+      Boolean(fixture.result) &&
+      (fixture.homeTeam.id === teamId || fixture.awayTeam.id === teamId),
+  );
+}
+
 export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
   const ids = Array.from(new Set(fixtureIds.filter(Boolean)));
 
@@ -162,6 +171,24 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
     WHERE prediction."fixtureId" IN (${Prisma.join(ids)})
       AND COALESCE(home_team."isFixturePlaceholder", false) = false
       AND COALESCE(away_team."isFixturePlaceholder", false) = false
+      AND EXISTS (
+        SELECT 1
+        FROM "Fixture" prior_home
+        JOIN "MatchResult" prior_home_result ON prior_home_result."fixtureId" = prior_home."id"
+        WHERE prior_home."leagueId" = fixture."leagueId"
+          AND prior_home."status"::text = 'COMPLETED'
+          AND prior_home."kickoffAt" < fixture."kickoffAt"
+          AND fixture."homeTeamId" IN (prior_home."homeTeamId", prior_home."awayTeamId")
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM "Fixture" prior_away
+        JOIN "MatchResult" prior_away_result ON prior_away_result."fixtureId" = prior_away."id"
+        WHERE prior_away."leagueId" = fixture."leagueId"
+          AND prior_away."status"::text = 'COMPLETED'
+          AND prior_away."kickoffAt" < fixture."kickoffAt"
+          AND fixture."awayTeamId" IN (prior_away."homeTeamId", prior_away."awayTeamId")
+      )
   `;
 
   return new Map(rows.map((row) => [row.fixtureId, toStoredPreview(row)]));
@@ -249,7 +276,16 @@ async function generateAndSave(input: {
     input.fixture.awayTeam.id,
   ]);
 
-  if (placeholderTeamIds.size > 0) {
+  const homeHasHistory = hasAtLeastOneCompletedMatch(
+    input.fixture.homeTeam.id,
+    input.fixtures,
+  );
+  const awayHasHistory = hasAtLeastOneCompletedMatch(
+    input.fixture.awayTeam.id,
+    input.fixtures,
+  );
+
+  if (placeholderTeamIds.size > 0 || !homeHasHistory || !awayHasHistory) {
     await prisma.$executeRaw`
       DELETE FROM "FixtureAiPrediction"
       WHERE "fixtureId" = ${input.fixture.id}
