@@ -16,9 +16,14 @@ let source = fs.readFileSync(filePath, "utf8");
 
 const placeholderImport = 'import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";';
 if (!source.includes(placeholderImport)) {
-  const anchor = 'import { refreshStoredAiPreviewsForLeague } from "@/lib/fixtures/storedAiPredictions";';
-  if (!source.includes(anchor)) throw new Error("Venue-neutral next-week placeholder import anchor not found.");
-  source = source.replace(anchor, `${anchor}\n${placeholderImport}`);
+  const anchors = [
+    'import { prisma } from "@/lib/prisma";',
+    'import { snapshotFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";',
+    'import { FixtureStatus, Prisma } from "@prisma/client";',
+  ];
+  const anchor = anchors.find((candidate) => source.includes(candidate));
+  if (!anchor) throw new Error("Venue-neutral next-week placeholder import anchor not found.");
+  source = source.replace(anchor, `${placeholderImport}\n${anchor}`);
 }
 
 source = source.replace("\n\ntype CountRow = { count: number | bigint };", "");
