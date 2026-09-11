@@ -167,7 +167,11 @@ export async function GET(
           storedPrediction,
         };
 
-        if (fixture.status !== "SCHEDULED") {
+        // The stored prediction service is the eligibility gate. If it filtered
+        // this fixture out (for example because either side is playing its first
+        // SIXFL match), the captain dashboard must not manufacture a local
+        // fallback prediction and accidentally put percentages back on screen.
+        if (fixture.status !== "SCHEDULED" || !storedPreview) {
           return {
             ...base,
             winChance: null,
@@ -189,14 +193,12 @@ export async function GET(
           ...base,
           winChance: {
             ...winChance,
-            aiPreview:
-              !storedPreview ||
-              shouldIgnoreStaleTooEarlyPreview({
-                preview: storedPreview,
-                predictedResultLabel: winChance.predictedResult.label,
-              })
-                ? fallbackPreview
-                : storedPreview,
+            aiPreview: shouldIgnoreStaleTooEarlyPreview({
+              preview: storedPreview,
+              predictedResultLabel: winChance.predictedResult.label,
+            })
+              ? fallbackPreview
+              : storedPreview,
           },
         };
       }),
