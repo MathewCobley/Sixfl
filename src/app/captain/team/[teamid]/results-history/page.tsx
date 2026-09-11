@@ -1,3 +1,6 @@
+import { getOnPitchResult } from "@/lib/results/result-scores";
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 import { notFound } from "next/navigation";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
@@ -79,8 +82,7 @@ export default async function CaptainResultsHistoryPage({
       awayTeam: { select: { name: true, logoUrl: true } },
       result: {
         select: {
-          homeScore: true,
-          awayScore: true,
+          ...RESULT_SCORE_SELECT,
           teamMetadata: {
             select: {
               teamId: true,
@@ -122,6 +124,9 @@ export default async function CaptainResultsHistoryPage({
               const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
               const actualFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
               const actualAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+              const playingResult = getOnPitchResult(fixture.result);
+              const playedFor = playingResult ? (isHome ? playingResult.homeScore : playingResult.awayScore) : null;
+              const playedAgainst = playingResult ? (isHome ? playingResult.awayScore : playingResult.homeScore) : null;
               const matchDetails =
                 fixture.result!.teamMetadata.find((item) => item.teamId === teamIdForFixture) ?? null;
               const scorers = parseScorers(matchDetails?.scorers);
@@ -145,12 +150,14 @@ export default async function CaptainResultsHistoryPage({
               const exact =
                 predictedFor !== null &&
                 predictedAgainst !== null &&
-                predictedFor === actualFor &&
-                predictedAgainst === actualAgainst;
+                playedFor !== null && playedAgainst !== null &&
+                predictedFor === playedFor &&
+                predictedAgainst === playedAgainst;
               const correctResult =
                 predictedFor !== null &&
                 predictedAgainst !== null &&
-                outcome(predictedFor, predictedAgainst) === outcome(actualFor, actualAgainst);
+                playedFor !== null && playedAgainst !== null &&
+                outcome(predictedFor, predictedAgainst) === outcome(playedFor, playedAgainst);
 
               return (
                 <article key={fixture.id} className="grid gap-4 px-5 py-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6">
@@ -165,6 +172,8 @@ export default async function CaptainResultsHistoryPage({
                       </div>
                     </div>
 
+                    <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
+                    {fixture.result?.overturnedAt ? <p className="mt-2 text-xs text-white/60">Prediction accuracy is compared with the original on-pitch score.</p> : null}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {predictedFor !== null && predictedAgainst !== null ? (
                         <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
@@ -183,7 +192,7 @@ export default async function CaptainResultsHistoryPage({
                             ? "rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-100"
                             : "rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/50"}
                         >
-                          {exact ? "Exact score 🎯" : correctResult ? "Correct result" : "Prediction missed"}
+                          {!playingResult ? "Playing result unavailable" : exact ? "Exact score 🎯" : correctResult ? "Correct result" : "Prediction missed"}
                         </span>
                       ) : null}
                     </div>

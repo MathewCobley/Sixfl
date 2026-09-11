@@ -1,3 +1,5 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/captain/team/[teamid]/fixtures/page.tsx
 // ========================================
@@ -478,7 +480,7 @@ export default async function CaptainFixturesPage({
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
-        result: { select: { homeScore: true, awayScore: true } },
+        result: { select: { ...RESULT_SCORE_SELECT } },
       },
     }),
   ]);
@@ -839,6 +841,7 @@ export default async function CaptainFixturesPage({
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-semibold text-white">{goalsFor} - {goalsAgainst}</div>
+                      <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
                         <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{getResultLabel(goalsFor, goalsAgainst)}</div>
                       </div>
                     </div>

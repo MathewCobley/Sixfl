@@ -39,7 +39,7 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
     orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
     select: { id: true, status: true, kickoffAt: true,
       homeTeam: { select: { id: true, name: true } }, awayTeam: { select: { id: true, name: true } },
-      result: { select: { homeScore: true, awayScore: true, isDisputed: true,
+      result: { select: { homeScore: true, awayScore: true, overturnedAt: true, isDisputed: true,
         teamMetadata: { select: { teamId: true, scorers: true, playerOfMatchName: true } },
         disputes: { where: { status: { in: ["OPEN", "REVIEW"] } }, select: { id: true }, take: 1 },
       } },
@@ -80,6 +80,7 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
     else if (f.status === "CANCELLED") reasons.push({ code: "cancelled", message: "The fixture is marked cancelled." });
     else if (f.status !== "COMPLETED") reasons.push({ code: "not_completed", message: `The fixture is not marked completed (recorded status: ${f.status}).` });
     if (f.kickoffAt > now) reasons.push({ code: "future_kickoff", message: "The recorded kick-off time is still in the future." });
+    if (r?.overturnedAt) reasons.push({ code: "result_overturned", message: "This result was overturned by SIXFL. Its original playing score and awarded competition result need editorial review; do not describe the award as goals scored." });
     if (r?.isDisputed) reasons.push({ code: "disputed_result", message: "The saved result is flagged as disputed." });
     if (r?.disputes.length) reasons.push({ code: "unresolved_dispute", message: "There is an open or under-review dispute against the result." });
     reasons.push(...(exceptionReasons.get(f.id) ?? []));

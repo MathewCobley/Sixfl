@@ -1,3 +1,5 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/player-payment-display";
 import { hasPlayerLedgerReceipts } from "@/lib/payments/player-ledger-markers";
 import { getPlayerLedgerSummaryForUser } from "@/lib/payments/player-ledger";
@@ -280,7 +282,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         homeTeamId: true,
         homeTeam: { select: { name: true } },
         awayTeam: { select: { name: true } },
-        result: { select: { homeScore: true, awayScore: true } },
+        result: { select: { ...RESULT_SCORE_SELECT } },
       },
     }),
     prisma.teamMember.findMany({
@@ -683,6 +685,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                       <div className="mt-2 text-sm text-white/70">
                         {fixture.result ? `${fixture.result.homeScore} - ${fixture.result.awayScore}` : fixture.status}
                       </div>
+                          <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
                     </div>
                   ))
                 )}

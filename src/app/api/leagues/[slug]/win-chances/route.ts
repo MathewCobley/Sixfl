@@ -1,3 +1,4 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
 // ========================================
 // File: src/app/api/leagues/[slug]/win-chances/route.ts
 // ========================================
@@ -55,12 +56,7 @@ export async function GET(
                 name: true,
               },
             },
-            result: {
-              select: {
-                homeScore: true,
-                awayScore: true,
-              },
-            },
+            result: { select: { ...RESULT_SCORE_SELECT } },
           },
         },
       },

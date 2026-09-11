@@ -1,3 +1,5 @@
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
 // src/app/referee/fixture/[id]/page.tsx
 
 import Link from "next/link";
@@ -86,8 +88,7 @@ export default async function RefereeFixturePage({
       result: {
         select: {
           id: true,
-          homeScore: true,
-          awayScore: true,
+          ...RESULT_SCORE_SELECT,
           enteredAt: true,
           isDisputed: true,
           disputeNote: true,
@@ -184,7 +185,8 @@ export default async function RefereeFixturePage({
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h2 className="text-lg font-semibold text-white">Result</h2>
 
-        <form action={submitRefereeResultAction} className="mt-4 space-y-4">
+        <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
+        {!fixture.result?.overturnedAt ? <form action={submitRefereeResultAction} className="mt-4 space-y-4">
           <input type="hidden" name="fixtureId" value={fixture.id} />
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -242,7 +244,7 @@ export default async function RefereeFixturePage({
               Cancel
             </Link>
           </div>
-        </form>
+        </form> : <p className="mt-3 text-sm text-white/65">SIXFL has recorded a competition decision. The original score and awarded result are protected against normal score edits.</p>}
       </div>
 
       {fixture.result ? (

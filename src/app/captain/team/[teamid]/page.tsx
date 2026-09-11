@@ -1,3 +1,6 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import { getOnPitchResult } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/captain/team/[teamid]/page.tsx
 // ========================================
@@ -193,8 +196,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
         result: {
           select: {
             id: true,
-            homeScore: true,
-            awayScore: true,
+            ...RESULT_SCORE_SELECT,
             isDisputed: true,
             disputes: { where: { teamId: { in: relatedTeamIds }, status: { in: ["OPEN", "REVIEW"] } }, select: { id: true, status: true } },
           },
@@ -255,7 +257,9 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
   const needsCompletionCount = completionResults.filter((fixture) => {
     if (!fixture.result) return false;
     const isHome = relatedTeamIds.includes(fixture.homeTeamId);
-    const goalsFor = isHome ? fixture.result.homeScore : fixture.result.awayScore;
+    const playingResult = getOnPitchResult(fixture.result);
+    if (!playingResult) return false;
+    const goalsFor = isHome ? playingResult.homeScore : playingResult.awayScore;
     const teamMeta = fixture.result.teamMetadata[0] ?? null;
     const goalsRecorded = teamMeta?.goalsRecorded ?? 0;
     const playerOfMatchName = teamMeta?.playerOfMatchName ?? null;
@@ -431,8 +435,58 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
               const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
               const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
               const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+              const outcome =
+                goalsFor > goalsAgainst
+                  ? {
+                      label: "WIN",
+                      verb: "Won",
+                      tone: "border-emerald-400/30 bg-emerald-500/15 text-emerald-100",
+                    }
+                  : goalsFor < goalsAgainst
+                    ? {
+                        label: "LOSS",
+                        verb: "Lost",
+                        tone: "border-red-400/30 bg-red-500/15 text-red-100",
+                      }
+                    : {
+                        label: "DRAW",
+                        verb: "Drew",
+                        tone: "border-amber-400/30 bg-amber-500/15 text-amber-100",
+                      };
               return (
-                <div key={fixture.id} className="px-6 py-5"><div className="flex items-center justify-between gap-4"><div><div className="text-base font-semibold text-white">{opponent}</div><div className="mt-1 text-sm text-white/60">{formatDateTime(fixture.kickoffAt)}</div></div><div className="text-right"><div className="text-lg font-semibold text-white">{goalsFor} - {goalsAgainst}</div></div></div></div>
+                <div
+                  key={fixture.id}
+                  data-captain-result-outcome="true"
+                  className="px-6 py-5"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                        Opponent
+                      </div>
+                      <div className="mt-1 text-base font-semibold text-white">
+                        {opponent}
+                      </div>
+                      <div className="mt-1 text-sm text-white/60">
+                        {formatDateTime(fixture.kickoffAt)}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black tracking-[0.08em] ${outcome.tone}`}
+                      >
+                        {outcome.label}
+                      </span>
+                      <div className="mt-2 text-lg font-black text-white">
+                        {outcome.verb} {goalsFor} - {goalsAgainst}
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/35">
+                        Your team’s score first
+                      </div>
+                    </div>
+                  </div>
+                  <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
+                </div>
               );
             })}
           </div>

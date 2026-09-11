@@ -220,14 +220,15 @@ export default async function PredictorBacktestPage() {
       home_team."name" AS "homeTeamName",
       away_team."id" AS "awayTeamId",
       away_team."name" AS "awayTeamName",
-      result."homeScore" AS "actualHomeScore",
-      result."awayScore" AS "actualAwayScore"
+      (CASE WHEN result."overturnedAt" IS NULL THEN result."homeScore" ELSE result."originalHomeScore" END) AS "actualHomeScore",
+      (CASE WHEN result."overturnedAt" IS NULL THEN result."awayScore" ELSE result."originalAwayScore" END) AS "actualAwayScore"
     FROM "Fixture" fixture
     JOIN "MatchResult" result ON result."fixtureId" = fixture."id"
     JOIN "League" league ON league."id" = fixture."leagueId"
     JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
     JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
     WHERE fixture."status" = 'COMPLETED'
+        AND (result."overturnedAt" IS NULL OR (result."originalHomeScore" IS NOT NULL AND result."originalAwayScore" IS NOT NULL))
       AND COALESCE(home_team."isFixturePlaceholder", false) = false
       AND COALESCE(away_team."isFixturePlaceholder", false) = false
     ORDER BY fixture."kickoffAt" ASC, fixture."id" ASC
@@ -249,7 +250,7 @@ export default async function PredictorBacktestPage() {
             Historical predictor back-test
           </h1>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
-            Replays completed SIXFL fixtures in chronological order. Every model sees only results whose kick-off and result-entry time were both before the match being predicted. The target match and all future information remain excluded.
+            Replays completed SIXFL fixtures in chronological order using on-pitch scores, not administrative awards. Every model sees only results whose kick-off and result-entry time were both before the match being predicted. The target match and all future information remain excluded.
           </p>
         </div>
         <Link

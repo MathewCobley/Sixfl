@@ -1,3 +1,5 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/(public)/leagues/[slug]/page.tsx
 // ========================================
@@ -380,8 +382,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
           },
           result: {
             select: {
-              homeScore: true,
-              awayScore: true,
+              ...RESULT_SCORE_SELECT,
             },
           },
         },
@@ -1153,6 +1154,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
                               {fixture.result?.awayScore}
                             </span>
                           </div>
+                          {fixture.result?.overturnedAt ? <div className="order-last col-span-full"><ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} /></div> : null}
 
                           <div className="flex min-w-0 items-center justify-end gap-3 text-right">
                             <Link

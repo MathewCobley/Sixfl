@@ -510,6 +510,12 @@ model MatchResult {
   homeScore Int
   awayScore Int
 
+  // Official scores above; preserve the played result when SIXFL awards a fixture.
+  originalHomeScore Int?
+  originalAwayScore Int?
+  overturnedAt      DateTime?
+  overturn          MatchResultOverturn?
+
   enteredByUserId String?
   enteredAt       DateTime @default(now())
 
@@ -1333,4 +1339,25 @@ model PlayerRepaymentRequest {
   updatedAt DateTime @updatedAt
   @@index([planId, status])
   @@index([feeId, status])
+}
+
+// Private immutable administrative decision. No customer messages or payments.
+model MatchResultOverturn {
+  id                  String @id
+  matchResultId       String @unique
+  fixtureId           String @unique
+  homeTeamId          String
+  awayTeamId          String
+  originalHomeScore   Int
+  originalAwayScore   Int
+  awardedHomeScore    Int
+  awardedAwayScore    Int
+  winnerTeamId        String
+  reasonCode          String
+  decisionReason      String
+  evidenceReference   String
+  rulesBasis          String
+  decidedByUserId     String
+  decidedAt           DateTime @default(now())
+  result              MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 }

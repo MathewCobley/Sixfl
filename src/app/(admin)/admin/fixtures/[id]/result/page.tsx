@@ -1,3 +1,4 @@
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/(admin)/admin/fixtures/[id]/result/page.tsx
 // ========================================
@@ -50,7 +51,7 @@ export default async function FixtureResultPage({
       venue: { select: { name: true } },
       homeTeam: { select: { name: true } },
       awayTeam: { select: { name: true } },
-      result: { select: { homeScore: true, awayScore: true, isDisputed: true } },
+      result: { select: { homeScore: true, awayScore: true, isDisputed: true, originalHomeScore: true, originalAwayScore: true, overturnedAt: true } },
     },
   });
 
@@ -82,7 +83,14 @@ export default async function FixtureResultPage({
         </div>
       ) : null}
 
-      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+      {fixture.result && fixture.status === "COMPLETED" ? <AdminCard className="rounded-3xl border border-amber-300/25 bg-amber-400/[0.06] p-6">
+        <h2 className="text-lg font-semibold text-white">Competition decision</h2>
+        <p className="mt-2 text-sm text-white/65">Use an overturn for an awarded result after review, not a score-entry correction. The original score is retained for the AI Predictor.</p>
+        <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/>
+        <Link href={`/admin/fixtures/${fixture.id}/overturn`} className="mt-4 inline-flex rounded-xl border border-amber-300/35 px-4 py-3 font-semibold text-amber-100">{fixture.result.overturnedAt ? "View overturn decision" : "Overturn result"}</Link>
+      </AdminCard> : null}
+
+      {!fixture.result?.overturnedAt ? <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <form action={submitResultAction} className="space-y-5">
           <input type="hidden" name="fixtureId" value={fixture.id} />
           <input type="hidden" name="returnTo" value={returnTo} />
@@ -122,7 +130,7 @@ export default async function FixtureResultPage({
             </Link>
           </div>
         </form>
-      </AdminCard>
+      </AdminCard> : null}
     </div>
   );
 }

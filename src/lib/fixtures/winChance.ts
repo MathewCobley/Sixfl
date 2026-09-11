@@ -1,11 +1,9 @@
+import { useOnPitchResults, type ResultScoreSnapshot } from "@/lib/results/result-scores";
 // ========================================
 // File: src/lib/fixtures/winChance.ts
 // ========================================
 
-type FixtureResult = {
-  homeScore: number;
-  awayScore: number;
-};
+type FixtureResult = ResultScoreSnapshot;
 
 export type WinChanceFixture = {
   kickoffAt?: Date | string | null;
@@ -515,6 +513,7 @@ export function calculateFixtureWinChance(input: {
   awayTeamId: string;
   fixtures: WinChanceFixture[];
 }): FixtureWinChance {
+  input = { ...input, fixtures: useOnPitchResults(input.fixtures) };
   const statsByTeamId = buildStats(input.fixtures);
   const baselines = getLeagueBaselines(statsByTeamId);
   const homeStats = statsByTeamId.get(input.homeTeamId);

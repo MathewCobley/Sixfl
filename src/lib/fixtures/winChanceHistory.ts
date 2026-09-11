@@ -1,3 +1,4 @@
+import { getOnPitchResult, type ResultScoreSnapshot } from "@/lib/results/result-scores";
 // ========================================
 // File: src/lib/fixtures/winChanceHistory.ts
 // ========================================
@@ -15,10 +16,7 @@ type NamedFixtureSource = {
   status: string;
   homeTeam: NamedTeam;
   awayTeam: NamedTeam;
-  result: {
-    homeScore: number;
-    awayScore: number;
-  } | null;
+  result: ResultScoreSnapshot | null;
 };
 
 type TargetFixtureSource = {
@@ -70,7 +68,7 @@ export function buildNameAwareWinChanceFixtures(input: {
     awayTeam: {
       id: canonicalTeamId({ team: fixture.awayTeam, currentTeamIdByName }),
     },
-    result: fixture.result,
+    result: getOnPitchResult(fixture.result),
   }));
 }
 

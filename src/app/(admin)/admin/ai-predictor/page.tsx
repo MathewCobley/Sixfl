@@ -193,8 +193,8 @@ export default async function AiPredictorAccuracyPage() {
         away_team."name" AS "awayTeamName",
         prediction."predictedHomeScore" AS "predictedHomeScore",
         prediction."predictedAwayScore" AS "predictedAwayScore",
-        result."homeScore" AS "actualHomeScore",
-        result."awayScore" AS "actualAwayScore",
+        (CASE WHEN result."overturnedAt" IS NULL THEN result."homeScore" ELSE result."originalHomeScore" END) AS "actualHomeScore",
+        (CASE WHEN result."overturnedAt" IS NULL THEN result."awayScore" ELSE result."originalAwayScore" END) AS "actualAwayScore",
         prediction."source" AS "source",
         prediction."generatedAt" AS "generatedAt"
       FROM "Fixture" fixture
@@ -204,6 +204,7 @@ export default async function AiPredictorAccuracyPage() {
       JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
       LEFT JOIN "FixtureAiPrediction" prediction ON prediction."fixtureId" = fixture."id"
       WHERE fixture."status" = 'COMPLETED'
+        AND (result."overturnedAt" IS NULL OR (result."originalHomeScore" IS NOT NULL AND result."originalAwayScore" IS NOT NULL))
         AND COALESCE(home_team."isFixturePlaceholder", false) = false
         AND COALESCE(away_team."isFixturePlaceholder", false) = false
       ORDER BY fixture."kickoffAt" DESC
@@ -327,6 +328,7 @@ export default async function AiPredictorAccuracyPage() {
           <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
             Predictor accuracy & coverage
           </h1>
+          <p className="mt-2 text-sm text-white/60">Overturned matches are assessed against their original on-pitch score, not the administrative award.</p>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
             Coverage shows whether every real fixture has a permanently stored pre-match prediction. Accuracy only scores genuine predictions that were stored before the result; recovered historical rows remain visible but are excluded.
           </p>

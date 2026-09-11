@@ -1,3 +1,5 @@
+import { getOnPitchResult } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/captain/team/[teamid]/results/page.tsx
 // ========================================
@@ -332,15 +334,17 @@ async function saveTeamMatchDetails(formData: FormData) {
     }
 
     const isHome = result.fixture.homeTeamId === teamid;
-    const goalsExpected = isHome ? result.homeScore : result.awayScore;
+    const playingResult = getOnPitchResult(result);
+    if (!playingResult) throw new Error("The original playing score needs review before recording scorers.");
+    const goalsExpected = isHome ? playingResult.homeScore : playingResult.awayScore;
     const goalsRecorded = contributions.reduce((sum, row) => sum + row.goals, 0);
     const assistsRecorded = contributions.reduce((sum, row) => sum + row.assists, 0);
 
     if (goalsRecorded > goalsExpected) {
-      throw new Error("Recorded scorer goals cannot exceed the official result.");
+      throw new Error("Recorded scorer goals cannot exceed the on-pitch score.");
     }
     if (assistsRecorded > goalsExpected) {
-      throw new Error("Recorded assists cannot exceed the official result.");
+      throw new Error("Recorded assists cannot exceed the on-pitch score.");
     }
 
     let playerOfMatchName: string | null = null;
@@ -549,6 +553,8 @@ export default async function CaptainResultsPage({
       const isHome = fixture.homeTeamId === teamid;
       const goalsFor = getGoalsFor(fixture.result!, isHome);
       const goalsAgainst = getGoalsAgainst(fixture.result!, isHome);
+      const playingResult = getOnPitchResult(fixture.result);
+      const playedGoalsFor = playingResult ? getGoalsFor(playingResult, isHome) : 0;
       const matchDetails =
         fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ?? null;
       const selectedPlayerIds = new Set(
@@ -562,7 +568,7 @@ export default async function CaptainResultsPage({
       }));
       const contributions = parseStoredContributions(matchDetails?.scorers);
       const matchPerformances = performancesByResult.get(fixture.result!.id) ?? [];
-      const needsScorers = (matchDetails?.goalsRecorded ?? 0) < goalsFor;
+      const needsScorers = (matchDetails?.goalsRecorded ?? 0) < playedGoalsFor;
       const needsPom = !matchDetails?.playerOfMatchName;
       const needsAppearances = matchPerformances.length === 0;
 
@@ -570,6 +576,7 @@ export default async function CaptainResultsPage({
         fixture,
         opponent: isHome ? fixture.awayTeam.name : fixture.homeTeam.name,
         goalsFor,
+        playedGoalsFor,
         goalsAgainst,
         outcome: getOutcome(goalsFor, goalsAgainst),
         matchDetails,
@@ -730,6 +737,7 @@ export default async function CaptainResultsPage({
                       {row.fixture.homeTeam.name} {row.fixture.result!.homeScore}-
                       {row.fixture.result!.awayScore} {row.fixture.awayTeam.name}
                     </h3>
+                    <ResultOverturnNotice result={row.fixture.result} homeName={row.fixture.homeTeam.name} awayName={row.fixture.awayTeam.name} />
                     <p className="mt-2 text-sm text-white/65">
                       Your opponent: {row.opponent}
                     </p>
@@ -816,7 +824,7 @@ export default async function CaptainResultsPage({
                       </div>
 
                       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/65">
-                        Recorded {recordedGoalTotal} of {row.goalsFor} team goals. Optional assists recorded: {recordedAssistTotal}.
+                        Recorded {recordedGoalTotal} of {row.playedGoalsFor} team goals. Optional assists recorded: {recordedAssistTotal}.
                       </div>
                     </div>
                   </div>
@@ -941,7 +949,7 @@ export default async function CaptainResultsPage({
                                   name={`scorerGoals_${player.id}`}
                                   defaultValue={contribution?.goals ?? 0}
                                   min={0}
-                                  max={row.goalsFor}
+                                  max={row.playedGoalsFor}
                                   inputMode="numeric"
                                   className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
                                   aria-label={`Goals for ${player.name}`}
@@ -951,7 +959,7 @@ export default async function CaptainResultsPage({
                                   name={`assists_${player.id}`}
                                   defaultValue={contribution?.assists ?? 0}
                                   min={0}
-                                  max={row.goalsFor}
+                                  max={row.playedGoalsFor}
                                   inputMode="numeric"
                                   className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
                                   aria-label={`Assists for ${player.name}`}

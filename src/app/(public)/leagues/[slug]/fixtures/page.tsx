@@ -1,3 +1,5 @@
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
 // ========================================
 // File: src/app/(public)/leagues/[slug]/fixtures/page.tsx
 // ========================================
@@ -233,12 +235,7 @@ export default async function LeagueFixturesPublic({
         include: {
           homeTeam: true,
           awayTeam: true,
-          result: {
-            select: {
-              homeScore: true,
-              awayScore: true,
-            },
-          },
+          result: { select: { ...RESULT_SCORE_SELECT } },
         },
       },
     },
@@ -410,6 +407,7 @@ export default async function LeagueFixturesPublic({
                       />
                     </div>
 
+                    {fixture.result?.overturnedAt ? <div className="px-5 sm:px-6 lg:px-7"><ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} /></div> : null}
                     {winChance ? (
                       <div className="border-t border-white/10 px-5 pb-5 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
                         <WinChanceBlock

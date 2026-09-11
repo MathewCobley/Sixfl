@@ -1,3 +1,4 @@
+import Link from "next/link";
 // ========================================
 // File: src/app/(admin)/admin/results/page.tsx
 // ========================================
@@ -212,6 +213,7 @@ export default async function AdminResultsPage({
                     {dispute.matchResult.fixture.awayTeam.name}
                   </h2>
 
+                  <Link className="mt-3 inline-flex rounded-xl border border-amber-300/30 px-3 py-2 text-sm text-amber-100" href={`/admin/fixtures/${dispute.matchResult.fixture.id}/overturn`}>Overturn result / view decision</Link>
                   <p className="mt-2 text-sm text-white/65">
                     Team: {dispute.team.name}
                   </p>

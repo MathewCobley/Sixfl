@@ -1,3 +1,5 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -126,8 +128,7 @@ export default async function LeagueResultsPage({
           },
           result: {
             select: {
-              homeScore: true,
-              awayScore: true,
+              ...RESULT_SCORE_SELECT,
               isDisputed: true,
             },
           },
@@ -279,6 +280,7 @@ export default async function LeagueResultsPage({
                       align="right"
                     />
                   </div>
+                  {fixture.result?.overturnedAt ? <div className="px-5 pb-3 sm:px-6"><ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} /></div> : null}
                 </article>
               ))}
             </div>

@@ -1,3 +1,4 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
 // ========================================
 // File: src/app/api/admin/night-board/night-fixtures/route.ts
 // ========================================
@@ -493,7 +494,7 @@ async function getFixtures(input: {
       venue: { select: { name: true } },
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
-      result: { select: { homeScore: true, awayScore: true } },
+      result: { select: { ...RESULT_SCORE_SELECT } },
     },
   });
 }
@@ -535,7 +536,7 @@ export async function GET(request: Request) {
           status: true,
           homeTeam: { select: { id: true } },
           awayTeam: { select: { id: true } },
-          result: { select: { homeScore: true, awayScore: true } },
+          result: { select: { ...RESULT_SCORE_SELECT } },
         },
       })
     : [];

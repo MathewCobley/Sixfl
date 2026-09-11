@@ -1,3 +1,4 @@
+import { useOnPitchResults } from "@/lib/results/result-scores";
 import type { WinChanceFixture } from "@/lib/fixtures/winChance";
 
 export type PredictorV3Outcome = "HOME" | "DRAW" | "AWAY";
@@ -663,6 +664,7 @@ export function calculatePredictorV3Candidates(input: {
   history: WinChanceFixture[];
   currentProbabilities: PredictorV3Probabilities;
 }): PredictorV3CandidateSet {
+  input = { ...input, history: useOnPitchResults(input.history) };
   const stats = buildStats(input.history);
   const profile = buildLeagueProfile(stats, input.history);
   const ratings = buildEloRatings(input.history);

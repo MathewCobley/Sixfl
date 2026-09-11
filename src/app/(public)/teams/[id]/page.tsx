@@ -1,3 +1,5 @@
+import { RESULT_SCORE_SELECT } from "@/lib/results/result-scores";
+import ResultOverturnNotice from "@/components/results/ResultOverturnNotice";
 // ========================================
 // File: src/app/(public)/teams/[id]/page.tsx
 // ========================================
@@ -303,8 +305,7 @@ export default async function TeamPage({ params }: PageProps) {
               },
               result: {
                 select: {
-                  homeScore: true,
-                  awayScore: true,
+                  ...RESULT_SCORE_SELECT,
                 },
               },
             },
@@ -781,6 +782,7 @@ export default async function TeamPage({ params }: PageProps) {
                           <div className="mt-1 text-sm text-white/55">
                             {formatFixtureDate(fixture.kickoffAt)}
                           </div>
+                              <ResultOverturnNotice result={fixture.result} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name} />
                         </div>
                       </div>
 
