@@ -379,6 +379,8 @@ async function saveTeamMatchDetails(formData: FormData) {
     revalidatePath(`/captain/team/${teamid}/results`);
     revalidatePath(`/captain/team/${teamid}/captain-squad`);
     revalidatePath(`/player/team/${teamid}`);
+    revalidatePath("/admin/teams");
+    revalidatePath(`/admin/teams/${teamid}`);
   } catch (error) {
     redirect(
       `/captain/team/${teamid}/results?error=${encodeURIComponent(
