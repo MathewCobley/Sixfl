@@ -101,7 +101,7 @@ export default function NewsArticle({
           {a.introduction}
         </p>
 
-        <nav aria-label="Jump to match" className="mt-10 border-y border-[#07130f]/10 py-6">
+        <section className="mt-10 border-y border-[#07130f]/10 py-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">In this week&apos;s report</p>
@@ -109,15 +109,15 @@ export default function NewsArticle({
             </div>
             <Link href={`/leagues/${news.leagueSlug}/results`} className="text-sm font-bold text-emerald-700 hover:text-emerald-600">Full results →</Link>
           </div>
-          <div className="mt-5 grid gap-x-6 sm:grid-cols-2">
+          <nav aria-label="Jump to match" className="mt-5 grid gap-x-6 sm:grid-cols-2">
             {a.matches.map((m) => (
               <Link key={m.fixtureId} href={`#${matchAnchor(m.fixtureId)}`} className="flex items-center justify-between gap-3 border-t border-[#07130f]/8 py-3 text-sm first:border-t-0 hover:text-emerald-700 sm:first:border-t">
                 <span className="min-w-0 truncate">{m.teamA} · {m.teamB}</span>
                 <strong className="shrink-0 rounded-full bg-[#07130f] px-3 py-1 font-black tabular-nums text-white">{m.scoreA}–{m.scoreB}</strong>
               </Link>
             ))}
-          </div>
-        </nav>
+          </nav>
+        </section>
 
         <div className="mt-2">
           {a.matches.map((m, index) => {
