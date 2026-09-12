@@ -1,3 +1,5 @@
+import { readVeoSettings } from '@/lib/veo/service';
+import CaptainVeoConfirmationInfo from './CaptainVeoConfirmationInfo';
 import Link from 'next/link';
 import { requireCaptain } from '@/lib/requireCaptain';
 import { readVeoOffer, VEO_REQUEST_TERMS } from '@/lib/veo/priority-requests';
@@ -8,6 +10,7 @@ export default async function CaptainVeoPriorityCard({ teamId, leagueId }: { tea
   const offer = await readVeoOffer(leagueId, teamId);
   if (!offer || !leagueId) return null;
   const canRequest = access.accessMode === 'captain' && !access.isAdmin && access.isCaptain && Boolean(access.user?.id);
+  if ((await readVeoSettings(leagueId)).confirmationMode) return <CaptainVeoConfirmationInfo teamId={teamId} leagueId={leagueId} ongoing={offer.priority} preview={!canRequest} />;
   const pending = offer.request?.status === 'PENDING';
   const declined = offer.request?.status === 'DECLINED';
   return <section aria-label="Veo Priority" className="space-y-4 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 sm:p-6">

@@ -1,3 +1,4 @@
+import VeoConfirmationNight from '@/components/admin/VeoConfirmationNight';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
@@ -66,19 +67,19 @@ export default async function VeoPriorityPage({ params, searchParams }: {
       <h2 className="text-xl font-semibold">League settings</h2>
       <form action={saveVeoSettings.bind(null, id)} className="space-y-5">
         <input type="hidden" name="date" value={date} /><input type="hidden" name="revision" value={settings.revision} />
-        <label className="flex min-h-11 items-center gap-3"><input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-5 w-5" />Enable Veo Priority for future fixture publication</label>
+        <label className="flex min-h-11 items-center gap-3"><input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-5 w-5" />Enable Veo Priority for this league</label>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="space-y-2"><span className="block text-sm text-white/70">Veo pitch label</span><input name="pitch" defaultValue={settings.pitch} maxLength={40} placeholder="For example: Pitch 1" className={input} /></label>
           <label className="space-y-2"><span className="block text-sm text-white/70">Maximum filmed matches per night</span><input name="maxMatches" type="number" min={1} max={12} step={1} required defaultValue={settings.maxMatches} className={input} /></label>
         </div>
         <fieldset className="space-y-2"><legend className="mb-2 text-sm text-white/70">Veo venue</legend>{venueOptions.map(v => <label key={v.id ?? 'none'} className="flex min-h-11 items-center gap-3"><input type="radio" name="venueId" value={v.id ?? ''} defaultChecked={v.id === settings.venueId || (venueOptions.length === 1 && settings.revision === 0)} />{v.name}</label>)}</fieldset>
-        <p className="text-sm leading-6 text-white/60">Default capacity: three matches. Allocation prefers Priority-v-Priority fixtures, then gives preference to teams with fewer previous filmed games. It only swaps pitches at the same venue and kick-off time. Published, billed, past and manually marked TV fixtures are left alone.</p>
+        <p className="text-sm leading-6 text-white/60">Default capacity: three matches. Allocation prefers Priority-v-Priority fixtures, then gives preference to teams with fewer previous filmed games. It only swaps pitches at the same venue and kick-off time. Existing Veo agreements stay protected. New requests are made at fixture confirmation and finalised below; the original match charge is never recalculated.</p>
         <SubmitButton>Save league settings</SubmitButton>
       </form>
     </section>
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority</h2>
-      <p className="text-sm leading-6 text-white/60">Record the captain’s agreement before opting a team in. Priority is not a guarantee of filming. Changing a switch affects future publications only; it never changes a saved fixture price. No announcement or payment message is sent by these switches.</p>
+      <p className="text-sm leading-6 text-white/60">Record the captain’s agreement before opting a team in. Priority is not a guarantee of filming. This saves the default for future confirmations. Captains can skip one match; already accepted Veo bookings are unchanged. No announcement or payment message is sent by these switches.</p>
       <div className="divide-y divide-white/10">{teams.map(team => <div key={team.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div><Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link><p className="mt-1 text-sm text-white/60">{team.teamMode === 'STANDARD' ? `Normal fee ${money(team.standardMatchFeePence ?? 4000)} · Priority ${team.priority ? 'ON' : 'OFF'}` : 'Managed team — Priority not available'}</p></div>
         {team.teamMode === 'STANDARD' && <form action={setVeoTeamPriority.bind(null, id)} className="flex flex-wrap items-center gap-3 sm:max-w-md">
@@ -88,10 +89,11 @@ export default async function VeoPriorityPage({ params, searchParams }: {
         </form>}
       </div>)}{!teams.length && <p className="py-3 text-white/60">No teams are currently linked to this league or its upcoming fixtures.</p>}</div>
     </section>
-    <section className={panel}>
-      <h2 className="text-xl font-semibold">Match-night preview and saved allocations</h2>
+    {settings.confirmationMode && <VeoConfirmationNight leagueId={id} date={date} />}
+    {(!settings.confirmationMode || snapshots.length > 0) && <section className={panel}>
+      <h2 className="text-xl font-semibold">{settings.confirmationMode ? 'Earlier publication agreements (history)' : 'Match-night preview and saved allocations'}</h2>
       <form method="get" className="flex flex-wrap items-end gap-3"><label className="space-y-2"><span className="block text-sm text-white/70">Match date (UK time)</span><input name="date" type="date" required defaultValue={date} className={input} /></label><button className="min-h-11 rounded-xl border border-white/20 px-4 py-2">Show night</button></form>
-      <p className="text-sm leading-6 text-white/60">This preview does not save anything. Use the normal Publish fixtures action for the whole league night, without a division filter. Allocation and the £5 price snapshots are saved together with publication. Settings can change the preview until then.</p>
+      <p className="text-sm leading-6 text-white/60">{settings.confirmationMode ? 'These are earlier, unchanged publication agreements. Current Veo requests and any separate add-ons are shown above.' : 'This preview does not save anything. Publish the whole night together to preserve earlier publication-mode agreements.'}</p>
       {!settings.enabled && <p className="rounded-xl bg-white/5 p-4 text-sm">Veo is off. No new allocations or supplements will be added. Existing saved agreements remain visible below.</p>}
       {previewError && <p role="alert" className="rounded-xl border border-amber-400/30 p-4 text-amber-100">{previewError}</p>}
       <div className="grid gap-3 sm:grid-cols-3">{[[String(allocatedCount), 'TV matches: saved + preview'], [String(missed.length), 'Priority teams not allocated'], [money(supplement), 'Veo supplement value: saved + preview']].map(([value, label]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="text-2xl font-semibold">{value}</div><p className="mt-1 text-xs leading-5 text-white/60">{label}</p></div>)}</div>
@@ -114,6 +116,6 @@ export default async function VeoPriorityPage({ params, searchParams }: {
         </article>;
       })}{!fixtures.length && <p className="py-4 text-white/60">No fixtures on this date.</p>}</div>
       <Link href={`/admin/fixtures?leagueId=${id}`} className="inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold">Open fixtures to publish</Link>
-    </section>
+    </section>}
   </div>;
 }

@@ -3,6 +3,11 @@ on:
   pull_request:
     paths:
       - 'src/lib/veo/**'
+      - 'src/app/api/**/veo/**'
+      - 'src/components/admin/Veo*'
+      - 'src/components/captain/CaptainTeamNudges.tsx'
+      - 'src/app/captain/team/**/fixtures/**'
+      - 'prisma/migrations/*veo_confirmation*/**'
       - 'src/app/**/veo-priority/**'
       - 'src/components/captain/*Veo*'
       - 'src/app/captain/team/[teamid]/page.tsx'
@@ -57,11 +62,11 @@ jobs:
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
       - name: Native request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs
+        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/confirmation-ui.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
       - name: Prepared request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs
+        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/confirmation-ui.test.cjs
       - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
@@ -84,6 +89,12 @@ jobs:
         run: npx tsx tests/veo-priority/database.ts
       - name: Real request and approval database safety checks
         run: npx tsx tests/veo-priority/requests.ts
+      - name: Apply confirmation-phase migration to the existing legacy test data
+        run: |
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260709210000_team_credit_ledger/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912120000_veo_confirmation_choices/migration.sql
+      - name: Real confirmation, shared-camera, fee and reversal checks
+        run: npx tsx tests/veo-priority/confirmation-database.ts
       - name: Production build
         shell: bash
         run: npx next build 2>&1 | tee veo-build.log
@@ -102,6 +113,8 @@ jobs:
           grep -i 'location: /login' veo-auth-headers.txt
       - name: Install browser test dependencies
         run: npm install --no-save --package-lock=false playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Prepare real client component test host (not a production route)
+        run: node tests/veo-priority/prepare-confirmation-browser.cjs
       - name: Start isolated development app
         shell: bash
         run: |
@@ -113,7 +126,7 @@ jobs:
           cat veo-dev.log
           exit 1
       - name: Mobile, request queue and completed-video browser checks
-        run: node tests/veo-priority/browser.mjs
+        run: node tests/veo-priority/browser.mjs && node tests/veo-priority/confirmation-browser.mjs
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

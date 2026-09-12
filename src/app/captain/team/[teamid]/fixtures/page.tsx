@@ -1,3 +1,5 @@
+import { readVeoFixtureOffer } from '@/lib/veo/confirmation';
+import VeoFixtureConfirmation from '@/components/captain/VeoFixtureConfirmation';
 // ========================================
 // File: src/app/captain/team/[teamid]/fixtures/page.tsx
 // ========================================
@@ -420,7 +422,7 @@ export default async function CaptainFixturesPage({
   const filters = await searchParams;
   const requestedFixtureId = filters.fixtureId?.trim() || "";
 
-  await requireCaptain(teamid);
+  const captainAccess = await requireCaptain(teamid);
 
   const [team, upcomingFixtures, recentResults] = await Promise.all([
     prisma.team.findUnique({
@@ -506,6 +508,8 @@ export default async function CaptainFixturesPage({
     : null;
   const selectedFixture = requestedFixture ?? upcomingFixtures[0] ?? null;
   const selectedConfirmation = selectedFixture?.captainConfirmations[0] ?? null;
+  const veoOffer = selectedFixture ? await readVeoFixtureOffer(teamid, selectedFixture.id) : null;
+  const veoPreview = captainAccess.accessMode !== 'captain' || captainAccess.isAdmin || !captainAccess.isCaptain || !captainAccess.user?.id;
   const selectedFixtureIsProvisional = Boolean(
     selectedFixture && fixtureIsProvisional(selectedFixture),
   );
@@ -637,7 +641,7 @@ export default async function CaptainFixturesPage({
                     If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
 
-                  <form action={confirmFixtureAction} className="mt-4">
+                  {veoOffer ? <VeoFixtureConfirmation key={veoOffer.fixtureId} teamId={team.id} offer={veoOffer} confirmed={isSelectedFixtureConfirmed} preview={veoPreview} /> : (<form action={confirmFixtureAction} className="mt-4">
                     <input type="hidden" name="teamid" value={team.id} />
                     <input type="hidden" name="fixtureId" value={selectedFixture.id} />
                     <button
@@ -651,7 +655,7 @@ export default async function CaptainFixturesPage({
                     >
                       {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
                     </button>
-                  </form>
+                  </form>)}
 
                   <a
                     href={selectedFixtureEmailHref}
@@ -669,8 +673,8 @@ export default async function CaptainFixturesPage({
                       You can confirm yes at any time before kick-off. If you need to say no, change a response or raise an issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.
                     </p>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <form action={confirmFixtureAction}>
+                    <div className={veoOffer ? "mt-4 grid gap-3" : "mt-4 grid gap-3 sm:grid-cols-2"}>
+                      {veoOffer ? <VeoFixtureConfirmation key={veoOffer.fixtureId} teamId={team.id} offer={veoOffer} confirmed={isSelectedFixtureConfirmed} preview={veoPreview} /> : (<form action={confirmFixtureAction}>
                         <input type="hidden" name="teamid" value={team.id} />
                         <input type="hidden" name="fixtureId" value={selectedFixture.id} />
                         <button
@@ -684,7 +688,7 @@ export default async function CaptainFixturesPage({
                         >
                           {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
                         </button>
-                      </form>
+                      </form>)}
 
                       <form action={markFixtureUnavailableAction}>
                         <input type="hidden" name="teamid" value={team.id} />

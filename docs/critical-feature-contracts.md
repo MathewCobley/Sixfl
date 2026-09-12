@@ -166,3 +166,33 @@ collapsed sections in browsers at desktop/phone widths. Tests also cover
 fail-closed helper defaults and an admin boolean without the server role.
 The example remains £37 settled / £3 due; only the administrator sees the
 £18 cash / £19 internal adjustment breakdown.
+
+## Veo choices at fixture confirmation
+
+The shared `src/lib/veo/confirmation.ts` service owns one-match requests, explicit
+ongoing preferences, exact active captain permission and camera-night finalisation.
+Confirmation and the optional request report separate outcomes: a failed Veo save
+cannot silently un-confirm attendance. The same client choices appear in previews
+without a live form/action. A remembered preference can be skipped for one fixture;
+turning it off never changes accepted bookings or just-this-match requests.
+
+The additive confirmation migration changes only the Veo *phase*, not league
+activation or existing customer preferences. New publications keep base fees and
+pitches unchanged. The finalisation preview spans the physical venue/pitch/night,
+including other enabled leagues and every division, and counts protected existing
+filming bookings against the same capacity. It never changes opponents or kickoff.
+Preview hashes and serializable transactions prevent stale or double finalisation.
+
+Accepted requests create a separate, uniquely linked £5 PaymentCharge, not an edit
+to a paid match bill. Explicit free fixtures remain free. Earlier Veo snapshots are
+never rewritten. A recording failure or material fixture change cancels only these
+new add-ons. Narrow database triggers keep cancelled charges void and reconcile
+actual net receipts to one deterministic team-credit entry, including late receipts.
+No credit is invented for an unpaid add-on. Original receipts remain in history.
+
+Booking updates use editable NotificationTemplates and a retryable outbox. Testing
+uses disposable localhost PostgreSQL only, plus the actual client component in a
+test host created after production build. The test host is not deployed. CI retains
+legacy Veo allocation checks before applying the new phase migration and then
+checks both-league capacity, current requests, immutable bills, failed filming,
+late receipts, captain previews and post-prebuild source wiring.

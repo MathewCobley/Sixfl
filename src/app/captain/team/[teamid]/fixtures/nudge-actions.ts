@@ -127,5 +127,5 @@ export async function confirmFixtureFromNudgeAction(formData: FormData) {
     redirect(fixturesErrorRedirect(teamId, fixtureId, errorMessage));
   }
 
-  redirect(`/captain/team/${teamId}`);
+  redirect(`/captain/team/${teamId}/fixtures?fixtureId=${encodeURIComponent(fixtureId)}&saved=confirmed`);
 }
