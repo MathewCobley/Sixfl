@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import MergeResultHardReload from "@/components/admin/players/MergeResultHardReload";
 import { notFound } from "next/navigation";
 import { Prisma, TeamRole } from "@prisma/client";
 
@@ -33,6 +34,7 @@ export const metadata = {
 type SearchParams = {
   saved?: string;
   error?: string;
+  hardReload?: string;
 };
 
 const roleOptions: { value: TeamRole; label: string }[] = [
@@ -170,6 +172,8 @@ function getSavedMessage(saved?: string) {
       return "Squad member removed.";
     case "moved-to-prospects":
       return "Player moved back to prospects and unlinked from the active squad.";
+    case "player-merged":
+      return "Player accounts merged successfully. All squad cards and player history are now linked to the surviving account.";
     default:
       return saved ? "Saved." : null;
   }
@@ -260,6 +264,7 @@ export default async function AdminTeamSquadPage({
 
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-6 [overflow-wrap:anywhere]">
+      <MergeResultHardReload active={filters.hardReload === "1"} />
       <div className="flex min-w-0 flex-col gap-4">
         <div className="min-w-0 space-y-2">
           <Link
@@ -679,7 +684,7 @@ export default async function AdminTeamSquadPage({
 
               <Link
                 href={`/captain/team/${team.id}/captain-squad`}
-                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 transition hover:bg-emerald-500/15"
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
                 Preview weaker captain view
               </Link>
