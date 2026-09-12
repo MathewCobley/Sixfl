@@ -54,6 +54,19 @@ function saveArtifact(name, html) {
   fs.mkdirSync('artifacts/veo', { recursive: true });
   fs.writeFileSync(`artifacts/veo/${name}.html`, html);
 }
+// React may move name after disabled; Tailwind's disabled: variants are not
+// a boolean HTML disabled attribute. Check the actual attributes, in any order.
+const disabledAttribute = /\sdisabled(?:\s|=|\/?>)/;
+function agreementTag(html) {
+  const tag = html.match(/<input\b[^>]*name="agreed"[^>]*>/)?.[0];
+  assert.ok(tag, 'Agreement checkbox must be rendered');
+  return tag;
+}
+function buttonTag(html) {
+  const tag = html.match(/<button\b[^>]*>/)?.[0];
+  assert.ok(tag, 'Request button must be rendered');
+  return tag;
+}
 test('real captain card is absent when the shared service says the league is off or team ineligible', async () => {
   assert.equal(await renderCard(null), '');
   for (const access of previewAccess) assert.equal(await renderCard(null, access), '');
@@ -62,8 +75,8 @@ test('eligible captain sees a live form, plain pricing, activation steps and pub
   const html = await renderCard({ priority: false, request: null });
   for (const word of ['Get more of your matches', 'How to switch it on', 'Tick the agreement', 'Request Veo Priority', 'if approved', '£5 extra for the whole team', 'scheduled on the Veo pitch', 'usual match fee', 'YouTube', 'not guaranteed', 'name="agreed"', 'required', 'name="termsVersion"']) assert.ok(html.includes(word), word);
   assert.match(html, /<form\b/);
-  assert.doesNotMatch(html.match(/<input\b[^>]*name="agreed"[^>]*>/)[0], /disabled/);
-  assert.doesNotMatch(html.match(/<button\b[^>]*>/)[0], /disabled/);
+  assert.doesNotMatch(agreementTag(html), disabledAttribute);
+  assert.doesNotMatch(buttonTag(html), disabledAttribute);
   assert.ok(!html.includes('name="actorId"'));
   assert.ok(!html.includes('Veo preview notice'));
   assert.doesNotMatch(customerMarkup(html), /read-only preview|fixture publications|No Veo allocation|supplement/);
@@ -89,8 +102,9 @@ test('admin and captain-only previews show identical customer copy and disabled 
     assert.ok(html.includes('Veo preview notice'));
     assert.ok(html.indexOf('</aside>') < html.indexOf('<section'), 'Preview notice stays outside customer card');
     assert.equal(visibleCopy(card), visibleCopy(live));
-    assert.match(card, /<input\b[^>]*name="agreed"[^>]*disabled=""/);
-    assert.match(card, /<button\b[^>]*type="button"[^>]*disabled=""/);
+    assert.match(agreementTag(card), disabledAttribute);
+    assert.match(buttonTag(card), disabledAttribute);
+    assert.match(buttonTag(card), /type="button"/);
     assert.ok(card.includes('Request Veo Priority'));
     assert.doesNotMatch(html, /<form|\$ACTION_|name="termsVersion"/);
     assert.doesNotMatch(card, /Preview only|read-only preview/);
@@ -105,7 +119,8 @@ test('preview is fail-closed by default and does not even bind the request serve
   for (const preview of [undefined, true]) {
     const html = renderToStaticMarkup(React.createElement(Form, { teamId: 'team', leagueId: 'league', termsVersion: 'veo-priority-v1', preview }));
     assert.ok(html.includes('Request Veo Priority'));
-    assert.match(html, /disabled=""/);
+    assert.match(agreementTag(html), disabledAttribute);
+    assert.match(buttonTag(html), disabledAttribute);
     assert.doesNotMatch(html, /<form|\$ACTION_|name="termsVersion"/);
   }
 });
