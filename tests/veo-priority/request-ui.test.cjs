@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
@@ -42,30 +43,85 @@ async function renderCard(offer, access = normalAccess) {
   }).default;
   return renderToStaticMarkup(await Card({ teamId: 'team', leagueId: 'league' }));
 }
+function customerMarkup(html) {
+  const start = html.indexOf('<section');
+  return html.slice(start, html.indexOf('</section>', start) + '</section>'.length);
+}
+function visibleCopy(html) {
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function saveArtifact(name, html) {
+  fs.mkdirSync('artifacts/veo', { recursive: true });
+  fs.writeFileSync(`artifacts/veo/${name}.html`, html);
+}
+// React may move name after disabled; Tailwind's disabled: variants are not
+// a boolean HTML disabled attribute. Check the actual attributes, in any order.
+const disabledAttribute = /\sdisabled(?:\s|=|\/?>)/;
+function agreementTag(html) {
+  const tag = html.match(/<input\b[^>]*name="agreed"[^>]*>/)?.[0];
+  assert.ok(tag, 'Agreement checkbox must be rendered');
+  return tag;
+}
+function buttonTag(html) {
+  const tag = html.match(/<button\b[^>]*>/)?.[0];
+  assert.ok(tag, 'Request button must be rendered');
+  return tag;
+}
 test('real captain card is absent when the shared service says the league is off or team ineligible', async () => {
   assert.equal(await renderCard(null), '');
+  for (const access of previewAccess) assert.equal(await renderCard(null, access), '');
 });
-test('eligible captain sees the real opt-in form, agreement, price and public-filming disclosure', async () => {
+test('eligible captain sees a live form, plain pricing, activation steps and public-filming disclosure', async () => {
   const html = await renderCard({ priority: false, request: null });
-  for (const word of ['Get more of your matches', 'Request Veo Priority', '£5', 'not £5 per player', 'YouTube', 'name="agreed"', 'required', 'name="termsVersion"']) assert.ok(html.includes(word), word);
+  for (const word of ['Get more of your matches', 'How to switch it on', 'Tick the agreement', 'Request Veo Priority', 'if approved', '£5 extra for the whole team', 'scheduled on the Veo pitch', 'usual match fee', 'YouTube', 'not guaranteed', 'name="agreed"', 'required', 'name="termsVersion"']) assert.ok(html.includes(word), word);
+  assert.match(html, /<form\b/);
+  assert.doesNotMatch(agreementTag(html), disabledAttribute);
+  assert.doesNotMatch(buttonTag(html), disabledAttribute);
   assert.ok(!html.includes('name="actorId"'));
-  fs.mkdirSync('artifacts/veo', { recursive: true });
-  fs.writeFileSync('artifacts/veo/captain-promo.html', html);
+  assert.ok(!html.includes('Veo preview notice'));
+  assert.doesNotMatch(customerMarkup(html), /read-only preview|fixture publications|No Veo allocation|supplement/);
+  saveArtifact('captain-promo', html);
 });
-test('pending, approved and declined cards persist without another sign-up button', async () => {
+test('pending, approved and declined cards persist without another sign-up button in live or preview', async () => {
   for (const [offer, expected] of [
     [{ priority: false, request: { status: 'PENDING' } }, 'awaiting SIXFL approval'],
     [{ priority: true, request: { status: 'APPROVED' } }, 'Veo Priority is ON'],
     [{ priority: false, request: { status: 'DECLINED' } }, 'not approved'],
   ]) {
-    const html = await renderCard(offer);
-    assert.ok(html.includes(expected)); assert.ok(!html.includes('Request Veo Priority</button>'));
+    for (const access of [normalAccess, ...previewAccess]) {
+      const html = await renderCard(offer, access);
+      assert.ok(html.includes(expected)); assert.doesNotMatch(customerMarkup(html), /<button|<form|name="agreed"/);
+    }
   }
 });
-test('administrator, captain-only preview and development fallback cannot present a consent button', async () => {
-  for (const access of previewAccess) {
+test('admin and captain-only previews show identical customer copy and disabled controls, never a live form', async () => {
+  const live = customerMarkup(await renderCard({ priority: false, request: null }));
+  for (const [index, access] of previewAccess.entries()) {
     const html = await renderCard({ priority: false, request: null }, access);
-    assert.ok(html.includes('read-only preview')); assert.ok(!html.includes('<form'));
+    const card = customerMarkup(html);
+    assert.ok(html.includes('Veo preview notice'));
+    assert.ok(html.indexOf('</aside>') < html.indexOf('<section'), 'Preview notice stays outside customer card');
+    assert.equal(visibleCopy(card), visibleCopy(live));
+    assert.match(agreementTag(card), disabledAttribute);
+    assert.match(buttonTag(card), disabledAttribute);
+    assert.match(buttonTag(card), /type="button"/);
+    assert.ok(card.includes('Request Veo Priority'));
+    assert.doesNotMatch(html, /<form|\$ACTION_|name="termsVersion"/);
+    assert.doesNotMatch(card, /Preview only|read-only preview/);
+    saveArtifact(index === 0 ? 'admin-preview' : index === 1 ? 'captain-preview' : `fallback-preview-${index}`, html);
+  }
+});
+test('preview is fail-closed by default and does not even bind the request server action', () => {
+  const forbiddenAction = new Proxy(() => { throw new Error('Preview invoked action'); }, {
+    get() { throw new Error('Preview bound action'); },
+  });
+  const Form = load(formPath, { '@/app/captain/team/[teamid]/veo-priority/actions': { requestVeoPriorityAction: forbiddenAction } }).default;
+  for (const preview of [undefined, true]) {
+    const html = renderToStaticMarkup(React.createElement(Form, { teamId: 'team', leagueId: 'league', termsVersion: 'veo-priority-v1', preview }));
+    assert.ok(html.includes('Request Veo Priority'));
+    assert.match(agreementTag(html), disabledAttribute);
+    assert.match(buttonTag(html), disabledAttribute);
+    assert.doesNotMatch(html, /<form|\$ACTION_|name="termsVersion"/);
   }
 });
 test('native action refuses every preview mode and binds the real actor and exact team server-side', async () => {
@@ -110,4 +166,24 @@ test('owning sources retain the promo and admin queue after preparation; no new 
   for (const file of [cardPath, formPath, actionPath, reviewPath, 'src/lib/veo/priority-requests.ts']) {
     assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /MutationObserver|document\.querySelector|sendEmail|queueDirectNotification|stripe\./);
   }
+});
+test('repository-wide source inventory has no stale preview replacement or duplicate Veo request field copy', () => {
+  const refs = [], stale = [], fieldOwners = [];
+  function visit(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) { visit(file); continue; }
+      if (!/\.(?:[cm]?[jt]sx?)$/.test(file)) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      if (/CaptainVeoPriorityCard|VeoPriorityRequestForm|requestVeoPriorityAction/.test(text)) refs.push(file);
+      if (text.includes('This is a read-only preview. The captain can request Priority here') || text.includes('£5 when allocated')) stale.push(file);
+      if (text.includes("I agree to an extra £5 on our team's match fee")) fieldOwners.push(file);
+    }
+  }
+  visit('src'); visit('scripts');
+  assert.deepEqual(stale, []);
+  assert.deepEqual(fieldOwners, [formPath]);
+  assert.ok(refs.includes(cardPath) && refs.includes(formPath) && refs.includes(actionPath));
+  fs.mkdirSync('artifacts/veo', { recursive: true });
+  fs.writeFileSync('artifacts/veo/request-source-inventory.json', JSON.stringify({ refs, stale, fieldOwners }, null, 2));
 });
