@@ -1,5 +1,6 @@
 import twilio from "twilio";
 
+import { normalizeUkMobileNumber } from "@/lib/phone/normalize";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -55,14 +56,24 @@ export async function POST(request: Request) {
     });
   }
 
-  const rawPhone = lead.phoneNormalized?.trim() || lead.phone?.trim();
+  // Only validated UK mobile numbers may be dialled. This is deliberately
+  // re-checked here even though imports validate numbers, so legacy or manually
+  // edited overseas numbers can never be sent to Twilio Voice.
+  const destination = normalizeUkMobileNumber(lead.phoneNormalized || lead.phone);
   const from = (
     process.env.TWILIO_PHONE_NUMBER ||
     process.env.TWILIO_FROM_NUMBER
   )?.trim();
 
-  if (!rawPhone || !from) {
-    response.say({ voice: "alice", language: "en-GB" }, "This lead does not have a callable number or the SIXFL voice number is not configured.");
+  if (!destination) {
+    response.say({ voice: "alice", language: "en-GB" }, "This lead does not have a valid UK mobile number and cannot be called.");
+    return new Response(response.toString(), {
+      headers: { "Content-Type": "text/xml" },
+    });
+  }
+
+  if (!from) {
+    response.say({ voice: "alice", language: "en-GB" }, "The SIXFL voice number is not configured.");
     return new Response(response.toString(), {
       headers: { "Content-Type": "text/xml" },
     });
@@ -90,7 +101,7 @@ export async function POST(request: Request) {
     answerOnBridge: true,
     timeout: 25,
   });
-  dial.number(normalizeUkPhone(rawPhone));
+  dial.number(destination);
 
   return new Response(response.toString(), {
     headers: { "Content-Type": "text/xml" },
