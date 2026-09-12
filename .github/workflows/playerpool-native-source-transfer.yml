@@ -1,0 +1,72 @@
+name: Prepare native PlayerPool owner files
+on:
+  push:
+    branches: [maintenance/playerpool-native-source-transfer]
+permissions:
+  contents: write
+jobs:
+  prepare-blobs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8fa5f3c5ec993b2cd0dcbef59579c336a57fddc
+          persist-credentials: false
+      - name: Materialise existing nudge controls once in the disposable review workspace
+        run: node scripts/apply-player-pool-nudge-history.cjs
+      - name: Store reviewed native owner files as Git blobs only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, subprocess, hashlib
+          p=Path('src/app/(admin)/admin/player-pool/page.tsx'); s=p.read_text()
+          s=s.replace('import Link from "next/link";', '''import Link from "next/link";
+          import PlayerPoolContactHistory from "@/components/admin/player-pool/PlayerPoolContactHistory";
+          import PlayerPoolResponseChaseButton from "@/components/admin/player-pool/PlayerPoolResponseChaseButton";
+          import { getPlayerPoolFollowupStates } from "@/lib/player-pool/followup-history";
+          import { followupBlock } from "@/lib/player-pool/followup-policy";''')
+          s=s.replace('  leadId: string | null;','  leadId: string | null;\n  prospectId: string;',1)
+          s=s.replace('        profile."leadId",','        profile."leadId",\n        profile."prospectId",',1)
+          s=s.replace('  const totalAwaitingProfile =', '  const followups = new Map((await getPlayerPoolFollowupStates(visibleProfiles.map(p => p.id))).map(s => [s.id, s]));\n\n  const totalAwaitingProfile =')
+          s=s.replace('<BulkPlayerPoolProfileReminderButton awaitingCount={counts.awaiting} />','<>\n            <PlayerPoolResponseChaseButton />\n            <BulkPlayerPoolProfileReminderButton awaitingCount={counts.awaiting} />\n          </>')
+          s=s.replace('                <PlayerPoolSmsChaseHistory profile={profile}', '''                {followups.get(profile.id) ? <PlayerPoolContactHistory
+                            events={followups.get(profile.id)!.events}
+                            replyAt={followups.get(profile.id)!.latestReplyAt}
+                            declinedAt={followups.get(profile.id)!.declinedAt}
+                            prospectId={profile.prospectId}
+                            block={followupBlock(followups.get(profile.id)!)}
+                          /> : null}
+                          <PlayerPoolSmsChaseHistory profile={profile}''')
+          assert 'PlayerPoolContactHistory' in s and 'const followups = new Map' in s
+          p.write_text(s)
+          p=Path('scripts/check-central-standings-usage.cjs'); s=p.read_text(); assert 'require("./apply-player-pool-nudge-history.cjs");' in s
+          p.write_text(s.replace('require("./apply-player-pool-nudge-history.cjs");\n',''))
+          p=Path('src/components/admin/player-pool/PlayerPoolNudgeButton.tsx');s=p.read_text().replace('No profile reminder email sent yet.','No profile reminder email recorded. Check contact history above for invitations and other messages.').replace('hourCycle: "h23",','hourCycle: "h23",\n    timeZone: "Europe/London",');p.write_text(s)
+          p=Path('src/lib/notifications/processor.ts');s=p.read_text();needle='      const cancellationReason =\n';assert s.count(needle)==1
+          s=s.replace(needle,'''      const profileFollowupBlock = dispatch.sourceType?.startsWith("PLAYER_POOL_")
+                  ? await (await import("@/lib/player-pool/response-chases")).getPlayerPoolFollowupDeliveryBlock(dispatch)
+                  : null;
+                const cancellationReason =
+                  profileFollowupBlock ??
+          ''');p.write_text(s)
+          paths=['src/app/(admin)/admin/player-pool/page.tsx','scripts/check-central-standings-usage.cjs','src/components/admin/player-pool/PlayerPoolNudgeButton.tsx','src/lib/notifications/processor.ts']
+          manifest=[]
+          for path in paths:
+              content=Path(path).read_text(); raw=content.encode()
+              expected=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+              response=subprocess.run(['gh','api','--method','POST','repos/MathewCobley/Sixfl/git/blobs','--input','-'],input=json.dumps({'content':content,'encoding':'utf-8'}),text=True,capture_output=True,check=True)
+              sha=json.loads(response.stdout)['sha'];assert sha==expected
+              manifest.append({'path':path,'mode':'100644','type':'blob','sha':sha})
+          manifest.append({'path':'scripts/apply-player-pool-nudge-history.cjs','mode':'100644','type':'blob','sha':None})
+          Path('/tmp/playerpool-owner-files.json').write_text(json.dumps(manifest,indent=2))
+          print(json.dumps(manifest))
+          print('No branch refs updated. No database access. No messages sent. This developer-only workflow is not included in the product PR.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playerpool-owner-file-manifest
+          path: /tmp/playerpool-owner-files.json
+          retention-days: 2
