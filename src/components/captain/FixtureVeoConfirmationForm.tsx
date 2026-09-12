@@ -10,15 +10,20 @@ const button='min-h-12 w-full rounded-xl border border-emerald-300/30 bg-emerald
 function Feedback({state}:{state:FixtureVeoFormState}) { return state.message?<p role={state.ok?'status':'alert'} className={`rounded-xl border p-3 text-sm leading-6 ${state.ok?'border-emerald-300/30 text-emerald-100':'border-amber-300/30 text-amber-100'}`}>{state.message}</p>:null; }
 function Fields({offer,disabled}:{offer:FixtureVeoOffer;disabled:boolean}) {
   return <fieldset key={offer.version} disabled={disabled} className="space-y-3 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4">
-    <legend className="px-1 text-base font-bold text-white">📹 Would you like this match filmed?</legend>
-    <p className="text-sm leading-6 text-white/80">Watch the game back and share it with your squad. Veo Priority costs <strong>£5 extra for the whole team</strong> if SIXFL confirms your place on the camera pitch and a usable recording is available.</p>
+    <legend className="px-1 text-base font-bold text-white">📹 Want a guaranteed place on the camera pitch?</legend>
+    <p className="text-sm leading-6 text-white/80">Choose <strong>Veo Priority</strong> to secure your match on our camera-equipped pitch. <strong>Once SIXFL confirms your booking, your match is guaranteed a place on that pitch.</strong></p>
+    <p className="text-sm leading-6 text-white/80"><strong>Just £5 extra for the whole team—not per player.</strong></p>
     <div className="space-y-3">{[
-      ['NONE',offer.preference?'Skip Veo Priority for this match':'No thanks','Your usual match fee. This does not change your saved preference.'],
-      ['MATCH','Yes, just this match','Request Veo Priority for this fixture only.'],
-      ['ONGOING','Yes, this and future matches','Request it now and remember my choice for future confirmations in this league.'],
+      ['NONE',offer.preference?'Skip Veo Priority for this match':'No thanks — no Veo Priority',offer.preference
+        ?'Your match may still be recorded, but a place on the camera pitch is not guaranteed. No extra charge for this match. Your saved preference stays on for future fixtures.'
+        :'Your match may still be recorded, but a place on the camera pitch is not guaranteed. There is no extra charge.'],
+      ['MATCH','Yes, just this match','Request a guaranteed place on the camera pitch for this fixture only. No ongoing commitment.'],
+      ['ONGOING','Yes, this and future matches','Request the camera pitch for this fixture and save Veo Priority as our preference for future matches in this league. You can skip an individual match or turn off your saved preference.'],
     ].map(([value,label,help])=><label key={value} className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-white/15 p-3 text-sm text-white"><input type="radio" name="veoChoice" value={value} defaultChecked={offer.defaultChoice===value} className="mt-1 h-4 w-4 shrink-0"/><span><strong className="block">{label}</strong><span className="mt-1 block text-xs leading-5 text-white/65">{help}</span></span></label>)}</div>
-    <p className="text-xs leading-5 text-white/65">By choosing either Yes option you agree to the £5 team charge for an accepted request with usable footage. No space or no usable recording means no extra charge. The £5 is billed separately after the recording is ready; your original match payment is untouched. Both request types have equal priority.</p>
-    <p className="text-xs leading-5 text-white/65">There are limited filming spaces each night. Recordings may be published publicly on SIXFL TV/YouTube. A team choosing No thanks can still appear in its opponent’s recording without being charged.</p>
+    <p className="text-sm font-semibold text-white">How it works</p>
+    <p className="text-xs leading-5 text-white/65">Camera-pitch spaces are limited. We will confirm whether your request has been accepted—<strong>submitting a request alone does not reserve a space</strong>. One-match requests and saved preferences receive the same priority.</p>
+    <p className="text-xs leading-5 text-white/65">By choosing either Yes option, you agree to the £5 team charge for an accepted request with usable footage. The <strong>£5 charge is added separately to Team payments after a usable recording is ready</strong>. No available space or no usable recording means no extra charge. Your normal match fee remains unchanged.</p>
+    <p className="text-xs leading-5 text-white/65">Recordings may be published publicly on <strong>SIXFL TV/YouTube</strong>. Teams choosing <strong>No thanks</strong> may still be filmed without being charged.</p>
   </fieldset>;
 }
 function ChoiceStatus({offer}:{offer:FixtureVeoOffer|null}) {
@@ -39,7 +44,7 @@ function FormContents({props,disabled,preview}:{props:Props;disabled:boolean;pre
     {confirmed&&<p className="font-semibold text-emerald-100">✓ Your team is confirmed to play</p>}
     {offer?.available&&<Fields offer={offer} disabled={disabled}/>}
     {(!confirmed||offer?.available)&&<button type={preview?'button':'submit'} disabled={disabled} className={button}>{disabled&&!preview?'Saving…':confirmed?'Save Veo choice':'Confirm our team can play'}</button>}
-    {!confirmed&&<p className="text-xs leading-5 text-white/65">Veo is optional. Your team can confirm attendance without requesting filming.</p>}
+    {!confirmed&&<p className="text-xs leading-5 text-white/65">Veo Priority is optional. You do not need to select it to confirm your team’s attendance.</p>}
   </>;
 }
 function LiveForm(props:Props) {
