@@ -20,7 +20,7 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
   const includeId = includeLeagueId?.trim() || null;
 
   try {
-    return prisma.$queryRaw<CurrentLeagueOption[]>(Prisma.sql`
+    return await prisma.$queryRaw<CurrentLeagueOption[]>(Prisma.sql`
       SELECT
         l."id",
         l."name",
@@ -35,7 +35,10 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
         l."isActive" = true
         AND (
           l."competitionId" IS NULL
-          OR c."currentLeagueId" = l."id"
+          OR (
+            COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
+            AND c."currentLeagueId" = l."id"
+          )
         )
       )
       OR (${includeId}::text IS NOT NULL AND l."id" = ${includeId})
@@ -45,9 +48,12 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
     return prisma.league.findMany({
       where: includeId
         ? {
-            OR: [{ isActive: true }, { id: includeId }],
+            OR: [
+              { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },
+              { id: includeId },
+            ],
           }
-        : { isActive: true },
+        : { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: {
         id: true,
@@ -74,7 +80,10 @@ export async function getCurrentLeagueIds(includeLeagueId?: string | null) {
         l."isActive" = true
         AND (
           l."competitionId" IS NULL
-          OR c."currentLeagueId" = l."id"
+          OR (
+            COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
+            AND c."currentLeagueId" = l."id"
+          )
         )
       )
       OR (${includeId}::text IS NOT NULL AND l."id" = ${includeId})
@@ -86,9 +95,12 @@ export async function getCurrentLeagueIds(includeLeagueId?: string | null) {
     const rows = await prisma.league.findMany({
       where: includeId
         ? {
-            OR: [{ isActive: true }, { id: includeId }],
+            OR: [
+              { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },
+              { id: includeId },
+            ],
           }
-        : { isActive: true },
+        : { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },
       orderBy: [{ name: "asc" }, { season: "asc" }],
       select: { id: true },
     });

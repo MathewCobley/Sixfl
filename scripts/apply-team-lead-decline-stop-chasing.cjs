@@ -59,9 +59,6 @@ if ((processor.match(/const leadChaseBlock = await applyTeamLeadChaseDeliveryGat
 }
 write(processorPath, processor);
 
-// Reject new chases at queue time and clean up stale future chases before the
-// queue is read. Existing sent/provider-accepted evidence is preserved by the
-// lead-chase helper itself.
 const servicePath = "src/lib/notifications/service.ts";
 let service = read(servicePath);
 
@@ -134,11 +131,6 @@ if (!service.includes("cancelStoppedTeamLeadChases")) {
 }
 write(servicePath, service);
 
-// The fixture-reminder regression suite deliberately evaluates a very small
-// dependency graph with all unrelated notification policy I/O mocked. Once the
-// shared notification service gained the team-lead gate, teach that isolated
-// harness about the two new no-op boundaries rather than making it load lead
-// decision SQL that is tested separately by team-lead-decline.test.cjs.
 const reminderTestPath = "tests/fixture-reminder-context.test.cjs";
 if (fs.existsSync(path.join(root, reminderTestPath))) {
   let reminderTest = read(reminderTestPath);
@@ -152,8 +144,3 @@ if (fs.existsSync(path.join(root, reminderTestPath))) {
 }
 
 console.log("Applied team-lead decline queue and provider safeguards to final prepared source.");
-
-// These run last so current kick-off, fee, AI-prediction and notification
-// preparation stays authoritative while scheduling/admin wording becomes venue-neutral.
-require("./apply-venue-neutral-fixtures-current.cjs");
-require("./apply-venue-neutral-next-week-compat.cjs");

@@ -24,6 +24,7 @@ type TeamSchedulingRule = {
   id: string;
   name: string;
   logoUrl: string | null;
+  earliestKickoffTime: string | null;
   latestKickoffTime: string | null;
   standardMatchFeePence: number | null;
 };
@@ -99,8 +100,17 @@ function getSessionCapacity(input: {
 
 function isKickoffAllowed(kickoffAt: Date, homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
   const kickoffMinutes = getLondonMinutesSinceMidnight(kickoffAt);
+  const homeEarliest = parseTimeToMinutes(homeTeam.earliestKickoffTime);
+  const awayEarliest = parseTimeToMinutes(awayTeam.earliestKickoffTime);
   const homeLatest = parseTimeToMinutes(homeTeam.latestKickoffTime);
   const awayLatest = parseTimeToMinutes(awayTeam.latestKickoffTime);
+
+  if (homeEarliest !== null && kickoffMinutes < homeEarliest) {
+    return { allowed: false, reason: `${homeTeam.name} cannot kick off before ${homeTeam.earliestKickoffTime}.` };
+  }
+  if (awayEarliest !== null && kickoffMinutes < awayEarliest) {
+    return { allowed: false, reason: `${awayTeam.name} cannot kick off before ${awayTeam.earliestKickoffTime}.` };
+  }
 
   if (homeLatest !== null && kickoffMinutes > homeLatest) {
     return { allowed: false, reason: `${homeTeam.name} cannot kick off later than ${homeTeam.latestKickoffTime}.` };
@@ -112,10 +122,10 @@ function isKickoffAllowed(kickoffAt: Date, homeTeam: TeamSchedulingRule, awayTea
 }
 
 function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
-  const homeFee = homeTeam.standardMatchFeePence ?? 0;
-  const awayFee = awayTeam.standardMatchFeePence ?? 0;
-  const highestFee = Math.max(homeFee, awayFee);
-  return highestFee > 0 ? highestFee : null;
+  return Math.max(
+    homeTeam.standardMatchFeePence ?? 4000,
+    awayTeam.standardMatchFeePence ?? 4000,
+  );
 }
 
 function generateRounds(teamIds: string[]): Pair[][] {
@@ -133,8 +143,8 @@ function generateRounds(teamIds: string[]): Pair[][] {
       const a = arr[i];
       const b = arr[n - 1 - i];
       if (!a || !b) continue;
-      const isEvenRound = round % 2 === 0;
-      pairs.push({ homeId: isEvenRound ? a : b, awayId: isEvenRound ? b : a });
+      // Legacy column names are storage slots only; pairing has no home/away meaning.
+      pairs.push({ homeId: a, awayId: b });
     }
     rounds.push(pairs);
     const fixed = arr[0];
@@ -146,8 +156,8 @@ function generateRounds(teamIds: string[]): Pair[][] {
   return rounds;
 }
 
-function mirrorRounds(rounds: Pair[][]): Pair[][] {
-  return rounds.map((pairs) => pairs.map((pair) => ({ homeId: pair.awayId, awayId: pair.homeId })));
+function repeatRounds(rounds: Pair[][]): Pair[][] {
+  return rounds.map((pairs) => pairs.map((pair) => ({ homeId: pair.homeId, awayId: pair.awayId })));
 }
 
 function sortPairsByRestriction(pairs: Pair[], teamMap: Map<string, TeamSchedulingRule>) {
@@ -268,24 +278,24 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
 
   if (input.divisionId) {
     return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime", t."standardMatchFeePence"
+      SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${input.leagueId}
         AND lst."divisionId" = ${input.divisionId}
         AND lst."isActive" = true
-        AND t."leagueId" = ${input.leagueId}
+        AND COALESCE(t."isFixturePlaceholder", false) = false
       ORDER BY t."name" ASC
     `);
   }
 
   return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-    SELECT t."id", t."name", t."logoUrl", t."latestKickoffTime", t."standardMatchFeePence"
+    SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
     FROM "LeagueSeasonTeam" lst
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
       AND lst."isActive" = true
-      AND t."leagueId" = ${input.leagueId}
+      AND COALESCE(t."isFixturePlaceholder", false) = false
     ORDER BY t."name" ASC
   `);
 }
@@ -377,7 +387,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   if (invalidRefereeIds.length > 0) throw new Error("One or more selected pitch referees could not be found.");
 
   let rounds = generateRounds(teams.map((team) => team.id));
-  if (doubleRoundRobin) rounds = [...rounds, ...mirrorRounds(rounds)];
+  if (doubleRoundRobin) rounds = [...rounds, ...repeatRounds(rounds)];
 
   const teamMap = new Map<string, TeamSchedulingRule>(teams.map((team) => [team.id, team]));
   const fixturesToCreate: Array<{
@@ -393,6 +403,8 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     pitch: string;
     status: FixtureStatus;
     matchFeePence: number | null;
+    homeMatchFeePence: number;
+    awayMatchFeePence: number;
   }> = [];
 
   let nightOffset = 0;
@@ -431,6 +443,8 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           pitch: `Pitch ${pitchNumber}`,
           status,
           matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
+          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,
+          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,
         });
       });
 
@@ -459,6 +473,8 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           pitch: fixtureData.pitch,
           status: fixtureData.status,
           matchFeePence: fixtureData.matchFeePence,
+          homeMatchFeePence: fixtureData.homeMatchFeePence,
+          awayMatchFeePence: fixtureData.awayMatchFeePence,
         },
         select: { id: true },
       });

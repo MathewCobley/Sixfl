@@ -19,6 +19,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Check native venue-neutral implementation before preparation
+        run: node scripts/check-venue-neutral-fixtures.mjs
       - name: Prepare final production source
         run: npm run prebuild
       - run: npx prisma generate

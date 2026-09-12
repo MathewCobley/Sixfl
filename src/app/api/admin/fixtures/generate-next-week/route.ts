@@ -7,8 +7,8 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { FixtureStatus, Prisma } from "@prisma/client";
 
-import { refreshStoredAiPreviewsForLeague } from "@/lib/fixtures/storedAiPredictions";
 import { snapshotFixtureMatchFees } from "@/lib/payments/fixture-fee-policy";
+import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -19,8 +19,8 @@ type TeamSeed = {
 };
 
 type Pair = {
-  homeTeamId: string;
-  awayTeamId: string;
+  team1Id: string;
+  team2Id: string;
 };
 
 type FixtureSeed = {
@@ -59,8 +59,6 @@ function chooseFixtures(input: {
 }) {
   const pairCounts = new Map<string, number>();
   const pairLatestRound = new Map<string, number>();
-  const homeCounts = new Map<string, number>();
-  const awayCounts = new Map<string, number>();
   const playedCounts = new Map<string, number>();
   const maxRound = Math.max(
     0,
@@ -75,14 +73,6 @@ function chooseFixtures(input: {
     pairLatestRound.set(
       key,
       Math.max(pairLatestRound.get(key) ?? 0, fixture.round ?? 0),
-    );
-    homeCounts.set(
-      fixture.homeTeamId,
-      (homeCounts.get(fixture.homeTeamId) ?? 0) + 1,
-    );
-    awayCounts.set(
-      fixture.awayTeamId,
-      (awayCounts.get(fixture.awayTeamId) ?? 0) + 1,
     );
     playedCounts.set(
       fixture.homeTeamId,
@@ -157,17 +147,8 @@ function chooseFixtures(input: {
     const opponent = remaining.splice(bestOpponentIndex, 1)[0];
     if (!opponent) break;
 
-    const firstBalance =
-      (homeCounts.get(first.id) ?? 0) - (awayCounts.get(first.id) ?? 0);
-    const opponentBalance =
-      (homeCounts.get(opponent.id) ?? 0) -
-      (awayCounts.get(opponent.id) ?? 0);
-
-    if (firstBalance <= opponentBalance) {
-      pairs.push({ homeTeamId: first.id, awayTeamId: opponent.id });
-    } else {
-      pairs.push({ homeTeamId: opponent.id, awayTeamId: first.id });
-    }
+    // SIXFL is venue-neutral; these are only technical storage slots.
+    pairs.push({ team1Id: first.id, team2Id: opponent.id });
   }
 
   return pairs;
@@ -220,7 +201,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const [league, teams, existingFixtures] = await Promise.all([
+    const [league, linkedTeams, existingFixtures] = await Promise.all([
       prisma.league.findUnique({
         where: { id: leagueId },
         select: { id: true, slug: true },
@@ -251,11 +232,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const placeholderTeamIds = await getFixturePlaceholderTeamIds(
+      linkedTeams.map((team) => team.id),
+    );
+    const teams = linkedTeams.filter((team) => !placeholderTeamIds.has(team.id));
+
     if (teams.length < 2) {
       return NextResponse.json(
         {
           error:
-            "This league needs at least two linked teams before fixtures can be generated.",
+            "This league needs at least two playable linked teams before fixtures can be generated.",
           requestId,
         },
         { status: 400 },
@@ -301,14 +287,14 @@ export async function POST(request: Request) {
       data: pairs.map((pair, index) => {
         const batch = Math.floor(index / pitchCount);
         const pitchNumber = (index % pitchCount) + 1;
-        const homeTeam = teamsById.get(pair.homeTeamId);
-        const awayTeam = teamsById.get(pair.awayTeamId);
+        const homeTeam = teamsById.get(pair.team1Id);
+        const awayTeam = teamsById.get(pair.team2Id);
         if (!homeTeam || !awayTeam) throw new Error("A selected fixture team is no longer available.");
 
         return {
           leagueId,
-          homeTeamId: pair.homeTeamId,
-          awayTeamId: pair.awayTeamId,
+          homeTeamId: pair.team1Id,
+          awayTeamId: pair.team2Id,
           venueId,
           kickoffAt: addMinutes(kickoffBase, batch * slotMinutes),
           round,
@@ -320,31 +306,8 @@ export async function POST(request: Request) {
       }),
     });
 
-    const createdFixtures = await prisma.fixture.findMany({
-      where: {
-        leagueId,
-        round,
-        status: FixtureStatus.SCHEDULED,
-      },
-      select: { id: true },
-    });
-    const createdFixtureIds = createdFixtures.map((fixture) => fixture.id);
+    // Predictions are generated only when fixtures are published.
 
-    let predictorStored = true;
-    try {
-      await refreshStoredAiPreviewsForLeague(leagueId, {
-        fixtureIds: createdFixtureIds,
-      });
-    } catch (error) {
-      predictorStored = false;
-      console.error("Generated fixtures but failed to store their AI predictions", {
-        requestId,
-        leagueId,
-        round,
-        fixtureIds: createdFixtureIds,
-        error,
-      });
-    }
 
     revalidatePath("/admin/fixtures");
     revalidatePath("/admin/ai-predictor");
@@ -359,8 +322,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       created: pairs.length,
-      predictorStored,
-      predictorFixtureCount: createdFixtureIds.length,
+      predictorStored: false,
+      predictorFixtureCount: 0,
       round,
       requestId,
     });

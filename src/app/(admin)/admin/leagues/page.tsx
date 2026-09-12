@@ -103,6 +103,7 @@ export default async function AdminLeaguesPage() {
       LEFT JOIN "League" l ON l."competitionId" = c."id"
       LEFT JOIN "LeagueSeasonTeam" lst ON lst."leagueId" = c."currentLeagueId" AND lst."isActive" = true
       WHERE c."isActive" = true
+        AND COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
       GROUP BY c."id", c."name", c."slug", c."currentLeagueId", current_l."season"
       ORDER BY c."name" ASC
     `),
@@ -122,6 +123,7 @@ export default async function AdminLeaguesPage() {
       LEFT JOIN "LeagueSeasonTeam" lst ON lst."leagueId" = l."id" AND lst."isActive" = true
       LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
       WHERE l."competitionId" IS NOT NULL
+        AND COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
       GROUP BY l."id", l."competitionId", l."name", l."slug", l."season", l."isActive", c."currentLeagueId"
       ORDER BY (l."id" = c."currentLeagueId") DESC, COALESCE(l."season", '') DESC, l."createdAt" DESC
     `),

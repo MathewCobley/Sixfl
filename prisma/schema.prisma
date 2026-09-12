@@ -96,6 +96,10 @@ model LeagueCompetition {
   venueName String?
   isActive Boolean @default(true)
 
+  competitionType String  @default("LEAGUE")
+  cupFormat       String?
+  isInterLeague   Boolean @default(false)
+
   currentLeagueId String?
   currentLeague   League? @relation("CurrentCompetitionLeague", fields: [currentLeagueId], references: [id], onDelete: SetNull)
 
@@ -105,6 +109,8 @@ model LeagueCompetition {
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
+  @@index([competitionType])
+  @@index([competitionType, isActive], map: "LeagueCompetition_type_active_idx")
   @@index([area])
   @@index([dayOfWeek])
   @@index([leagueType])

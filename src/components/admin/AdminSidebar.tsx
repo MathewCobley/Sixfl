@@ -65,6 +65,12 @@ const navigationGroups = [
         description: "Setup",
       },
       {
+        name: "Cups",
+        href: "/admin/cups",
+        icon: TrophyIcon,
+        description: "Setup",
+      },
+      {
         name: "Teams",
         href: "/admin/teams",
         icon: UserGroupIcon,
@@ -206,6 +212,12 @@ const navigationGroups = [
         description: "Postponed",
       },
       {
+        name: "Participation controls",
+        href: "/admin/participation-controls",
+        icon: ShieldCheckIcon,
+        description: "Blocks/suspensions",
+      },
+      {
         name: "Backfill",
         href: "/admin/fixtures/backfill",
         icon: WrenchScrewdriverIcon,
@@ -340,6 +352,12 @@ const navigationGroups = [
         href: "/admin/email-audit",
         icon: MagnifyingGlassIcon,
         description: "Address counts",
+      },
+      {
+        name: "Rules archive",
+        href: "/admin/rules-archive",
+        icon: DocumentTextIcon,
+        description: "Versions",
       },
       {
         name: "Queue",
