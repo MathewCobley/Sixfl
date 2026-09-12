@@ -53,3 +53,13 @@ test('overturn action does not send messages, take money or regenerate frozen pr
   const migration=fs.readFileSync('prisma/migrations/20260912120000_result_overturn_audit/migration.sql','utf8');
   assert.match(migration,/BEFORE UPDATE OR DELETE ON "MatchResultOverturn"/);assert.match(migration,/BEFORE UPDATE OR DELETE ON "MatchResult"/);
 });
+
+test('captain scorer editing uses the original played goals, never invented awarded goals',()=>{
+ const source=fs.readFileSync('src/app/captain/team/[teamid]/results/page.tsx','utf8');
+ assert.match(source,/const playedResult = getPredictorResult\(result\)/);
+ assert.match(source,/const goalsExpected = isHome \? playedResult.homeScore : playedResult.awayScore/);
+ assert.match(source,/include:\s*\{\s*overturn: \{ select: RESULT_OVERTURN_SUMMARY_SELECT \}/);
+ assert.match(source,/getPredictorResult\(fixture.result!\)/);
+ assert.match(source,/max=\{row.playedGoalsFor\}/);assert.doesNotMatch(source,/max=\{row.goalsFor\}/);
+ assert.match(source,/outcome: getOutcome\(goalsFor, goalsAgainst\)/,'competition outcome still uses the official award');
+});
