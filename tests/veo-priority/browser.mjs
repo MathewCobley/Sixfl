@@ -30,12 +30,20 @@ try {
   await page.screenshot({ path: 'artifacts/veo/admin-desktop.png', fullPage: true });
   assert.deepEqual(errors, []);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => link.href));
-  const promo = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  await promo.setContent(`<!doctype html><html><head>${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body style="background:#080808"><main class="mx-auto max-w-5xl p-4">${readFileSync('artifacts/veo/captain-promo.html', 'utf8')}</main></body></html>`, { waitUntil: 'networkidle' });
-  await promo.getByRole('button', { name: 'Request Veo Priority', exact: true }).waitFor();
-  assert.ok(await promo.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Captain promo must fit mobile');
-  await promo.screenshot({ path: 'artifacts/veo/captain-promo-mobile.png', fullPage: true });
-  await promo.setViewportSize({ width: 1440, height: 1000 });
-  await promo.screenshot({ path: 'artifacts/veo/captain-promo-desktop.png', fullPage: true });
-  console.log('PASS: request queue, anonymous review refusal, mobile promo, OFF state, saved fee rows and completed-fixture video edits.');
+  for (const name of ['confirmation-live','confirmation-preview','confirmation-ongoing']) {
+    const promo = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const posts=[];promo.on('request',r=>{if(r.method()!=='GET')posts.push(r.url());});
+    await promo.setContent(`<!doctype html><html><head>${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body style="background:#080808"><main class="mx-auto max-w-5xl p-4">${readFileSync(`artifacts/veo/${name}.html`, 'utf8')}</main></body></html>`, { waitUntil: 'networkidle' });
+    const radios=promo.getByRole('radio');assert.equal(await radios.count(),3);
+    const match=promo.locator('input[value="MATCH"]');const ongoing=promo.locator('input[value="ONGOING"]');
+    if(name==='confirmation-preview') {
+      assert.ok(await match.isDisabled());assert.equal(await promo.locator('form').count(),0);
+      const button=promo.getByRole('button',{name:'Confirm our team can play'});assert.ok(await button.isDisabled());
+      const box=await button.boundingBox();await promo.mouse.click(box.x+5,box.y+5);assert.deepEqual(posts,[]);
+    }else{await match.check();assert.ok(await match.isChecked());await ongoing.check();assert.ok(await ongoing.isChecked());}
+    assert.ok(await promo.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${name} must fit mobile`);
+    await promo.screenshot({path:`artifacts/veo/${name}-mobile.png`,fullPage:true});
+    await promo.setViewportSize({width:1440,height:1000});await promo.screenshot({path:`artifacts/veo/${name}-desktop.png`,fullPage:true});await promo.close();
+  }
+  console.log('PASS: native fixture choices, radio changes, safe preview, phone/desktop and legacy admin recording controls.');
 } finally { await browser.close(); }
