@@ -21,8 +21,11 @@ async function transaction<T>(work: (db: Db) => Promise<T>): Promise<T> {
     try {
       return await prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 20000 });
     } catch (error) {
+      // Simultaneous requests can hit the partial unique index while the second
+      // serializable transaction still sees its older snapshot. Roll it back and
+      // reread in a new transaction; never bypass the one-pending-request index.
       const retry = error instanceof Prisma.PrismaClientKnownRequestError &&
-        (error.code === 'P2034' || (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code))));
+        (error.code === 'P2034' || (error.code === 'P2010' && ['40001', '40P01', '23505'].includes(String(error.meta?.code))));
       if (!retry || attempt >= 2) throw error;
     }
   }
@@ -73,7 +76,7 @@ export async function readVeoOffer(leagueId: string | null, teamId: string, db: 
   if (!leagueId || !await eligibleTeam(db, leagueId, teamId)) return null;
   const requests = await db.$queryRaw<VeoRequest[]>`
     SELECT * FROM "VeoPriorityRequest" WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId}
-    ORDER BY "requestedAt" DESC, id DESC LIMIT 1
+    ORDER BY (status = 'PENDING') DESC, "requestedAt" DESC, id DESC LIMIT 1
   `;
   return { priority: await enabled(db, leagueId, teamId), request: requests[0] ?? null };
 }
@@ -110,6 +113,7 @@ export async function reviewVeoPriorityRequest(input: { leagueId: string; reques
     if (!request) throw new VeoRequestError('Request not found in this league.');
     await lockTeam(db, input.leagueId, request.teamId);
     const current = (await db.$queryRaw<VeoRequest[]>`SELECT * FROM "VeoPriorityRequest" WHERE id = ${request.id} FOR UPDATE`)[0];
+    if (!current) throw new VeoRequestError('Request no longer exists. Refresh the page.');
     if (current.status !== 'PENDING') {
       if (current.status !== input.decision) throw new VeoRequestError('Another administrator has already reviewed this request. Refresh to see the decision.');
       return request.teamId; // Retried approval must not re-enable a subsequently disabled team.
