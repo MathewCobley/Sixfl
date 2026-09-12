@@ -18,7 +18,7 @@ jobs:
           POSTGRES_DB: sixfl_native_review
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U postgres -d sixfl_native_review'
+          --health-cmd "pg_isready -U postgres -d sixfl_native_review"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_native_review
