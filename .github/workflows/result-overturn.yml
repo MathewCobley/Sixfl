@@ -1,0 +1,95 @@
+name: Overturned result and predictor integrity
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: result-overturn-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_overturn_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_overturn_test
+      OVERTURN_TEST_DATABASE: '1'
+      NEXTAUTH_SECRET: isolated-overturn-test-only
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      STRIPE_SECRET_KEY: sk_test_isolated_overturn_not_real
+      RESEND_API_KEY: re_isolated_overturn_not_real
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Native predictor and action boundary tests
+        run: node --test tests/result-overturn/*.test.cjs
+      - name: Prepare exactly the production source and schema
+        run: npm run prebuild && npx prisma generate
+      - name: Verify prepared predictor projections and permissions
+        run: node --test tests/result-overturn/*.test.cjs
+      - name: Create disposable base schema and apply the real audit migration
+        run: |
+          node - <<'JS'
+          const fs=require('fs');
+          let s=fs.readFileSync('prisma/schema.prisma','utf8');
+          s=s.replace(/^\s*overturn\s+MatchResultOverturn\?\s*$/m,'');
+          s=s.replace(/model MatchResultOverturn \{[\s\S]*?\n\}/,'');
+          fs.writeFileSync('prisma/overturn-base-test.prisma',s);
+          JS
+          npx prisma db push --skip-generate --schema prisma/overturn-base-test.prisma
+          rm prisma/overturn-base-test.prisma
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260819232000_fixture_abandonment_workflow/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260912120000_result_overturn_audit/migration.sql
+      - name: Real database rollback, permissions, immutable history and predictor inputs
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsx tests/result-overturn/database.ts 2>&1 | tee overturn-database.log
+      - name: Complete application typecheck and production build
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit
+          npx next build 2>&1 | tee overturn-build.log
+      - name: Confirm public route labels, original-score display and permission boundary
+        run: node --test tests/result-overturn/render.test.cjs
+      - name: Install isolated browser tools
+        run: npm install --prefix /tmp/overturn-browser --no-package-lock playwright@1.55.0 && /tmp/overturn-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Desktop and mobile confirmation controls
+        run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/browser.cjs
+      - name: Prove official-score regression is detected
+        shell: bash
+        run: |
+          cp src/lib/fixtures/result-score.ts /tmp/result-score.original
+          node - <<'JS'
+          const fs=require('fs'),p='src/lib/fixtures/result-score.ts';
+          fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('result.overturn ? result.overturn.originalHomeScore : result.homeScore','result.homeScore').replace('result.overturn ? result.overturn.originalAwayScore : result.awayScore','result.awayScore'));
+          JS
+          if node --test tests/result-overturn/predictor.test.cjs > overturn-negative.log 2>&1; then
+            cp /tmp/result-score.original src/lib/fixtures/result-score.ts
+            echo 'ERROR: negative control passed'; exit 1
+          fi
+          cp /tmp/result-score.original src/lib/fixtures/result-score.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-overturn-evidence
+          path: |
+            artifacts/result-overturn/
+            overturn-*.log
+          retention-days: 7
