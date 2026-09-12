@@ -37,8 +37,9 @@ jobs:
           git grep -n -E 'ManagedSquadInjuryBridge|managed-squad-status|Squad console' -- src > artifacts/admin-squad-layout/source-inventory.txt || true
           cp 'src/app/(admin)/admin/teams/[id]/squad/page.tsx' artifacts/admin-squad-layout/console-page.tsx
           git diff --stat > artifacts/admin-squad-layout/preparation.txt
-      - name: Build production application
-        run: npm run build
+      - name: Build prepared production application
+        # prebuild already ran above; do not invoke the legacy preparation twice.
+        run: npx prisma generate && npx next build
       - name: Install isolated browser tooling
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0 esbuild

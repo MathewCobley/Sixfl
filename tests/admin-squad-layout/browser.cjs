@@ -16,6 +16,8 @@ const { load, renderShell, PANEL } = require('./contract.test.cjs');
     '@/lib/requireAdmin': { requireAdmin: async () => ({}) },
     '@/lib/datetime/london': { formatDateTimeInLondon: () => '12/09/2026, 12:00' },
     '@/lib/admin/squadLoginStatus': { getSquadLoginStatusMap: async () => new Map() },
+    '@/lib/admin/squadMemberCreationDetails': { getSquadMemberCreationDetailsMap: async () => new Map() },
+    '@/lib/players/player-team-memberships': { getPlayerTeamMembershipsByUserId: async () => new Map() },
     '@/lib/prisma': { prisma: {
       team: { findUnique: async () => ({ id: 'test-team', name: 'Example United', teamMode: 'STANDARD', isRecruiting: true, contactName: 'Example Captain', contactEmail: 'captain@example.invalid', league: { id: 'test-league', name: 'Example League', season: '2026' }, members: [
         { id: 'active', role: 'PLAYER', createdAt: new Date(), user: { id: 'active-user', name: 'Example Active Player', email: 'active@example.invalid' } },
@@ -63,6 +65,7 @@ const { load, renderShell, PANEL } = require('./contract.test.cjs');
       assert.equal(await panel.getAttribute('open'), null);
       assert.equal(reads, 0); assert.equal(writes.length, 0);
       assert.ok(await tab.getByRole('button', { name: 'Add to squad', exact: true }).count());
+      assert.equal(await tab.getByRole('link', { name: 'Add existing player', exact: true }).getAttribute('href'), '#add-squad-member');
       async function bounds(label) {
         const values = await tab.evaluate(() => {
           const main = document.querySelector('main').getBoundingClientRect();
