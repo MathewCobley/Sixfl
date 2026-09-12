@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -7,47 +6,12 @@ import { requireAdmin } from "@/lib/requireAdmin";
 export const dynamic = "force-dynamic";
 
 type DiallerPayload = {
-  action?: "call" | "outcome";
+  action?: "outcome";
   leadId?: string;
   outcome?: "INTERESTED" | "CALLBACK" | "NO_ANSWER" | "NOT_INTERESTED" | "JOINED";
   note?: string;
   callbackAt?: string;
 };
-
-function normalizeUkPhone(value: string) {
-  const compact = value.replace(/[^\d+]/g, "");
-  if (compact.startsWith("+44")) return compact;
-  if (compact.startsWith("44")) return `+${compact}`;
-  if (compact.startsWith("0")) return `+44${compact.slice(1)}`;
-  return compact.startsWith("+") ? compact : `+${compact}`;
-}
-
-function getTwilioConfig() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
-  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
-  const from = (
-    process.env.TWILIO_PHONE_NUMBER ||
-    process.env.TWILIO_FROM_NUMBER ||
-    process.env.TWILIO_SMS_FROM
-  )?.trim();
-  const agent = (
-    process.env.TWILIO_DIALER_AGENT_NUMBER ||
-    process.env.SIXFL_DIALER_AGENT_NUMBER
-  )?.trim();
-
-  if (!accountSid || !authToken || !from || !agent) {
-    throw new Error(
-      "Lead dialler is not configured. Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, a Twilio from number, and TWILIO_DIALER_AGENT_NUMBER.",
-    );
-  }
-
-  return {
-    accountSid,
-    authToken,
-    from: normalizeUkPhone(from),
-    agent: normalizeUkPhone(agent),
-  };
-}
 
 function outcomeLabel(outcome: NonNullable<DiallerPayload["outcome"]>) {
   if (outcome === "INTERESTED") return "Interested";
@@ -82,71 +46,12 @@ export async function POST(request: Request) {
     where: { id: leadId },
     select: {
       id: true,
-      contactName: true,
-      teamName: true,
-      phone: true,
-      phoneNormalized: true,
       status: true,
       message: true,
     },
   });
 
   if (!lead) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
-
-  if (payload?.action === "call") {
-    const rawPhone = lead.phoneNormalized?.trim() || lead.phone?.trim();
-    if (!rawPhone) {
-      return NextResponse.json({ error: "This lead has no phone number." }, { status: 400 });
-    }
-    if (lead.status === "CLOSED") {
-      return NextResponse.json({ error: "This lead is closed and cannot be dialled." }, { status: 400 });
-    }
-
-    try {
-      const config = getTwilioConfig();
-      const client = twilio(config.accountSid, config.authToken);
-      const leadPhone = normalizeUkPhone(rawPhone);
-      const response = new twilio.twiml.VoiceResponse();
-      response.say({ voice: "alice", language: "en-GB" }, "SIXFL lead call. Connecting you now.");
-      const dial = response.dial({ callerId: config.from, answerOnBridge: true });
-      dial.number(leadPhone);
-
-      const call = await client.calls.create({
-        to: config.agent,
-        from: config.from,
-        twiml: response.toString(),
-      });
-
-      const calledAt = new Date();
-      await prisma.$transaction([
-        prisma.$executeRaw`
-          INSERT INTO "LeadPhoneCall" ("leadId", "calledAt")
-          VALUES (${leadId}, ${calledAt})
-          ON CONFLICT ("leadId")
-          DO UPDATE SET "calledAt" = EXCLUDED."calledAt"
-        `,
-        prisma.interestLead.update({
-          where: { id: leadId },
-          data: {
-            contactedAt: calledAt,
-            status: lead.status === "NEW" ? "CONTACTED" : undefined,
-          },
-        }),
-      ]);
-
-      return NextResponse.json({
-        ok: true,
-        callSid: call.sid,
-        calledAt: calledAt.toISOString(),
-      });
-    } catch (error) {
-      console.error("Lead dialler call failed", error);
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "Could not start the call." },
-        { status: 500 },
-      );
-    }
-  }
 
   if (payload?.action === "outcome") {
     const outcome = payload.outcome;
