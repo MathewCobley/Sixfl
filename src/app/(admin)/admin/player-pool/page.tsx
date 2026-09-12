@@ -46,8 +46,8 @@ type SearchParams = Promise<{ saved?: string; error?: string; view?: string }>;
 
 type ProfileRow = {
   id: string;
-  leadId: string | null;
   prospectId: string;
+  leadId: string | null;
   publicCode: string;
   profileToken: string;
   area: string | null;
@@ -272,8 +272,8 @@ export default async function AdminPlayerPoolPage({
     prisma.$queryRaw<ProfileRow[]>`
       SELECT
         profile."id",
-        profile."leadId",
         profile."prospectId",
+        profile."leadId",
         profile."publicCode",
         profile."profileToken",
         profile."area",

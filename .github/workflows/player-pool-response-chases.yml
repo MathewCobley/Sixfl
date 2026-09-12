@@ -55,3 +55,5 @@ jobs:
           npx tsx tests/player-pool-response/database.ts
       - name: Typecheck and production build
         run: npx tsc --noEmit && npx next build
+      - name: Verify genuine HTTP permissions and explicit response form
+        run: npx tsx tests/player-pool-response/http.ts

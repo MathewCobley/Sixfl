@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 const read = p => fs.readFileSync(p,"utf8");
 const page = read("src/app/(admin)/admin/player-pool/page.tsx");
+const row = page.match(/type ProfileRow = \{[\s\S]*?\n\};/)?.[0] || "";
+assert.equal((row.match(/prospectId: string;/g) || []).length, 1, "One native prospect ID field must survive preparation");
 for (const marker of ["PlayerPoolContactHistory", "PlayerPoolResponseChaseButton", "getPlayerPoolFollowupStates", "PlayerPoolNudgeButton", "BulkPlayerPoolProfileReminderButton", "PlayerPoolSmsChaseHistory", "PlayerPoolJoinedTeams"]) assert.ok(page.includes(marker), marker);
 assert.ok(!fs.existsSync("scripts/apply-player-pool-nudge-history.cjs"));
 assert.ok(!read("scripts/check-central-standings-usage.cjs").includes("apply-player-pool-nudge-history.cjs"));
