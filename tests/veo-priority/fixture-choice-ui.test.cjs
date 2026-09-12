@@ -34,3 +34,25 @@ const nudge=fs.readFileSync('src/app/captain/team/[teamid]/fixtures/nudge-action
 for(const p of ['src/lib/fixtures/confirmation-emails.ts','src/lib/fixtures/confirmation-reminders.ts'])assert.ok(fs.readFileSync(p,'utf8').includes('/fixtures?fixtureId='));
 for(const p of ['src/lib/veo/fixture-bookings.ts','src/components/captain/FixtureVeoConfirmationForm.tsx'])assert.doesNotMatch(fs.readFileSync(p,'utf8'),/MutationObserver|document\.querySelector|queueDirectNotification|sendEmail|stripe\./);
 });
+
+test('Veo confirmation integration retains the existing awarded-result display on the same page', () => {
+  const path = 'src/app/captain/team/[teamid]/fixtures/page.tsx';
+  const source = fs.readFileSync(path, 'utf8');
+  const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  assert.equal(ast.parseDiagnostics.length, 0, 'The integrated fixture page must parse');
+  const imports = new Set();
+  const rendered = [];
+  function visit(node) {
+    if (ts.isImportDeclaration(node)) imports.add(node.moduleSpecifier.text);
+    if (ts.isJsxSelfClosingElement(node)) rendered.push(node.tagName.getText(ast));
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  for (const name of ['@/components/captain/CaptainFixtureConfirmation', '@/components/fixtures/OverturnedResultNotice', '@/lib/fixtures/result-score']) {
+    assert.ok(imports.has(name), `Keep existing/new shared dependency: ${name}`);
+  }
+  assert.equal(rendered.filter(name => name === 'CaptainFixtureConfirmation').length, 2, 'Normal and late confirmation retain the shared choices');
+  assert.equal(rendered.filter(name => name === 'OverturnedResultNotice').length, 1, 'Retain the original/awarded result notice');
+  assert.match(source, /overturn:\s*\{\s*select:\s*RESULT_OVERTURN_SUMMARY_SELECT/);
+  assert.match(source, /fixture\.result!\.overturn\s*\?\s*"Awarded result"/);
+});
