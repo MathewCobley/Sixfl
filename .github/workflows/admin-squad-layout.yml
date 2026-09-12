@@ -35,7 +35,7 @@ jobs:
         run: |
           mkdir -p artifacts/admin-squad-layout
           git grep -n -E 'ManagedSquadInjuryBridge|managed-squad-status|Squad console' -- src > artifacts/admin-squad-layout/source-inventory.txt || true
-          cp 'src/app/(admin)/admin/teams/[id]/squad/page.tsx' artifacts/admin-squad-layout/console-page.tsx
+          cp 'src/app/(admin)/admin/teams/[id]/squad/page.tsx' artifacts/admin-squad-layout/console-page.txt
           git diff --stat > artifacts/admin-squad-layout/preparation.txt
       - name: Build prepared production application
         # prebuild already ran above; do not invoke the legacy preparation twice.
