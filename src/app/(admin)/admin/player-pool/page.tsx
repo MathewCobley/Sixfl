@@ -3,12 +3,19 @@
 // ========================================
 
 import Link from "next/link";
+import PlayerPoolContactHistory from "@/components/admin/player-pool/PlayerPoolContactHistory";
+import PlayerPoolResponseChaseButton from "@/components/admin/player-pool/PlayerPoolResponseChaseButton";
+import { getPlayerPoolFollowupStates } from "@/lib/player-pool/followup-history";
+import { followupBlock } from "@/lib/player-pool/followup-policy";
 import PlayerPoolSmsChaseHistory from "@/components/admin/player-pool/PlayerPoolSmsChaseHistory";
 import { getPlayerPoolProfileSmsHistory } from "@/lib/player-pool/profile-sms-reminders";
 
 import DeletePlayerPoolProfileButton from "@/components/admin/player-pool/DeletePlayerPoolProfileButton";
+import BulkPlayerPoolProfileReminderButton from "@/components/admin/player-pool/BulkPlayerPoolProfileReminderButton";
+import PlayerPoolNudgeButton from "@/components/admin/player-pool/PlayerPoolNudgeButton";
 import PlayerPoolJoinedTeams from "@/components/admin/player-pool/PlayerPoolJoinedTeams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { ensurePlayerPoolProfileReminderTemplate } from "@/lib/player-pool/profile-reminders";
 import { ensurePlayerPoolTables, readPlayerPoolStringArray } from "@/lib/player-pool/storage";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -40,6 +47,7 @@ type SearchParams = Promise<{ saved?: string; error?: string; view?: string }>;
 type ProfileRow = {
   id: string;
   leadId: string | null;
+  prospectId: string;
   publicCode: string;
   profileToken: string;
   area: string | null;
@@ -47,6 +55,10 @@ type ProfileRow = {
   status: string;
   invitedAt: Date | null;
   profileSubmittedAt: Date | null;
+  nudgeCount: number;
+  lastNudgeAt: Date | null;
+  lastNudgeStatus: string | null;
+  lastNudgeBy: string | null;
   firstName: string;
   lastName: string | null;
   email: string | null;
@@ -251,6 +263,7 @@ export default async function AdminPlayerPoolPage({
 }) {
   await requireAdmin();
   await ensurePlayerPoolTables();
+  await ensurePlayerPoolProfileReminderTemplate();
 
   const params = (await searchParams) ?? {};
   const selectedView = parseView(params.view);
@@ -260,6 +273,7 @@ export default async function AdminPlayerPoolPage({
       SELECT
         profile."id",
         profile."leadId",
+        profile."prospectId",
         profile."publicCode",
         profile."profileToken",
         profile."area",
@@ -267,6 +281,10 @@ export default async function AdminPlayerPoolPage({
         profile."status",
         profile."invitedAt",
         profile."profileSubmittedAt",
+        COALESCE(nudge_history."nudgeCount", 0)::int AS "nudgeCount",
+        nudge_history."lastNudgeAt",
+        nudge_history."lastNudgeStatus",
+        nudge_history."lastNudgeBy",
         prospect."firstName",
         prospect."lastName",
         prospect."email",
@@ -281,6 +299,20 @@ export default async function AdminPlayerPoolPage({
       FROM "PlayerPoolProfile" profile
       JOIN "TeamPlayerProspect" prospect ON prospect."id" = profile."prospectId"
       LEFT JOIN "League" league ON league."id" = profile."leagueId"
+      LEFT JOIN LATERAL (
+        SELECT
+          (COUNT(*) OVER())::int AS "nudgeCount",
+          COALESCE(dispatch."sentAt", dispatch."failedAt", dispatch."processedAt", dispatch."createdAt") AS "lastNudgeAt",
+          dispatch."status"::text AS "lastNudgeStatus",
+          COALESCE(creator."name", creator."email", 'SIXFL admin') AS "lastNudgeBy"
+        FROM "NotificationDispatch" dispatch
+        LEFT JOIN "User" creator ON creator."id" = dispatch."createdByUserId"
+        WHERE dispatch."sourceType" = 'PLAYER_POOL_PROFILE_NUDGE'
+          AND dispatch."sourceId" = profile."id"
+          AND dispatch."channel" = 'EMAIL'
+        ORDER BY COALESCE(dispatch."sentAt", dispatch."failedAt", dispatch."processedAt", dispatch."createdAt") DESC
+        LIMIT 1
+      ) nudge_history ON TRUE
       ORDER BY COALESCE(profile."profileSubmittedAt", profile."invitedAt", profile."createdAt") DESC
     `,
     prisma.$queryRaw<RequestRow[]>`
@@ -353,6 +385,8 @@ export default async function AdminPlayerPoolPage({
         );
 
   const smsHistory = await getPlayerPoolProfileSmsHistory(visibleProfiles.map((profile) => profile.id));
+
+  const followups = new Map((await getPlayerPoolFollowupStates(visibleProfiles.map(p => p.id))).map(s => [s.id, s]));
 
   const totalAwaitingProfile = counts.awaiting + awaitingProfileLeads.length;
   const savedMessage = getSavedMessage(params.saved);
@@ -509,6 +543,13 @@ export default async function AdminPlayerPoolPage({
           </nav>
         </div>
 
+        {selectedView === "awaiting" ? (
+          <>
+            <PlayerPoolResponseChaseButton />
+            <BulkPlayerPoolProfileReminderButton awaitingCount={counts.awaiting} />
+          </>
+        ) : null}
+
         <div className="grid gap-4 p-4 sm:p-6 xl:grid-cols-2">
           {visibleProfiles.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/55 xl:col-span-2">
@@ -615,6 +656,13 @@ export default async function AdminPlayerPoolPage({
                   <span>Profile: {formatDate(profile.profileSubmittedAt)}</span>
                 </div>
 
+                {followups.get(profile.id) ? <PlayerPoolContactHistory
+                  events={followups.get(profile.id)!.events}
+                  replyAt={followups.get(profile.id)!.latestReplyAt}
+                  declinedAt={followups.get(profile.id)!.declinedAt}
+                  prospectId={profile.prospectId}
+                  block={followupBlock(followups.get(profile.id)!)}
+                /> : null}
                 <PlayerPoolSmsChaseHistory profile={profile} history={smsHistory.get(profile.id)!} />
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -634,7 +682,16 @@ export default async function AdminPlayerPoolPage({
                   ))}
                 </div>
 
-                <div className="mt-4 flex justify-end border-t border-white/10 pt-4">
+                <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-end sm:justify-between">
+                  <PlayerPoolNudgeButton
+                    profileId={profile.id}
+                    playerName={playerName}
+                    canNudge={profile.status === "INVITED" && !profile.profileSubmittedAt}
+                    initialNudgeCount={profile.nudgeCount}
+                    initialLastNudgeAt={profile.lastNudgeAt?.toISOString() ?? null}
+                    initialLastNudgeStatus={profile.lastNudgeStatus}
+                    initialLastNudgeBy={profile.lastNudgeBy}
+                  />
                   <DeletePlayerPoolProfileButton
                     profileId={profile.id}
                     playerName={playerName}

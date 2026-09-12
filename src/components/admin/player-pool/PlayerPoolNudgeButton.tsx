@@ -23,6 +23,7 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
+    timeZone: "Europe/London",
   }).format(date);
 }
 
@@ -125,7 +126,7 @@ export default function PlayerPoolNudgeButton({
             </span>
           </>
         ) : (
-          <span>No profile reminder email sent yet.</span>
+          <span>No profile reminder email recorded. Check contact history above for invitations and other messages.</span>
         )}
       </div>
 
