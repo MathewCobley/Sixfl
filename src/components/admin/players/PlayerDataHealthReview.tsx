@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RecruitmentMatch } from "@/lib/players/player-data-health-matches";
+import { REGISTRATION_PENDING_STATUSES } from "@/lib/managed-squad/registration-reminder-policy";
 import { confirmIdentityAction } from "@/app/(admin)/admin/players/data-health/actions";
 import HealthSubmitButton from "./HealthSubmitButton";
 
@@ -9,6 +10,9 @@ export default function PlayerDataHealthReview({ matches }: { matches: Recruitme
       <p className="mt-2 text-sm text-white/60">Green records are eligible for safe cleanup. Amber records require a person-by-person check. Multiple teams on one account are not duplicate accounts.</p></div>
     {!matches.length ? <p className="p-6 text-white/60">No matching records in this view.</p> : <div className="divide-y divide-white/10">{matches.map(match => {
       const r = match.record;
+      const canCloseOtherTeam = r.kind === "PROSPECT" && Boolean(r.teamId)
+        && REGISTRATION_PENDING_STATUSES.includes(r.status)
+        && match.candidates.some(c => !c.teams.some(t => t.id === r.teamId));
       return <article key={`${r.kind}:${r.id}`} id={`record-${r.id}`} className="space-y-4 p-5">
         <div className="flex flex-wrap justify-between gap-3">
           <div className="min-w-0 break-words"><h3 className="text-lg font-bold text-white">{r.name || "Unnamed enquiry"}</h3>
@@ -32,9 +36,16 @@ export default function PlayerDataHealthReview({ matches }: { matches: Recruitme
         {!match.safe ? <details className="rounded-xl border border-amber-400/20 p-4"><summary className="cursor-pointer text-sm font-bold text-amber-100">I have verified the person — reconcile this recruitment record</summary>
           <form action={confirmIdentityAction} className="mt-4 space-y-4 text-sm text-white/75">
             <input type="hidden" name="kind" value={r.kind}/><input type="hidden" name="recordId" value={r.id}/><input type="hidden" name="fingerprint" value={match.fingerprint}/>
-            <fieldset className="space-y-2"><legend className="mb-2 font-bold text-white">Choose the existing registered account</legend>{match.candidates.map(c => <label key={c.userId} className="flex gap-3 rounded-xl border border-white/10 p-3"><input type="radio" required name="userId" value={c.userId}/><span className="break-words">{c.name || "Unnamed account"} · {c.email || "No email"} · {c.teams.map(t => t.name).join(', ')}</span></label>)}</fieldset>
-            <p>This does not merge accounts, change emails, remove squad memberships or alter payments. It closes only the eligible recruitment overlap and retains the communication history. Existing declined/paused statuses and enquiries assigned to another team remain unchanged.</p>
-            <label className="block">How did you verify this is the same person?<textarea name="reason" minLength={10} maxLength={1000} required className="mt-2 block min-h-20 w-full rounded-xl border border-white/20 bg-black/25 p-3" /></label>
+            <fieldset className="space-y-2"><legend className="mb-2 font-bold text-white">Choose the existing registered account — keep all its squads</legend>{match.candidates.map(c => <label key={c.userId} className="flex gap-3 rounded-xl border border-white/10 p-3"><input type="radio" required name="userId" value={c.userId}/><span className="break-words">{c.name || "Unnamed account"} · {c.email || "No email"}<span className="mt-1 block text-emerald-200">Keep registered with: {c.teams.map(t => t.name).join(', ')}</span></span></label>)}</fieldset>
+            <p>This does not merge accounts, change emails, add or remove squad memberships, move a player between teams or alter payments. Communication history is retained. Existing declined/paused statuses stay unchanged.</p>
+            {canCloseOtherTeam ? <label className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.06] p-4">
+              <input type="checkbox" name="closeOtherTeamEnquiryId" value={r.teamId!} className="mt-1 shrink-0" />
+              <span><strong className="block text-amber-100">Close this other-team enquiry as a duplicate</strong>
+                <span className="mt-1 block">Close only the obsolete {r.teamName || "assigned team"} prospect and any pending introduction for that same enquiry. Keep every squad listed on the selected account above. Do not register this player with {r.teamName || "the enquiry team"}.</span>
+                <span className="mt-2 block text-xs text-white/60">Optional and unchecked by default. The old team assignment, contact details and messages stay in history, with an audit link to the chosen existing player. Leave unticked to keep this enquiry open.</span>
+              </span>
+            </label> : <p>Enquiries assigned to another team are kept open unless you explicitly choose to close that obsolete enquiry.</p>}
+            <label className="block">How did you verify this is the same person, and what should happen to this enquiry?<textarea name="reason" minLength={10} maxLength={1000} required className="mt-2 block min-h-20 w-full rounded-xl border border-white/20 bg-black/25 p-3" /></label>
             <label className="block">Type <strong>CONFIRM</strong> to continue<input name="confirmation" required pattern="CONFIRM" autoComplete="off" className="mt-2 block w-full max-w-sm rounded-xl border border-white/20 bg-black/25 p-3" /></label>
             <HealthSubmitButton>Confirm existing player and reconcile</HealthSubmitButton>
           </form>

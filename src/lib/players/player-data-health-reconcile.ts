@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { REGISTRATION_INVITE_SOURCE, REGISTRATION_SOURCE, REGISTRATION_LEGACY_CHASES, REGISTRATION_PENDING_STATUSES } from "@/lib/managed-squad/registration-reminder-policy";
 import { ensurePlayerDataHealthChangeTable, recordPlayerDataHealthChange } from "./player-data-health-audit";
 import { getPlayerRecruitmentMatches, hasLiveRecruitment, type RecruitmentMatch } from "./player-data-health-matches";
 
@@ -9,10 +10,16 @@ export function emptyHealthChanges() {
     playerPoolProfilesJoined: 0, requestsJoined: 0, requestsClosed: 0, leadsClosed: 0 };
 }
 
+type IdentityConfirmation = {
+  userId: string; actorUserId: string; reason: string;
+  // Opt-in to close only this exact obsolete team enquiry, never a membership.
+  closeOtherTeamEnquiryId?: string;
+};
+
 /** Recruitment-only reconciliation. User, TeamMember, performance and payments are never written. */
 export async function reconcileRecruitmentMatch(input: {
   match: RecruitmentMatch; runId: string; actorUserId?: string | null;
-  confirmation?: { userId: string; actorUserId: string; reason: string };
+  confirmation?: IdentityConfirmation;
 }) {
   await ensurePlayerDataHealthChangeTable();
   return prisma.$transaction(async (db) => {
@@ -36,14 +43,43 @@ export async function reconcileRecruitmentMatch(input: {
     }
     // A concurrent user/membership edit causes SERIALIZABLE rollback, not a stale match being applied.
     const current = fresh.record;
-    const reason = manual
+    const closeOtherTeamEnquiry = Boolean(manual?.closeOtherTeamEnquiryId);
+    if (closeOtherTeamEnquiry) {
+      if (current.kind !== "PROSPECT" || !current.teamId || manual!.closeOtherTeamEnquiryId !== current.teamId) {
+        throw new Error("The enquiry team has changed. Refresh and review the exact enquiry before closing it.");
+      }
+      if (candidate.teams.some(t => t.id === current.teamId)) {
+        throw new Error("This is a current squad, not an other-team enquiry. Untick the other-team closure option; squad memberships must stay unchanged.");
+      }
+      if (!REGISTRATION_PENDING_STATUSES.includes(current.status)) {
+        throw new Error("Only an open recruitment prospect can be closed here. Existing stopped or active-squad records are preserved.");
+      }
+    }
+    const baseReason = manual
       ? `Confirmed same person by admin ${manual.actorUserId}: ${manual.reason.trim()}. ${candidate.evidence.join('; ')}`
       : `${input.actorUserId ? `Safe cleanup requested by admin ${input.actorUserId}. ` : ""}${candidate.evidence.join('; ')}. Registered with ${candidate.teams.map(t => t.name).join(', ')}; recruitment fulfilled.`;
+    const reason = closeOtherTeamEnquiry
+      ? `${baseReason}. Explicitly closed obsolete enquiry for ${current.teamName || current.teamId} (${current.teamId}) as a duplicate of existing player ${candidate.userId}. Kept all squad registrations: ${candidate.teams.map(t => `${t.name} (${t.id})`).join(', ')}. No account merge or team move.`
+      : baseReason;
     const counts = emptyHealthChanges();
     const log = async (recordType: string, recordId: string, label: string, previous: string, next: string) => {
       await recordPlayerDataHealthChange({ runId: input.runId, userId: candidate.userId,
         playerName: candidate.name, email: candidate.email, teamNames: candidate.teams.map(t => t.name).join(', '),
         recordType, recordId, recordLabel: label, previousStatus: previous, newStatus: next, reason }, db);
+    };
+    const cancelQueued = async (sourceId: string, sources: string[], label: string) => {
+      // Do not touch processing, accepted or sent messages, or unrelated sources.
+      const queued = await db.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
+        SELECT id, status::text FROM "NotificationDispatch" WHERE "sourceId"=${sourceId}
+          AND "sourceType" IN (${Prisma.join(sources)})
+          AND status='QUEUED' AND "sentAt" IS NULL AND "providerMessageId" IS NULL FOR UPDATE
+      `);
+      for (const dispatch of queued) {
+        await db.notificationDispatch.update({ where: { id: dispatch.id }, data: {
+          status: "CANCELLED", cancelledAt: new Date(), failureReason: "Recruitment reconciled with an existing squad player; obsolete enquiry closed.",
+        } });
+        await log("NOTIFICATION", dispatch.id, label, dispatch.status, "CANCELLED");
+      }
     };
     if (current.kind === "LEAD") {
       await db.$executeRaw`UPDATE "InterestLead" SET status='CLOSED', "closedAt"=COALESCE("closedAt", NOW()), "updatedAt"=NOW()
@@ -52,40 +88,37 @@ export async function reconcileRecruitmentMatch(input: {
       counts.leadsClosed++;
     } else {
       const sameTeam = candidate.teams.some(t => t.id === current.teamId);
-      // A deliberate different-team enquiry is never deactivated by this workflow.
-      if ((sameTeam || !current.teamId) && !["DECLINED", "NOT_LOOKING", "NOT_INTERESTED", "CLOSED"].includes(current.status)) {
+      // Different-team enquiries stay open by default, including bulk/monthly cleanup.
+      if ((sameTeam || !current.teamId || closeOtherTeamEnquiry) && !["DECLINED", "NOT_LOOKING", "NOT_INTERESTED", "CLOSED"].includes(current.status)) {
         const next = sameTeam ? "ACTIVE_SQUAD" : "DUPLICATE";
         if (current.status !== next) {
+          // Retain the historical team assignment and contact details; no TeamMember write.
           await db.$executeRaw`UPDATE "TeamPlayerProspect" SET status=${next},
             notes=CONCAT_WS(E'\n', NULLIF(notes,''), ${'Player data health: ' + reason}), "updatedAt"=NOW() WHERE id=${current.id}`;
           await log("PROSPECT", current.id, current.teamName ? `Prospect · ${current.teamName}` : "Unassigned prospect", current.status, next);
           if (sameTeam) counts.prospectsActivated++; else counts.prospectsClosedAsDuplicate++;
         }
       }
+      if (closeOtherTeamEnquiry) {
+        await cancelQueued(current.id, ["TEAM_PLAYER_PROSPECT", REGISTRATION_INVITE_SOURCE, REGISTRATION_SOURCE, ...REGISTRATION_LEGACY_CHASES], "Unsent recruitment message for closed enquiry");
+      }
       if (current.profileId && current.profileStatus && !["JOINED", "PAUSED", "NOT_LOOKING", "DECLINED", "CLOSED"].includes(current.profileStatus)) {
         await db.$executeRaw`UPDATE "PlayerPoolProfile" SET status='JOINED', "updatedAt"=NOW() WHERE id=${current.profileId}`;
         await log("PLAYER_POOL", current.profileId, `PlayerPool ${current.publicCode}`, current.profileStatus, "JOINED");
         counts.playerPoolProfilesJoined++;
-        // Preserve sent/provider-accepted evidence and unrelated squad/payment messages.
-        const cancelled = await db.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
-          SELECT id, status::text FROM "NotificationDispatch" WHERE "sourceId"=${current.profileId}
-          AND "sourceType" IN ('PLAYER_POOL_PROFILE_INVITE','PLAYER_POOL_PROFILE_NUDGE','PLAYER_POOL_PROFILE_SMS_NUDGE_1','PLAYER_POOL_PROFILE_SMS_NUDGE_FINAL')
-          AND status='QUEUED' AND "sentAt" IS NULL AND "providerMessageId" IS NULL FOR UPDATE
-        `);
-        for (const d of cancelled) {
-          await db.notificationDispatch.update({ where: { id: d.id }, data: { status: "CANCELLED", cancelledAt: new Date(), failureReason: "Recruitment fulfilled — already registered with a squad." } });
-          await log("NOTIFICATION", d.id, "Unsent PlayerPool chase", d.status, "CANCELLED");
-        }
+        await cancelQueued(current.profileId, ['PLAYER_POOL_PROFILE_INVITE','PLAYER_POOL_PROFILE_NUDGE','PLAYER_POOL_PROFILE_SMS_NUDGE_1','PLAYER_POOL_PROFILE_SMS_NUDGE_FINAL'], "Unsent PlayerPool chase");
       }
       if (current.profileId) {
-        const requests = await db.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
-          SELECT id, status FROM "PlayerPoolIntroductionRequest" WHERE "profileId"=${current.profileId}
-          AND "teamId" IN (${Prisma.join(candidate.teams.map(t => t.id))}) AND status IN ('REQUESTED','INTRODUCED') FOR UPDATE
+        const requests = await db.$queryRaw<Array<{ id: string; status: string; teamId: string }>>(Prisma.sql`
+          SELECT id, status, "teamId" FROM "PlayerPoolIntroductionRequest" WHERE "profileId"=${current.profileId}
+          AND "teamId" IN (${Prisma.join([...candidate.teams.map(t => t.id), ...(closeOtherTeamEnquiry ? [current.teamId!] : [])])})
+          AND status IN ('REQUESTED','INTRODUCED') FOR UPDATE
         `);
         for (const request of requests) {
-          await db.$executeRaw`UPDATE "PlayerPoolIntroductionRequest" SET status='JOINED', "resolvedAt"=COALESCE("resolvedAt",NOW()), "updatedAt"=NOW() WHERE id=${request.id}`;
-          await log("PLAYER_POOL_REQUEST", request.id, "Introduction to registered team", request.status, "JOINED");
-          counts.requestsJoined++;
+          const next = closeOtherTeamEnquiry && request.teamId === current.teamId ? "CLOSED" : "JOINED";
+          await db.$executeRaw`UPDATE "PlayerPoolIntroductionRequest" SET status=${next}, "resolvedAt"=COALESCE("resolvedAt",NOW()), "updatedAt"=NOW() WHERE id=${request.id}`;
+          await log("PLAYER_POOL_REQUEST", request.id, next === "CLOSED" ? `Obsolete introduction · ${current.teamName || current.teamId}` : "Introduction to registered team", request.status, next);
+          if (next === "CLOSED") counts.requestsClosed++; else counts.requestsJoined++;
         }
       }
     }
@@ -96,6 +129,7 @@ export async function reconcileRecruitmentMatch(input: {
 
 export async function confirmRecruitmentIdentity(input: {
   kind: string; recordId: string; fingerprint: string; userId: string; actorUserId: string; reason: string;
+  closeOtherTeamEnquiryId?: string;
 }) {
   const actor = await prisma.user.findUnique({ where: { id: input.actorUserId }, select: { role: true } });
   if (actor?.role !== "ADMIN") throw new Error("Administrator access is required to confirm an identity match.");
@@ -108,13 +142,15 @@ export async function confirmRecruitmentIdentity(input: {
   const runId = randomUUID();
   await prisma.$executeRaw`INSERT INTO "PlayerDataHealthRun" (id,"runKey",source,status,"startedAt") VALUES (${runId},${'review:' + runId},'MANUAL_REVIEW','STARTED',NOW())`;
   try {
-    const result = await reconcileRecruitmentMatch({ match, runId,
-      confirmation: { userId: input.userId, actorUserId: input.actorUserId, reason: input.reason } });
+    const result = await reconcileRecruitmentMatch({ match, runId, confirmation: {
+      userId: input.userId, actorUserId: input.actorUserId, reason: input.reason,
+      closeOtherTeamEnquiryId: input.closeOtherTeamEnquiryId,
+    } });
     await prisma.$executeRaw`UPDATE "PlayerDataHealthRun" SET status='COMPLETED', "completedAt"=NOW(),
       "affectedUsers"=${result.changed ? 1 : 0}, "scannedUsers"=1, "prospectsActivated"=${result.prospectsActivated},
       "prospectsClosedAsDuplicate"=${result.prospectsClosedAsDuplicate}, "playerPoolProfilesJoined"=${result.playerPoolProfilesJoined},
-      "requestsJoined"=${result.requestsJoined}, "leadsClosed"=${result.leadsClosed} WHERE id=${runId}`;
-    return result;
+      "requestsJoined"=${result.requestsJoined}, "requestsClosed"=${result.requestsClosed}, "leadsClosed"=${result.leadsClosed} WHERE id=${runId}`;
+    return { ...result, enquiryTeamId: match.record.teamId };
   } catch (error) {
     await prisma.$executeRaw`UPDATE "PlayerDataHealthRun" SET status='FAILED', "completedAt"=NOW(), error=${error instanceof Error ? error.message : 'Review failed'} WHERE id=${runId}`;
     throw error;

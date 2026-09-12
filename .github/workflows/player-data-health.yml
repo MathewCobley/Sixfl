@@ -21,7 +21,7 @@ jobs:
           POSTGRES_DB: sixfl_data_health_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd "pg_isready -U postgres -d sixfl_data_health_test" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_data_health_test
@@ -40,6 +40,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Check native other-team consent controls
+        run: node --test tests/player-data-health/other-team-render.test.cjs
       - name: Protect owning native source
         run: |
           sha256sum src/lib/players/player-data-health*.ts src/lib/player-pool/contact-history.ts 'src/app/(admin)/admin/players/data-health/'*.tsx 'src/app/(admin)/admin/players/data-health/'*.ts src/components/admin/players/*.tsx > /tmp/data-health-source.sha
@@ -47,11 +49,16 @@ jobs:
           sha256sum --check /tmp/data-health-source.sha
           node scripts/check-critical-feature-contracts.mjs
           node scripts/check-player-pool-profile-reminders.mjs
+          node --test tests/player-data-health/other-team-render.test.cjs
       - run: npx prisma generate && npx tsc --noEmit
       - name: Real isolated identity and cleanup tests
         run: |
           npx prisma db push --skip-generate
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/database.ts"],outfile:".data-health-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .data-health-test.cjs
+      - name: Other-team closure keeps current squad memberships and history
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/other-team.ts"],outfile:".data-health-other-team-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .data-health-other-team-test.cjs
       - name: Production build
         run: npx next build
