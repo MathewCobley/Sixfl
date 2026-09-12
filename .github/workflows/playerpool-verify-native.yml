@@ -16,7 +16,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: sixfl_pool_response_test
         ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_pool_response_test
       NEXTAUTH_SECRET: isolated-playerpool-response-only
@@ -32,6 +32,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Load exact reviewed patch into disposable developer checkout
+        id: native
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -47,15 +48,18 @@ jobs:
           assert hashlib.sha256(patch).hexdigest()=='1135e069bb5285700c8d699d3a2c3bdbaab73430361cc08e1d77798c078226a7'
           Path('/tmp/native-playerpool.patch').write_bytes(patch)
           subprocess.run(['git','apply','--index','/tmp/native-playerpool.patch'],check=True)
-          # PostgreSQL advisory lock returns void; cast the unused result so
-          # Prisma's query deserialiser receives a supported scalar type.
           p=Path('src/lib/player-pool/response-chase.ts');s=p.read_text()
           s=s.replace("SELECT pg_advisory_xact_lock(hashtext('playerpool-response:' || ${email}))`", "SELECT pg_advisory_xact_lock(hashtext('playerpool-response:' || ${email}))::text`")
           p.write_text(s)
-          subprocess.run(['git','add',str(p)],check=True)
+          # This obsolete preparation step cannot recognise the newer native
+          # edit/comms buttons. Remove it, retaining the actual owning page.
+          p=Path('package.json');s=p.read_text();assert 'node scripts/apply-player-pool-comms-link.cjs && ' in s
+          p.write_text(s.replace('node scripts/apply-player-pool-comms-link.cjs && ',''))
+          Path('scripts/apply-player-pool-comms-link.cjs').unlink()
+          subprocess.run(['git','add','-u'],check=True)
           subprocess.run(['git','diff','--cached','--check'],check=True)
           names=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
-          assert len(names)==19
+          assert len(names)==21
           assert not any('playerpool-verify-native' in x for x in names)
           entries=[]
           for name in names:
@@ -75,6 +79,7 @@ jobs:
         run: |
           node scripts/check-player-pool-profile-reminders.mjs
           test ! -f scripts/apply-player-pool-nudge-history.cjs
+          test ! -f scripts/apply-player-pool-comms-link.cjs
           npm run prebuild
           node scripts/check-critical-feature-contracts.mjs
           npx prisma generate
@@ -85,7 +90,8 @@ jobs:
           node -e 'require("esbuild").buildSync({entryPoints:["tests/playerpool-response-chase.test.ts"],outfile:".playerpool-response-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .playerpool-response-tests.cjs
       - run: npx next build
-      - name: Export native source objects without updating any branch
+      - name: Export reviewable native objects without updating any branch
+        if: always() && steps.native.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -103,12 +109,12 @@ jobs:
                   reply=subprocess.check_output(['gh','api','--method','POST','repos/MathewCobley/Sixfl/git/blobs','--input','-'],input=json.dumps({'content':content,'encoding':'utf-8'}).encode())
                   entry['sha']=json.loads(reply)['sha'];assert entry['sha']==expected
           Path('/tmp/playerpool-native-objects.json').write_text(json.dumps(data,indent=2))
-          print('Validated native source blobs exported; no branch or production data changed.')
+          print('Native source objects exported for PR review. Test results above remain authoritative. No branch or production data changed.')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: validated-playerpool-native-source
+          name: playerpool-native-source-review
           path: |
             /tmp/playerpool-native-source.json
             /tmp/playerpool-native-objects.json
