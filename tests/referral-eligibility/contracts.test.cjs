@@ -14,7 +14,7 @@ test('email producers and the database send-claim gate check eligibility; privat
  assert.match(notifications,/referralRewardEmailBlock/);
  const migration=fs.readFileSync('prisma/migrations/20260912193000_referral_ineligibility/migration.sql','utf8');
  assert.match(migration,/NEW.status IN \('QUEUED','PROCESSING'\)/);assert.match(migration,/FOR UPDATE/);
- const processor=fs.readFileSync('src/lib/notifications/processor.ts','utf8');assert.ok(processor.indexOf('markNotificationDispatchProcessing(dispatch.id)')<processor.indexOf('sendEmailWithResend({')); 
+ const processor=fs.readFileSync('src/lib/notifications/processor.ts','utf8');assert.ok(processor.indexOf('markNotificationDispatchProcessing(dispatch.id)')<processor.indexOf('sendEmailWithResend({'));
  const read=fs.readFileSync('src/lib/team-referrals.ts','utf8');assert.doesNotMatch(read,/ineligibleNote|ineligibleByName/);
  for(const file of ['src/app/player/referrals/page.tsx','src/app/player/referrals/payout/[id]/page.tsx'])assert.doesNotMatch(fs.readFileSync(file,'utf8'),/ineligibleNote|ineligibleByName/);
 });
