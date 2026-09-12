@@ -13,6 +13,11 @@ try {
   assert.equal(await page.locator('select').count(), 0);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile page must not overflow horizontally');
   assert.equal(await page.locator('article').count(), 6);
+  const requests = page.getByRole('region', { name: 'Veo Priority requests', exact: true });
+  await requests.getByText('1 pending', { exact: true }).waitFor();
+  await requests.getByRole('button', { name: 'Approve Priority request', exact: true }).click();
+  await requests.getByRole('alert').filter({ hasText: 'Sign in as an administrator' }).waitFor();
+  await requests.getByText('1 pending', { exact: true }).waitFor();
   await page.screenshot({ path: 'artifacts/veo/admin-mobile.png', fullPage: true });
   const completed = page.locator('article').filter({ hasText: 'Veo test team 3 vs Veo test team 4' });
   await completed.locator('summary').click();
@@ -24,5 +29,13 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: 'artifacts/veo/admin-desktop.png', fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('PASS: mobile layout, OFF state, saved fee rows and completed-fixture video edits.');
+  const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => link.href));
+  const promo = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await promo.setContent(`<!doctype html><html><head>${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body style="background:#080808"><main class="mx-auto max-w-5xl p-4">${readFileSync('artifacts/veo/captain-promo.html', 'utf8')}</main></body></html>`, { waitUntil: 'networkidle' });
+  await promo.getByRole('button', { name: 'Request Veo Priority', exact: true }).waitFor();
+  assert.ok(await promo.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Captain promo must fit mobile');
+  await promo.screenshot({ path: 'artifacts/veo/captain-promo-mobile.png', fullPage: true });
+  await promo.setViewportSize({ width: 1440, height: 1000 });
+  await promo.screenshot({ path: 'artifacts/veo/captain-promo-desktop.png', fullPage: true });
+  console.log('PASS: request queue, anonymous review refusal, mobile promo, OFF state, saved fee rows and completed-fixture video edits.');
 } finally { await browser.close(); }

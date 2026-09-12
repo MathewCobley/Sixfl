@@ -7,12 +7,14 @@ import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
 import { readVeoSettings, readVeoTeams, VeoAllocationError, validVeoDate } from '@/lib/veo/service';
+import { approvePendingVeoRequests } from '@/lib/veo/priority-requests';
 
 function back(leagueId: string, form: FormData, error?: string) {
   const query = new URLSearchParams(error ? { error } : { saved: '1' });
   const date = String(form.get('date') ?? '');
   if (validVeoDate(date)) query.set('date', date);
-  revalidatePath(`/admin/leagues/${leagueId}/veo-priority`);
+  revalidatePath(`/admin/leagues/${leagueId}`, 'layout');
+  revalidatePath('/captain/team/[teamid]', 'page');
   redirect(`/admin/leagues/${leagueId}/veo-priority?${query}`);
 }
 function message(error: unknown) {
@@ -76,6 +78,7 @@ export async function setVeoTeamPriority(leagueId: string, form: FormData) {
         VALUES (${leagueId}, ${teamId}, ${enabled}, ${user?.id ?? null})
         ON CONFLICT ("leagueId", "teamId") DO UPDATE SET enabled = EXCLUDED.enabled, "updatedAt" = NOW(), "updatedBy" = EXCLUDED."updatedBy"
       `;
+      if (enabled && user?.id) await approvePendingVeoRequests(tx, leagueId, teamId, user.id);
       const details = JSON.stringify({ kind: 'team_priority', before: team.priority, enabled, captainAgreementConfirmed: enabled, supplementPence: 500 });
       await tx.$executeRaw`INSERT INTO "VeoSettingsAudit" (id, "leagueId", "teamId", "actorId", details) VALUES (${randomUUID()}, ${leagueId}, ${teamId}, ${user?.id ?? null}, ${details}::jsonb)`;
     });
