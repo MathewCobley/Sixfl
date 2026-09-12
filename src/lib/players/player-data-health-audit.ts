@@ -27,7 +27,7 @@ type RunWindow = {
   completedAt: Date | null;
 };
 
-async function ensurePlayerDataHealthChangeTable() {
+export async function ensurePlayerDataHealthChangeTable() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "PlayerDataHealthChange" (
       "id" TEXT NOT NULL,
@@ -69,9 +69,9 @@ export async function recordPlayerDataHealthChange(input: {
   previousStatus?: string | null;
   newStatus?: string | null;
   reason?: string | null;
-}) {
-  await ensurePlayerDataHealthChangeTable();
-  await prisma.$executeRaw(Prisma.sql`
+}, db?: Pick<typeof prisma, "$executeRaw">) {
+  if (!db) await ensurePlayerDataHealthChangeTable();
+  await (db ?? prisma).$executeRaw(Prisma.sql`
     INSERT INTO "PlayerDataHealthChange" (
       "id", "runId", "userId", "playerName", "email", "teamNames",
       "recordType", "recordId", "recordLabel", "previousStatus", "newStatus",

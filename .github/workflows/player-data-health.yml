@@ -1,0 +1,57 @@
+name: Player data health identity review
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: data-health-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  data-health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_data_health_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_data_health_test
+      SIXFL_DATA_HEALTH_TEST: '1'
+      NEXTAUTH_SECRET: data-health-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_test_unused
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Protect owning native source
+        run: |
+          sha256sum src/lib/players/player-data-health*.ts src/lib/player-pool/contact-history.ts 'src/app/(admin)/admin/players/data-health/'*.tsx 'src/app/(admin)/admin/players/data-health/'*.ts src/components/admin/players/*.tsx > /tmp/data-health-source.sha
+          npm run prebuild
+          sha256sum --check /tmp/data-health-source.sha
+          node scripts/check-critical-feature-contracts.mjs
+          node scripts/check-player-pool-profile-reminders.mjs
+      - run: npx prisma generate && npx tsc --noEmit
+      - name: Real isolated identity and cleanup tests
+        run: |
+          npx prisma db push --skip-generate
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/database.ts"],outfile:".data-health-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .data-health-test.cjs
+      - name: Production build
+        run: npx next build

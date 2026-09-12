@@ -1,3 +1,4 @@
+import { getPlayerPoolSquadMatches } from "@/lib/players/player-data-health-matches";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -12,6 +13,7 @@ export type PlayerPoolContactHistory = {
   emailBlocked: boolean; smsBlocked: boolean; hasMembership: boolean;
   latestReplyAt: Date | null; latestContactAt: Date | null; pending: boolean;
   events: PlayerPoolContactEvent[];
+  squadMatch?: { definite: boolean; teamNames: string; reason: string };
 };
 type Db = Pick<typeof prisma, "$queryRaw">;
 
@@ -27,7 +29,8 @@ export async function getPlayerPoolContactHistory(ids: string[], db: Db = prisma
       COALESCE(contacts."emailBlocked", false) AS "emailBlocked",
       COALESCE(contacts."smsBlocked", false) AS "smsBlocked",
       EXISTS (SELECT 1 FROM "TeamMember" member JOIN "User" u ON u.id = member."userId"
-        WHERE NULLIF(LOWER(TRIM(prospect.email)), '') IS NOT NULL
+        WHERE COALESCE(to_jsonb(member)->>'squadStatus', 'ACTIVE') IN ('ACTIVE', 'INJURED')
+          AND NULLIF(LOWER(TRIM(prospect.email)), '') IS NOT NULL
           AND LOWER(TRIM(u.email)) = LOWER(TRIM(prospect.email))) AS "hasMembership",
       history."latestReplyAt", history."latestContactAt", COALESCE(history.pending, false) AS pending,
       COALESCE(history.events, '[]'::jsonb) AS events
@@ -98,13 +101,15 @@ export async function getPlayerPoolContactHistory(ids: string[], db: Db = prisma
     ) history ON true
     WHERE p.id IN (${Prisma.join(unique)})
   `);
-  return new Map(rows.map((row) => [row.id, row]));
+  const squadMatches = await getPlayerPoolSquadMatches(unique, db);
+  return new Map(rows.map((row) => [row.id, { ...row, squadMatch: squadMatches.get(row.id) }]));
 }
 
 export function playerPoolContactBlock(history: PlayerPoolContactHistory, channel: "EMAIL" | "SMS") {
   if (history.status !== "INVITED" || history.profileSubmittedAt) return "No longer awaiting a profile.";
   if (["DECLINED", "DUPLICATE", "JOINED", "NOT_LOOKING", "NOT_INTERESTED"].includes(history.prospectStatus)) return "Prospect is no longer awaiting a team; review its status.";
   if (history.latestReplyAt) return "Reply received — review Player comms before sending another chase.";
+  if (history.squadMatch) return `${history.squadMatch.definite ? "Already registered" : "Possible existing player"} — ${history.squadMatch.teamNames}. Review Player data health before chasing.`;
   if (history.hasMembership) return "This contact is already linked to a squad — review before chasing.";
   if (channel === "EMAIL" ? history.emailBlocked : history.smsBlocked) return "Contact opted out or delivery disabled — no chase sent.";
   return null;

@@ -18,7 +18,9 @@ const migration = "prisma/migrations/20260906143000_player_pool_sms_chase_templa
 const now = new Date("2026-09-06T12:00:00Z");
 const ago = (hours: number) => new Date(now.getTime() - hours * 3600000);
 const applyMigration = () => execFileSync("psql", [process.env.DATABASE_URL!, "-v", "ON_ERROR_STOP=1", "-f", migration], { stdio: "pipe" });
-before(async () => { await ensurePlayerPoolTables(); applyMigration(); });
+before(async () => {
+  execFileSync("psql", [process.env.DATABASE_URL!, "-v", "ON_ERROR_STOP=1", "-f", "prisma/migrations/20260424162000_add_team_member_profile/migration.sql"], { stdio: "pipe" });
+  await ensurePlayerPoolTables(); applyMigration(); });
 after(async () => { await prisma.$disconnect(); });
 
 let testPhoneSequence = 100;
