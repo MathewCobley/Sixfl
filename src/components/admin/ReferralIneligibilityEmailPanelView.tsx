@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import type { getReferralIneligibilityEmailPanel } from "@/lib/referral-ineligibility-email";
 
@@ -22,8 +21,8 @@ export default function ReferralIneligibilityEmailPanelView({ referralId, panel,
     {panel.record ? <div className="space-y-2">
       <p className="font-bold">Status: {labels[panel.record.status] || panel.record.status}</p>
       {panel.record.failureReason ? <p>{panel.record.failureReason}</p> : null}
-      <Link className="font-semibold text-emerald-800 underline" href={`/admin/queue/${panel.record.id}`}>View message status</Link>
-      {["FAILED", "SKIPPED", "CANCELLED"].includes(panel.record.status) ? <p>Review this message in the queue before retrying. Another notice will not be created.</p> : null}
+      <a className="font-semibold text-emerald-800 underline" href={`/admin/queue/${panel.record.id}`}>View message status</a>
+      {["FAILED", "SKIPPED", "CANCELLED"].includes(panel.record.status) ? <p>This update has not been sent. Open the message record to review the problem; duplicate notices are blocked.</p> : null}
     </div> : <p className="font-semibold text-amber-800">No eligibility update email has been queued.</p>}
     {panel.body ? <details className="rounded-lg border border-slate-200 p-3">
       <summary className="cursor-pointer font-semibold">{panel.record ? "View recorded email" : "Preview email"}</summary>
