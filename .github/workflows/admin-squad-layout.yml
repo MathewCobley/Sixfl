@@ -1,0 +1,52 @@
+name: Admin squad console layout
+on:
+  pull_request:
+    paths:
+      - 'src/app/(admin)/admin/layout.tsx'
+      - 'src/app/(admin)/admin/teams/**'
+      - 'src/components/admin/teams/ManagedSquadInjuryBridge.tsx'
+      - 'src/app/api/admin/managed-squad-status/**'
+      - 'tests/admin-squad-layout/**'
+      - '.github/workflows/admin-squad-layout.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
+      NEXTAUTH_SECRET: isolated-squad-layout-tests-only
+      NEXTAUTH_URL: http://127.0.0.1:3217
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Native console and inactive-player regressions
+        run: node --test tests/admin-squad-layout/contract.test.cjs
+      - run: npm run prebuild
+      - name: Prepared console and inactive-player regressions
+        run: node --test tests/admin-squad-layout/contract.test.cjs
+      - name: Shared source inventory
+        run: |
+          mkdir -p artifacts/admin-squad-layout
+          git grep -n -E 'ManagedSquadInjuryBridge|managed-squad-status|Squad console' -- src > artifacts/admin-squad-layout/source-inventory.txt || true
+          cp 'src/app/(admin)/admin/teams/[id]/squad/page.tsx' artifacts/admin-squad-layout/console-page.tsx
+          git diff --stat > artifacts/admin-squad-layout/preparation.txt
+      - name: Build production application
+        run: npm run build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0 esbuild
+          npx playwright install --with-deps chromium
+      - name: Actual console shell and injury controls at mobile and desktop widths
+        run: node tests/admin-squad-layout/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-squad-layout-${{ github.sha }}
+          path: artifacts/admin-squad-layout
