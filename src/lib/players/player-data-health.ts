@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 
 import { Prisma } from "@prisma/client";
 
-import { ensurePlayerPoolTables } from "@/lib/player-pool/storage";
+import { getPlayerRecruitmentMatches } from "./player-data-health-matches";
 import { prisma } from "@/lib/prisma";
 
 export type PlayerDataHealthIssue = {
@@ -51,29 +50,11 @@ export type PlayerDataHealthRun = {
   error: string | null;
 };
 
-type ProspectRow = {
-  id: string;
-  teamId: string | null;
-  status: string;
-};
-
-type RequestRow = {
-  id: string;
-  teamId: string;
-  status: string;
-};
-
-type CountRow = { count: number | bigint };
-
 function asNumber(value: number | bigint | null | undefined) {
   return typeof value === "bigint" ? Number(value) : Number(value ?? 0);
 }
 
-function normaliseEmail(value: string | null | undefined) {
-  return value?.trim().toLowerCase() || "";
-}
-
-async function ensurePlayerDataHealthRunTable() {
+export async function ensurePlayerDataHealthRunTable() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "PlayerDataHealthRun" (
       "id" TEXT NOT NULL,
@@ -104,377 +85,27 @@ async function ensurePlayerDataHealthRunTable() {
   `);
 }
 
+// Kept as a compatibility summary; the detailed UI and cleanup use the same matcher.
 export async function getPlayerDataHealthIssues(): Promise<PlayerDataHealthIssue[]> {
-  await ensurePlayerPoolTables();
-
-  const rows = await prisma.$queryRaw<
-    Array<
-      Omit<
-        PlayerDataHealthIssue,
-        "prospectCount" | "playerPoolCount" | "requestCount" | "leadCount"
-      > & {
-        prospectCount: number | bigint;
-        playerPoolCount: number | bigint;
-        requestCount: number | bigint;
-        leadCount: number | bigint;
-      }
-    >
-  >(Prisma.sql`
-    WITH active_people AS (
-      SELECT
-        u."id" AS "userId",
-        u."name",
-        u."email",
-        LOWER(TRIM(u."email")) AS "emailNormalized",
-        ARRAY_AGG(DISTINCT member."teamId") AS "teamIds",
-        STRING_AGG(DISTINCT team."name", ', ' ORDER BY team."name") AS "teamNames"
-      FROM "User" u
-      JOIN "TeamMember" member ON member."userId" = u."id"
-      JOIN "Team" team ON team."id" = member."teamId"
-      WHERE u."email" IS NOT NULL
-        AND TRIM(u."email") <> ''
-      GROUP BY u."id", u."name", u."email"
-    )
-    SELECT
-      person."userId",
-      person."name",
-      person."email",
-      person."emailNormalized",
-      person."teamIds",
-      person."teamNames",
-      (
-        SELECT COUNT(*)::int
-        FROM "TeamPlayerProspect" prospect
-        WHERE prospect."email" IS NOT NULL
-          AND LOWER(TRIM(prospect."email")) = person."emailNormalized"
-          AND (
-            prospect."status" NOT IN ('DECLINED', 'DUPLICATE', 'ACTIVE_SQUAD')
-            OR (
-              prospect."status" = 'ACTIVE_SQUAD'
-              AND (
-                prospect."teamId" IS NULL
-                OR NOT (prospect."teamId" = ANY(person."teamIds"))
-              )
-            )
-          )
-      ) AS "prospectCount",
-      (
-        SELECT COUNT(*)::int
-        FROM "PlayerPoolProfile" profile
-        WHERE LOWER(TRIM(profile."emailNormalized")) = person."emailNormalized"
-          AND profile."status" <> 'JOINED'
-      ) AS "playerPoolCount",
-      (
-        SELECT COUNT(*)::int
-        FROM "PlayerPoolIntroductionRequest" request
-        JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
-        WHERE LOWER(TRIM(profile."emailNormalized")) = person."emailNormalized"
-          AND request."status" IN ('REQUESTED', 'INTRODUCED')
-      ) AS "requestCount",
-      (
-        SELECT COUNT(*)::int
-        FROM "InterestLead" lead
-        WHERE lead."interestType" = 'PLAYER'::"InterestType"
-          AND lead."email" IS NOT NULL
-          AND LOWER(TRIM(lead."email")) = person."emailNormalized"
-          AND lead."status" <> 'CLOSED'::"LeadStatus"
-      ) AS "leadCount"
-    FROM active_people person
-    WHERE
-      EXISTS (
-        SELECT 1
-        FROM "TeamPlayerProspect" prospect
-        WHERE prospect."email" IS NOT NULL
-          AND LOWER(TRIM(prospect."email")) = person."emailNormalized"
-          AND (
-            prospect."status" NOT IN ('DECLINED', 'DUPLICATE', 'ACTIVE_SQUAD')
-            OR (
-              prospect."status" = 'ACTIVE_SQUAD'
-              AND (
-                prospect."teamId" IS NULL
-                OR NOT (prospect."teamId" = ANY(person."teamIds"))
-              )
-            )
-          )
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM "PlayerPoolProfile" profile
-        WHERE LOWER(TRIM(profile."emailNormalized")) = person."emailNormalized"
-          AND profile."status" <> 'JOINED'
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM "PlayerPoolIntroductionRequest" request
-        JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
-        WHERE LOWER(TRIM(profile."emailNormalized")) = person."emailNormalized"
-          AND request."status" IN ('REQUESTED', 'INTRODUCED')
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM "InterestLead" lead
-        WHERE lead."interestType" = 'PLAYER'::"InterestType"
-          AND lead."email" IS NOT NULL
-          AND LOWER(TRIM(lead."email")) = person."emailNormalized"
-          AND lead."status" <> 'CLOSED'::"LeadStatus"
-      )
-    ORDER BY person."teamNames" ASC, person."name" ASC NULLS LAST, person."email" ASC
-  `);
-
-  return rows.map((row) => ({
-    ...row,
-    teamIds: Array.isArray(row.teamIds) ? row.teamIds : [],
-    prospectCount: asNumber(row.prospectCount),
-    playerPoolCount: asNumber(row.playerPoolCount),
-    requestCount: asNumber(row.requestCount),
-    leadCount: asNumber(row.leadCount),
-  }));
+  const matches = await getPlayerRecruitmentMatches();
+  const issues = new Map<string, PlayerDataHealthIssue>();
+  for (const match of matches) for (const candidate of match.candidates) {
+    const issue = issues.get(candidate.userId) || { userId: candidate.userId, name: candidate.name,
+      email: candidate.email || "", emailNormalized: candidate.email?.trim().toLowerCase() || "",
+      teamIds: candidate.teams.map(t => t.id), teamNames: candidate.teams.map(t => t.name).join(", "),
+      prospectCount: 0, playerPoolCount: 0, requestCount: 0, leadCount: 0 };
+    if (match.record.kind === "LEAD") issue.leadCount++; else issue.prospectCount++;
+    if (match.record.profileId) issue.playerPoolCount++;
+    issue.requestCount += match.record.openRequestTeamIds?.length || 0;
+    issues.set(candidate.userId, issue);
+  }
+  return [...issues.values()];
 }
 
-async function reconcileActivePlayer(issue: PlayerDataHealthIssue) {
-  const email = normaliseEmail(issue.email);
-  if (!email || issue.teamIds.length === 0) {
-    return {
-      changed: false,
-      prospectsActivated: 0,
-      prospectsClosedAsDuplicate: 0,
-      playerPoolProfilesJoined: 0,
-      requestsJoined: 0,
-      requestsClosed: 0,
-      leadsClosed: 0,
-    };
-  }
-
-  const prospects = await prisma.$queryRaw<ProspectRow[]>(Prisma.sql`
-    SELECT "id", "teamId", "status"::text AS "status"
-    FROM "TeamPlayerProspect"
-    WHERE "email" IS NOT NULL
-      AND LOWER(TRIM("email")) = ${email}
-  `);
-
-  let prospectsActivated = 0;
-  let prospectsClosedAsDuplicate = 0;
-  const teamIds = new Set(issue.teamIds);
-
-  for (const prospect of prospects) {
-    if (prospect.teamId && teamIds.has(prospect.teamId)) {
-      if (prospect.status !== "ACTIVE_SQUAD") {
-        await prisma.$executeRaw(Prisma.sql`
-          UPDATE "TeamPlayerProspect"
-          SET
-            "status" = 'ACTIVE_SQUAD',
-            "notes" = CASE
-              WHEN COALESCE(TRIM("notes"), '') = ''
-                THEN 'Player data health: linked email is already an active SIXFL squad member.'
-              WHEN "notes" NOT ILIKE '%Player data health:%'
-                THEN "notes" || E'\nPlayer data health: linked email is already an active SIXFL squad member.'
-              ELSE "notes"
-            END,
-            "updatedAt" = NOW()
-          WHERE "id" = ${prospect.id}
-        `);
-        prospectsActivated += 1;
-      }
-      continue;
-    }
-
-    if (prospect.status !== "DECLINED" && prospect.status !== "DUPLICATE") {
-      await prisma.$executeRaw(Prisma.sql`
-        UPDATE "TeamPlayerProspect"
-        SET
-          "status" = 'DUPLICATE',
-          "notes" = CASE
-            WHEN COALESCE(TRIM("notes"), '') = ''
-              THEN 'Player data health: closed because this email already belongs to an active SIXFL squad account.'
-            WHEN "notes" NOT ILIKE '%Player data health:%'
-              THEN "notes" || E'\nPlayer data health: closed because this email already belongs to an active SIXFL squad account.'
-            ELSE "notes"
-          END,
-          "updatedAt" = NOW()
-        WHERE "id" = ${prospect.id}
-      `);
-      prospectsClosedAsDuplicate += 1;
-    }
-  }
-
-  const playerPoolProfilesJoined = await prisma.$executeRaw(Prisma.sql`
-    UPDATE "PlayerPoolProfile"
-    SET "status" = 'JOINED', "updatedAt" = NOW()
-    WHERE LOWER(TRIM("emailNormalized")) = ${email}
-      AND "status" <> 'JOINED'
-  `);
-
-  const requestRows = await prisma.$queryRaw<RequestRow[]>(Prisma.sql`
-    SELECT request."id", request."teamId", request."status"
-    FROM "PlayerPoolIntroductionRequest" request
-    JOIN "PlayerPoolProfile" profile ON profile."id" = request."profileId"
-    WHERE LOWER(TRIM(profile."emailNormalized")) = ${email}
-      AND request."status" IN ('REQUESTED', 'INTRODUCED')
-  `);
-
-  let requestsJoined = 0;
-  let requestsClosed = 0;
-  for (const request of requestRows) {
-    const status = teamIds.has(request.teamId) ? "JOINED" : "CLOSED";
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "PlayerPoolIntroductionRequest"
-      SET
-        "status" = ${status},
-        "resolvedAt" = COALESCE("resolvedAt", NOW()),
-        "updatedAt" = NOW()
-      WHERE "id" = ${request.id}
-    `);
-    if (status === "JOINED") requestsJoined += 1;
-    else requestsClosed += 1;
-  }
-
-  const leadsClosed = await prisma.$executeRaw(Prisma.sql`
-    UPDATE "InterestLead"
-    SET
-      "status" = 'CLOSED'::"LeadStatus",
-      "closedAt" = COALESCE("closedAt", NOW()),
-      "updatedAt" = NOW()
-    WHERE "interestType" = 'PLAYER'::"InterestType"
-      AND "email" IS NOT NULL
-      AND LOWER(TRIM("email")) = ${email}
-      AND "status" <> 'CLOSED'::"LeadStatus"
-  `);
-
-  const changed =
-    prospectsActivated +
-      prospectsClosedAsDuplicate +
-      playerPoolProfilesJoined +
-      requestsJoined +
-      requestsClosed +
-      leadsClosed >
-    0;
-
-  return {
-    changed,
-    prospectsActivated,
-    prospectsClosedAsDuplicate,
-    playerPoolProfilesJoined,
-    requestsJoined,
-    requestsClosed,
-    leadsClosed,
-  };
-}
-
-function currentMonthRunKey() {
-  const now = new Date();
-  return `monthly:${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-export async function runPlayerDataHealthCleanup(input: {
-  source: "MANUAL" | "MONTHLY";
-  force?: boolean;
-}): Promise<PlayerDataHealthSummary> {
-  await ensurePlayerPoolTables();
-  await ensurePlayerDataHealthRunTable();
-
-  const runKey =
-    input.source === "MONTHLY" && !input.force
-      ? currentMonthRunKey()
-      : `${input.source.toLowerCase()}:${new Date().toISOString()}:${randomUUID()}`;
-
-  if (input.source === "MONTHLY" && !input.force) {
-    const existing = await prisma.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
-      SELECT "id", "status"
-      FROM "PlayerDataHealthRun"
-      WHERE "runKey" = ${runKey}
-      LIMIT 1
-    `);
-    if (existing[0]?.status === "COMPLETED" || existing[0]?.status === "STARTED") {
-      return {
-        runId: existing[0].id,
-        runKey,
-        source: input.source,
-        alreadyRun: true,
-        scannedUsers: 0,
-        affectedUsers: 0,
-        prospectsActivated: 0,
-        prospectsClosedAsDuplicate: 0,
-        playerPoolProfilesJoined: 0,
-        requestsJoined: 0,
-        requestsClosed: 0,
-        leadsClosed: 0,
-      };
-    }
-  }
-
-  const runId = randomUUID();
-  await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "PlayerDataHealthRun" (
-      "id", "runKey", "source", "status", "startedAt"
-    ) VALUES (
-      ${runId}, ${runKey}, ${input.source}, 'STARTED', NOW()
-    )
-    ON CONFLICT ("runKey") DO UPDATE SET
-      "id" = EXCLUDED."id",
-      "source" = EXCLUDED."source",
-      "status" = 'STARTED',
-      "startedAt" = NOW(),
-      "completedAt" = NULL,
-      "error" = NULL
-  `);
-
-  try {
-    const issues = await getPlayerDataHealthIssues();
-    const totals = {
-      affectedUsers: 0,
-      prospectsActivated: 0,
-      prospectsClosedAsDuplicate: 0,
-      playerPoolProfilesJoined: 0,
-      requestsJoined: 0,
-      requestsClosed: 0,
-      leadsClosed: 0,
-    };
-
-    for (const issue of issues) {
-      const result = await reconcileActivePlayer(issue);
-      if (result.changed) totals.affectedUsers += 1;
-      totals.prospectsActivated += result.prospectsActivated;
-      totals.prospectsClosedAsDuplicate += result.prospectsClosedAsDuplicate;
-      totals.playerPoolProfilesJoined += result.playerPoolProfilesJoined;
-      totals.requestsJoined += result.requestsJoined;
-      totals.requestsClosed += result.requestsClosed;
-      totals.leadsClosed += result.leadsClosed;
-    }
-
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "PlayerDataHealthRun"
-      SET
-        "status" = 'COMPLETED',
-        "scannedUsers" = ${issues.length},
-        "affectedUsers" = ${totals.affectedUsers},
-        "prospectsActivated" = ${totals.prospectsActivated},
-        "prospectsClosedAsDuplicate" = ${totals.prospectsClosedAsDuplicate},
-        "playerPoolProfilesJoined" = ${totals.playerPoolProfilesJoined},
-        "requestsJoined" = ${totals.requestsJoined},
-        "requestsClosed" = ${totals.requestsClosed},
-        "leadsClosed" = ${totals.leadsClosed},
-        "completedAt" = NOW(),
-        "error" = NULL
-      WHERE "id" = ${runId}
-    `);
-
-    return {
-      runId,
-      runKey,
-      source: input.source,
-      alreadyRun: false,
-      scannedUsers: issues.length,
-      ...totals,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "PlayerDataHealthRun"
-      SET "status" = 'FAILED', "completedAt" = NOW(), "error" = ${message}
-      WHERE "id" = ${runId}
-    `);
-    throw error;
-  }
+// No alternative email-only writer: all callers share the safe reconciliation path.
+export async function runPlayerDataHealthCleanup(input: { source: "MANUAL" | "MONTHLY"; force?: boolean }) {
+  const { runSafePlayerDataHealthCleanup } = await import("./player-data-health-safe");
+  return runSafePlayerDataHealthCleanup(input);
 }
 
 export async function getPlayerDataHealthRuns(limit = 12): Promise<PlayerDataHealthRun[]> {
