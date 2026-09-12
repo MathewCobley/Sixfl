@@ -432,6 +432,85 @@
           ]
         }
       ]
+    },
+    {
+      "id": "owned-admin-email-preview-layout",
+      "removedPaths": [
+        "src/components/admin/messages/QueuedSmsReasonHints.tsx",
+        "src/components/admin/messages/AdminEmailPreviewLayoutBridge.tsx"
+      ],
+      "responsibilities": [
+        "Keep genuine email previews readable and responsive inside their own sandboxed frame rather than imposing 620px/720px widths on unrelated admin cards.",
+        "Keep email styles, images and link behavior inside EmailHtmlPreview; do not resize message ancestors or scan the document on route changes.",
+        "Remove the duplicate helper and its inactive captain-layout mount; retain native admin message, template and queue preview consumers.",
+        "Leave referral decisions, private notes, saved email content, sent history and payment controls unchanged."
+      ],
+      "checks": [
+        {
+          "path": "src/components/admin/email/EmailHtmlPreview.tsx",
+          "contains": [
+            "export default function EmailHtmlPreview",
+            "<iframe",
+            "srcDoc={buildEmailPreviewDocument(html)}",
+            "className=\"block w-full min-w-0 border-0 bg-white\"",
+            "sandbox=\"allow-popups allow-popups-to-escape-sandbox\""
+          ],
+          "notContains": [
+            "MutationObserver",
+            "document.querySelector",
+            "firstElementChild"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/layout.tsx",
+          "contains": [
+            "export default async function AdminLayout",
+            "<main className=\"w-full min-w-0 flex-1\">{children}</main>"
+          ],
+          "notContains": [
+            "QueuedSmsReasonHints",
+            "AdminEmailPreviewLayoutBridge"
+          ]
+        },
+        {
+          "path": "src/app/captain/team/[teamid]/layout.tsx",
+          "contains": [
+            "export default async function CaptainTeamLayout",
+            "<CaptainSupportPanel teamId={team.id} />"
+          ],
+          "notContains": [
+            "QueuedSmsReasonHints",
+            "AdminEmailPreviewLayoutBridge"
+          ]
+        },
+        {
+          "path": "src/components/admin/messages/AdminMessageThread.tsx",
+          "contains": [
+            "EmailHtmlPreview"
+          ]
+        },
+        {
+          "path": "src/components/admin/email-templates/EmailTemplateForm.tsx",
+          "contains": [
+            "EmailHtmlPreview"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/queue/[id]/page.tsx",
+          "contains": [
+            "EmailHtmlPreview"
+          ]
+        },
+        {
+          "path": "src/app/(admin)/admin/referrals/page.tsx",
+          "contains": [
+            "sixfl-referral-card",
+            "sixfl-referral-summary",
+            "sixfl-referral-details",
+            "ReferralIneligibilityEmailPanel"
+          ]
+        }
+      ]
     }
   ]
 }
