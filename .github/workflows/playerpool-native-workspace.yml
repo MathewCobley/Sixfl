@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify transport and apply the reviewed native diff to the exact feature base
+      - name: Verify transport and apply reviewed native changes to the exact feature base
         run: |
           cp .native-work/native-fixes.py /tmp/native-fixes.py
           python3 - <<'PY'
@@ -65,7 +65,7 @@ jobs:
           import subprocess,json
           base='a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a'
           names=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
-          assert len(names)==17, names
+          assert len(names)==18, names
           assert all(p=='package.json' or p.startswith(('src/','scripts/','tests/','prisma/')) for p in names)
           entries=[]
           for p in names:
