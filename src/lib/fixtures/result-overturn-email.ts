@@ -89,7 +89,7 @@ export async function queueResultOverturnEmails(input: {
   return prisma.$transaction(async (tx) => {
     await assertAdmin(tx, input.actorUserId);
     // Serialise contact resolution and queueing, including concurrent first clicks.
-    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${RESULT_OVERTURN_EMAIL_SOURCE}), hashtext(${input.decisionId}))`);
+    await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${RESULT_OVERTURN_EMAIL_SOURCE}), hashtext(${input.decisionId}))`);
     const current = await loadNotice(input.fixtureId, input.decisionId, input.actorUserId, tx);
     const teams = [
       { id: current.decision.homeTeamId, name: current.decision.homeTeamName },
