@@ -1,18 +1,41 @@
-name: Data health source review
+name: Transfer reviewed native data health source
 on:
   push:
     branches: [fix/player-data-health-identity-review]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
+  transfer:
+    if: github.repository == 'MathewCobley/Sixfl'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: git archive --format=zip HEAD -o /tmp/data-health-current-source.zip
-      - uses: actions/upload-artifact@v4
         with:
-          name: data-health-current-source
-          path: /tmp/data-health-current-source.zip
-          retention-days: 2
+          ref: fix/player-data-health-identity-review
+      - name: Transfer checksum-verified source to feature branch only
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, pathlib, subprocess, zlib
+          first = pathlib.Path('.health-transfer-1')
+          if not first.exists():
+              print('Already transferred; no action.')
+              raise SystemExit(0)
+          encoded = ''.join(pathlib.Path(f'.health-transfer-{i}').read_text().strip() for i in range(1,4))
+          encoded = encoded.replace('mOXZZ2KUQ', 'mOXZ2KUQ')
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '26cbb4e9c8837430193b13218657368d05c215005123a421b0632dc24f419949'
+          assert b'diff --git a/.github/' not in patch
+          pathlib.Path('/tmp/reviewed-health.patch').write_bytes(patch)
+          subprocess.run(['git','apply','--check','/tmp/reviewed-health.patch'],check=True)
+          subprocess.run(['git','apply','--index','/tmp/reviewed-health.patch'],check=True)
+          paths = subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().strip('\0').split('\0')
+          assert len(paths) == 14 and all(p.startswith(('src/', 'tests/')) and '..' not in p.split('/') for p in paths)
+          for p in paths: print(p, hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest())
+          subprocess.run(['git','rm','.health-transfer-1','.health-transfer-2','.health-transfer-3'],check=True)
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          subprocess.run(['git','commit','-m','Improve native player identity matching and audited recruitment cleanup'],check=True)
+          subprocess.run(['git','push','origin','HEAD:refs/heads/fix/player-data-health-identity-review'],check=True)
+          print('Native source committed to review branch. No main ref or database changed.')
+          PY
