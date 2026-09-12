@@ -1,0 +1,48 @@
+/* Owned referral layout. The sidebar changes the available width independently
+   of the viewport, so only the summary responds to the card's container size. */
+.sixfl-referrals,
+.sixfl-referral-list,
+.sixfl-referral-card,
+.sixfl-referral-details {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.sixfl-referral-card {
+  display: block;
+  container: sixfl-referral / inline-size;
+}
+
+.sixfl-referral-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem 1.5rem;
+}
+
+.sixfl-referral-summary > div,
+.sixfl-referral-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sixfl-referral-status {
+  text-align: left;
+}
+
+@container sixfl-referral (min-width: 40rem) {
+  .sixfl-referral-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container sixfl-referral (min-width: 64rem) {
+  .sixfl-referral-summary {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto;
+  }
+
+  .sixfl-referral-status {
+    text-align: right;
+  }
+}

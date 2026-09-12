@@ -56,6 +56,7 @@ jobs:
         run: |
           REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-eligibility/browser.cjs
           REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-ineligibility-email/browser.cjs
+          REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-ineligibility-email/layout-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

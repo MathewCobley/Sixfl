@@ -1,3 +1,4 @@
+import "./referrals.css";
 import Link from "next/link";
 import ReferralIneligibilityEmailPanel from "@/components/admin/ReferralIneligibilityEmailPanel";
 import ReferralIneligibilityForm from "@/components/admin/ReferralIneligibilityForm";
@@ -170,7 +171,7 @@ function emailStatusClass(status: string | null) {
     case "CANCELLED":
       return "border-red-200 bg-red-50 text-red-800";
     case "SKIPPED":
-      return "border-amber-200 bg-amber-50 text-amber-900";
+      return "border-amber-200 bg-amber-50 text-amber-800";
     default:
       return "border-slate-200 bg-slate-50 text-slate-700";
   }
@@ -264,7 +265,7 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
   const retryNotice = emailNotice(sp.email);
 
   return (
-    <div className="space-y-6">
+    <div className="sixfl-referrals space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Growth</p>
@@ -383,7 +384,7 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
         <Summary label="Amount due" value={money(unpaidValue)} />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="sixfl-referral-list overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {referrals.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500">No team referrals have been recorded yet.</div>
         ) : (
@@ -393,7 +394,8 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
               const displayedTeam = row.teamName ?? row.leadTeamName ?? "Unnamed team";
               const emailDelivery = referralEmailById.get(row.id);
               return (
-                <div key={row.id} className="grid gap-4 p-5 lg:grid-cols-[1.4fr_1.2fr_0.8fr_auto] lg:items-center">
+                <article key={row.id} className="sixfl-referral-card space-y-5 p-5 sm:p-6">
+                  <div className="sixfl-referral-summary">
                   <div>
                     <p className="font-black text-slate-950">{row.referrerName ?? row.referrerEmail ?? "Player"}</p>
                     <p className="mt-1 text-xs text-slate-500">{row.referrerEmail ?? "No email"}</p>
@@ -441,7 +443,7 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                       </p>
                     ) : null}
                   </div>
-                  <div className="min-w-36 text-left lg:text-right">
+                  <div className="sixfl-referral-status">
                     {status === "INELIGIBLE" ? (
                       <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-800">Not eligible</span>
                     ) : status === "PAID" ? (
@@ -457,17 +459,18 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                       <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">In progress</span>
                     )}
                   </div>
-                  {status === "INELIGIBLE" ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950 lg:col-span-4">
+                  </div>
+                  {status === "INELIGIBLE" ? <div className="sixfl-referral-details rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950 sm:p-5">
                     <p className="font-bold">Not eligible — {referralIneligibilityLabel(row.ineligibleReasonCode)}</p>
                     <p className="mt-1 text-xs">Recorded {row.ineligibleAt ? dateTime(row.ineligibleAt) : ""} · {auditById.get(row.id)?.ineligibleByName}</p>
                     <p className="mt-2 whitespace-pre-wrap">Private admin note: {auditById.get(row.id)?.ineligibleNote}</p>
                     {access.user?.role === "ADMIN" ? <ReferralIneligibilityEmailPanel
                       referralId={row.id} actorUserId={access.user.id} action={emailIneligibleReferralAction}/> : null}
-                  </div> : status !== "PAID" ? <div className="lg:col-span-4">
+                  </div> : status !== "PAID" ? <div className="sixfl-referral-details">
                     <ReferralIneligibilityForm referralId={row.id} teamName={displayedTeam}
                       referrerName={row.referrerName ?? row.referrerEmail ?? "Player"} action={markReferralIneligibleAction}/>
                   </div> : null}
-                </div>
+                </article>
               );
             })}
           </div>
