@@ -12,6 +12,7 @@ import {
   upsertNotificationRecipient,
 } from "@/lib/notifications/recipients";
 import { prisma } from "@/lib/prisma";
+import { referralRewardEmailBlock } from "@/lib/team-referral-eligibility";
 import { getEmailReplyDomain } from "@/lib/resend/client";
 
 const REFERRAL_RECORDED_SOURCE = "team-referral-recorded";
@@ -116,6 +117,9 @@ async function queueEssentialReferralEmail(input: {
   cta: { label: string; url: string };
   metadata: Record<string, string>;
 }) {
+  if (await referralRewardEmailBlock({ sourceType: input.sourceType, sourceId: input.referral.id })) {
+    return { queued: false, reason: "ineligible" as const };
+  }
   const activeOrSentDispatch = await prisma.notificationDispatch.findFirst({
     where: {
       sourceType: input.sourceType,
@@ -208,7 +212,7 @@ async function getReferralNotificationRow(referralId: string) {
     FROM "TeamReferral" r
     INNER JOIN "User" u ON u."id" = r."referrerUserId"
     INNER JOIN "InterestLead" l ON l."id" = r."interestLeadId"
-    WHERE r."id" = ${referralId}
+    WHERE r."id" = ${referralId} AND r."ineligibleAt" IS NULL
     LIMIT 1
   `;
   return rows[0] ?? null;
@@ -217,6 +221,9 @@ async function getReferralNotificationRow(referralId: string) {
 export async function queueReferralRecordedEmail(referralId: string) {
   const id = referralId.trim();
   if (!id) return { queued: false, reason: "missing_referral_id" as const };
+  if (await referralRewardEmailBlock({ sourceType: REFERRAL_RECORDED_SOURCE, sourceId: id })) {
+    return { queued: false, reason: "ineligible" as const };
+  }
 
   const latestSkippedDispatch = await prisma.notificationDispatch.findFirst({
     where: {
@@ -282,6 +289,9 @@ export async function queueReferralRecordedEmail(referralId: string) {
 export async function queueReferralPayoutReadyEmail(referralId: string) {
   const id = referralId.trim();
   if (!id) return { queued: false, reason: "missing_referral_id" as const };
+  if (await referralRewardEmailBlock({ sourceType: REFERRAL_RECORDED_SOURCE, sourceId: id })) {
+    return { queued: false, reason: "ineligible" as const };
+  }
 
   const rows = await prisma.$queryRaw<ReferralPayoutReadyRow[]>`
     SELECT
@@ -308,7 +318,7 @@ export async function queueReferralPayoutReadyEmail(referralId: string) {
         FROM "FixtureAbandonment" abandonment
         WHERE abandonment."fixtureId" = f."id"
       )
-    WHERE r."id" = ${id}
+    WHERE r."id" = ${id} AND r."ineligibleAt" IS NULL
     GROUP BY
       r."id", r."referrerUserId", u."name", u."email", l."contactName",
       l."teamName", r."rewardPence", r."requiredMatches",
@@ -368,7 +378,7 @@ export async function queueMissingReferralRecordedEmails(limit = 100) {
     SELECT r."id"
     FROM "TeamReferral" r
     INNER JOIN "User" u ON u."id" = r."referrerUserId"
-    WHERE r."paidAt" IS NULL
+    WHERE r."paidAt" IS NULL AND r."ineligibleAt" IS NULL
       AND u."email" IS NOT NULL
       AND BTRIM(u."email") <> ''
       AND NOT EXISTS (
@@ -422,7 +432,7 @@ export async function queueReadyReferralPayoutEmails(limit = 100) {
     INNER JOIN "User" u ON u."id" = r."referrerUserId"
     INNER JOIN "InterestLead" l ON l."id" = r."interestLeadId"
     LEFT JOIN "Team" t ON t."id" = l."convertedTeamId"
-    WHERE r."paidAt" IS NULL
+    WHERE r."paidAt" IS NULL AND r."ineligibleAt" IS NULL
       AND r."payoutDetailsSubmittedAt" IS NULL
       AND u."email" IS NOT NULL
       AND BTRIM(u."email") <> ''

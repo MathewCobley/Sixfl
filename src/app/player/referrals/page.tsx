@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { referralIneligibilityLabel } from "@/lib/team-referral-eligibility-policy";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth";
@@ -86,15 +87,15 @@ export default async function PlayerReferralsPage() {
                         <p className="font-black">{row.teamName ?? row.leadTeamName ?? "Referred team"}</p>
                         <p className="mt-1 text-xs text-white/50">{row.leagueName ?? "Waiting to join a league"}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${status === "PAID" ? "bg-emerald-400 text-slate-950" : status === "READY" ? "bg-sky-300 text-slate-950" : "bg-amber-300 text-slate-950"}`}>
-                        {status === "PAID" ? "£75 paid" : status === "READY" ? "£75 ready" : `${progress} of ${row.requiredMatches} matches`}
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${status === "INELIGIBLE" ? "bg-red-200 text-red-950" : status === "PAID" ? "bg-emerald-400 text-slate-950" : status === "READY" ? "bg-sky-300 text-slate-950" : "bg-amber-300 text-slate-950"}`}>
+                        {status === "INELIGIBLE" ? "Not eligible" : status === "PAID" ? "£75 paid" : status === "READY" ? "£75 ready" : `${progress} of ${row.requiredMatches} matches`}
                       </span>
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                    {status !== "INELIGIBLE" ? <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                       <div className="h-full rounded-full bg-emerald-400" style={{ width: `${(progress / row.requiredMatches) * 100}%` }} />
-                    </div>
+                    </div> : null}
                     <p className="mt-3 text-sm text-white/70">
-                      {status === "PAID"
+                      {status === "INELIGIBLE" ? `Not eligible — ${referralIneligibilityLabel(row.ineligibleReasonCode)}. No reward is payable for this referral.` : status === "PAID"
                         ? `Your ${money(row.rewardPence)} reward has been marked as paid.`
                         : status === "READY"
                           ? row.payoutDetailsSubmittedAt

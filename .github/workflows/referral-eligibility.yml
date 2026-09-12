@@ -1,0 +1,61 @@
+name: Referral eligibility safety
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: referral-eligibility-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_referral_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_referral_test
+      REFERRAL_TEST_DATABASE: '1'
+      NEXTAUTH_SECRET: referral-isolated-test
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      RESEND_API_KEY: re_isolated_not_real
+      STRIPE_SECRET_KEY: sk_test_isolated_not_real
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/referral-eligibility/*.test.cjs
+      - run: npm run prebuild && npx prisma generate
+      - run: node --test tests/referral-eligibility/*.test.cjs
+      - name: Disposable schema and real additive referral migrations
+        run: |
+          npx prisma db push --skip-generate
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260805002000_team_referral_rewards/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260825162500_team_referral_payout_details/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260819232000_fixture_abandonment_workflow/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260912193000_referral_ineligibility/migration.sql
+      - name: Real eligibility, queue, payout and audit tests
+        run: npx tsx tests/referral-eligibility/database.ts
+      - name: Prepared typecheck and build
+        run: npx tsc --noEmit && npx next build
+      - name: Install isolated browser
+        run: npm install --prefix /tmp/referral-browser --no-package-lock playwright@1.55.0 && /tmp/referral-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Confirm actual admin form on mobile and desktop
+        run: REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-eligibility/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: referral-eligibility-evidence
+          path: artifacts/referral-eligibility/
+          retention-days: 7

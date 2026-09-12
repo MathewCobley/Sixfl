@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { referralIneligibilityLabel } from "@/lib/team-referral-eligibility-policy";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamReferralPayoutDetails, formatSortCode } from "@/lib/team-referral-payout";
@@ -37,7 +38,7 @@ export default async function AdminReferralPayoutPage({ params }: { params: Para
   if (!referral) notFound();
 
   const status = referralStatus(referral);
-  const payout = await getTeamReferralPayoutDetails(referral.id);
+  const payout = status === "INELIGIBLE" ? null : await getTeamReferralPayoutDetails(referral.id);
   const teamLabel = referral.teamName ?? referral.leadTeamName ?? "Referred team";
 
   return (
@@ -53,7 +54,12 @@ export default async function AdminReferralPayoutPage({ params }: { params: Para
         </Link>
       </div>
 
-      {status === "PAID" ? (
+      {status === "INELIGIBLE" ? (
+          <section className="rounded-2xl border border-red-300 bg-red-50 p-6 text-red-950">
+            <h2 className="text-xl font-black">Not eligible</h2>
+            <p className="mt-2">{referralIneligibilityLabel(referral.ineligibleReasonCode)}. No referral reward is payable and payment details cannot be submitted.</p>
+          </section>
+        ) : status === "PAID" ? (
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
           <h2 className="text-xl font-black text-emerald-950">Paid</h2>
           <p className="mt-2 text-sm leading-6 text-emerald-800">

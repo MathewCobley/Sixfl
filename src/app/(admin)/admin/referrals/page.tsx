@@ -1,8 +1,12 @@
 import Link from "next/link";
+import ReferralIneligibilityForm from "@/components/admin/ReferralIneligibilityForm";
+import { getReferralEligibilityAudit } from "@/lib/team-referral-eligibility";
+import { referralIneligibilityLabel } from "@/lib/team-referral-eligibility-policy";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamReferrals, referralStatus } from "@/lib/team-referrals";
 import {
+  markReferralIneligibleAction,
   attachExistingLeadReferralAction,
   retryReferralRecordedEmailAction,
 } from "./actions";
@@ -14,6 +18,8 @@ export const metadata = { title: "Team Referrals | SIXFL Admin" };
 
 type SearchParams = Promise<{
   added?: string;
+  ineligible?: string;
+  eligibilityError?: string;
   error?: string;
   email?: string;
 }>;
@@ -86,6 +92,8 @@ function errorMessage(value?: string) {
 
 function emailNotice(value?: string) {
   switch (value) {
+    case "ineligible":
+      return { tone: "warning" as const, message: "This referral is not eligible. No reward email was queued." };
     case "queued":
       return {
         tone: "success" as const,
@@ -176,7 +184,7 @@ function canRetryReferralEmail(delivery?: ReferralEmailDeliveryRow) {
 }
 
 export default async function AdminReferralsPage({ searchParams }: { searchParams?: SearchParams }) {
-  await requireAdmin();
+  const access = await requireAdmin();
   const sp = (await searchParams) ?? {};
 
   const [referrals, availableLeads, playerOptions, referralEmailDeliveries] = await Promise.all([
@@ -240,6 +248,8 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
     `,
   ]);
 
+  const audits = access.user?.role === "ADMIN" ? await getReferralEligibilityAudit(access.user.id) : [];
+  const auditById = new Map(audits.map(row => [row.id, row]));
   const referralEmailById = new Map(
     referralEmailDeliveries.map((delivery) => [delivery.referralId, delivery]),
   );
@@ -265,6 +275,8 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
         </Link>
       </div>
 
+      {sp.ineligible === "1" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Referral marked not eligible. The record is retained, payment is blocked and unsent reward emails are cancelled. No new email was sent.</p> : null}
+      {sp.eligibilityError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">{sp.eligibilityError}</p> : null}
       {sp.added === "1" ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800">
           Referral added. SIXFL will now track that team towards the player&apos;s £75 reward.
@@ -392,7 +404,7 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                       ) : (
                         <p className="mt-2 text-xs text-slate-500">No confirmation email attempt has been recorded yet.</p>
                       )}
-                      {canRetryReferralEmail(emailDelivery) ? (
+                      {status !== "INELIGIBLE" && canRetryReferralEmail(emailDelivery) ? (
                         <form action={retryReferralRecordedEmailAction} className="mt-3">
                           <input type="hidden" name="referralId" value={row.id} />
                           <button
@@ -411,7 +423,7 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                   </div>
                   <div>
                     <p className="text-sm font-black text-slate-900">{Math.min(row.completedMatches, row.requiredMatches)} of {row.requiredMatches} matches</p>
-                    <p className="mt-1 text-xs text-slate-500">Reward: {money(row.rewardPence)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{status === "INELIGIBLE" ? "Reward not payable" : `Reward: ${money(row.rewardPence)}`}</p>
                     {status === "READY" ? (
                       <p className={`mt-1 text-xs font-bold ${row.payoutDetailsSubmittedAt ? "text-emerald-700" : "text-amber-700"}`}>
                         {row.payoutDetailsSubmittedAt ? "Payment details received" : "Awaiting payment details"}
@@ -419,7 +431,9 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                     ) : null}
                   </div>
                   <div className="min-w-36 text-left lg:text-right">
-                    {status === "PAID" ? (
+                    {status === "INELIGIBLE" ? (
+                      <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-800">Not eligible</span>
+                    ) : status === "PAID" ? (
                       <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">Paid</span>
                     ) : status === "READY" ? (
                       <Link
@@ -432,6 +446,14 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                       <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">In progress</span>
                     )}
                   </div>
+                  {status === "INELIGIBLE" ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950 lg:col-span-4">
+                    <p className="font-bold">Not eligible — {referralIneligibilityLabel(row.ineligibleReasonCode)}</p>
+                    <p className="mt-1 text-xs">Recorded {row.ineligibleAt ? dateTime(row.ineligibleAt) : ""} · {auditById.get(row.id)?.ineligibleByName}</p>
+                    <p className="mt-2 whitespace-pre-wrap">Private admin note: {auditById.get(row.id)?.ineligibleNote}</p>
+                  </div> : status !== "PAID" ? <div className="lg:col-span-4">
+                    <ReferralIneligibilityForm referralId={row.id} teamName={displayedTeam}
+                      referrerName={row.referrerName ?? row.referrerEmail ?? "Player"} action={markReferralIneligibleAction}/>
+                  </div> : null}
                 </div>
               );
             })}
@@ -446,7 +468,7 @@ function Summary({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
+      <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{value}</p>
     </div>
   );
 }
