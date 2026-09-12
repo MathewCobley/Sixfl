@@ -1,0 +1,21 @@
+name: Veo fixture source check
+on:
+  push:
+    branches: [feature/veo-fixture-confirmation-choice]
+    paths: ['.github/workflows/veo-fixture-source-check.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package source for isolated review
+        run: |
+          tar -czf /tmp/sixfl-veo-source.tgz src scripts tests prisma docs config .github package.json package-lock.json tsconfig.json next.config.* AGENTS.md postcss.config.* 2>/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sixfl-veo-source
+          path: /tmp/sixfl-veo-source.tgz
+          retention-days: 1
