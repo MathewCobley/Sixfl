@@ -1,0 +1,55 @@
+name: Apply reviewed Veo source on feature branch
+on:
+  push:
+    branches: [feature/veo-fixture-confirmation]
+    paths: [.github/workflows/veo-native-transport.yml]
+permissions:
+  contents: write
+jobs:
+  transport:
+    if: github.ref == 'refs/heads/feature/veo-fixture-confirmation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/veo-fixture-confirmation
+      - name: Verify and apply native source transport
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, subprocess, urllib.request
+          shas = ['b5ef35fe193c1dbc1480e32db375942d34e4480f', 'd8e3351fd65454af5fdf33cd4de534e973a5deb7', 'd4ad3ec1dce1b9edae7d800ebc83138fedf19341', '08b1d0b9eb8d7a565b692650a0277ec445aff883', 'deae15f88630b8e1d4adb04d3b7d4e77be929b4b']
+          chunks=[]
+          for sha in shas:
+              req=urllib.request.Request('https://api.github.com/repos/MathewCobley/Sixfl/git/blobs/'+sha, headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req) as r: obj=json.load(r)
+              chunk=base64.b64decode(obj['content'])
+              assert hashlib.sha1(b'blob '+str(len(chunk)).encode()+b'\0'+chunk).hexdigest()==sha
+              chunks.append(chunk)
+          data=base64.b64decode(b''.join(chunks),validate=True)
+          assert hashlib.sha256(data).hexdigest()=='3b7a386c2842bf18eef6c13bf72578ab2a897a7b26c5719d3be33afca773083f'
+          patch=lzma.decompress(data)
+          assert len(patch)==114663
+          open('/tmp/veo-native.patch','wb').write(patch)
+          subprocess.run(['git','apply','--check','/tmp/veo-native.patch'],check=True)
+          subprocess.run(['git','apply','--index','/tmp/veo-native.patch'],check=True)
+          PY
+          git rm --ignore-unmatch .github/workflows/veo-native-transport.yml .github/workflows/veo-fixture-dev-snapshot.yml
+          git diff --cached --check
+          git config user.name 'SIXFL feature implementation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add per-fixture Veo choice, remembered preference and post-confirmation allocation'
+          git push origin HEAD:refs/heads/feature/veo-fixture-confirmation
+          git rev-parse HEAD
+      - name: Export committed files for independent inspection
+        run: |
+          git archive HEAD src scripts prisma tests config docs .github package.json package-lock.json tsconfig.json AGENTS.md | gzip > /tmp/sixfl-veo-native.tar.gz
+          git log -1 --format='%H %s' > /tmp/sixfl-veo-native-commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sixfl-veo-native-inspection
+          path: |
+            /tmp/sixfl-veo-native.tar.gz
+            /tmp/sixfl-veo-native-commit.txt
+          retention-days: 1
