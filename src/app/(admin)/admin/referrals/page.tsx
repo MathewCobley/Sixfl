@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ReferralIneligibilityEmailPanel from "@/components/admin/ReferralIneligibilityEmailPanel";
 import ReferralIneligibilityForm from "@/components/admin/ReferralIneligibilityForm";
 import { getReferralEligibilityAudit } from "@/lib/team-referral-eligibility";
 import { referralIneligibilityLabel } from "@/lib/team-referral-eligibility-policy";
@@ -7,6 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamReferrals, referralStatus } from "@/lib/team-referrals";
 import {
   markReferralIneligibleAction,
+  emailIneligibleReferralAction,
   attachExistingLeadReferralAction,
   retryReferralRecordedEmailAction,
 } from "./actions";
@@ -20,6 +22,7 @@ type SearchParams = Promise<{
   added?: string;
   ineligible?: string;
   eligibilityError?: string;
+  eligibilityNotice?: string;
   error?: string;
   email?: string;
 }>;
@@ -275,7 +278,15 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
         </Link>
       </div>
 
-      {sp.ineligible === "1" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Referral marked not eligible. The record is retained, payment is blocked and unsent reward emails are cancelled. No new email was sent.</p> : null}
+      {sp.ineligible === "1" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Referral marked not eligible. The record is retained, payment is blocked and unsent reward-ready emails are cancelled. Check the referrer update email status below.</p> : null}
+      {sp.eligibilityNotice ? <p role="status" className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">{({
+        queued: "Referrer update email queued. This is not yet confirmation of delivery.",
+        sending: "The referrer update is already being sent. No duplicate was created.",
+        sent: "The referrer update has already been sent. No duplicate was created.",
+        review: "The update email needs attention. Review its status below; the eligibility decision remains saved.",
+        failed: "No new update email was queued. The eligibility decision remains saved. Check the email panel below before retrying.",
+        not_requested: "No update email was requested by that form. Use Email referrer on the saved referral to notify them.",
+      } as Record<string, string>)[sp.eligibilityNotice] || "Check the referrer update email status below."}</p> : null}
       {sp.eligibilityError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">{sp.eligibilityError}</p> : null}
       {sp.added === "1" ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800">
@@ -450,6 +461,8 @@ export default async function AdminReferralsPage({ searchParams }: { searchParam
                     <p className="font-bold">Not eligible — {referralIneligibilityLabel(row.ineligibleReasonCode)}</p>
                     <p className="mt-1 text-xs">Recorded {row.ineligibleAt ? dateTime(row.ineligibleAt) : ""} · {auditById.get(row.id)?.ineligibleByName}</p>
                     <p className="mt-2 whitespace-pre-wrap">Private admin note: {auditById.get(row.id)?.ineligibleNote}</p>
+                    {access.user?.role === "ADMIN" ? <ReferralIneligibilityEmailPanel
+                      referralId={row.id} actorUserId={access.user.id} action={emailIneligibleReferralAction}/> : null}
                   </div> : status !== "PAID" ? <div className="lg:col-span-4">
                     <ReferralIneligibilityForm referralId={row.id} teamName={displayedTeam}
                       referrerName={row.referrerName ?? row.referrerEmail ?? "Player"} action={markReferralIneligibleAction}/>

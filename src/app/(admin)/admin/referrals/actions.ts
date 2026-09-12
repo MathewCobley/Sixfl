@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { queueReferralIneligibilityEmail } from "@/lib/referral-ineligibility-email";
 import { markReferralIneligible, ReferralEligibilityError } from "@/lib/team-referral-eligibility";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { clearTeamReferralPayoutSecrets } from "@/lib/team-referral-payout";
@@ -194,5 +195,34 @@ export async function markReferralIneligibleAction(formData: FormData) {
   }
   for (const path of ["/admin/referrals", "/player/referrals", "/admin/queue",
     `/admin/referrals/payout/${encodeURIComponent(referralId)}`, `/player/referrals/payout/${encodeURIComponent(referralId)}`]) revalidatePath(path);
-  referralRedirect({ ineligible: "1" });
+  // Only the updated form requests an email. Old open tabs can still save the
+  // decision and then use the explicit catch-up button; no surprise backfill.
+  const eligibilityNotice = formData.get("notifyReferrer") === "yes"
+    ? await queueEligibilityUpdate(referralId, access.user.id, true)
+    : "not_requested";
+  revalidatePath("/admin/referrals");
+  referralRedirect({ ineligible: "1", eligibilityNotice });
+}
+
+async function queueEligibilityUpdate(referralId: string, actorUserId: string, confirmed: boolean) {
+  try {
+    const result = await queueReferralIneligibilityEmail({ referralId, actorUserId, confirmed });
+    if (result.status === "QUEUED") return "queued";
+    if (result.status === "PROCESSING") return "sending";
+    if (result.status === "SENT") return "sent";
+    return "review";
+  } catch {
+    // An email problem must never undo or misreport the saved eligibility decision.
+    return "failed";
+  }
+}
+
+export async function emailIneligibleReferralAction(formData: FormData) {
+  const access = await requireAdmin();
+  if (!access.user || access.user.role !== "ADMIN") throw new Error("Administrator access is required.");
+  const referralId = String(formData.get("referralId") ?? "").trim();
+  const eligibilityNotice = await queueEligibilityUpdate(referralId, access.user.id, formData.get("confirmed") === "yes");
+  revalidatePath("/admin/referrals");
+  revalidatePath("/admin/queue");
+  referralRedirect({ eligibilityNotice });
 }
