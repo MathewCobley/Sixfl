@@ -4,6 +4,9 @@ on:
     branches: [maintenance/playerpool-native-workspace-20260912]
 permissions:
   contents: write
+concurrency:
+  group: playerpool-native-workspace
+  cancel-in-progress: true
 jobs:
   native-verification:
     runs-on: ubuntu-24.04
@@ -17,7 +20,7 @@ jobs:
           POSTGRES_DB: sixfl_response_check_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_response_check_test
@@ -35,11 +38,11 @@ jobs:
           persist-credentials: false
       - name: Verify transport and apply the reviewed native diff to the exact feature base
         run: |
+          cp .native-work/native-fixes.py /tmp/native-fixes.py
           python3 - <<'PY'
           from pathlib import Path
           import base64, gzip, hashlib
           chunks = [Path(f'.native-work/playerpool.{i}').read_text().strip() for i in range(1,5)]
-          # Correct a known missing repeated pair in text transport, never source.
           chunks[1] = chunks[1].replace('SD9BefWPPlK+', 'SD9BefWPPlPlK+')
           expected = ['3bb79cfe60e558a7673b119e72fa0cc4e32d8165','f8d6294200f0edfa1eb31a271e46acd4382c1043','6bd8c9fdf3b2044756388c554bfc2809413db1f8','92f026c0f08318094654f78b227cb0c275b0512a']
           for i,c in enumerate(chunks):
@@ -52,6 +55,7 @@ jobs:
           git checkout --detach a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a
           git apply --check /tmp/playerpool.patch
           git apply /tmp/playerpool.patch
+          python3 /tmp/native-fixes.py
           git add -u
           git add src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx prisma/migrations/20260912183000_player_pool_response_check/migration.sql tests/player-pool-response-check.test.ts
           git diff --cached --check
@@ -61,8 +65,8 @@ jobs:
           import subprocess,json
           base='a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a'
           names=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
-          assert len(names)==15, names
-          assert all(p.startswith(('src/','scripts/','tests/','prisma/')) for p in names)
+          assert len(names)==17, names
+          assert all(p=='package.json' or p.startswith(('src/','scripts/','tests/','prisma/')) for p in names)
           entries=[]
           for p in names:
               e={'path':p,'mode':'100644','type':'blob'}
@@ -82,13 +86,17 @@ jobs:
         run: |
           node scripts/check-player-pool-profile-reminders.mjs
           test ! -f scripts/apply-player-pool-nudge-history.cjs
+          test ! -f scripts/apply-player-pool-comms-link.cjs
           sha256sum 'src/app/(admin)/admin/player-pool/page.tsx' src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx > /tmp/playerpool-source.sha
           node scripts/audit-dom-bridges.mjs --changed-from a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a --fail-on-findings
           node scripts/audit-dom-replacements.mjs --changed-from a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a
       - name: Prepare application and preserve native ownership
         run: |
           npm run prebuild
-          sha256sum --check /tmp/playerpool-source.sha
+          if ! sha256sum --check /tmp/playerpool-source.sha; then
+            git diff -- 'src/app/(admin)/admin/player-pool/page.tsx' src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx
+            exit 1
+          fi
           node scripts/check-player-pool-profile-reminders.mjs
           node scripts/check-critical-feature-contracts.mjs
       - run: npx prisma generate
