@@ -79,6 +79,8 @@ jobs:
         run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/browser.cjs
       - name: Desktop and mobile fixed-copy email preview and confirmation
         run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/email-browser.cjs
+      - name: Actual captain result cards on desktop and mobile
+        run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/captain-views-browser.cjs
       - name: Prove official-score regression is detected
         shell: bash
         run: |
