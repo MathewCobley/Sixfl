@@ -156,7 +156,7 @@ replaceOnce(
                             Whole team cannot play?
                           </p>
                           <p className="mt-1 text-xs leading-5 text-red-100/65">
-                            Only use this when the whole team cannot fulfil the fixture. Sending it immediately raises an issue for SIXFL to review.
+                            Only use this when the whole team cannot fulfil the fixture. SIXFL will be alerted immediately and the fixture will be flagged for review.
                           </p>
                         </div>
                         <textarea
