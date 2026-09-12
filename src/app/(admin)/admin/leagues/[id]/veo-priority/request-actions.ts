@@ -14,7 +14,7 @@ export async function reviewVeoPriorityAction(leagueId: string, requestId: strin
     const teamId = await reviewVeoPriorityRequest({ leagueId, requestId, actorId: user.id, decision });
     revalidatePath(`/admin/leagues/${leagueId}`, 'layout');
     revalidatePath(`/captain/team/${teamId}`);
-    return { done: true, error: false, message: decision === 'APPROVED' ? 'Approved. Priority is on for future fixture publications. Existing fees are unchanged.' : 'Request declined. Priority and existing fees are unchanged.' };
+    return { done: true, error: false, message: decision === 'APPROVED' ? 'Request approved. Existing fees are unchanged. The current team Priority setting is shown below.' : 'Request declined. Priority and existing fees are unchanged.' };
   } catch (error) {
     if (!(error instanceof VeoRequestError)) console.error('Veo Priority request review failed', error);
     return { done: false, error: true, message: error instanceof VeoRequestError ? error.message : 'The decision could not be saved. Please refresh and try again.' };

@@ -8,7 +8,7 @@ export type VeoRequestFormState = { status: 'idle' | 'error' | 'pending' | 'on';
 
 export async function requestVeoPriorityAction(teamId: string, leagueId: string, _previous: VeoRequestFormState, form: FormData): Promise<VeoRequestFormState> {
   const access = await requireCaptain(teamId);
-  if (access.accessMode !== 'CAPTAIN' || access.isAdmin || !access.user?.id) {
+  if (access.accessMode !== 'captain' || access.isAdmin || !access.isCaptain || !access.user?.id) {
     return { status: 'error', message: 'Captain previews are read-only. The team captain must submit their own request.' };
   }
   try {

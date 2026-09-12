@@ -7,7 +7,7 @@ export default async function CaptainVeoPriorityCard({ teamId, leagueId }: { tea
   const access = await requireCaptain(teamId);
   const offer = await readVeoOffer(leagueId, teamId);
   if (!offer || !leagueId) return null;
-  const canRequest = access.accessMode === 'CAPTAIN' && !access.isAdmin && Boolean(access.user?.id);
+  const canRequest = access.accessMode === 'captain' && !access.isAdmin && access.isCaptain && Boolean(access.user?.id);
   const pending = offer.request?.status === 'PENDING';
   const declined = offer.request?.status === 'DECLINED';
   return <section aria-label="Veo Priority" className="space-y-4 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 sm:p-6">

@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
@@ -23,9 +22,16 @@ function load(file, mocks) {
   }, mod, mod.exports);
   return mod.exports;
 }
-const normalAccess = { accessMode: 'CAPTAIN', isAdmin: false, user: { id: 'captain' } };
+// These are the actual requireCaptain access modes, not invented role labels.
+const normalAccess = { accessMode: 'captain', isAdmin: false, isCaptain: true, user: { id: 'captain' } };
+const previewAccess = [
+  { accessMode: 'captain', isAdmin: true, isCaptain: false, user: { id: 'admin' } },
+  { accessMode: 'captain-preview', isAdmin: false, isCaptain: true, user: { id: 'admin' } },
+  { accessMode: 'captain', isAdmin: false, isCaptain: false, user: null },
+  { accessMode: 'captain', isAdmin: false, isCaptain: false, user: { id: 'non-captain' } },
+];
 async function renderCard(offer, access = normalAccess) {
-  const form = load(formPath, { [ '@/app/captain/team/[teamid]/veo-priority/actions' ]: {
+  const form = load(formPath, { '@/app/captain/team/[teamid]/veo-priority/actions': {
     requestVeoPriorityAction: async () => ({ status: 'pending', message: 'Requested' }),
   } }).default;
   const Card = load(cardPath, {
@@ -56,14 +62,14 @@ test('pending, approved and declined cards persist without another sign-up butto
     assert.ok(html.includes(expected)); assert.ok(!html.includes('Request Veo Priority</button>'));
   }
 });
-test('administrator and development previews cannot present a live consent button', async () => {
-  for (const mode of ['ADMIN_VIEW', 'ADMIN_PREVIEW', 'DEV']) {
-    const html = await renderCard({ priority: false, request: null }, { accessMode: mode, isAdmin: true, user: { id: 'admin' } });
+test('administrator, captain-only preview and development fallback cannot present a consent button', async () => {
+  for (const access of previewAccess) {
+    const html = await renderCard({ priority: false, request: null }, access);
     assert.ok(html.includes('read-only preview')); assert.ok(!html.includes('<form'));
   }
 });
-test('native action refuses preview writes and binds the real actor and exact team server-side', async () => {
-  let access = { accessMode: 'ADMIN_PREVIEW', isAdmin: true, user: { id: 'admin' } };
+test('native action refuses every preview mode and binds the real actor and exact team server-side', async () => {
+  let access = previewAccess[0];
   const writes = [], refreshed = [];
   const action = load(actionPath, {
     'next/cache': { revalidatePath: (...args) => refreshed.push(args) },
@@ -71,7 +77,11 @@ test('native action refuses preview writes and binds the real actor and exact te
     '@/lib/veo/priority-requests': { VeoRequestError, requestVeoPriority: async input => { writes.push(input); return 'PENDING'; } },
   }).requestVeoPriorityAction;
   const form = new FormData(); form.set('agreed', 'on'); form.set('termsVersion', 'veo-priority-v1'); form.set('actorId', 'forged-admin');
-  assert.equal((await action('team', 'league', {}, form)).status, 'error'); assert.equal(writes.length, 0);
+  for (const preview of previewAccess) {
+    access = preview;
+    assert.equal((await action('team', 'league', {}, form)).status, 'error');
+    assert.equal(writes.length, 0);
+  }
   access = normalAccess;
   assert.equal((await action('team', 'league', {}, form)).status, 'pending');
   assert.deepEqual(writes[0], { teamId: 'team', leagueId: 'league', actorId: 'captain', agreed: true, termsVersion: 'veo-priority-v1' });
