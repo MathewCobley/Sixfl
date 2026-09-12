@@ -22,6 +22,7 @@ test('server action rejects non-admins and binds the audit to the authenticated 
  let user=null,input=null;const paths=[];
  const action=load('src/app/(admin)/admin/referrals/actions.ts',{
   '@/lib/prisma':{prisma:{}},'@/lib/requireAdmin':{requireAdmin:async()=>({user})},'@/lib/team-referral-payout':{},'@/lib/team-referral-notifications':{},'@/lib/team-referrals':{},
+  '@/lib/referral-ineligibility-email':{queueReferralIneligibilityEmail:async()=>{throw Error('Old form did not request an email')}},
   '@/lib/team-referral-eligibility':{ReferralEligibilityError:Error,markReferralIneligible:async v=>{input=v}},
   'next/cache':{revalidatePath:p=>paths.push(p)},'next/navigation':{redirect:p=>{throw new Error(p)}},
  }).markReferralIneligibleAction;

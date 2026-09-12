@@ -17,6 +17,7 @@ export default function ReferralIneligibilityForm({ referralId, teamName, referr
     <summary className="cursor-pointer text-sm font-bold text-red-800">Mark not eligible</summary>
     <form action={action} className="mt-4 space-y-4">
       <input type="hidden" name="referralId" value={referralId}/>
+      <input type="hidden" name="notifyReferrer" value="yes"/>
       <p className="text-sm text-slate-700"><strong>{teamName}</strong> · referred by {referrerName}</p>
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-bold text-slate-900">Reason shown to the referrer</legend>
@@ -29,10 +30,10 @@ export default function ReferralIneligibilityForm({ referralId, teamName, referr
           className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 font-normal text-slate-900"
           placeholder="Record the facts supporting this decision."/>
       </label>
-      <p className="text-xs leading-5 text-slate-600">The note stays private. This records a final decision, removes the reward from payable totals, blocks payment details and cancels unsent reward emails. It does not change the team or fixtures. No new email is sent; previously sent messages cannot be recalled.</p>
+      <p className="text-xs leading-5 text-slate-600">The note stays private. This records a final decision, removes the reward from payable totals, blocks payment details and cancels unsent reward-ready emails. It does not change the team or fixtures. A brief update email will be queued to the referrer using only the standard reason, not this note. Previously sent messages cannot be recalled.</p>
       <label className="flex items-start gap-2 text-sm text-slate-800">
         <input className="mt-1" type="checkbox" name="confirmed" value="yes" required/>
-        I have checked the referral terms and confirm this reward is not eligible.
+        I have checked the referral terms, confirm this reward is not eligible and want to email the referrer an update.
       </label>
       <SaveButton/>
     </form>
