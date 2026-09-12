@@ -1,0 +1,19 @@
+name: PlayerPool response repair review
+on:
+  push:
+    branches: [fix/playerpool-response-and-contact-history]
+permissions:
+  contents: read
+jobs:
+  source-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive tracked source only, without credentials or generated files
+        run: git archive --format=zip HEAD -o /tmp/playerpool-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playerpool-current-source
+          path: /tmp/playerpool-source.zip
+          retention-days: 2
