@@ -154,7 +154,7 @@ function getFriendlyErrorMessage(error: unknown) {
       return "Only published scheduled upcoming fixtures can be confirmed.";
     }
     if (error.message.includes("Fixture response window closed")) {
-      return `Late changes and issue reports close online ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. You can still confirm that your team can play, but please email ${SIXFL_FIXTURE_EMAIL} if your team cannot play or anything needs changing now.`;
+      return `Team confirmation is required at least ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. For any late cancellation, change or issue, email ${SIXFL_FIXTURE_EMAIL} immediately.`;
     }
     if (error.message.includes("Issue note must be at least")) {
       return "Please add a short note so SIXFL knows what the issue is.";
@@ -178,7 +178,7 @@ function getFixtureConfirmationSummary(input: {
   kickoffAt: Date;
 }): ConfirmationSummary {
   const confirmation = input.confirmation ?? null;
-  const diffHours = Math.floor((input.kickoffAt.getTime() - Date.now()) / (1000 * 60 * 60));
+  const confirmationDeadline = new Date(input.kickoffAt.getTime() - FIXTURE_RESPONSE_LOCK_MS);
 
   if (confirmation?.status === "CONFIRMED") {
     return {
@@ -209,18 +209,18 @@ function getFixtureConfirmationSummary(input: {
     };
   }
 
-  if (diffHours <= FIXTURE_RESPONSE_LOCK_HOURS) {
+  if (isFixtureResponseLocked(input.kickoffAt)) {
     return {
-      label: "Awaiting confirmation",
-      tone: "amber",
-      helper: `Within ${FIXTURE_RESPONSE_LOCK_HOURS} hours — you can still confirm your team can play; contact SIXFL directly for any late change or issue`,
+      label: "Confirmation overdue",
+      tone: "red",
+      helper: `Confirmation was due ${formatDateTime(confirmationDeadline)} — ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Please confirm immediately, or contact SIXFL now if your team cannot play.`,
     };
   }
 
   return {
     label: "Awaiting team response",
     tone: "neutral",
-    helper: confirmation?.lastChasedAt ? `Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}` : "Tell SIXFL whether your team can fulfil this fixture",
+    helper: `Please confirm by ${formatDateTime(confirmationDeadline)} — at least ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.${confirmation?.lastChasedAt ? ` Reminder sent ${formatShortDateTime(confirmation.lastChasedAt)}.` : ""}`,
   };
 }
 
@@ -533,10 +533,10 @@ export default async function CaptainFixturesPage({
                 : "Your next match will appear here once SIXFL publishes the fixture."}
             </p>
 
-            {selectedFixture ? (
+            {selectedFixture && !selectedFixtureIsProvisional ? (
               <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
-                <strong className="text-sky-50">This is about the whole team.</strong>{" "}
-                You can confirm that your team can play right up until kick-off. If your team cannot play, you need to change a previous response, or there is another fixture issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly. Individual player availability is handled separately in the Availability tab.
+                <strong className="text-sky-50">Confirm your team at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.</strong>{" "}
+                This is the whole-team response; individual player availability is handled separately in the Availability tab. If your team cannot play, needs to change a response or has a fixture issue, notify SIXFL as soon as possible. Within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off, contact SIXFL directly about any cancellation, change or issue.
               </div>
             ) : null}
 
@@ -586,16 +586,25 @@ export default async function CaptainFixturesPage({
                 </div>
               ) : selectedResponseLocked ? (
                 <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-5 text-amber-50">
-                  <p className="text-base font-semibold">Please confirm your team can play</p>
+                  <p className="text-base font-semibold">
+                    {isSelectedFixtureConfirmed
+                      ? "Team confirmed"
+                      : selectedConfirmation?.status === "ISSUE_RAISED"
+                        ? "SIXFL is reviewing your response"
+                        : "Confirmation overdue — please confirm immediately"}
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-amber-100/80">
-                    The fixture is now within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off. You will continue to receive reminders until you confirm that your team can play.
+                    {isSelectedFixtureConfirmed
+                      ? "Thank you — your team is confirmed to play. Contact SIXFL immediately if anything changes."
+                      : selectedConfirmation?.status === "ISSUE_RAISED"
+                        ? "Your response has been recorded. Contact SIXFL directly to discuss or update the issue."
+                        : `Your team should have confirmed at least ${FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Please confirm immediately so SIXFL can finalise the match night.`}
                   </p>
-                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                    It is essential to the smooth running of the league that every team confirms its availability.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-amber-100/80">
-                    If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.
-                  </p>
+                  {!isSelectedFixtureConfirmed && selectedConfirmation?.status !== "ISSUE_RAISED" ? (
+                    <p className="mt-3 text-sm leading-6 text-amber-100/80">
+                      If you do not confirm and your team then fails to attend the match, your team may be liable for both its own match fee and its opponent’s match fee.
+                    </p>
+                  ) : null}
                   <p className="mt-3 text-sm leading-6 text-amber-100/80">
                     If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
@@ -615,7 +624,7 @@ export default async function CaptainFixturesPage({
                   <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
                     <p className="text-base font-semibold text-white">Can your team play this fixture?</p>
                     <p className="mt-1 text-sm leading-6 text-white/55">
-                      You can confirm yes at any time before kick-off. If you need to say no, change a response or raise an issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.
+                      Please confirm at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Choose Yes when the whole team can play. If the whole team cannot play, choose No and give a brief reason so SIXFL can review it.
                     </p>
 
                     <div className="mt-4 grid gap-4">

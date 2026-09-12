@@ -136,7 +136,7 @@ replaceOnce(
 replaceOnce(
   captainFixturePage,
   `You can confirm yes at any time before kick-off. If you need to say no, change a response or raise an issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.`,
-  `Choose Yes when the whole team can fulfil the fixture. Choose No only when the whole team cannot fulfil it: a brief reason is required and SIXFL will be alerted immediately. You can use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.`,
+  `Please confirm at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Choose Yes when the whole team can play. If the whole team cannot play, choose No and give a brief reason so SIXFL can review it.`,
 );
 
 replaceOnce(
@@ -156,7 +156,7 @@ replaceOnce(
                             Whole team cannot play?
                           </p>
                           <p className="mt-1 text-xs leading-5 text-red-100/65">
-                            Only use this when the whole team cannot fulfil the fixture. Sending it immediately raises an issue for SIXFL to review.
+                            Only use this when the whole team cannot fulfil the fixture. SIXFL will be alerted immediately and the fixture will be flagged for review.
                           </p>
                         </div>
                         <textarea
