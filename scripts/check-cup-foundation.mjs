@@ -43,8 +43,8 @@ expect(
     schema.includes("cupFormat       String?") &&
     schema.includes("isInterLeague   Boolean @default(false)") &&
     schema.includes("@@index([competitionType])") &&
-    schema.includes("@@index([competitionType, isActive])"),
-  "prepared Prisma schema must model the cup metadata and indexes created by the migration",
+    schema.includes('@@index([competitionType, isActive], map: "LeagueCompetition_type_active_idx")'),
+  "native Prisma schema must model the cup metadata and indexes created by the migration",
 );
 
 expect(

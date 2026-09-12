@@ -144,7 +144,3 @@ if (fs.existsSync(path.join(root, reminderTestPath))) {
 }
 
 console.log("Applied team-lead decline queue and provider safeguards to final prepared source.");
-
-require("./apply-venue-neutral-fixtures-current.cjs");
-require("./apply-venue-neutral-next-week-compat.cjs");
-require("./apply-cup-admin-navigation.cjs");

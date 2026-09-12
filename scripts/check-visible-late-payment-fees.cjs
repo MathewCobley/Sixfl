@@ -1,7 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-require("./apply-fixture-matchup-grid-screen-fit.cjs");
 require("./apply-meta-area-import-inference.cjs");
 require("./apply-late-fee-canonical-coverage.cjs");
 require("./fix-late-fee-stale-paid-candidates.cjs");

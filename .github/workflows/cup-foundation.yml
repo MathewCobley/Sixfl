@@ -34,20 +34,24 @@ jobs:
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
-      - name: Archive clean tracked source for native implementation review
-        run: git archive --format=tar.gz -o /tmp/sixfl-native-review-source.tar.gz HEAD src scripts tests prisma .github package.json package-lock.json tsconfig.json next.config.ts
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sixfl-native-review-source
-          path: /tmp/sixfl-native-review-source.tar.gz
-          retention-days: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Prepare final production source
+      - name: Verify native source before any build preparation
+        run: |
+          node scripts/check-cup-foundation.mjs
+          node scripts/check-venue-neutral-fixtures.mjs
+          node scripts/check-native-cup-fixture-source.mjs --snapshot "$RUNNER_TEMP/native-cup-fixtures.json"
+          node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs
+      - name: Prepare existing application features
         run: npm run prebuild
+      - name: Prove preparation cannot rewrite the native cup and fixture implementation
+        run: |
+          node scripts/check-native-cup-fixture-source.mjs --verify "$RUNNER_TEMP/native-cup-fixtures.json"
+          node scripts/check-venue-neutral-fixtures.mjs
+          node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs
       - run: npx prisma generate
       - name: Check cup isolation contracts
         run: node scripts/check-cup-foundation.mjs
