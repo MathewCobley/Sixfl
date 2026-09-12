@@ -7,6 +7,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import TeamShirt from "@/components/fixtures/TeamShirt";
 import SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -456,7 +458,6 @@ export default async function CaptainFixturesPage({
         captainConfirmations: {
           where: { teamId: teamid },
           select: {
-            id: true,
             status: true,
             note: true,
             confirmedAt: true,
@@ -478,7 +479,7 @@ export default async function CaptainFixturesPage({
       include: {
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
-        result: { select: { homeScore: true, awayScore: true } },
+        result: { select: { homeScore: true, awayScore: true, overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT } } },
       },
     }),
   ]);
@@ -839,9 +840,10 @@ export default async function CaptainFixturesPage({
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-semibold text-white">{goalsFor} - {goalsAgainst}</div>
-                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{getResultLabel(goalsFor, goalsAgainst)}</div>
+                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">{fixture.result!.overturn ? "Awarded result" : getResultLabel(goalsFor, goalsAgainst)}</div>
                       </div>
                     </div>
+                    <OverturnedResultNotice overturn={fixture.result!.overturn} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/>
                   </div>
                 );
               })

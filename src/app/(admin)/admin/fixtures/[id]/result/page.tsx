@@ -1,3 +1,5 @@
+import OverturnEmailPanel from "@/components/admin/OverturnEmailPanel";
+import { emailOverturnedResultAction } from "./overturn-email-actions";
 import { randomUUID } from "node:crypto";
 import OverturnResultForm from "@/components/admin/OverturnResultForm";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
@@ -33,7 +35,7 @@ export default async function FixtureResultPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ returnTo?: string; overturned?: string; overturnError?: string }>;
+  searchParams?: Promise<{ returnTo?: string; overturned?: string; overturnError?: string; noticeError?: string; noticeChecked?: string }>;
 }) {
   const access = await requireAdmin();
 
@@ -68,7 +70,7 @@ export default async function FixtureResultPage({
 
       <AdminCard className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-          Enter result
+          {fixture.result?.overturn ? "Result overturned" : "Enter result"}
         </p>
         <h1 className="mt-3 text-3xl font-black tracking-tight text-white">
           {fixture.homeTeam.name} vs {fixture.awayTeam.name}
@@ -84,7 +86,7 @@ export default async function FixtureResultPage({
       {sp.overturnError ? <p role="alert" className="rounded-xl border border-red-300/25 p-4 text-red-100">{sp.overturnError}</p> : null}
       <OverturnedResultNotice overturn={fixture.result?.overturn} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/>
       {fixture.result?.overturn ? <section className="space-y-3 rounded-2xl border border-white/15 p-5 text-sm text-white/80">
-        <h2 className="text-lg font-semibold">Recorded competition decision</h2>
+        <h2 className="text-lg font-semibold">Recorded competition decision · Admin only</h2>
         <p>Official result: {fixture.homeTeam.name} {fixture.result.homeScore}–{fixture.result.awayScore} {fixture.awayTeam.name}</p>
         <p>{fixture.result.overturn.decidedByName} · {formatDate(fixture.result.overturn.decidedAt)}</p>
         <p>Rules: {fixture.result.overturn.rulesBasis}</p>
@@ -94,6 +96,12 @@ export default async function FixtureResultPage({
         fixtureId={fixture.id} requestId={randomUUID()} updatedAt={fixture.result.updatedAt.toISOString()}
         homeTeam={fixture.homeTeam} awayTeam={fixture.awayTeam} homeScore={fixture.result.homeScore} awayScore={fixture.result.awayScore}
         action={overturnResultAction}/> : null}
+
+      {sp.noticeChecked === "1" ? <p role="status" className="rounded-xl border border-emerald-300/25 p-4 text-sm text-emerald-100">Email request checked. See the queued/sent status below. The recorded result has not been changed.</p> : null}
+      {sp.noticeError ? <p role="alert" className="rounded-xl border border-red-300/25 p-4 text-sm text-red-100">{sp.noticeError}</p> : null}
+      {fixture.result?.overturn && access.user?.role === "ADMIN" ? <OverturnEmailPanel
+        fixtureId={fixture.id} decisionId={fixture.result.overturn.id} actorUserId={access.user.id}
+        action={emailOverturnedResultAction}/> : null}
 
       {fixture.result?.isDisputed ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
