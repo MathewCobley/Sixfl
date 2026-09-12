@@ -25,8 +25,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check native homepage night copy
+        run: node --test tests/critical-pages/league-night-copy.test.cjs
+
       - name: Apply the complete production source-preparation chain
         run: npm run prebuild
+
+      - name: Check prepared homepage night copy
+        run: node --test tests/critical-pages/league-night-copy.test.cjs
 
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
