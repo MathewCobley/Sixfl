@@ -1,0 +1,31 @@
+name: Veo isolated development source
+on:
+  push:
+    branches: [feature/veo-fixture-confirmation-options]
+    paths: [.github/workflows/veo-development-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Package source and offline development dependencies only
+        run: |
+          mkdir -p /tmp/veo-development-source
+          tar -czf /tmp/veo-development-source/source.tgz src scripts prisma tests config docs .github AGENTS.md package.json package-lock.json tsconfig.json next.config.* postcss.config.* eslint.config.*
+          tar -czf /tmp/veo-development-source/dependencies.tgz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veo-development-source
+          path: /tmp/veo-development-source/
+          retention-days: 1
+          compression-level: 0
