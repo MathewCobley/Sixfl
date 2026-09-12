@@ -1,0 +1,59 @@
+name: PlayerPool response chases
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: playerpool-response-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  response-chases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_playerpool_response_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_playerpool_response_test
+      SIXFL_PLAYERPOOL_RESPONSE_TEST: '1'
+      NEXTAUTH_SECRET: isolated-playerpool-response-test
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      RESEND_API_KEY: re_test_never_sent
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify raw native controls and policy
+        run: |
+          node scripts/check-player-pool-response-native.mjs
+          npx tsx --test tests/player-pool-response/policy.test.ts
+      - run: npm run prebuild && npx prisma generate
+      - name: Verify prepared controls and existing contracts
+        run: |
+          node scripts/check-player-pool-response-native.mjs
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+          npx tsx --test tests/player-pool-response/policy.test.ts
+      - name: Isolated database and concurrency tests; no providers
+        run: |
+          npx prisma db push --skip-generate
+          npx tsx tests/player-pool-response/database.ts
+      - name: Typecheck and production build
+        run: npx tsc --noEmit && npx next build
+      - name: Verify genuine HTTP permissions and explicit response form
+        run: npx tsx tests/player-pool-response/http.ts

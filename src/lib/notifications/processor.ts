@@ -357,7 +357,11 @@ export async function processNotificationQueue(limit = 25) {
         sourceId: dispatch.sourceId,
         metadata: dispatch.metadata,
       });
+      const profileFollowupBlock = dispatch.sourceType?.startsWith("PLAYER_POOL_")
+        ? await (await import("@/lib/player-pool/response-chases")).getPlayerPoolFollowupDeliveryBlock(dispatch)
+        : null;
       const cancellationReason =
+        profileFollowupBlock ??
         (await playerLedgerNotificationBlock(dispatch)) ??
         (await playerRepaymentReminderDeliveryBlock(dispatch)) ??
         getUnresolvedEmailPlaceholderReason(dispatch) ??

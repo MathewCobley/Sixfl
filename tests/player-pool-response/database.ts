@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { prisma } from "../../src/lib/prisma";
+import { ensurePlayerPoolTables } from "../../src/lib/player-pool/storage";
+import { getPlayerPoolFollowupStates } from "../../src/lib/player-pool/followup-history";
+import { followupBlock, RESPONSE_CHASE_SOURCE, RESPONSE_CHASE_TEMPLATE } from "../../src/lib/player-pool/followup-policy";
+import { queuePlayerPoolResponseChase, declinePlayerPoolResponse, getPlayerPoolFollowupDeliveryBlock } from "../../src/lib/player-pool/response-chases";
+import History from "../../src/components/admin/player-pool/PlayerPoolContactHistory";
+const url = new URL(process.env.DATABASE_URL || "http://invalid");
+assert.ok(process.env.SIXFL_PLAYERPOOL_RESPONSE_TEST === "1" && url.hostname === "127.0.0.1" && url.pathname === "/sixfl_playerpool_response_test", "Isolated database only");
+// No provider imports/calls. Network sends are not part of these tests.
+const migration = "prisma/migrations/20260912133000_player_pool_response_chases/migration.sql";
+const migrate = () => execFileSync("psql", [process.env.DATABASE_URL!, "-v", "ON_ERROR_STOP=1", "-f", migration], { stdio: "pipe" });
+async function target() {
+  const id = randomUUID(), token = randomUUID(), email = `${id}@example.invalid`;
+  const p = await prisma.teamPlayerProspect.create({ data: { firstName: "Test", email, phone: null } });
+  await prisma.$executeRaw`INSERT INTO "PlayerPoolProfile" (id,"prospectId","profileToken","publicCode","emailNormalized",status,"invitedAt","createdAt","updatedAt")
+    VALUES (${id},${p.id},${token},${'PP-'+id},${email},'INVITED',NOW() - INTERVAL '10 days',NOW() - INTERVAL '10 days',NOW())`;
+  const recipient = await prisma.notificationRecipient.create({ data: { sourceType: "GENERAL", sourceId: `player-pool-profile:${id}`, audience: "PLAYER", email, emailNormalized: email, preferences: { create: {} } } });
+  return { id, token, email, p, recipient };
+}
+async function read(id: string) { return (await getPlayerPoolFollowupStates([id]))[0]; }
+async function main() {
+  await ensurePlayerPoolTables(); migrate(); migrate();
+  const fresh = await target();
+  const before = await prisma.notificationDispatch.count();
+  assert.equal(followupBlock(await read(fresh.id)), null);
+  assert.equal(await prisma.notificationDispatch.count(), before, "Audit is read-only");
+  const attempts = await Promise.all([1,2,3,4].map(() => queuePlayerPoolResponseChase(fresh.id)));
+  assert.equal(attempts.filter(r => r.queued).length, 1, "Concurrent jobs must not duplicate");
+  const dispatch = await prisma.notificationDispatch.findFirstOrThrow({ where: { sourceType: RESPONSE_CHASE_SOURCE, sourceId: fresh.id }, include: { recipient: true, template: true } });
+  assert.equal(dispatch.status, "QUEUED"); assert.equal(dispatch.template?.key, RESPONSE_CHASE_TEMPLATE);
+  assert.match(dispatch.bodyText, /a no is absolutely fine/);
+  assert.match(dispatch.bodyText, /cannot introduce you to a team/);
+  assert.ok(dispatch.bodyHtml?.includes(`/profile/${fresh.token}/respond`));
+  assert.equal(await getPlayerPoolFollowupDeliveryBlock(dispatch), null);
+  assert.equal((await queuePlayerPoolResponseChase(fresh.id)).queued, false);
+  const html = renderToStaticMarkup(createElement(History, { events: (await read(fresh.id)).events, replyAt: null, declinedAt: null, prospectId: fresh.p.id, block: null }));
+  assert.match(html, /Yes \/ no response request/); assert.match(html, /not sent yet/); assert.ok(!html.includes(fresh.token));
+  assert.equal(await declinePlayerPoolResponse("invalid"), false);
+  assert.equal(await declinePlayerPoolResponse(fresh.token), true); assert.equal(await declinePlayerPoolResponse(fresh.token), true);
+  assert.equal((await read(fresh.id)).status, "NOT_LOOKING");
+  assert.equal((await prisma.notificationDispatch.findUniqueOrThrow({ where: { id: dispatch.id } })).status, "CANCELLED");
+  assert.match((await getPlayerPoolFollowupDeliveryBlock(dispatch))!, /no longer awaiting/);
+  assert.equal(await prisma.teamPlayerProspect.count({ where: { id: fresh.p.id } }), 1, "No deletion");
+  const silent = await target(); assert.equal((await read(silent.id)).status, "INVITED", "Silence stays awaiting");
+  const replied = await target();
+  const thread = await prisma.messageThread.create({ data: { channel: "EMAIL", emailNormalized: replied.email } });
+  await prisma.messageEntry.create({ data: { threadId: thread.id, channel: "EMAIL", direction: "INBOUND", body: "I have a question", fromEmail: replied.email, receivedAt: new Date() } });
+  assert.match(followupBlock(await read(replied.id))!, /Reply/); assert.equal((await queuePlayerPoolResponseChase(replied.id)).queued, false);
+  const old = await target();
+  const invite = await prisma.notificationDispatch.create({ data: { recipientId: old.recipient.id, channel: "EMAIL", audience: "PLAYER", bodyText: "test", sourceType: "PLAYER_POOL_PROFILE_INVITE", sourceId: old.id, status: "SENT", sentAt: new Date() } });
+  assert.equal((await read(old.id)).events[0].id, invite.id); assert.match(followupBlock(await read(old.id))!, /48 hours/);
+  const oldSms = await target();
+  await prisma.notificationDispatch.create({ data: { recipientId: oldSms.recipient.id, channel: "SMS", audience: "PLAYER", bodyText: "test", sourceType: "PLAYER_POOL_PROFILE_SMS_NUDGE_FINAL", sourceId: oldSms.id, status: "SENT", sentAt: new Date() } });
+  assert.match(followupBlock(await read(oldSms.id))!, /48 hours/);
+  const opted = await target();
+  await prisma.notificationRecipient.update({ where: { id: opted.recipient.id }, data: { transactionalEmailOptIn: false } });
+  assert.equal((await queuePlayerPoolResponseChase(opted.id)).queued, false);
+  assert.equal((await prisma.notificationRecipient.findUniqueOrThrow({ where: { id: opted.recipient.id } })).transactionalEmailOptIn, false);
+  const inTeam = await target();
+  const user = await prisma.user.create({ data: { email: inTeam.email } });
+  const team = await prisma.team.create({ data: { name: randomUUID(), claimCode: randomUUID() } });
+  await prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, role: "PLAYER" } });
+  assert.match(followupBlock(await read(inTeam.id))!, /Squad/);
+  const changed = await target(); const queued = await queuePlayerPoolResponseChase(changed.id);
+  assert.ok(queued.queued);
+  const record = await prisma.notificationDispatch.findUniqueOrThrow({ where: { id: queued.dispatchId! }, include: { recipient: true } });
+  await prisma.teamPlayerProspect.update({ where: { id: changed.p.id }, data: { email: "different@example.invalid" } });
+  assert.match((await getPlayerPoolFollowupDeliveryBlock(record))!, /identity changed/);
+  await prisma.notificationTemplate.update({ where: { key: RESPONSE_CHASE_TEMPLATE }, data: { subject: "Admin edited subject", isActive: false } });
+  migrate();
+  const template = await prisma.notificationTemplate.findUniqueOrThrow({ where: { key: RESPONSE_CHASE_TEMPLATE } });
+  assert.equal(template.subject, "Admin edited subject"); assert.equal(template.isActive, false);
+  assert.equal((await queuePlayerPoolResponseChase((await target()).id)).queued, false);
+  console.log("PlayerPool response tests passed: read-only audit, concurrent dedupe, native history, real invitation/SMS evidence, recent contact, replies, opt-out preservation, existing squad, token decision, cancellation, contact recheck and template edit preservation.");
+}
+main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());
