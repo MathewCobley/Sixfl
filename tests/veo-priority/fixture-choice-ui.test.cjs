@@ -9,8 +9,8 @@ const offer={available:true,reason:null,defaultChoice:'NONE',preference:false,re
 const props={teamId:'team',fixtureId:'fixture',leagueId:'league',confirmed:false,offer,preview:false};
 function render(input){return renderToStaticMarkup(React.createElement(forms.default,input));}
 function save(name,html){fs.mkdirSync('artifacts/veo',{recursive:true});fs.writeFileSync(`artifacts/veo/${name}.html`,html);}
-test('confirmation offers NONE/MATCH/ONGOING, defaults off, explains whole-team price and does not promise filming',()=>{
-const html=render(props);for(const text of ['Just this match','this and future matches','No thanks','£5 extra for the whole team','Confirm our team can play','usable recording','YouTube','billed separately'])assert.ok(html.toLowerCase().includes(text.toLowerCase()),text);
+test('confirmation offers NONE/MATCH/ONGOING, defaults off and explains the conditional whole-team price',()=>{
+const html=render(props);for(const text of ['Just this match','this and future matches','No thanks','£5 extra for the whole team','Confirm our team can play','usable recording','YouTube','added separately'])assert.ok(html.toLowerCase().includes(text.toLowerCase()),text);
 assert.equal((html.match(/type="radio"/g)||[]).length,3);assert.match(html,/<input[^>]+checked=""[^>]+value="NONE"/);assert.doesNotMatch(html,/value="(?:MATCH|ONGOING)"[^>]*checked/);save('confirmation-live',html);
 });
 test('saved preference defaults ongoing; skip and stop are separate; accepted booking shows no new purchase choice',()=>{
@@ -55,4 +55,59 @@ test('Veo confirmation integration retains the existing awarded-result display o
   assert.equal(rendered.filter(name => name === 'OverturnedResultNotice').length, 1, 'Retain the original/awarded result notice');
   assert.match(source, /overturn:\s*\{\s*select:\s*RESULT_OVERTURN_SUMMARY_SELECT/);
   assert.match(source, /fixture\.result!\.overturn\s*\?\s*"Awarded result"/);
+});
+
+function textOnly(html) { return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); }
+function noChoice(html) {
+  return textOnly((html.match(/<label\b[^>]*>[\s\S]*?<\/label>/g) || []).find(label => label.includes('value="NONE"')) || '');
+}
+for (const preview of [false, true]) {
+  for (const preference of [false, true]) {
+    test(`Veo wording: ${preview ? 'preview' : 'captain'}, preference ${preference}, distinguishes opt-out from no filming`, () => {
+      const html = render({...props, preview, offer:{...offer, preference, defaultChoice:preference ? 'ONGOING' : 'NONE'}});
+      const text = textOnly(html);
+      const no = noChoice(html);
+      assert.ok(no.includes(preference ? 'Skip Veo Priority for this match' : 'No thanks — no Veo Priority'));
+      assert.ok(no.includes('Your match may still be recorded, but a place on the camera pitch is not guaranteed.'));
+      assert.ok(no.includes(preference ? 'No extra charge for this match.' : 'There is no extra charge.'));
+      assert.equal(no.includes('Your saved preference stays on for future fixtures.'), preference);
+      for (const expected of [
+        'Once SIXFL confirms your booking, your match is guaranteed a place on that pitch.',
+        'submitting a request alone does not reserve a space',
+        'One-match requests and saved preferences receive the same priority.',
+        '£5 charge is added separately to Team payments after a usable recording is ready',
+        'No available space or no usable recording means no extra charge.',
+        'Your normal match fee remains unchanged.',
+        'Teams choosing No thanks may still be filmed without being charged.',
+        'Veo Priority is optional. You do not need to select it to confirm your team’s attendance.',
+      ]) assert.ok(text.includes(expected), expected);
+      assert.doesNotMatch(text, /Would you like this match filmed|Your usual match fee\. This does not change your saved preference/);
+      const fieldset = html.match(/<fieldset\b[\s\S]*?<\/fieldset>/)?.[0];
+      const other = render({...props, preview:!preview, offer:{...offer, preference, defaultChoice:preference ? 'ONGOING' : 'NONE'}}).match(/<fieldset\b[\s\S]*?<\/fieldset>/)?.[0];
+      assert.equal(textOnly(fieldset), textOnly(other), 'Preview must show the same captain-facing explanation');
+    });
+  }
+}
+
+test('capture the complete native/prepared Veo wording and owner inventory', () => {
+  const path = require('node:path');
+  const matches = [];
+  const stale = [];
+  function walk(dir) {
+    for (const item of fs.readdirSync(dir, {withFileTypes:true})) {
+      const file = path.join(dir, item.name);
+      if (item.isDirectory()) walk(file);
+      else if (/\.(?:tsx?|[cm]?js)$/.test(item.name)) {
+        fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+          if (/FixtureVeoConfirmationForm|CaptainFixtureConfirmation|Veo Priority|Would you like this match filmed|Your usual match fee\. This does not change your saved preference/.test(line)) matches.push(`${file}:${i+1}:${line.trim()}`);
+          if (/Would you like this match filmed\?|Your usual match fee\. This does not change your saved preference\./.test(line)) stale.push(`${file}:${i+1}`);
+        });
+      }
+    }
+  }
+  walk('src'); walk('scripts');
+  fs.mkdirSync('artifacts/veo', {recursive:true});
+  fs.writeFileSync('artifacts/veo/confirmation-wording-inventory.txt', matches.join('\n')+'\n');
+  assert.ok(matches.length > 0);
+  assert.deepEqual(stale, [], 'Do not retain the old ambiguous confirmation wording in source or preparation scripts');
 });
