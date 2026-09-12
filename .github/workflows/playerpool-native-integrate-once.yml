@@ -1,0 +1,171 @@
+name: Review native PlayerPool source in isolated workspace
+on:
+  push:
+    branches: [fix/playerpool-response-and-contact-history]
+permissions:
+  contents: write
+concurrency:
+  group: playerpool-native-review
+  cancel-in-progress: true
+jobs:
+  native-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_playerpool_response_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_playerpool_response_test
+      SIXFL_PLAYERPOOL_RESPONSE_TEST: '1'
+      NEXTAUTH_SECRET: playerpool-response-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_playerpool_response_test_not_real
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      CRON_SECRET: playerpool-response-test-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Capture existing page behaviour for native source retirement
+        run: npm run prebuild
+      - name: Apply reviewed edits once in developer workspace, not during application builds
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          page_path='src/app/(admin)/admin/player-pool/page.tsx'
+          prepared=Path(page_path).read_text()
+          subprocess.run(['git','restore','.'],check=True)
+          Path(page_path).write_text(prepared)
+          p=Path('scripts/check-central-standings-usage.cjs');p.write_text(p.read_text().replace('require("./apply-player-pool-nudge-history.cjs");\n',''))
+          Path('scripts/apply-player-pool-nudge-history.cjs').unlink()
+          p=Path('src/lib/player-pool/response-reminders.ts');p.write_text(p.read_text().replace('await db.$queryRaw`SELECT pg_advisory_xact_lock','await db.$executeRaw`SELECT pg_advisory_xact_lock'))
+          p=Path('src/lib/notifications/processor.ts');s=p.read_text();s='import { getPlayerPoolContactDeliveryBlock } from "@/lib/player-pool/response-reminders";\n'+s
+          block='''        const playerPoolContactBlock = await getPlayerPoolContactDeliveryBlock(dispatch);
+                  if (playerPoolContactBlock) {
+                    await markNotificationDispatchCancelled(dispatch.id, playerPoolContactBlock);
+                    result.skipped += 1;
+                    result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: playerPoolContactBlock });
+                    continue;
+                  }
+          '''
+          s=s.replace('        const sendResult = await sendEmailWithResend({',block+'        const sendResult = await sendEmailWithResend({').replace('        const sendResult = await sendSmsWithTwilio({',block+'        const sendResult = await sendSmsWithTwilio({');p.write_text(s)
+          p=Path('src/lib/player-pool/profile-sms-reminders.ts');s=p.read_text();s='import { getPlayerPoolContactHistory, readPlayerPoolContactTargets } from "./contact-history";\nimport { playerPoolChaseBlock } from "./response-policy";\n'+s
+          s=s.replace('    const templateKey = PLAYER_POOL_PROFILE_SMS_TEMPLATE_KEYS[plan.stage];','''    const contactProfile = (await readPlayerPoolContactTargets([profile.id], db))[0];
+              if (!contactProfile) return null;
+              const contactHistory = (await getPlayerPoolContactHistory([contactProfile], db)).get(profile.id)!;
+              if (playerPoolChaseBlock(contactProfile, contactHistory, now, "SMS", true)) return null;
+              const templateKey = PLAYER_POOL_PROFILE_SMS_TEMPLATE_KEYS[plan.stage];''')
+          s=s.replace('variables: { firstName: profile.firstName.trim() || "there", profileUrl, publicCode: profile.publicCode },','variables: { firstName: profile.firstName.trim() || "there", profileUrl, notLookingUrl: `${profileUrl}/respond`, publicCode: profile.publicCode },');p.write_text(s)
+          p=Path('src/app/(public)/player-pool/profile/[token]/page.tsx');s=p.read_text().replace('import { notFound }','import Link from "next/link";\nimport { notFound }');s=s.replace('<PlayerPoolProfileForm','''{!profile.profileSubmittedAt ? <p className="mb-6 rounded-xl border border-white/15 p-4 text-sm">
+                        No longer looking for a team? <Link className="font-bold text-emerald-300 underline" href={`/player-pool/profile/${encodeURIComponent(token)}/respond`}>Tell us and stop these reminders</Link>.
+                      </p> : null}
+                      <PlayerPoolProfileForm''');p.write_text(s)
+          p=Path(page_path);s=p.read_text();s='import PlayerPoolContactHistory from "@/components/admin/player-pool/PlayerPoolContactHistory";\nimport { getPlayerPoolContactHistory, readPlayerPoolContactTargets } from "@/lib/player-pool/contact-history";\n'+s
+          s=s.replace('  const totalAwaitingProfile =','''  const contactTargets = await readPlayerPoolContactTargets(visibleProfiles.map(profile => profile.id));
+            const contactHistory = await getPlayerPoolContactHistory(contactTargets, undefined, null, true);
+          
+            const totalAwaitingProfile =''')
+          s=s.replace('                <PlayerPoolSmsChaseHistory','''                <PlayerPoolContactHistory history={contactHistory.get(profile.id)!} />
+                          <PlayerPoolSmsChaseHistory''');p.write_text(s)
+          p=Path('src/components/admin/player-pool/PlayerPoolNudgeButton.tsx');s=p.read_text().replace('import { useState }','import { useEffect, useState }').replace('    hourCycle: "h23",','    hourCycle: "h23",\n    timeZone: "Europe/London",')
+          s=s.replace('  async function sendNudge()','''  // A bulk refresh must replace the card's original copied server props.
+            useEffect(() => {
+              setNudgeCount(initialNudgeCount); setLastNudgeAt(initialLastNudgeAt);
+              setLastNudgeStatus(initialLastNudgeStatus); setLastNudgeBy(initialLastNudgeBy);
+            }, [initialNudgeCount, initialLastNudgeAt, initialLastNudgeStatus, initialLastNudgeBy]);
+          
+            async function sendNudge()''')
+          s=s.replace('This sends the full PlayerPool explanation and their secure profile form link.','This asks whether they still want a team, with a profile link and a no-longer-looking option. Recent contact, existing replies, pending messages and opt-outs are checked first.').replace('No profile reminder email sent yet.','No profile-reminder email is recorded. Invitations and other contact are shown above.');p.write_text(s)
+          p=Path('src/components/admin/player-pool/BulkPlayerPoolProfileReminderButton.tsx');s=p.read_text().replace('Each player will receive the full PlayerPool explanation and their own secure profile link. Eligible players who still have not completed it will then receive an automatic SMS nudge 48 hours after the email is delivered.','Eligible players receive a short yes/no follow-up and their own secure profile link. Recent contact, pending messages, existing replies, squad records and opt-outs are skipped. Nobody is closed for not replying.')
+          start=s.index('            This sends the full PlayerPool explanation');end=s.index('\n          </p>',start)
+          s=s[:start]+'''            Ask whether they still want help finding a team. Each email has a profile
+                      link and a no-longer-looking option. Recent contact, queued messages,
+                      replies, squad records and opt-outs are checked before sending. Silence
+                      does not close an enquiry. Eligible non-responders can receive the existing
+                      first SMS after 48 hours and final SMS 48 hours later; stages are never reset.'''+s[end:];p.write_text(s)
+          p=Path('scripts/check-player-pool-profile-reminders.mjs');s=p.read_text();start=s.index('expect(\n  reminderService,\n  \'"player-pool-profile-reminder-email"\'');end=s.index('\nexpect(\n  individualRoute,',start)
+          s=s[:start]+'''const responseService = read("src/lib/player-pool/response-reminders.ts");
+          const responsePolicy = read("src/lib/player-pool/response-policy.ts");
+          const migration = read("prisma/migrations/20260912180000_playerpool_response_followup/migration.sql");
+          expect(responsePolicy, '"player-pool-still-looking-email"', "Response chases use an editable System Template.");
+          expect(migration, "ON CONFLICT (key) DO NOTHING", "Preserve administrator template edits.");
+          expect(migration, "Yes — complete my PlayerPool profile", "Retain secure profile CTA.");
+          expect(migration, "'profileUrl'", "Use the player's own profile URL.");
+          expect(migration, "{{notLookingUrl}}", "Offer an explicit no-longer-looking response.");
+          expect(migration, "Your contact details are not made public", "Preserve privacy explanation.");
+          expect(migration, "does not commit you to joining a team", "Preserve no-commitment explanation.");
+          expect(migration, "does not guarantee a place", "Never promise a team place.");
+          expect(reminderService, "queuePlayerPoolResponseReminder", "Single and bulk controls use shared eligibility and queueing.");
+          expect(responseService, "queueNotificationFromTemplate", "Use the existing audited outbox.");
+          expect(responseService, "playerPoolChaseBlock", "Do not duplicate messages or chase replies/opt-outs.");
+          expect(reminderService, "PLAYER_POOL_PROFILE_NUDGE", "Keep historical chase source IDs.");
+          '''+s[end:];s=s.replace('rich email, awaiting-only bulk send','yes/no template, guarded awaiting-only bulk send');p.write_text(s)
+          Path('.github/workflows/playerpool-native-integrate-once.yml').unlink()
+          subprocess.run(['git','add','-u'],check=True)
+          subprocess.run(['git','-c','user.name=SIXFL source review','-c','user.email=source-review@example.invalid','commit','-m','Native PlayerPool responses and contact history; retire source rewrite'],check=True)
+          Path('/tmp/native-sha').write_text(subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip())
+          PY
+      - name: Verify native source survives application preparation
+        run: |
+          sha256sum 'src/app/(admin)/admin/player-pool/page.tsx' > /tmp/native.sha256
+          npm run prebuild
+          sha256sum -c /tmp/native.sha256
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+          node scripts/audit-dom-bridges.mjs --changed-from origin/main --fail-on-findings
+          npx prisma generate
+          npx tsc --noEmit
+      - name: Real PostgreSQL tests without provider access
+        run: |
+          npx prisma db push --skip-generate
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/playerpool-response/database.test.tsx"],outfile:".playerpool-response-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .playerpool-response-tests.cjs
+      - name: Production build
+        run: npx next build
+      - name: Export tested content-addressed objects, without updating any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import subprocess,json,os,base64
+          from pathlib import Path
+          head=Path('/tmp/native-sha').read_text().strip();base=os.environ['GITHUB_SHA']
+          names=subprocess.check_output(['git','diff','--name-only',base,head],text=True).splitlines();entries=[]
+          for name in names:
+            r=subprocess.run(['git','show',head+':'+name],capture_output=True)
+            entry={'path':name,'mode':'100644','type':'blob','sha':None}
+            if r.returncode==0:
+              assert not name.startswith('.github/'), 'Workflow content must use authorised connector, not Actions token'
+              result=subprocess.run(['gh','api','--method','POST','repos/MathewCobley/Sixfl/git/blobs','--input','-'],input=json.dumps({'content':base64.b64encode(r.stdout).decode(),'encoding':'base64'}),text=True,capture_output=True,check=True)
+              entry['sha']=json.loads(result.stdout)['sha']
+            entries.append(entry)
+          tree=subprocess.check_output(['git','rev-parse',base+'^{tree}'],text=True).strip()
+          Path('/tmp/playerpool-native-manifest.json').write_text(json.dumps({'base_commit':base,'base_tree':tree,'entries':entries},indent=2))
+          Path('/tmp/playerpool-native-review.patch').write_bytes(subprocess.check_output(['git','diff',base,head]))
+          print('All reviewed native source tests passed; no branch was moved, no production data accessed and no customer message sent.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playerpool-native-review
+          path: |
+            /tmp/playerpool-native-manifest.json
+            /tmp/playerpool-native-review.patch
+          retention-days: 2

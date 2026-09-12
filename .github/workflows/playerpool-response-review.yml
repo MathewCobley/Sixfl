@@ -1,19 +1,59 @@
-name: PlayerPool response repair review
+name: PlayerPool responses and contact history
 on:
+  pull_request:
   push:
-    branches: [fix/playerpool-response-and-contact-history]
+    branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: playerpool-response-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  source-review:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_playerpool_response_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_playerpool_response_test
+      SIXFL_PLAYERPOOL_RESPONSE_TEST: '1'
+      NEXTAUTH_SECRET: playerpool-response-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_playerpool_response_test_not_real
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      CRON_SECRET: playerpool-response-test-only
     steps:
       - uses: actions/checkout@v4
-      - name: Archive tracked source only, without credentials or generated files
-        run: git archive --format=zip HEAD -o /tmp/playerpool-source.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: playerpool-current-source
-          path: /tmp/playerpool-source.zip
-          retention-days: 2
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Snapshot native PlayerPool page before preparation
+        run: sha256sum 'src/app/(admin)/admin/player-pool/page.tsx' > /tmp/playerpool-native.sha256
+      - name: Prepare production source without a PlayerPool rewriting script
+        run: |
+          npm run prebuild
+          sha256sum -c /tmp/playerpool-native.sha256
+          test ! -f scripts/apply-player-pool-nudge-history.cjs
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+      - run: npx prisma generate && npx tsc --noEmit
+      - name: Isolated schema and runtime tests, never production credentials
+        run: |
+          npx prisma db push --skip-generate
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/playerpool-response/database.test.tsx"],outfile:".playerpool-response-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .playerpool-response-tests.cjs
+      - name: Production build
+        run: npx next build
