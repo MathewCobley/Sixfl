@@ -37,7 +37,7 @@ export default function BulkPlayerPoolProfileReminderButton({
 
   async function sendBulkReminder() {
     const confirmed = window.confirm(
-      `Email all ${awaitingCount} players still awaiting their PlayerPool profile?\n\nEach player will receive the full PlayerPool explanation and their own secure profile link. Eligible players who still have not completed it will then receive an automatic SMS nudge 48 hours after the email is delivered.`,
+      `Email all ${awaitingCount} players still awaiting their PlayerPool profile?\n\nAsk whether they still want a team. They can complete their profile or reply NO. People with replies, recent contact, pending messages, squad links or opt-outs are skipped. No profile will be closed automatically.`,
     );
 
     if (!confirmed) return;
@@ -91,10 +91,10 @@ export default function BulkPlayerPoolProfileReminderButton({
             Email everyone who is still awaiting their profile
           </h3>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            This sends the full PlayerPool explanation and each player&apos;s own secure
-            form link. If they still have not completed it, SIXFL automatically sends
-            one SMS 48 hours after the email is delivered and a final SMS five days
-            later. Completed profiles and players without a usable mobile are skipped.
+            Ask for a clear yes or no. Players can complete their profile or reply NO
+            so SIXFL can close their enquiry. Existing replies, contact within 48 hours,
+            pending messages, squad links and opt-outs are checked before sending.
+            No response does not mean declined, and no profile is closed by this action.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export default function BulkPlayerPoolProfileReminderButton({
           {result.skipped > 0 ? ` ${result.skipped} skipped.` : ""}
           {result.failed > 0 ? ` ${result.failed} failed.` : ""}
           <div className="mt-1 text-xs text-emerald-100/65">
-            SMS follow-up starts automatically only after the email is actually sent. The latest email date is shown on each player card below.
+            The existing SMS sequence still stops after two messages; replies pause further chases. The latest email date is shown on each player card below.
           </div>
           {result.errors.length > 0 ? (
             <details className="mt-3 text-xs text-amber-100/80">

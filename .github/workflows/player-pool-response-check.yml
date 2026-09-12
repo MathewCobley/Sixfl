@@ -1,0 +1,63 @@
+name: PlayerPool response checks and contact history
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: playerpool-response-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  response-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_response_check_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_response_check_test
+      SIXFL_ISOLATED_RESPONSE_CHECK_TEST: '1'
+      NEXTAUTH_SECRET: response-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      RESEND_API_KEY: re_test_unused
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify the owning PlayerPool page is native
+        run: |
+          node scripts/check-player-pool-profile-reminders.mjs
+          test ! -f scripts/apply-player-pool-nudge-history.cjs
+          sha256sum 'src/app/(admin)/admin/player-pool/page.tsx' src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx > /tmp/playerpool-source.sha
+      - name: Prepare the existing application without rewriting the native feature
+        run: |
+          npm run prebuild
+          sha256sum --check /tmp/playerpool-source.sha
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - name: Create isolated database and run real history and queue tests
+        run: |
+          npx prisma db push --skip-generate
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-pool-response-check.test.ts"],outfile:".response-check-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .response-check-tests.cjs
+      - name: Production compilation with inert provider configuration
+        run: npx next build
