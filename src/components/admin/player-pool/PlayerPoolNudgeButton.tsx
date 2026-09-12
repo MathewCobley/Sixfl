@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type NudgeResponse = {
   ok?: boolean;
@@ -23,6 +23,7 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
+    timeZone: "Europe/London",
   }).format(date);
 }
 
@@ -69,9 +70,16 @@ export default function PlayerPoolNudgeButton({
   const [lastNudgeStatus, setLastNudgeStatus] = useState(initialLastNudgeStatus);
   const [lastNudgeBy, setLastNudgeBy] = useState(initialLastNudgeBy);
 
+  useEffect(() => {
+    setNudgeCount(initialNudgeCount);
+    setLastNudgeAt(initialLastNudgeAt);
+    setLastNudgeStatus(initialLastNudgeStatus);
+    setLastNudgeBy(initialLastNudgeBy);
+  }, [initialNudgeCount, initialLastNudgeAt, initialLastNudgeStatus, initialLastNudgeBy]);
+
   async function sendNudge() {
     const confirmed = window.confirm(
-      `Send a PlayerPool profile reminder to ${playerName}?\n\nThis sends the full PlayerPool explanation and their secure profile form link.`,
+      `Send a PlayerPool profile reminder to ${playerName}?\n\nAsk whether they still want a team, with their profile link and an option to reply NO. Recent contact, replies and opt-outs are checked before queueing.`,
     );
     if (!confirmed) return;
 
@@ -125,7 +133,7 @@ export default function PlayerPoolNudgeButton({
             </span>
           </>
         ) : (
-          <span>No profile reminder email sent yet.</span>
+          <span>No profile-reminder email recorded. Check contact history above for invitations and other messages.</span>
         )}
       </div>
 
