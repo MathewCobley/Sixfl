@@ -1,3 +1,4 @@
+import { getPlayerPoolContactHistory, playerPoolChaseBlock } from "@/lib/player-pool/contact-history";
 // ========================================
 // File: src/app/api/admin/player-pool/bulk-profile-reminders/route.ts
 // ========================================
@@ -133,5 +134,24 @@ export async function POST() {
       },
       { status: 500 },
     );
+  }
+}
+
+/** Read-only preflight. Never creates a message or changes a player's status. */
+export async function GET() {
+  try {
+    await requireAdmin();
+    const ids = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "PlayerPoolProfile" WHERE status='INVITED' AND "profileSubmittedAt" IS NULL
+    `;
+    const states = await getPlayerPoolContactHistory(ids.map(row => row.id));
+    const profiles = ids.map(row => {
+      const state = states.get(row.id);
+      return { publicCode: state?.publicCode ?? row.id, reason: playerPoolChaseBlock(state) };
+    });
+    return NextResponse.json({ ok: true, targeted: ids.length, eligible: profiles.filter(row => !row.reason).length,
+      skipped: profiles.filter(row => row.reason) });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Unable to load the admin PlayerPool chase preview." }, { status: 403 });
   }
 }

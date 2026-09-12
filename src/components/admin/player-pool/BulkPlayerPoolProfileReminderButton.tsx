@@ -36,17 +36,15 @@ export default function BulkPlayerPoolProfileReminderButton({
   const [error, setError] = useState<string | null>(null);
 
   async function sendBulkReminder() {
-    const confirmed = window.confirm(
-      `Email all ${awaitingCount} players still awaiting their PlayerPool profile?\n\nEach player will receive the full PlayerPool explanation and their own secure profile link. Eligible players who still have not completed it will then receive an automatic SMS nudge 48 hours after the email is delivered.`,
-    );
-
-    if (!confirmed) return;
-
     setPending(true);
     setResult(null);
     setError(null);
 
     try {
+      const previewResponse = await fetch("/api/admin/player-pool/bulk-profile-reminders", { cache: "no-store" });
+      const preview = await previewResponse.json();
+      if (!previewResponse.ok || !preview.ok) throw new Error(preview.error || "Cannot verify the chase recipients.");
+      if (!window.confirm(`Send a yes/no follow-up to ${preview.eligible} eligible awaiting players?\n\n${preview.skipped.length} will be skipped for recent contact, queued messages, an existing reply, squad records, missing details or opt-outs. Nobody is closed for not responding.`)) return;
       const response = await fetch(
         "/api/admin/player-pool/bulk-profile-reminders",
         { method: "POST" },
@@ -88,13 +86,15 @@ export default function BulkPlayerPoolProfileReminderButton({
             Email &amp; SMS profile reminders
           </p>
           <h3 className="mt-2 text-lg font-black text-white">
-            Email everyone who is still awaiting their profile
+            Get a yes or no from awaiting players
           </h3>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            This sends the full PlayerPool explanation and each player&apos;s own secure
-            form link. If they still have not completed it, SIXFL automatically sends
-            one SMS 48 hours after the email is delivered and a final SMS five days
-            later. Completed profiles and players without a usable mobile are skipped.
+            Ask whether each player still wants a team. Yes opens their profile;
+            No lets them close their PlayerPool enquiry. Without a completed profile
+            we cannot introduce them to a team. A live check skips recent contact,
+            queued messages, replies needing review, existing squad records and opt-outs.
+            The existing two SMS follow-ups remain spaced 48 hours apart and stop
+            when a reply, completed profile or no-longer-looking status is recorded.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export default function BulkPlayerPoolProfileReminderButton({
           {result.skipped > 0 ? ` ${result.skipped} skipped.` : ""}
           {result.failed > 0 ? ` ${result.failed} failed.` : ""}
           <div className="mt-1 text-xs text-emerald-100/65">
-            SMS follow-up starts automatically only after the email is actually sent. The latest email date is shown on each player card below.
+            The latest email date is shown on each player card below. Invitations, chases and responses are recorded separately. Queued is not the same as sent.
           </div>
           {result.errors.length > 0 ? (
             <details className="mt-3 text-xs text-amber-100/80">

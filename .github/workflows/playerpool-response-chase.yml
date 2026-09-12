@@ -1,0 +1,56 @@
+name: PlayerPool yes-no response and contact history
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  playerpool-response:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_pool_response_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_pool_response_test
+      NEXTAUTH_SECRET: isolated-playerpool-response-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      RESEND_API_KEY: re_isolated_no_delivery
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      SIXFL_POOL_RESPONSE_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify native controls before preparation
+        run: |
+          node scripts/check-player-pool-profile-reminders.mjs
+          test ! -f scripts/apply-player-pool-nudge-history.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npx prisma db push --skip-generate
+      - name: Actual PostgreSQL history, queue, concurrency, opt-outs, replies and closure
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/playerpool-response-chase.test.ts"],outfile:".playerpool-response-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .playerpool-response-tests.cjs
+      - name: Existing critical contracts
+        run: |
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+      - run: npx next build
