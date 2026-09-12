@@ -86,6 +86,8 @@ export default async function PlayerTeamLayout({
         <PlayerTeamNav teamId={teamid} />
       </Suspense>
 
+      {/* Keep the player's dashboard first; discovery panels must not precede it. */}
+      {children}
       <PlayerDashboardOnly teamId={teamid}>
         <div className="mx-auto w-full max-w-6xl px-4 pt-6">
           <GoalOfWeekDashboardPromo
@@ -94,7 +96,6 @@ export default async function PlayerTeamLayout({
           />
         </div>
       </PlayerDashboardOnly>
-      {children}
       <PlayerDashboardOnly teamId={teamid}>
         <div className="space-y-8 pb-8">
           <PlayerLeagueMediaPanel teamId={teamid} />

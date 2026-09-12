@@ -1,0 +1,58 @@
+name: Player dashboard content order
+on:
+  pull_request:
+    paths:
+      - 'src/app/player/team/**'
+      - 'src/components/player/**'
+      - 'src/components/news/LatestNews.tsx'
+      - 'src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx'
+      - 'tests/player-dashboard-order/**'
+      - '.github/workflows/player-dashboard-order.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: player-dashboard-order-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused?connect_timeout=1
+      NEXTAUTH_SECRET: isolated-player-order-tests-only
+      NEXTAUTH_URL: http://127.0.0.1:3218
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3218
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      RESEND_API_KEY: re_isolated_player_order_not_a_real_key
+      STRIPE_SECRET_KEY: sk_test_isolated_player_order_not_a_real_key
+      OPENAI_API_KEY: sk-isolated-player-order-not-a-real-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Native layout and template composition
+        run: node --test tests/player-dashboard-order/contract.test.cjs
+      - name: Prepare application once
+        run: npm run prebuild && npx prisma generate
+      - name: Prepared order and existing feature safeguards
+        run: |
+          node --test tests/player-dashboard-order/contract.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+      - name: Build prepared production application
+        run: npx next build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix /tmp/player-order-browser --no-save --package-lock=false playwright@1.55.0
+          /tmp/player-order-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Mobile and desktop layout order with synthetic content
+        run: PLAYER_ORDER_PLAYWRIGHT=/tmp/player-order-browser/node_modules/playwright node tests/player-dashboard-order/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-dashboard-order-${{ github.sha }}
+          path: .tmp/player-dashboard-order
+          retention-days: 7
