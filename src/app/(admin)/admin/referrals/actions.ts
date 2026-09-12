@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { markReferralIneligible, ReferralEligibilityError } from "@/lib/team-referral-eligibility";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { clearTeamReferralPayoutSecrets } from "@/lib/team-referral-payout";
 import { queueReferralRecordedEmail } from "@/lib/team-referral-notifications";
@@ -10,6 +11,7 @@ import {
   attachReferralToLead,
   getOrCreateReferralCode,
   getTeamReferrals,
+  referralStatus,
 } from "@/lib/team-referrals";
 
 function referralRedirect(params: Record<string, string>) {
@@ -127,6 +129,8 @@ export async function retryReferralRecordedEmailAction(formData: FormData) {
       referralRedirect({ email: "blocked" });
     case "missing_email":
       referralRedirect({ email: "no_email" });
+    case "ineligible":
+      referralRedirect({ email: "ineligible" });
     case "not_found":
       referralRedirect({ email: "not_found" });
     default:
@@ -136,6 +140,7 @@ export async function retryReferralRecordedEmailAction(formData: FormData) {
 
 export async function markReferralPaidAction(formData: FormData) {
   const { user } = await requireAdmin();
+  if (!user || user.role !== "ADMIN") throw new Error("Administrator access is required.");
   const referralId = String(formData.get("referralId") ?? "").trim();
   if (!referralId) return;
 
@@ -144,7 +149,7 @@ export async function markReferralPaidAction(formData: FormData) {
 
   if (
     !referral ||
-    referral.paidAt ||
+    referralStatus(referral) !== "READY" ||
     referral.completedMatches < referral.requiredMatches ||
     !referral.payoutDetailsSubmittedAt
   ) {
@@ -158,7 +163,7 @@ export async function markReferralPaidAction(formData: FormData) {
       "paidByUserId" = ${user?.id ?? null},
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${referralId}
-      AND "paidAt" IS NULL
+      AND "paidAt" IS NULL AND "ineligibleAt" IS NULL
       AND "payoutDetailsSubmittedAt" IS NOT NULL
   `;
 
@@ -170,4 +175,24 @@ export async function markReferralPaidAction(formData: FormData) {
   revalidatePath(`/admin/referrals/payout/${encodeURIComponent(referralId)}`);
   revalidatePath("/player/referrals");
   revalidatePath(`/player/referrals/payout/${encodeURIComponent(referralId)}`);
+}
+
+export async function markReferralIneligibleAction(formData: FormData) {
+  const access = await requireAdmin();
+  if (!access.user || access.user.role !== "ADMIN") throw new Error("Administrator access is required.");
+  const referralId = String(formData.get("referralId") ?? "").trim();
+  try {
+    await markReferralIneligible({
+      referralId, actorUserId: access.user.id,
+      reasonCode: String(formData.get("reasonCode") ?? ""),
+      note: String(formData.get("note") ?? ""), confirmed: formData.get("confirmed") === "yes",
+    });
+  } catch (error) {
+    const message = error instanceof ReferralEligibilityError ? error.message
+      : "The decision could not be saved. Refresh and check the referral and message queue before retrying.";
+    referralRedirect({ eligibilityError: message });
+  }
+  for (const path of ["/admin/referrals", "/player/referrals", "/admin/queue",
+    `/admin/referrals/payout/${encodeURIComponent(referralId)}`, `/player/referrals/payout/${encodeURIComponent(referralId)}`]) revalidatePath(path);
+  referralRedirect({ ineligible: "1" });
 }

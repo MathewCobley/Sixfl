@@ -1,0 +1,11 @@
+# Referral ineligibility
+
+Admin → Team referrals → an unpaid referral → **Mark not eligible**. Select a public reason, record a private note, confirm and save. Existing/renamed teams can be marked without deleting the lead or team. The referrer sees **Not eligible — Existing or renamed team**; the private note and administrator identity never enter the player query or customer messages.
+
+The additive migration makes no eligibility decisions. An authenticated ADMIN must select the exact referral. It preserves the original referral, reward and match history; records reason, note, actor and timestamp; removes unneeded encrypted bank details (retaining submission timestamps); and atomically cancels queued/failed recorded/reward-ready emails. Previously sent emails remain on record. No rejection email, SMS, bank transfer, fixture change or team change is triggered.
+
+`referralStatus` is the shared status source. Ineligible referrals cannot contribute to Ready to pay or Amount due, display reward progress, receive payout-ready notices, save bank details, or be marked paid. Both old payout links show the eligibility decision instead of banking controls. Producers and cron selectors exclude ineligible rows; a scoped database trigger also rejects stale queue/retry/send claims, so bypassing the UI cannot reactivate the reward. Already-paid records cannot be rejected. Decisions cannot be silently edited/deleted or reactivated; a future reversal needs an audited review feature.
+
+A currently PROCESSING referral email prevents rejection with an explicit retry message: the control does not promise to recall a message already being sent. The referral row lock serializes the eligibility decision with payment and send claims. A transient transaction conflict is reported as not saved; refresh/check status before retrying. Other notification types and the player's unrelated referrals are not suppressed.
+
+Permanent tests cover status, permissions, action identity, public/private rendering, old payout pages, real migrations, concurrent duplicate decisions, in-flight messages, atomic rollback/retry, send/retry guards, banking protection and immutable history. No production data or providers are used by tests.

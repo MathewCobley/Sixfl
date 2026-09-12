@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { referralIneligibilityLabel } from "@/lib/team-referral-eligibility-policy";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/auth";
@@ -49,7 +50,7 @@ export default async function ReferralPayoutPage({
   if (!referral) notFound();
 
   const status = referralStatus(referral);
-  const payout = await getTeamReferralPayoutDetails(referral.id);
+  const payout = status === "INELIGIBLE" ? null : await getTeamReferralPayoutDetails(referral.id);
   const teamLabel = referral.teamName ?? referral.leadTeamName ?? "your referred team";
   const hasStoredDetails = Boolean(payout?.details);
 
@@ -69,7 +70,7 @@ export default async function ReferralPayoutPage({
           </Link>
         </div>
 
-        {sp.saved === "1" ? (
+        {sp.saved === "1" && status === "READY" ? (
           <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4 text-sm font-bold text-emerald-100">
             Payment details saved securely. SIXFL can now arrange your reward payment.
           </div>
@@ -81,7 +82,12 @@ export default async function ReferralPayoutPage({
           </div>
         ) : null}
 
-        {status === "PAID" ? (
+        {status === "INELIGIBLE" ? (
+          <section className="rounded-2xl border border-red-300 bg-red-50 p-6 text-red-950">
+            <h2 className="text-xl font-black">Not eligible</h2>
+            <p className="mt-2">{referralIneligibilityLabel(referral.ineligibleReasonCode)}. No referral reward is payable and payment details cannot be submitted.</p>
+          </section>
+        ) : status === "PAID" ? (
           <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-6 sm:p-8">
             <h2 className="text-xl font-black">Reward paid</h2>
             <p className="mt-3 text-sm leading-7 text-emerald-50/90">

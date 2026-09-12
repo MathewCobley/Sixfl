@@ -105,6 +105,8 @@ export type TeamReferralRow = {
   completedMatches: number;
   payoutDetailsSubmittedAt: Date | null;
   paidAt: Date | null;
+  ineligibleAt: Date | null;
+  ineligibleReasonCode: string | null;
   createdAt: Date;
 };
 
@@ -126,6 +128,7 @@ export async function getTeamReferrals(referrerUserId?: string) {
       COUNT(DISTINCT f."id")::int AS "completedMatches",
       r."payoutDetailsSubmittedAt",
       r."paidAt",
+      r."ineligibleAt", r."ineligibleReasonCode",
       r."createdAt"
     FROM "TeamReferral" r
     INNER JOIN "User" u ON u."id" = r."referrerUserId"
@@ -144,12 +147,13 @@ export async function getTeamReferrals(referrerUserId?: string) {
     GROUP BY
       r."id", r."referrerUserId", u."name", u."email", l."contactName", l."email",
       l."teamName", t."id", t."name", lg."name", r."rewardPence",
-      r."requiredMatches", r."payoutDetailsSubmittedAt", r."paidAt", r."createdAt"
+      r."requiredMatches", r."payoutDetailsSubmittedAt", r."paidAt", r."ineligibleAt", r."ineligibleReasonCode", r."createdAt"
     ORDER BY r."createdAt" DESC
   `;
 }
 
-export function referralStatus(row: Pick<TeamReferralRow, "paidAt" | "completedMatches" | "requiredMatches">) {
+export function referralStatus(row: Pick<TeamReferralRow, "paidAt" | "completedMatches" | "requiredMatches"> & { ineligibleAt?: Date | null }) {
+  if (row.ineligibleAt) return "INELIGIBLE" as const;
   if (row.paidAt) return "PAID" as const;
   if (row.completedMatches >= row.requiredMatches) return "READY" as const;
   return "TRACKING" as const;
