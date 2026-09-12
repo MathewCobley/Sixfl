@@ -202,7 +202,7 @@ test('native source keeps the safety guard and shows a truthful partial-publicat
 test('fragment migration is repeatable and preserves saved parent edits and disabled fragments',{skip:process.env.FIXTURE_TEMPLATE_TEST_DB!=='1'},()=>{
   const url=new URL(process.env.DATABASE_URL);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/sixfl_fixture_reminder_test');
   const sql=`BEGIN;
-    CREATE TEMP TABLE "NotificationTemplate" ("id" text PRIMARY KEY,"key" text UNIQUE,"name" text,"description" text,"kind" text,"channel" text,"audience" text,"subject" text,"body" text,"ctaLabel" text,"ctaUrlKey" text,"ctaUrlKey" text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
+    CREATE TEMP TABLE "NotificationTemplate" ("id" text PRIMARY KEY,"key" text UNIQUE,"name" text,"description" text,"kind" text,"channel" text,"audience" text,"subject" text,"body" text,"ctaLabel" text,"ctaUrlKey" text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
     INSERT INTO "NotificationTemplate" ("id","key","body","isActive") VALUES ('parent','match-fee-reminder-email','Custom parent {{reminderIntro}}',false),('custom','match-fee-reminder-intro-email-first','Edited intro',false);
     ${read(migrationPath)}\n${read(migrationPath)}
     DO $$ BEGIN
