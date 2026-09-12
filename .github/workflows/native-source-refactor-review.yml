@@ -1,150 +1,52 @@
-name: One-time native source refactor review
+name: Export verified native source objects
 on:
   push:
     branches: [maintenance/native-cups-fixtures-20260912-001]
 permissions:
   contents: write
+  actions: read
 jobs:
-  native-review:
+  export-verified-blobs:
     if: github.repository == 'MathewCobley/Sixfl'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: sixfl_native_review
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d sixfl_native_review"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_native_review
-      NEXTAUTH_SECRET: native-review-ci-only
-      NEXTAUTH_URL: http://localhost:3000
-      NEXT_PUBLIC_SITE_URL: http://localhost:3000
-      NEXT_TELEMETRY_DISABLED: '1'
-      RESEND_API_KEY: re_native_review_ci_placeholder
-      EMAIL_FROM: SIXFL <noreply@example.invalid>
-      EMAIL_REPLY_DOMAIN: replies.example.invalid
-      CRON_SECRET: native-review-ci-unused
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Isolate reviewed test assets and check out the exact existing PR source
-        run: |
-          cp scripts/check-native-cup-fixture-source.mjs /tmp/native-check.mjs
-          cp tests/native-cup-fixtures.test.cjs /tmp/native-tests.cjs
-          git checkout --detach 007bc14c653779186a93d6fa73339f9954a355ab
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Capture existing production behaviour in the disposable developer workspace
-        run: npm run prebuild
-      - name: Convert to owning source files and delete feature rewriting scripts
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import subprocess, shutil, json
-          paths = ['src/components/admin/AdminSidebar.tsx','src/lib/current-leagues.ts','src/app/(admin)/admin/leagues/page.tsx','src/app/(admin)/admin/fixtures/generate/division-actions.ts','src/app/(admin)/admin/fixtures/generate/page.tsx','src/app/api/admin/fixtures/generate-next-week/route.ts','src/app/api/admin/fixtures/matchup-grid/route.ts','src/components/admin/fixtures/FixtureMatchupGrid.tsx']
-          saved = {p: Path(p).read_text() for p in paths}
-          subprocess.run(['git','restore','.'], check=True)
-          for p,s in saved.items(): Path(p).write_text(s)
-          p=Path('prisma/schema.prisma'); s=p.read_text()
-          s=s.replace('  isActive Boolean @default(true)\n\n  currentLeagueId String?', '  isActive Boolean @default(true)\n\n  competitionType String  @default("LEAGUE")\n  cupFormat       String?\n  isInterLeague   Boolean @default(false)\n\n  currentLeagueId String?',1)
-          s=s.replace('  @@index([isActive])\n  @@index([area])','  @@index([isActive])\n  @@index([competitionType])\n  @@index([competitionType, isActive], map: "LeagueCompetition_type_active_idx")\n  @@index([area])',1); p.write_text(s)
-          retired=['apply-venue-neutral-fixtures-current.cjs','apply-venue-neutral-next-week-compat.cjs','apply-cup-admin-navigation.cjs','apply-fixture-matchup-grid-screen-fit.cjs']
-          for p in Path('scripts').glob('*.cjs'):
-            if p.name in retired: continue
-            s=p.read_text(); new=s
-            for name in retired: new=new.replace(f'require("./{name}");\n','')
-            if new!=s: p.write_text(new.rstrip()+'\n')
-          for name in retired: Path('scripts',name).unlink()
-          p=Path('scripts/check-cup-foundation.mjs'); s=p.read_text().replace('schema.includes("@@index([competitionType, isActive])")','schema.includes(\'@@index([competitionType, isActive], map: "LeagueCompetition_type_active_idx")\')').replace('prepared Prisma schema must model','native Prisma schema must model'); p.write_text(s)
-          p=Path('src/lib/current-leagues.ts'); s=p.read_text().replace('return prisma.$queryRaw<CurrentLeagueOption[]>','return await prisma.$queryRaw<CurrentLeagueOption[]>')
-          s=s.replace('OR: [{ isActive: true }, { id: includeId }]', 'OR: [\n              { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },\n              { id: includeId },\n            ]')
-          s=s.replace(': { isActive: true },', ': { isActive: true, OR: [{ competitionId: null }, { competition: { is: { competitionType: "LEAGUE" } } }] },'); p.write_text(s)
-          shutil.copyfile('/tmp/native-check.mjs','scripts/check-native-cup-fixture-source.mjs')
-          shutil.copyfile('/tmp/native-tests.cjs','tests/native-cup-fixtures.test.cjs')
-          p=Path('.github/workflows/cup-foundation.yml'); s=p.read_text(); start=s.index('      - name: Archive clean tracked source'); end=s.index('      - uses: actions/setup-node',start); s=s[:start]+s[end:]
-          s=s.replace('      - name: Prepare final production source\n        run: npm run prebuild', '''      - name: Verify native source before any build preparation
-                  run: |
-                    node scripts/check-cup-foundation.mjs
-                    node scripts/check-venue-neutral-fixtures.mjs
-                    node scripts/check-native-cup-fixture-source.mjs --snapshot "$RUNNER_TEMP/native-cup-fixtures.json"
-                    node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs
-                - name: Prepare existing application features
-                  run: npm run prebuild
-                - name: Prove preparation cannot rewrite the native cup and fixture implementation
-                  run: |
-                    node scripts/check-native-cup-fixture-source.mjs --verify "$RUNNER_TEMP/native-cup-fixtures.json"
-                    node scripts/check-venue-neutral-fixtures.mjs
-                    node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs'''); p.write_text(s)
-          p=Path('.github/workflows/venue-neutral-fixtures.yml'); s=p.read_text().replace('      - name: Prepare final production source','      - name: Check native venue-neutral implementation before preparation\n        run: node scripts/check-venue-neutral-fixtures.mjs\n      - name: Prepare final production source'); p.write_text(s)
-          subprocess.run(['git','add','-u'],check=True)
-          subprocess.run(['git','add','scripts/check-native-cup-fixture-source.mjs','tests/native-cup-fixtures.test.cjs'],check=True)
-          subprocess.run(['git','diff','--cached','--check'],check=True)
-          subprocess.run(['git','-c','user.name=SIXFL source review','-c','user.email=native-review@example.invalid','commit','-m','Implement cups and venue-neutral fixtures natively; remove source rewriting'],check=True)
-          base='007bc14c653779186a93d6fa73339f9954a355ab'
-          names=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
-          assert not any('native-source-refactor-review' in p for p in names), 'Developer tooling must not enter the native candidate'
-          entries=[]
-          for name in names:
-            if Path(name).exists(): entries.append({'path':name,'mode':'100644','type':'blob','content':Path(name).read_text()})
-            else: entries.append({'path':name,'mode':'100644','type':'blob','sha':None})
-          tree=subprocess.check_output(['git','rev-parse',base+'^{tree}'],text=True).strip()
-          Path('/tmp/native-tree.json').write_text(json.dumps({'base_tree':tree,'tree':entries}))
-          PY
-      - name: Verify raw native source and behaviour
-        run: |
-          node scripts/check-cup-foundation.mjs
-          node scripts/check-venue-neutral-fixtures.mjs
-          node scripts/check-native-cup-fixture-source.mjs --snapshot /tmp/native-source-before.json
-          node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs
-          node scripts/audit-dom-bridges.mjs --changed-from 007bc14c653779186a93d6fa73339f9954a355ab --fail-on-findings
-          node scripts/audit-dom-replacements.mjs --changed-from 007bc14c653779186a93d6fa73339f9954a355ab
-      - name: Verify native source survives remaining application preparation unchanged
-        run: |
-          npm run prebuild
-          node scripts/check-native-cup-fixture-source.mjs --verify /tmp/native-source-before.json
-          node scripts/check-cup-foundation.mjs
-          node scripts/check-venue-neutral-fixtures.mjs
-          node scripts/check-critical-feature-contracts.mjs
-          node --test tests/native-cup-fixtures.test.cjs tests/fixture-fee-inheritance.test.cjs
-      - run: npx prisma generate
-      - run: npx tsc --noEmit
-      - name: Verify migration in isolated test database only
-        run: |
-          npx prisma db push --skip-generate
-          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f prisma/migrations/20260911233000_inter_league_cup_foundation/migration.sql
-          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f prisma/migrations/20260911233000_inter_league_cup_foundation/migration.sql
-      - run: npx next build
-      - name: Store the verified native Git objects without updating any branch
+      - name: Read exact tested artifact and store content-addressed blobs only
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --method POST repos/MathewCobley/Sixfl/git/trees --input /tmp/native-tree.json > /tmp/native-tree-result.json
+          gh api repos/MathewCobley/Sixfl/actions/artifacts/10287576741/zip > /tmp/verified-native.zip
           python3 - <<'PY'
-          import json
+          import hashlib, json, subprocess, zipfile
           from pathlib import Path
-          tree=json.loads(Path('/tmp/native-tree-result.json').read_text())['sha']
-          Path('/tmp/native-commit.json').write_text(json.dumps({'message':'Implement cups and venue-neutral fixtures natively; remove build-time rewriting','tree':tree,'parents':['007bc14c653779186a93d6fa73339f9954a355ab']}))
+          with zipfile.ZipFile('/tmp/verified-native.zip') as archive:
+              raw = archive.read('native-tree.json')
+          assert hashlib.sha256(raw).hexdigest() == '91b8781d5e8d26fe3e04f90c032878841c9f88014502fa6f8058290ae09f0126', 'Validated source artifact differs'
+          data = json.loads(raw)
+          assert data['base_tree'] == '3c7fca88a58ccfcaefd06a849522b163a048cb75'
+          entries = []
+          for entry in data['tree']:
+              assert entry['path'].startswith(('src/', 'scripts/', 'tests/', 'prisma/', '.github/workflows/'))
+              assert '..' not in entry['path'].split('/')
+              if 'content' in entry:
+                  content = entry.pop('content')
+                  expected = hashlib.sha1(b'blob ' + str(len(content.encode())).encode() + b'\0' + content.encode()).hexdigest()
+                  if entry['path'].startswith('.github/workflows/'):
+                      # Workflow blobs are supplied separately through the authorised
+                      # connector; this CI token never updates workflows or any ref.
+                      entry['sha'] = expected
+                  else:
+                      payload = json.dumps({'content':content, 'encoding':'utf-8'})
+                      result = subprocess.run(['gh','api','--method','POST','repos/MathewCobley/Sixfl/git/blobs','--input','-'], input=payload, text=True, capture_output=True, check=True)
+                      entry['sha'] = json.loads(result.stdout)['sha']
+                      assert entry['sha'] == expected
+              entries.append(entry)
+              print(json.dumps(entry))
+          Path('/tmp/verified-native-entries.json').write_text(json.dumps({'base_tree':data['base_tree'],'tree':entries}, indent=2))
+          print('Verified blobs exported. No branch, workflow, production database, or deployment changed.')
           PY
-          gh api --method POST repos/MathewCobley/Sixfl/git/commits --input /tmp/native-commit.json > /tmp/native-commit-result.json
-          echo "NATIVE_CANDIDATE_COMMIT=$(jq -r .sha /tmp/native-commit-result.json)"
-          echo "Verified native candidate: $(jq -r .sha /tmp/native-commit-result.json)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: native-source-refactor-review
-          path: |
-            /tmp/native-tree.json
-            /tmp/native-commit-result.json
-            /tmp/native-source-before.json
-          retention-days: 3
+          name: verified-native-object-manifest
+          path: /tmp/verified-native-entries.json
+          retention-days: 2
