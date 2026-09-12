@@ -416,6 +416,13 @@ export async function importLeadsAction(
       return false;
     }
 
+    if (row.phone && !row.phoneNormalized) {
+      errors.push(
+        `Row ${row.rowNumber}: rejected non-UK or invalid phone "${row.phone}".`,
+      );
+      return false;
+    }
+
     if (seenEmails.has(row.email)) {
       errors.push(`Row ${row.rowNumber}: duplicate email "${row.email}" within CSV.`);
       return false;
