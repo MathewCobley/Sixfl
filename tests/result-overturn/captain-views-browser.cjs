@@ -14,8 +14,8 @@ const { renderCaptainView } = require('./captain-view-fixtures.cjs');
   function walk(dir) { for (const name of fs.readdirSync(dir)) { const file = path.join(dir, name); if (fs.statSync(file).isDirectory()) walk(file); else if (file.endsWith('.css')) css.push(fs.readFileSync(file, 'utf8')); } }
   walk('.next/static'); assert.ok(css.length, 'real production CSS is required');
   const server = http.createServer((req, res) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080d14;margin:0}${css.join('\n')}</style></head><body><main class="mx-auto max-w-xl p-3 text-white"><div class="rounded-3xl border border-white/10 bg-white/[0.04]">${pages.get(req.url) || ''}</div></main></body></html>`);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#080d14;margin:0}${css.join('\n')}</style></head><body><main class="mx-auto max-w-xl p-3 text-white"><div class="rounded-3xl border border-white/10 bg-white/[0.04]">${pages.get(req.url) || ''}</div></main></body></html>`);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const dir = 'artifacts/result-overturn'; fs.mkdirSync(dir, { recursive: true });
