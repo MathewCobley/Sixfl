@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLeagueTable";
 import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";
+import CaptainVeoPriorityCard from "@/components/captain/CaptainVeoPriorityCard";
 import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -336,6 +337,8 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
         </section>
       ) : null}
 
+      <CaptainVeoPriorityCard teamId={teamid} leagueId={currentLeagueId} />
+
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 lg:py-8">
           <div>
@@ -423,7 +426,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
         <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Recent results</p><h2 className="mt-2 text-xl font-semibold text-white">Latest scores</h2></div>
-            <Link href={`/captain/team/${teamid}/results`} className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">Open results</Link>
+            <Link href={`/captain/team/${teamid}/results`} className="inline-flex items-center rounded-full border-emerald-400/30 border bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15">Open results</Link>
           </div>
           <div className="divide-y divide-white/10">
             {recentResults.length === 0 ? <div className="px-6 py-10 text-sm text-white/55">No results recorded yet.</div> : recentResults.map((fixture) => {

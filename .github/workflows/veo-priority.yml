@@ -4,9 +4,12 @@ on:
     paths:
       - 'src/lib/veo/**'
       - 'src/app/**/veo-priority/**'
+      - 'src/components/captain/*Veo*'
+      - 'src/app/captain/team/[teamid]/page.tsx'
+      - 'src/app/(admin)/admin/leagues/[id]/layout.tsx'
       - 'src/app/(admin)/admin/fixtures/publish-actions.ts'
       - 'src/app/captain/team/[teamid]/fixtures/layout.tsx'
-      - 'prisma/migrations/20260912001500_veo_priority_pilot/**'
+      - 'prisma/migrations/*veo_priority*/**'
       - 'tests/veo-priority/**'
       - '.github/workflows/veo-priority.yml'
   push:
@@ -40,8 +43,7 @@ jobs:
       NEXTAUTH_SECRET: isolated-veo-safety-test-only
       NEXTAUTH_URL: http://127.0.0.1:3100
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
-      # Inert placeholders satisfy constructors in unrelated application routes.
-      # No real credentials, sends or payment operations are used by these tests.
+      # Inert placeholders; no real providers, customer sends or payments.
       RESEND_API_KEY: re_isolated_veo_test_not_a_real_key
       STRIPE_SECRET_KEY: sk_test_isolated_veo_not_a_real_key
       OPENAI_API_KEY: sk-isolated-veo-not-a-real-key
@@ -54,21 +56,34 @@ jobs:
       - run: npm ci
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
+      - name: Native request card and action contracts
+        run: node --test tests/veo-priority/request-ui.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
-      - name: Create isolated test schema and apply additive Veo migration
+      - name: Prepared request card and action contracts
+        run: node --test tests/veo-priority/request-ui.test.cjs
+      - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
           npx prisma db push --skip-generate
           npx prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
           ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;
           ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "isFixturePlaceholder" BOOLEAN NOT NULL DEFAULT false;
+          ALTER TABLE "TeamMember" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
+          CREATE TABLE IF NOT EXISTS "LeagueSeasonTeam" (
+            id TEXT PRIMARY KEY, "leagueId" TEXT NOT NULL, "teamId" TEXT NOT NULL,
+            "isActive" BOOLEAN NOT NULL DEFAULT true, "divisionId" TEXT,
+            "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE ("leagueId", "teamId")
+          );
           SQL
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912001500_veo_priority_pilot/migration.sql
-      - name: Real database safety checks
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912010000_veo_priority_requests/migration.sql
+      - name: Real allocation database safety checks
         run: npx tsx tests/veo-priority/database.ts
-      # Production runs prebuild -> prisma generate -> next build once. Preparation
-      # already ran above so that database checks use the same generated schema.
+      - name: Real request and approval database safety checks
+        run: npx tsx tests/veo-priority/requests.ts
       - name: Production build
         shell: bash
         run: npx next build 2>&1 | tee veo-build.log
@@ -97,7 +112,7 @@ jobs:
           done
           cat veo-dev.log
           exit 1
-      - name: Mobile and completed-video edit browser checks
+      - name: Mobile, request queue and completed-video browser checks
         run: node tests/veo-priority/browser.mjs
       - name: Upload evidence
         if: always()

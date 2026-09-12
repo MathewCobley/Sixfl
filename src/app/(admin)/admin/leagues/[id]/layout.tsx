@@ -6,6 +6,7 @@ import AdminLeagueSeasonTeamsPanel from "@/components/admin/leagues/AdminLeagueS
 import MergeLeagueDivisionsButton from "@/components/admin/leagues/MergeLeagueDivisionsButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { pendingVeoRequestCount } from "@/lib/veo/priority-requests";
 
 export default async function AdminLeagueLayout({
   children,
@@ -22,6 +23,7 @@ export default async function AdminLeagueLayout({
   });
 
   if (!league) notFound();
+  const pendingRequests = await pendingVeoRequestCount(id);
 
   return (
     <div className="space-y-5">
@@ -45,7 +47,7 @@ export default async function AdminLeagueLayout({
           href={`/admin/leagues/${league.id}/veo-priority`}
           className="min-h-11 rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15"
         >
-          Veo Priority
+          Veo Priority{pendingRequests > 0 && <span className="ml-2 rounded-full bg-fuchsia-300/20 px-2 py-0.5 text-xs">{pendingRequests} pending</span>}
         </Link>
       </div>
       <MergeLeagueDivisionsButton />
