@@ -22,7 +22,6 @@ import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/F
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
 import AdminDivisionSelectBridge from "@/components/admin/leagues/AdminDivisionSelectBridge";
 import AdminLeagueSeasonsBridge from "@/components/admin/leagues/AdminLeagueSeasonsBridge";
-import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import NightBoardSaveNotice from "@/components/admin/night-board/NightBoardSaveNotice";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
@@ -81,7 +80,6 @@ export default async function AdminLayout({
           }
         }
       `}</style>
-      <QueuedSmsReasonHints />
       <NightBoardSaveNotice />
       <FixtureChangeNotificationSubmitBridge />
       <FixtureCardResultLinksBridge />
