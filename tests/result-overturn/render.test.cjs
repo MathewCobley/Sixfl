@@ -24,7 +24,8 @@ test('email preview shows both scores and explicit default win; private decision
  const copy=buildResultOverturnEmail({homeTeamName:'Northallerton Nomads',awayTeamName:'Under Sixes',originalHomeScore:1,originalAwayScore:4,awardedHomeScore:3,awardedAwayScore:0,reasonCode:'PLAYER_LIMIT',kickoffAt:new Date('2026-09-09T20:15:00Z')});
  const html=renderToStaticMarkup(React.createElement(View,{fixtureId:'fixture',decisionId:'decision',panel:{...copy,teamNames:['Northallerton Nomads','Under Sixes'],records:[]},action:async()=>{},evidenceNote:'SECRET_EVIDENCE',rulesBasis:'SECRET_RULES'}));
  assert.match(html,/Northallerton Nomads 1–4 Under Sixes/);assert.match(html,/Northallerton Nomads 3–0 Under Sixes/);
- assert.match(html,/default win for a rule breach/);assert.match(html,/Email both teams/);assert.match(html,/name="confirmed"[^>]*required/);
+ assert.match(html,/default win for a rule breach/);assert.match(html,/Email both teams/);const confirmation=(html.match(/<input\b[^>]*>/g)||[]).find(tag=>tag.includes('name="confirmed"'));
+ assert.ok(confirmation,'confirmation input must be rendered');assert.match(confirmation,/type="checkbox"/);assert.match(confirmation,/\brequired(?:=""|\s|\/?>)/);assert.match(confirmation,/value="yes"/);
  assert.doesNotMatch(html,/SECRET_/);assert.doesNotMatch(html,/name="(?:body|subject|rulesBasis|evidenceNote)"/);
  const notice=renderToStaticMarkup(React.createElement(Notice,{homeName:'Northallerton Nomads',awayName:'Under Sixes',overturn:{originalHomeScore:1,originalAwayScore:4,awardedHomeScore:3,awardedAwayScore:0,reasonCode:'PLAYER_LIMIT'}}));
  assert.match(notice,/Default win awarded to Northallerton Nomads/);assert.match(notice,/Rule breach/);assert.match(notice,/1–4/);assert.match(notice,/3–0/);
