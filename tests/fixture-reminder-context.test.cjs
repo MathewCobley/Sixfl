@@ -53,6 +53,15 @@ function harness() {
   const recipient=id=>({id,email:`${id}@example.invalid`,phone:'+440000000000',displayName:'Test captain',isSuppressed:false,transactionalEmailOptIn:true,transactionalSmsOptIn:true,
     preferences:{emailEnabled:true,smsEnabled:true,marketingEmailEnabled:false,marketingSmsEnabled:false}});
   const db={
+    // The real Veo hook reads no opt-in settings in these existing-league tests.
+    // Keep all provider and unrecognised SQL access blocked.
+    $queryRaw: async (strings, ...values) => {
+      const sql = strings.join('?');
+      assert.equal(values[0], league.id);
+      if (/SELECT id FROM "League" WHERE id = \? FOR UPDATE/.test(sql)) return [{ id: league.id }];
+      if (/FROM "VeoLeagueSettings" WHERE "leagueId" = \?/.test(sql)) return [];
+      throw new Error(`Unexpected fixture-reminder SQL: ${sql}`);
+    },
     notificationTemplate:{findUnique:async({where,select})=>{reads.push(where.key);return project(templates.get(where.key)||null,select);}},
     notificationRecipient:{findUnique:async({where})=>recipient(where.id)},
     notificationDispatch:{
@@ -96,6 +105,7 @@ function harness() {
     '@/lib/notifications/sms-short-links':{shortenSmsBodyLinks:({bodyText})=>({bodyText,links:[]})},
   };
   const allowed=new Set([feePath,batchPath,singlePath,'src/lib/notifications/service.ts','src/lib/notifications/renderer.ts','src/lib/payments/charge-status.ts','src/lib/payments/fixture-fee-policy.ts',
+    'src/lib/veo/service.ts','src/lib/veo/allocator.ts',
     'src/lib/fixtures/kickoff-window.ts','src/lib/email/buildEmail.ts','src/lib/email/footer.ts','src/lib/email/inline-formatting.ts','src/lib/email/template-cta.ts']);
   const cache=new Map();
   function load(file) {
@@ -132,7 +142,6 @@ function harness() {
     charges:[{id:'test-charge',teamId:'home',teamName:teams[0].name,teamLogoUrl:null,paymentToken:'nonfunctional-test-token',amountPence:4000}],...extra};}
   return {db,load,publish,feeInput,fixture,teams,templates,dispatches,charges,publishedWrites,reads,mocks};
 }
-
 for(const mode of ['single','week','batch']) {
   test(`${mode}: real publisher, charge sync, sender and renderer resolve original reminder templates`,async()=>{
     const h=harness();const result=await h.publish(mode);
@@ -193,7 +202,7 @@ test('native source keeps the safety guard and shows a truthful partial-publicat
 test('fragment migration is repeatable and preserves saved parent edits and disabled fragments',{skip:process.env.FIXTURE_TEMPLATE_TEST_DB!=='1'},()=>{
   const url=new URL(process.env.DATABASE_URL);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/sixfl_fixture_reminder_test');
   const sql=`BEGIN;
-    CREATE TEMP TABLE "NotificationTemplate" ("id" text PRIMARY KEY,"key" text UNIQUE,"name" text,"description" text,"kind" text,"channel" text,"audience" text,"subject" text,"body" text,"ctaLabel" text,"ctaUrlKey" text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
+    CREATE TEMP TABLE "NotificationTemplate" ("id" text PRIMARY KEY,"key" text UNIQUE,"name" text,"description" text,"kind" text,"channel" text,"audience" text,"subject" text,"body" text,"ctaLabel" text,"ctaUrlKey" text,"ctaUrlKey" text,"isActive" boolean,"createdAt" timestamptz,"updatedAt" timestamptz);
     INSERT INTO "NotificationTemplate" ("id","key","body","isActive") VALUES ('parent','match-fee-reminder-email','Custom parent {{reminderIntro}}',false),('custom','match-fee-reminder-intro-email-first','Edited intro',false);
     ${read(migrationPath)}\n${read(migrationPath)}
     DO $$ BEGIN
