@@ -7,9 +7,9 @@ import {
 } from "@/lib/leagues/homepage-leagues";
 
 function formatDay(value: string | null) {
-  if (!value) return "Night TBC";
-  if (value === "ANY") return "Night TBC";
-  return value.charAt(0) + value.slice(1).toLowerCase();
+  const day = value?.trim().toUpperCase();
+  if (!day || day === "ANY") return null;
+  return day.charAt(0) + day.slice(1).toLowerCase();
 }
 
 function formatMoney(value: number | null) {
@@ -46,18 +46,19 @@ function stageCopy(stage: HomepageLeagueStage) {
 
 function buildFallbackBody(league: HomepageLeague) {
   const day = formatDay(league.dayOfWeek);
+  const dayPrefix = day ? `${day} ` : "";
   const venue = league.venueName?.trim();
   const area = league.area?.trim() || league.name;
 
   if (league.homepageStage === "LIVE") {
-    return `${day} 6-a-side football${venue ? ` at ${venue}` : ` in ${area}`}. View the current league, fixtures, results and table.`;
+    return `${dayPrefix}6-a-side football${venue ? ` at ${venue}` : ` in ${area}`}. View the current league, fixtures, results and table.`;
   }
 
   if (league.homepageStage === "PLANNED") {
-    return `SIXFL is exploring a new ${day} league${venue ? ` at ${venue}` : ` in ${area}`}. Register early interest as a team or individual player.`;
+    return `SIXFL is exploring a new ${dayPrefix}league${venue ? ` at ${venue}` : ` in ${area}`}. Register early interest as a team or individual player.`;
   }
 
-  return `A new ${day} SIXFL league is forming${venue ? ` at ${venue}` : ` in ${area}`}. Full teams and individual players can register now.`;
+  return `A new ${dayPrefix}SIXFL league is forming${venue ? ` at ${venue}` : ` in ${area}`}. Full teams and individual players can register now.`;
 }
 
 function buildLaunchNews(league: HomepageLeague, proposedStart: string | null) {
@@ -97,6 +98,7 @@ function buildLaunchNews(league: HomepageLeague, proposedStart: string | null) {
 
 function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
   const copy = stageCopy(league.homepageStage);
+  const day = formatDay(league.dayOfWeek);
   const proposedStart = formatStartDate(league.proposedStartDate);
   const price = formatMoney(league.costPerTeamPerMatchPence);
   const targetLabel = league.targetTeamCount
@@ -154,9 +156,11 @@ function LeagueLaunchCard({ league }: { league: HomepageLeague }) {
         </h3>
 
         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-white/65">
-          <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5">
-            {formatDay(league.dayOfWeek)}
-          </span>
+          {day ? (
+            <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5">
+              {day}
+            </span>
+          ) : null}
           {league.venueName ? (
             <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5">
               {league.venueName}
