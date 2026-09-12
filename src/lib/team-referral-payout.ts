@@ -112,11 +112,12 @@ export async function saveTeamReferralPayoutDetails(input: {
     requiredMatches: number;
     completedMatches: number;
     paidAt: Date | null;
+    ineligibleAt: Date | null;
   }>>`
     SELECT
       referral."id",
       referral."requiredMatches",
-      referral."paidAt",
+      referral."paidAt", referral."ineligibleAt",
       COUNT(DISTINCT fixture."id")::int AS "completedMatches"
     FROM "TeamReferral" referral
     INNER JOIN "InterestLead" lead ON lead."id" = referral."interestLeadId"
@@ -131,19 +132,20 @@ export async function saveTeamReferralPayoutDetails(input: {
       )
     WHERE referral."id" = ${input.referralId}
       AND referral."referrerUserId" = ${input.referrerUserId}
-    GROUP BY referral."id", referral."requiredMatches", referral."paidAt"
+    GROUP BY referral."id", referral."requiredMatches", referral."paidAt", referral."ineligibleAt"
     LIMIT 1
   `;
 
   const referral = rows[0];
   if (!referral) throw new Error("Referral reward not found.");
+  if (referral.ineligibleAt) throw new Error("This referral is not eligible for a reward.");
   if (referral.paidAt) throw new Error("This referral reward has already been paid.");
   if (referral.completedMatches < referral.requiredMatches) {
     throw new Error("This referral reward is not ready for payment yet.");
   }
 
   const encrypted = encryptDetails(details);
-  await prisma.$executeRaw`
+  const saved = await prisma.$executeRaw`
     UPDATE "TeamReferral"
     SET
       "payoutDetailsCiphertext" = ${encrypted.ciphertext},
@@ -153,9 +155,10 @@ export async function saveTeamReferralPayoutDetails(input: {
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE "id" = ${input.referralId}
       AND "referrerUserId" = ${input.referrerUserId}
-      AND "paidAt" IS NULL
+      AND "paidAt" IS NULL AND "ineligibleAt" IS NULL
   `;
 
+  if (saved !== 1) throw new Error("Referral eligibility changed. No payment details were saved.");
   return details;
 }
 
@@ -167,7 +170,7 @@ export async function getTeamReferralPayoutDetails(referralId: string) {
       "payoutDetailsAuthTag",
       "payoutDetailsSubmittedAt"
     FROM "TeamReferral"
-    WHERE "id" = ${referralId}
+    WHERE "id" = ${referralId} AND "ineligibleAt" IS NULL
     LIMIT 1
   `;
 

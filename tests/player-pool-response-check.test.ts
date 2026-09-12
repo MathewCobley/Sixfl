@@ -20,7 +20,9 @@ const ago = (hours: number) => new Date(Date.now() - hours * 3600000);
 let phoneSequence = 100;
 const migration = "prisma/migrations/20260912183000_player_pool_response_check/migration.sql";
 const migrate = () => execFileSync("psql", [process.env.DATABASE_URL!, "-v", "ON_ERROR_STOP=1", "-f", migration], { stdio: "pipe" });
-before(async () => { await ensurePlayerPoolTables(); migrate(); });
+before(async () => {
+  execFileSync("psql", [process.env.DATABASE_URL!, "-v", "ON_ERROR_STOP=1", "-f", "prisma/migrations/20260424162000_add_team_member_profile/migration.sql"], { stdio: "pipe" });
+  await ensurePlayerPoolTables(); migrate(); });
 after(async () => { await prisma.$disconnect(); });
 async function target() {
   const id = randomUUID(); const email = `${id}@example.invalid`; const phone = `07700900${++phoneSequence}`;

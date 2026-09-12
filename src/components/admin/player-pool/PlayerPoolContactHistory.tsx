@@ -13,6 +13,11 @@ export default function PlayerPoolContactHistory({ history, prospectId }: { hist
         <h4 className="font-bold text-white/85">Contact &amp; reply history</h4>
         <Link className="font-semibold text-emerald-200 underline underline-offset-4" href={`/admin/player-prospects/${prospectId}/communications`}>Review Player comms</Link>
       </div>
+      {history.squadMatch ? <div className="mt-2 rounded-lg border border-amber-400/25 p-3 text-amber-100">
+        <strong>{history.squadMatch.definite ? "Already registered" : "Possible existing player"} — {history.squadMatch.teamNames}</strong>
+        <p className="mt-1">{history.squadMatch.reason}</p>
+        <Link className="mt-1 inline-block underline" href={`/admin/players/data-health?q=${encodeURIComponent(history.publicCode)}`}>Review in Player data health</Link>
+      </div> : null}
       <p className="mt-1 text-white/55">Invitation recorded: {when(history.invitedAt)}. This date alone does not confirm an email was sent.</p>
       {block ? <p className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/10 p-2 text-amber-100">{block}</p> : <p className="mt-2 text-white/55">No inbound response recorded since this profile was created. Silence is not a decline.</p>}
       {history.events.length ? (
