@@ -8,14 +8,25 @@ permissions:
 jobs:
   source:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Package source for isolated review
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Package source and dependencies for isolated review
         run: |
           tar -czf /tmp/sixfl-veo-source.tgz src scripts tests prisma docs config .github package.json package-lock.json tsconfig.json next.config.* AGENTS.md postcss.config.* 2>/dev/null
+          tar -czf /tmp/sixfl-veo-deps.tgz node_modules
       - uses: actions/upload-artifact@v4
         with:
           name: sixfl-veo-source
           path: /tmp/sixfl-veo-source.tgz
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sixfl-veo-deps
+          path: /tmp/sixfl-veo-deps.tgz
           retention-days: 1
