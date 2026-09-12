@@ -1,251 +1,128 @@
-// ========================================
-// File: src/components/admin/teams/ManagedSquadInjuryBridge.tsx
-// ========================================
-
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { TeamMemberSquadStatus } from "@/lib/managed-squad/squadStatus";
 
-type SquadStatus = "ACTIVE" | "INJURED";
-
-type MemberStatus = {
+type InjuryStatus = "ACTIVE" | "INJURED";
+export type InjuryPanelMember = {
   id: string;
   name: string | null;
   email: string | null;
   role: string;
-  squadStatus: SquadStatus;
+  squadStatus: TeamMemberSquadStatus;
   squadStatusUpdatedAt: string | null;
   squadStatusNote: string | null;
 };
-
-type StatusPayload = {
-  members?: MemberStatus[];
-  error?: string;
-};
-
-function getAdminTeamId(pathname: string) {
-  return pathname.match(/^\/admin\/teams\/([^/]+)\/squad\/?$/)?.[1] ?? "";
-}
-
-function getMemberName(member: MemberStatus) {
+type StatusPayload = { members?: InjuryPanelMember[]; error?: string; ok?: boolean; squadStatus?: string };
+function memberName(member: InjuryPanelMember) {
   return member.name?.trim() || member.email?.trim() || "Unnamed player";
 }
 
-export default function ManagedSquadInjuryBridge() {
-  const pathname = usePathname();
+export function SquadInjuryRows({ members, notes, busy, onNote, onUpdate }: {
+  members: InjuryPanelMember[];
+  notes: Record<string, string>;
+  busy: string | null;
+  onNote: (id: string, note: string) => void;
+  onUpdate: (member: InjuryPanelMember, status: InjuryStatus) => void;
+}) {
+  const current = members.filter(member => member.squadStatus === "ACTIVE" || member.squadStatus === "INJURED");
+  const inactive = members.filter(member => member.squadStatus === "INACTIVE");
+  const unknown = members.filter(member => !["ACTIVE", "INJURED", "INACTIVE"].includes(member.squadStatus));
+  return <div className="min-w-0">
+    {current.length === 0 && <p className="p-4 text-sm text-white/60">No current players to manage here.</p>}
+    <div className="divide-y divide-white/10">{current.map(member => {
+      const injured = member.squadStatus === "INJURED";
+      return <article key={member.id} data-squad-injury-member={member.id} className="grid min-w-0 gap-4 p-4 sm:p-5 2xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="min-w-0 font-semibold text-white [overflow-wrap:anywhere]">{memberName(member)}</h3>
+            <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-white/60">{member.role.replaceAll("_", " ")}</span>
+            <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${injured ? "border-red-400/30 text-red-100" : "border-emerald-400/30 text-emerald-100"}`}>{injured ? "Injured — unavailable" : "Available"}</span>
+          </div>
+          <p className="text-sm text-white/50 [overflow-wrap:anywhere]">{member.email || "No email on account"}</p>
+          {injured && member.squadStatusNote && <p className="text-sm text-red-100/80 [overflow-wrap:anywhere]">Injury note: {member.squadStatusNote}</p>}
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          {!injured && <label className="min-w-0 text-xs text-white/65">Optional injury note
+            <input value={notes[member.id] ?? ""} disabled={busy !== null} onChange={event => onNote(member.id, event.target.value)} aria-label={`Injury note for ${memberName(member)}`} className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-white/15 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400" />
+          </label>}
+          <button type="button" disabled={busy !== null} onClick={() => onUpdate(member, injured ? "ACTIVE" : "INJURED")} className={`min-h-11 w-full rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${injured ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" : "border-red-400/30 bg-red-500/10 text-red-100"}`}>
+            {busy === member.id ? "Saving…" : injured ? "Mark available" : "Mark injured"}
+          </button>
+        </div>
+      </article>;
+    })}</div>
+    {inactive.length > 0 && <details className="m-4 rounded-xl border border-white/10 bg-black/20 p-4" data-inactive-squad-history>
+      <summary className="min-h-11 cursor-pointer text-sm font-semibold text-white/70">Inactive / former players ({inactive.length})</summary>
+      <p className="mt-2 text-sm text-white/50">These players remain inactive. They are not available for selection and cannot be marked injured here.</p>
+      <ul className="mt-3 space-y-3">{inactive.map(member => <li key={member.id} data-squad-injury-member={member.id} className="min-w-0 border-t border-white/10 pt-3 text-sm [overflow-wrap:anywhere]">
+        <span className="font-semibold text-white/75">{memberName(member)}</span><span className="ml-2 text-white/50">Inactive</span>
+        {member.squadStatusNote && <p className="mt-1 text-white/45">{member.squadStatusNote}</p>}
+      </li>)}</ul>
+    </details>}
+    {unknown.length > 0 && <p role="alert" className="p-4 text-sm text-amber-100">Some player statuses could not be recognised. Their injury controls are unavailable; reload before making changes.</p>}
+  </div>;
+}
+
+// Keep the legacy export path compatible with the old captain layout's no-op
+// mount. Only the authenticated admin squad route supplies a teamId. There is
+// no pathname discovery, global markup injection or captain-side status fetch.
+export default function ManagedSquadInjuryBridge({ teamId = "" }: { teamId?: string }) {
   const router = useRouter();
-  const teamId = useMemo(() => getAdminTeamId(pathname), [pathname]);
-  const [members, setMembers] = useState<MemberStatus[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [members, setMembers] = useState<InjuryPanelMember[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadedTeamId, setLoadedTeamId] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const updateLock = useRef(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    if (!teamId) {
-      setMembers([]);
-      setNotes({});
-      setError("");
-      return;
-    }
-
+    if (!teamId || !expanded) return;
     const controller = new AbortController();
-    setLoading(true);
-    setError("");
-
-    void fetch(
-      `/api/admin/managed-squad-status?teamId=${encodeURIComponent(teamId)}`,
-      {
-        cache: "no-store",
-        signal: controller.signal,
-      },
-    )
-      .then(async (response) => {
-        const payload = (await response.json().catch(() => null)) as StatusPayload | null;
-        if (!response.ok) {
-          throw new Error(payload?.error || "Could not load squad injury status.");
-        }
-        return payload;
-      })
-      .then((payload) => {
-        const nextMembers = payload?.members ?? [];
-        setMembers(nextMembers);
-        setNotes(
-          Object.fromEntries(
-            nextMembers.map((member) => [member.id, member.squadStatusNote ?? ""]),
-          ),
-        );
-      })
-      .catch((loadError) => {
+    setLoading(true); setLoadedTeamId(""); setError("");
+    void fetch(`/api/admin/managed-squad-status?teamId=${encodeURIComponent(teamId)}`, { cache: "no-store", signal: controller.signal })
+      .then(async response => {
+        const payload = await response.json().catch(() => null) as StatusPayload | null;
+        if (!response.ok || !Array.isArray(payload?.members)) throw new Error(payload?.error || "Could not load squad availability.");
         if (controller.signal.aborted) return;
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Could not load squad injury status.",
-        );
+        setMembers(payload.members);
+        setNotes(Object.fromEntries(payload.members.map(member => [member.id, member.squadStatusNote ?? ""])));
+        setLoadedTeamId(teamId);
       })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-
+      .catch(err => { if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Could not load squad availability."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [teamId]);
+  }, [teamId, expanded, reload]);
 
-  async function updateStatus(member: MemberStatus, squadStatus: SquadStatus) {
-    if (!teamId) return;
-
-    setUpdatingId(member.id);
-    setError("");
-
+  async function updateStatus(member: InjuryPanelMember, status: InjuryStatus) {
+    if (!teamId || loadedTeamId !== teamId || updateLock.current || !["ACTIVE", "INJURED"].includes(member.squadStatus)) return;
+    updateLock.current = true; setUpdatingId(member.id); setError(""); setSuccess("");
     try {
-      const note = squadStatus === "INJURED" ? notes[member.id]?.trim() || null : null;
-      const response = await fetch("/api/admin/managed-squad-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teamId,
-          membershipId: member.id,
-          squadStatus,
-          note,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as StatusPayload | null;
-
-      if (!response.ok) {
-        throw new Error(payload?.error || "Could not update injury status.");
-      }
-
-      setMembers((current) =>
-        current.map((item) =>
-          item.id === member.id
-            ? {
-                ...item,
-                squadStatus,
-                squadStatusNote: note,
-                squadStatusUpdatedAt: new Date().toISOString(),
-              }
-            : item,
-        ),
-      );
-      if (squadStatus === "ACTIVE") {
-        setNotes((current) => ({ ...current, [member.id]: "" }));
-      }
+      const note = status === "INJURED" ? notes[member.id]?.trim() || null : null;
+      const response = await fetch("/api/admin/managed-squad-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamId, membershipId: member.id, squadStatus: status, note }) });
+      const payload = await response.json().catch(() => null) as StatusPayload | null;
+      if (!response.ok || !payload?.ok || payload.squadStatus !== status) throw new Error(payload?.error || "Could not update injury status. Your change has not been confirmed.");
+      setMembers(current => current.map(item => item.id === member.id ? { ...item, squadStatus: status, squadStatusNote: note } : item));
+      if (status === "ACTIVE") setNotes(current => ({ ...current, [member.id]: "" }));
+      setSuccess(`${memberName(member)} marked ${status === "INJURED" ? "injured" : "available"}.`);
       router.refresh();
-    } catch (updateError) {
-      setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Could not update injury status.",
-      );
-    } finally {
-      setUpdatingId(null);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update injury status."); }
+    finally { updateLock.current = false; setUpdatingId(null); }
   }
 
   if (!teamId) return null;
-
-  return (
-    <section className="mb-6 overflow-hidden rounded-3xl border border-red-400/20 bg-red-500/[0.05] shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
-      <div className="border-b border-white/10 px-5 py-4 sm:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-red-200/70">
-          Player availability status
-        </p>
-        <h2 className="mt-1 text-lg font-semibold text-white">Injuries</h2>
-        <p className="mt-1 text-sm text-white/60">
-          Marking a player injured removes them from future selections and disables availability chases until they are made available again.
-        </p>
-      </div>
-
-      {error ? (
-        <div className="border-b border-red-400/20 bg-red-500/10 px-5 py-3 text-sm text-red-100 sm:px-6">
-          {error}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="px-5 py-5 text-sm text-white/55 sm:px-6">Loading squad status…</div>
-      ) : members.length === 0 ? (
-        <div className="px-5 py-5 text-sm text-white/55 sm:px-6">No squad members found.</div>
-      ) : (
-        <div className="divide-y divide-white/10">
-          {members.map((member) => {
-            const isInjured = member.squadStatus === "INJURED";
-            const isUpdating = updatingId === member.id;
-
-            return (
-              <div
-                key={member.id}
-                className={`grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] ${
-                  isInjured ? "bg-red-500/[0.06]" : ""
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-semibold text-white">
-                      {getMemberName(member)}
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/60">
-                      {member.role.replaceAll("_", " ")}
-                    </span>
-                    <span
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                        isInjured
-                          ? "border-red-400/35 bg-red-500/15 text-red-100"
-                          : "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-                      }`}
-                    >
-                      {isInjured ? "Injured — unavailable" : "Available"}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-sm text-white/45">
-                    {member.email || "No email on account"}
-                  </div>
-                  {isInjured && member.squadStatusNote ? (
-                    <div className="mt-2 text-sm text-red-100/70">
-                      Injury note: {member.squadStatusNote}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  {!isInjured ? (
-                    <input
-                      value={notes[member.id] ?? ""}
-                      onChange={(event) =>
-                        setNotes((current) => ({
-                          ...current,
-                          [member.id]: event.target.value,
-                        }))
-                      }
-                      placeholder="Optional injury note"
-                      className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-red-400/50"
-                    />
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={isUpdating}
-                    onClick={() =>
-                      void updateStatus(member, isInjured ? "ACTIVE" : "INJURED")
-                    }
-                    className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      isInjured
-                        ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
-                        : "border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/15"
-                    }`}
-                  >
-                    {isUpdating
-                      ? "Saving…"
-                      : isInjured
-                        ? "Mark available"
-                        : "Mark injured"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
+  return <details data-squad-injury-panel open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="min-w-0 rounded-2xl border border-white/15 bg-white/[0.03]">
+    <summary className="min-h-12 cursor-pointer rounded-2xl p-4 font-semibold text-white sm:p-5">Player injuries and availability</summary>
+    {expanded && <div className="min-w-0 border-t border-white/10">
+      <p className="p-4 text-sm leading-6 text-white/60">Manage injuries separately from squad membership. Injured players are unavailable for selection and availability chases until marked available again. Existing inactive players remain inactive.</p>
+      {error && <div className="space-y-2 px-4 pb-4"><p role="alert" className="text-sm text-red-100">{error}</p>{loadedTeamId !== teamId && <button type="button" onClick={() => setReload(value => value + 1)} className="min-h-11 rounded-xl border border-white/20 px-4 text-sm text-white">Retry loading</button>}</div>}
+      {success && <p role="status" className="px-4 pb-4 text-sm text-emerald-100">{success}</p>}
+      {loading ? <p role="status" className="p-4 text-sm text-white/60">Loading squad availability…</p> : loadedTeamId === teamId ? <SquadInjuryRows members={members} notes={notes} busy={updatingId} onNote={(id, note) => setNotes(current => ({ ...current, [id]: note }))} onUpdate={(member, status) => void updateStatus(member, status)} /> : null}
+    </div>}
+  </details>;
 }

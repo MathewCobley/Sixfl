@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import MergeResultHardReload from "@/components/admin/players/MergeResultHardReload";
 import { notFound } from "next/navigation";
 import { Prisma, TeamRole } from "@prisma/client";
 
@@ -33,6 +34,7 @@ export const metadata = {
 type SearchParams = {
   saved?: string;
   error?: string;
+  hardReload?: string;
 };
 
 const roleOptions: { value: TeamRole; label: string }[] = [
@@ -170,6 +172,8 @@ function getSavedMessage(saved?: string) {
       return "Squad member removed.";
     case "moved-to-prospects":
       return "Player moved back to prospects and unlinked from the active squad.";
+    case "player-merged":
+      return "Player accounts merged successfully. All squad cards and player history are now linked to the surviving account.";
     default:
       return saved ? "Saved." : null;
   }
@@ -259,9 +263,10 @@ export default async function AdminTeamSquadPage({
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-6 [overflow-wrap:anywhere]">
+      <MergeResultHardReload active={filters.hardReload === "1"} />
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="min-w-0 space-y-2">
           <Link
             href={`/admin/teams/${team.id}`}
             className="text-sm text-emerald-300 hover:text-emerald-200"
@@ -280,6 +285,12 @@ export default async function AdminTeamSquadPage({
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <a
+            href="#add-squad-member"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black hover:bg-emerald-400"
+          >
+            Add existing player
+          </a>
           <Link
             href={`/captain/team/${team.id}/captain-squad`}
             className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
@@ -316,8 +327,8 @@ export default async function AdminTeamSquadPage({
       ) : null}
 
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
-        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
-          <div>
+        <div className="grid min-w-0 gap-6 px-4 py-6 sm:px-6 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Admin squad console
             </p>
@@ -345,7 +356,7 @@ export default async function AdminTeamSquadPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-2 gap-3">
             <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 Captains
@@ -385,9 +396,9 @@ export default async function AdminTeamSquadPage({
         </div>
       </section>
 
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
-          <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+      <section className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.04]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-5 sm:px-6">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Current squad
@@ -416,7 +427,7 @@ export default async function AdminTeamSquadPage({
                 return (
                   <div
                     key={member.id}
-                    className="flex flex-col gap-5 px-6 py-5 xl:flex-row xl:items-start xl:justify-between"
+                    className="flex min-w-0 flex-col gap-5 px-4 py-5 sm:px-6"
                   >
                     <div className="flex min-w-0 items-start gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-white/70">
@@ -471,7 +482,7 @@ export default async function AdminTeamSquadPage({
                       </div>
                     </div>
 
-                    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[28rem] xl:max-w-[28rem] xl:shrink-0">
+                    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                       <Link
                         href={`/admin/teams/${team.id}/players/${member.id}/preview`}
                         className={`${adminMemberActionClassName} border-violet-400/30 bg-violet-500/10 text-violet-100 hover:bg-violet-500/15`}
@@ -556,8 +567,8 @@ export default async function AdminTeamSquadPage({
           </div>
         </div>
 
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
+        <div className="min-w-0 space-y-6">
+          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-4 sm:p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
               Captain access override
             </p>
@@ -607,7 +618,7 @@ export default async function AdminTeamSquadPage({
             </form>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <section id="add-squad-member" className="scroll-mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Add existing user
             </p>
@@ -652,7 +663,7 @@ export default async function AdminTeamSquadPage({
             </form>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Quick links
             </p>
