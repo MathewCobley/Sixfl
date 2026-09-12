@@ -39,56 +39,28 @@ const oldBridge = read(
   "src/components/admin/player-pool/PlayerPoolNudgeBridge.tsx",
 );
 
-expect(
-  reminderService,
-  '"player-pool-profile-reminder-email"',
-  "Profile reminders must use their own editable notification template.",
-);
-expect(
-  reminderService,
-  'ctaLabel: "Complete my PlayerPool profile"',
-  "The reminder email must retain a clear profile-completion button.",
-);
-expect(
-  reminderService,
-  'ctaUrlKey: "profileUrl"',
-  "The reminder button must resolve each player's secure profile URL.",
-);
-expect(
-  reminderService,
-  "## ⚽ What is SIXFL PlayerPool?",
-  "The email must explain what PlayerPool is.",
-);
-expect(
-  reminderService,
-  "## 🚀 How PlayerPool works",
-  "The email must explain the controlled introduction process.",
-);
-expect(
-  reminderService,
-  "## 🏆 What is a SIXFL league like?",
-  "The email must explain how SIXFL league football works.",
-);
-expect(
-  reminderService,
-  "Your private contact details are not made public",
-  "The PlayerPool reminder must preserve the contact privacy explanation.",
-);
-expect(
-  reminderService,
-  "does not charge you anything and does not commit you to a team",
-  "The reminder must make the no-charge and no-commitment position clear.",
-);
-expect(
-  reminderService,
-  "PLAYER_POOL_PROFILE_REMINDER_SOURCE_TYPE",
-  "Individual and bulk reminders must share one auditable source type.",
-);
+const responseService = read("src/lib/player-pool/response-check.ts");
+const responseTemplates = read("prisma/migrations/20260912183000_player_pool_response_check/migration.sql");
+expect(reminderService, '"player-pool-response-check-email"', "Response checks use the editable template.");
+expect(reminderService, "queuePlayerPoolResponseCheck(input)", "Every reminder uses the shared guarded queue.");
+expect(reminderService, "PLAYER_POOL_PROFILE_REMINDER_SOURCE_TYPE", "Historical reminders retain their auditable source identity.");
+expect(responseService, "queueNotificationFromTemplate", "Customer reminders use System Templates.");
+expect(responseService, "getPlayerPoolContactHistory", "The send gate checks real contact history.");
+expect(responseTemplates, "Complete my PlayerPool profile", "Keep a clear profile-completion button.");
+expect(responseTemplates, "profileUrl", "The button resolves the player's secure profile URL.");
+expect(responseTemplates, "{{profileUrl}}", "Plain-text email retains the secure fallback link.");
+expect(responseTemplates, "reply **NO**", "The response check explicitly welcomes a no.");
+expect(responseTemplates, "positions, experience and availability", "Explain the profile details needed for team matching.");
+expect(responseTemplates, "we cannot introduce you to a team", "Explain why a completed response is necessary.");
+expect(responseTemplates, "contact details are not made public", "Preserve contact privacy.");
+expect(responseTemplates, "does not charge you anything and does not commit you", "Preserve no-charge and no-commitment guidance.");
+expect(responseTemplates, "ON CONFLICT (key) DO NOTHING", "Template seeding must preserve administrator edits.");
+reject(reminderService, "PLAYER_POOL_PROFILE_REMINDER_BODY", "Do not embed final customer messages in application code.");
 
 expect(
   individualRoute,
   "queuePlayerPoolProfileReminder",
-  "The individual reminder button must use the full shared PlayerPool email.",
+  "The individual reminder button must use the shared guarded PlayerPool email.",
 );
 expect(
   bulkRoute,
@@ -164,7 +136,7 @@ expect(
 expect(
   playerPoolPage,
   "ensurePlayerPoolProfileReminderTemplate",
-  "Opening PlayerPool admin must make the editable reminder template available.",
+  "PlayerPool admin must reference the existing editable reminder template.",
 );
 expect(
   oldBridge,
@@ -189,5 +161,5 @@ if (failures.length) {
 }
 
 console.log(
-  "PlayerPool profile reminder contract passed: rich email, awaiting-only bulk send, secure CTA, native controls and persistent per-player dates are present.",
+  "PlayerPool profile reminder contract passed: editable yes/no email, guarded awaiting-only bulk send, secure CTA, native controls and persistent per-player dates are present.",
 );

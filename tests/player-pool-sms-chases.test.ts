@@ -21,12 +21,14 @@ const applyMigration = () => execFileSync("psql", [process.env.DATABASE_URL!, "-
 before(async () => { await ensurePlayerPoolTables(); applyMigration(); });
 after(async () => { await prisma.$disconnect(); });
 
+let testPhoneSequence = 100;
 async function target(emailStatus: "SENT" | "FAILED" | "QUEUED" | null = "SENT") {
   const id = randomUUID();
-  const prospect = await prisma.teamPlayerProspect.create({ data: { firstName: "Test", email: `${id}@example.invalid`, phone: "07700900123" } });
+  const testPhone = `07700900${++testPhoneSequence}`;
+  const prospect = await prisma.teamPlayerProspect.create({ data: { firstName: "Test", email: `${id}@example.invalid`, phone: testPhone } });
   await prisma.$executeRaw(Prisma.sql`INSERT INTO "PlayerPoolProfile" (id,"prospectId","profileToken","publicCode","emailNormalized",status,"invitedAt","createdAt","updatedAt") VALUES (${id},${prospect.id},${id},${id},${id + "@example.invalid"},'INVITED',${ago(100)},${ago(100)},${ago(100)})`);
   const recipient = await prisma.notificationRecipient.create({ data: {
-    sourceType: "GENERAL", sourceId: `player-pool-profile:${id}`, audience: "PLAYER", phone: "+447700900123",
+    sourceType: "GENERAL", sourceId: `player-pool-profile:${id}`, audience: "PLAYER", phone: `+44${testPhone.slice(1)}`,
     preferences: { create: { smsEnabled: true } },
   } });
   if (emailStatus) await prisma.notificationDispatch.create({ data: {

@@ -357,7 +357,11 @@ export async function processNotificationQueue(limit = 25) {
         sourceId: dispatch.sourceId,
         metadata: dispatch.metadata,
       });
+      const poolResponseBlock = dispatch.sourceType === "PLAYER_POOL_PROFILE_NUDGE"
+        ? await (await import("@/lib/player-pool/response-check")).getPlayerPoolResponseDeliveryBlock(dispatch)
+        : null;
       const cancellationReason =
+        poolResponseBlock ??
         (await playerLedgerNotificationBlock(dispatch)) ??
         (await playerRepaymentReminderDeliveryBlock(dispatch)) ??
         getUnresolvedEmailPlaceholderReason(dispatch) ??

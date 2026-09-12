@@ -86,7 +86,17 @@ export async function queueDuePlayerPoolProfileSms(profileId: string, now = new 
     const history = (await getPlayerPoolProfileSmsHistory([profile.id], db)).get(profile.id)!;
     const plan = profileSmsPlan(profile, history);
     if (!plan.stage || !plan.dueAt || now < plan.dueAt) return null;
-    const templateKey = PLAYER_POOL_PROFILE_SMS_TEMPLATE_KEYS[plan.stage];
+    const { getPlayerPoolContactHistory, playerPoolContactBlock } = await import("./contact-history");
+    const contactHistory = (await getPlayerPoolContactHistory([profile.id], db)).get(profile.id);
+    if (!contactHistory || playerPoolContactBlock(contactHistory, "SMS")) return null;
+    const lastEmail = await db.notificationDispatch.findFirst({
+      where: { sourceId: profile.id, sourceType: PLAYER_POOL_PROFILE_REMINDER_SOURCE_TYPE, channel: "EMAIL", status: "SENT" },
+      orderBy: { sentAt: "desc" }, select: { metadata: true },
+    });
+    const responseCheck = (lastEmail?.metadata as Record<string, unknown> | null)?.responseCheck === true;
+    const templateKey = responseCheck
+      ? `player-pool-response-check-${plan.stage}-sms`
+      : PLAYER_POOL_PROFILE_SMS_TEMPLATE_KEYS[plan.stage];
     const template = await db.notificationTemplate.findUnique({ where: { key: templateKey } });
     if (!template?.isActive) return null;
     if (template.channel !== "SMS" || template.kind !== "TRANSACTIONAL" || template.audience !== "PLAYER") {
@@ -130,6 +140,8 @@ export async function getPlayerPoolProfileSmsDeliveryBlock(dispatch: {
   if (dispatch.channel !== "SMS" || !dispatch.sourceId) return "Invalid PlayerPool SMS chase.";
   const profile = await readProfile(dispatch.sourceId);
   if (!profile || profile.status !== "INVITED" || profile.profileSubmittedAt) return "Player is no longer awaiting a profile; SMS chase cancelled.";
+  const responseBlock = await (await import("./response-check")).getPlayerPoolResponseDeliveryBlock(dispatch);
+  if (responseBlock) return responseBlock;
   const phone = normalizePhoneNumber(profile.phone);
   if (!phone || phone !== normalizePhoneNumber(dispatch.recipient.phone)) return "Player contact number is missing or has changed; review before resending.";
   const recipient = await prisma.notificationRecipient.findUnique({ where: { id: dispatch.recipientId }, include: { preferences: true } });

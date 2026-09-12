@@ -1,3 +1,4 @@
+import { runConfiguredPlayerPoolResponseCheck, logConfiguredPlayerPoolResponseDelivery } from "@/lib/player-pool/response-check";
 // ========================================
 // File: src/app/api/cron/notifications/route.ts
 // ========================================
@@ -142,6 +143,9 @@ export async function GET(request: NextRequest) {
     failures,
     runCaptainRulesOnboardingEmailJob,
   );
+  const playerPoolResponseCheck = await runCronStep(
+    "player-pool-response-check", failures, runConfiguredPlayerPoolResponseCheck,
+  );
   const playerPoolProfileSmsReminders = await runCronStep(
     "player-pool-profile-sms-reminders",
     failures,
@@ -211,6 +215,8 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(200),
   );
 
+  await runCronStep("player-pool-response-delivery", failures, logConfiguredPlayerPoolResponseDelivery);
+
   const teamPaymentOrderCheckouts = await runCronStep(
     "team-payment-order-checkouts", failures, reconcileTeamPaymentOrderCheckouts,
   );
@@ -237,6 +243,7 @@ export async function GET(request: NextRequest) {
     onboarding,
     rulesOnboarding,
     playerPoolProfileSmsReminders,
+    playerPoolResponseCheck,
     teamLeadConfirmationSmsReminders,
     managedSquadRegistrationReminders,
     fixtureConfirmations,
