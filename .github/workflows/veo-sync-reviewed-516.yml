@@ -1,0 +1,56 @@
+name: Resolve reviewed Veo integration
+on:
+  push:
+    branches: [chore/veo-sync-516-20260912]
+    paths: [.github/workflows/veo-sync-reviewed-516.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.repository == 'MathewCobley/Sixfl' && github.ref == 'refs/heads/chore/veo-sync-516-20260912'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/veo-fixture-confirmation-options
+          fetch-depth: 0
+      - name: Merge pinned main without overwriting either feature
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = 9c867fab8282c607f0b0717b81347e52818f34f7
+          git config user.name 'SIXFL development'
+          git config user.email 'development@sixfl.co.uk'
+          git merge --no-commit --no-ff 2c62d0cc91ce5d5c92bddfe02507924243afa919 || true
+          test "$(cat .git/MERGE_HEAD)" = 2c62d0cc91ce5d5c92bddfe02507924243afa919
+          python3 - <<'PY'
+          import pathlib, subprocess, re
+          p='src/app/captain/team/[teamid]/fixtures/page.tsx'
+          conflicts=subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).splitlines()
+          assert conflicts == [p], conflicts
+          text=pathlib.Path(p).read_text()
+          blocks=re.findall(r'^<<<<<<<[^\n]*\n(.*?)^=======\n(.*?)^>>>>>>>[^\n]*\n',text,re.M|re.S)
+          assert len(blocks)==1, blocks
+          ours,theirs=blocks[0]
+          assert ours.strip()=='import CaptainFixtureConfirmation from "@/components/captain/CaptainFixtureConfirmation";', ours
+          assert theirs.strip()=='import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";\nimport { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";', theirs
+          resolved=re.sub(r'^<<<<<<<[^\n]*\n.*?^=======\n.*?^>>>>>>>[^\n]*\n',lambda _:ours+theirs,text,flags=re.M|re.S)
+          pathlib.Path(p).write_text(resolved)
+          actual=subprocess.check_output(['git','hash-object',p],text=True).strip()
+          assert actual=='456e223fbc360404785927fb0aaca93ac0a948ac', actual
+          subprocess.run(['git','add','--',p],check=True)
+          assert not subprocess.check_output(['git','diff','--name-only','--diff-filter=U'],text=True).strip()
+          PY
+          git commit -m 'Merge current main into Veo choices, preserving awarded-result notices and confirmation controls'
+          git push origin HEAD:refs/heads/feature/veo-fixture-confirmation-options
+          mkdir -p /tmp/veo-integration
+          git rev-parse HEAD > /tmp/veo-integration/commit.txt
+          git rev-parse HEAD^{tree} > /tmp/veo-integration/tree.txt
+          git diff --stat 2c62d0cc91ce5d5c92bddfe02507924243afa919 HEAD > /tmp/veo-integration/diff.txt
+          git ls-tree -r HEAD > /tmp/veo-integration/files.txt
+          tar -czf /tmp/veo-integration/source.tgz src scripts prisma tests docs config .github package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs AGENTS.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veo-reviewed-integration
+          path: /tmp/veo-integration/
+          retention-days: 1
