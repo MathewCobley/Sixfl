@@ -25,6 +25,8 @@ function loader(mocks = {}) {
       if (Object.hasOwn(mocks, id)) return mocks[id];
       if (id === '@/lib/payments/fixture-fee-policy') return load(policyPath);
       if (id === '@/lib/payments/charge-status') return load('src/lib/payments/charge-status.ts');
+      if (id === '@/lib/veo/service') return load('src/lib/veo/service.ts');
+      if (id === './allocator' && filename === path.resolve(root, 'src/lib/veo/service.ts')) return load('src/lib/veo/allocator.ts');
       if (id.startsWith('node:')) return require(id);
       if (id === 'crypto') return require('node:crypto');
       throw new Error(`Unmocked dependency: ${id}`);
@@ -66,6 +68,15 @@ function harness({ homeFee = 4000, awayFee = 3600, placeholderIds = [] } = {}) {
   }
   function chargeView(row) { return { ...row, team:teams.find(t=>t.id===row.teamId) }; }
   const prisma = {
+    // Run the real opt-in hook, returning no Veo settings (the production default).
+    // Only its two read/lock queries are allowed; unexpected SQL still fails closed.
+    $queryRaw: async (strings, ...values) => {
+      const sql = strings.join('?');
+      assert.equal(values[0], league.id);
+      if (/SELECT id FROM "League" WHERE id = \? FOR UPDATE/.test(sql)) return [{ id: league.id }];
+      if (/FROM "VeoLeagueSettings" WHERE "leagueId" = \?/.test(sql)) return [];
+      throw new Error(`Unmocked fixture-fee SQL: ${sql}`);
+    },
     league: { findUnique:async()=>league },
     leagueDivision: { findFirst:async()=>({id:'division'}) },
     team: { findMany:async({select})=>{ selections.push(select); return teams.map(row=>project(row,select)); } },
