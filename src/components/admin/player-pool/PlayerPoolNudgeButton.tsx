@@ -23,6 +23,7 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
+    timeZone: "Europe/London",
   }).format(date);
 }
 
@@ -71,7 +72,7 @@ export default function PlayerPoolNudgeButton({
 
   async function sendNudge() {
     const confirmed = window.confirm(
-      `Send a PlayerPool profile reminder to ${playerName}?\n\nThis sends the full PlayerPool explanation and their secure profile form link.`,
+      `Send a PlayerPool profile reminder to ${playerName}?\n\nThis asks whether they still want a team, with a secure yes/no response link. Recent contact, queued messages, replies and opt-outs are checked again before queueing.`,
     );
     if (!confirmed) return;
 
@@ -125,7 +126,7 @@ export default function PlayerPoolNudgeButton({
             </span>
           </>
         ) : (
-          <span>No profile reminder email sent yet.</span>
+          <span>No dedicated follow-up email recorded. Check the invitation/contact history above.</span>
         )}
       </div>
 
@@ -151,7 +152,7 @@ export default function PlayerPoolNudgeButton({
             ? "Queueing…"
             : sent
               ? "Reminder queued ✓"
-              : "Send profile reminder"}
+              : "Ask if still looking"}
         </button>
       ) : null}
     </div>

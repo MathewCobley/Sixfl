@@ -1,3 +1,4 @@
+import { queuePlayerPoolResponseChase } from "./response-chase";
 // ========================================
 // File: src/lib/player-pool/profile-reminders.ts
 // ========================================
@@ -201,115 +202,11 @@ export async function queuePlayerPoolProfileReminder(input: {
   originLabel: string;
   bulkRunId?: string | null;
 }): Promise<QueuePlayerPoolProfileReminderResult> {
-  const { profile } = input;
-
-  if (
-    profile.status !== PLAYER_POOL_PROFILE_STATUSES.INVITED ||
-    profile.profileSubmittedAt
-  ) {
-    return {
-      ok: false,
-      reason: "not_awaiting",
-      message: "Only players still awaiting their profile can receive this reminder.",
-    };
-  }
-
-  if (!profile.email?.trim()) {
-    return {
-      ok: false,
-      reason: "missing_email",
-      message: "Add an email address before sending this reminder.",
-    };
-  }
-
-  if (!profile.profileToken?.trim()) {
-    return {
-      ok: false,
-      reason: "missing_profile_link",
-      message: "This player does not have an active secure profile link.",
-    };
-  }
-
-  await ensurePlayerPoolProfileReminderTemplate();
-
-  const email = normalizePlayerPoolEmail(profile.email);
-  const displayName = fullName(profile.firstName, profile.lastName) || email;
-  const profileUrl = `${getPlayerPoolBaseUrl()}/player-pool/profile/${profile.profileToken}`;
-
-  const recipient = await upsertNotificationRecipient({
-    sourceType: NotificationRecipientSourceType.GENERAL,
-    sourceId: `player-pool-profile:${profile.id}`,
-    audience: NotificationAudience.PLAYER,
-    displayName,
-    email,
-    phone: profile.phone,
-    transactionalEmailOptIn: true,
-    transactionalSmsOptIn: true,
-    marketingEmailOptIn: false,
-    marketingSmsOptIn: false,
-    metadata: {
-      entityType: "PLAYER_POOL_PROFILE",
-      profileId: profile.id,
-      prospectId: profile.prospectId,
-      publicCode: profile.publicCode,
-      leagueId: profile.leagueId,
-    },
+  return queuePlayerPoolResponseChase({
+    profileId: input.profile.id,
+    createdByUserId: input.createdByUserId,
+    origin: input.origin,
+    originLabel: input.originLabel,
+    bulkRunId: input.bulkRunId,
   });
-
-  const dispatch = await queueNotificationFromTemplate({
-    templateKey: PLAYER_POOL_PROFILE_REMINDER_TEMPLATE_KEY,
-    recipientId: recipient.id,
-    variables: {
-      firstName: profile.firstName.trim() || "there",
-      fullName: displayName,
-      profileUrl,
-      publicCode: profile.publicCode,
-      area: profile.area || "",
-      leagueName: profile.leagueName || "SIXFL PlayerPool",
-      matchingContext: buildMatchingContext(profile),
-    },
-    sourceType: PLAYER_POOL_PROFILE_REMINDER_SOURCE_TYPE,
-    sourceId: profile.id,
-    metadata: {
-      origin: input.origin,
-      originLabel: input.originLabel,
-      profileId: profile.id,
-      prospectId: profile.prospectId,
-      publicCode: profile.publicCode,
-      leagueId: profile.leagueId,
-      ctaUrl: profileUrl,
-      ...(input.bulkRunId ? { bulkRunId: input.bulkRunId } : {}),
-    },
-    createdByUserId: input.createdByUserId?.trim() || null,
-  });
-
-  await logNotificationDispatchToThread({ dispatch, recipient });
-
-  const recordedAt = dispatch.sentAt ?? dispatch.createdAt ?? new Date();
-
-  try {
-    await prisma.$transaction([
-      prisma.$executeRaw`
-        UPDATE "PlayerPoolProfile"
-        SET "updatedAt" = ${recordedAt}
-        WHERE "id" = ${profile.id}
-      `,
-      prisma.teamPlayerProspect.update({
-        where: { id: profile.prospectId },
-        data: { lastContactedAt: recordedAt },
-      }),
-    ]);
-  } catch (error) {
-    console.error(
-      `PlayerPool reminder queued but contact timestamps could not be updated for ${profile.id}`,
-      error,
-    );
-  }
-
-  return {
-    ok: true,
-    displayName,
-    dispatchStatus: String(dispatch.status),
-    recordedAt,
-  };
 }

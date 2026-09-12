@@ -1340,3 +1340,12 @@ model PlayerRepaymentRequest {
   @@index([planId, status])
   @@index([feeId, status])
 }
+
+// Explicit PlayerPool reply audit; no team/member/payment records are changed.
+model PlayerPoolResponseDecision {
+  id String @id @default(uuid())
+  profileId String @unique
+  publicCode String
+  decision String
+  respondedAt DateTime @default(now())
+}
