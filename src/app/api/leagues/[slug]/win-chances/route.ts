@@ -1,3 +1,4 @@
+import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/api/leagues/[slug]/win-chances/route.ts
 // ========================================
@@ -55,12 +56,7 @@ export async function GET(
                 name: true,
               },
             },
-            result: {
-              select: {
-                homeScore: true,
-                awayScore: true,
-              },
-            },
+            result: { select: PREDICTOR_RESULT_SELECT },
           },
         },
       },

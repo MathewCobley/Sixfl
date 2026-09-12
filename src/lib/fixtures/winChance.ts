@@ -2,10 +2,9 @@
 // File: src/lib/fixtures/winChance.ts
 // ========================================
 
-type FixtureResult = {
-  homeScore: number;
-  awayScore: number;
-};
+import { getPredictorResult, type PredictorResultSource } from "./result-score";
+
+type FixtureResult = PredictorResultSource;
 
 export type WinChanceFixture = {
   kickoffAt?: Date | string | null;
@@ -515,6 +514,7 @@ export function calculateFixtureWinChance(input: {
   awayTeamId: string;
   fixtures: WinChanceFixture[];
 }): FixtureWinChance {
+  input = { ...input, fixtures: input.fixtures.map(fixture => ({ ...fixture, result: getPredictorResult(fixture.result) })) };
   const statsByTeamId = buildStats(input.fixtures);
   const baselines = getLeagueBaselines(statsByTeamId);
   const homeStats = statsByTeamId.get(input.homeTeamId);

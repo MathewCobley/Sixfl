@@ -1,3 +1,5 @@
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -129,6 +131,7 @@ export default async function LeagueResultsPage({
               homeScore: true,
               awayScore: true,
               isDisputed: true,
+              overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
             },
           },
         },
@@ -251,6 +254,7 @@ export default async function LeagueResultsPage({
                     <div className="text-center">
                       <div className="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-white/10 bg-black/30 px-5 py-3 text-3xl font-black text-white">
                         {fixture.result.homeScore} - {fixture.result.awayScore}
+
                       </div>
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs text-white/55">
                         <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
@@ -279,6 +283,7 @@ export default async function LeagueResultsPage({
                       align="right"
                     />
                   </div>
+                    {fixture.result?.overturn ? <div className="px-5 pb-5 sm:px-6"><OverturnedResultNotice overturn={fixture.result.overturn} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/></div> : null}
                 </article>
               ))}
             </div>

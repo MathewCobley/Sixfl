@@ -1,3 +1,4 @@
+import { PREDICTOR_RESULT_SELECT, getPredictorResult } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/lib/fixtures/storedAiPredictions.ts
 // ========================================
@@ -137,7 +138,7 @@ function hasAtLeastOneCompletedMatch(teamId: string, fixtures: WinChanceFixture[
   return fixtures.some(
     (fixture) =>
       fixture.status === "COMPLETED" &&
-      Boolean(fixture.result) &&
+      Boolean(getPredictorResult(fixture.result)) &&
       (fixture.homeTeam.id === teamId || fixture.awayTeam.id === teamId),
   );
 }
@@ -346,7 +347,7 @@ export async function refreshStoredAiPreviewForFixture(fixtureId: string, option
       status: true,
       homeTeam: { select: { id: true } },
       awayTeam: { select: { id: true } },
-      result: { select: { homeScore: true, awayScore: true } },
+      result: { select: PREDICTOR_RESULT_SELECT },
     },
   });
 
@@ -363,7 +364,7 @@ export async function refreshStoredAiPreviewsForLeague(leagueId: string, options
       status: true,
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
-      result: { select: { homeScore: true, awayScore: true } },
+      result: { select: PREDICTOR_RESULT_SELECT },
     },
   });
 

@@ -1,3 +1,4 @@
+import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/api/captain/team/[teamid]/fixture-badges/route.ts
 // ========================================
@@ -121,7 +122,7 @@ export async function GET(
             status: true,
             homeTeam: { select: { id: true, name: true } },
             awayTeam: { select: { id: true, name: true } },
-            result: { select: { homeScore: true, awayScore: true } },
+            result: { select: PREDICTOR_RESULT_SELECT },
           },
         })
       : [];

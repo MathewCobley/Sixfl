@@ -1,3 +1,5 @@
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/captain/team/[teamid]/results/page.tsx
 // ========================================
@@ -231,6 +233,7 @@ async function saveTeamMatchDetails(formData: FormData) {
       prisma.matchResult.findUnique({
         where: { id: resultId },
         include: {
+          overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
           fixture: {
             include: {
               selections: {
@@ -332,15 +335,17 @@ async function saveTeamMatchDetails(formData: FormData) {
     }
 
     const isHome = result.fixture.homeTeamId === teamid;
-    const goalsExpected = isHome ? result.homeScore : result.awayScore;
+    const playedResult = getPredictorResult(result);
+    if (!playedResult) throw new Error("The original played score needs administrator review before saving scorer details.");
+    const goalsExpected = isHome ? playedResult.homeScore : playedResult.awayScore;
     const goalsRecorded = contributions.reduce((sum, row) => sum + row.goals, 0);
     const assistsRecorded = contributions.reduce((sum, row) => sum + row.assists, 0);
 
     if (goalsRecorded > goalsExpected) {
-      throw new Error("Recorded scorer goals cannot exceed the official result.");
+      throw new Error("Recorded scorer goals cannot exceed the on-pitch result.");
     }
     if (assistsRecorded > goalsExpected) {
-      throw new Error("Recorded assists cannot exceed the official result.");
+      throw new Error("Recorded assists cannot exceed the on-pitch result.");
     }
 
     let playerOfMatchName: string | null = null;
@@ -514,6 +519,7 @@ export default async function CaptainResultsPage({
       result: {
         include: {
           teamMetadata: true,
+          overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
           disputes: {
             where: { teamId: teamid },
             orderBy: { createdAt: "desc" },
@@ -549,6 +555,8 @@ export default async function CaptainResultsPage({
       const isHome = fixture.homeTeamId === teamid;
       const goalsFor = getGoalsFor(fixture.result!, isHome);
       const goalsAgainst = getGoalsAgainst(fixture.result!, isHome);
+      const playedResult = getPredictorResult(fixture.result!);
+      const playedGoalsFor = playedResult ? getGoalsFor(playedResult, isHome) : 0;
       const matchDetails =
         fixture.result!.teamMetadata.find((item) => item.teamId === teamid) ?? null;
       const selectedPlayerIds = new Set(
@@ -562,7 +570,7 @@ export default async function CaptainResultsPage({
       }));
       const contributions = parseStoredContributions(matchDetails?.scorers);
       const matchPerformances = performancesByResult.get(fixture.result!.id) ?? [];
-      const needsScorers = (matchDetails?.goalsRecorded ?? 0) < goalsFor;
+      const needsScorers = (matchDetails?.goalsRecorded ?? 0) < playedGoalsFor;
       const needsPom = !matchDetails?.playerOfMatchName;
       const needsAppearances = matchPerformances.length === 0;
 
@@ -570,6 +578,7 @@ export default async function CaptainResultsPage({
         fixture,
         opponent: isHome ? fixture.awayTeam.name : fixture.homeTeam.name,
         goalsFor,
+        playedGoalsFor,
         goalsAgainst,
         outcome: getOutcome(goalsFor, goalsAgainst),
         matchDetails,
@@ -733,6 +742,7 @@ export default async function CaptainResultsPage({
                     <p className="mt-2 text-sm text-white/65">
                       Your opponent: {row.opponent}
                     </p>
+                    <OverturnedResultNotice overturn={row.fixture.result?.overturn} homeName={row.fixture.homeTeam.name} awayName={row.fixture.awayTeam.name}/>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">
@@ -816,7 +826,7 @@ export default async function CaptainResultsPage({
                       </div>
 
                       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/65">
-                        Recorded {recordedGoalTotal} of {row.goalsFor} team goals. Optional assists recorded: {recordedAssistTotal}.
+                        Recorded {recordedGoalTotal} of {row.playedGoalsFor} on-pitch team goals. Optional assists recorded: {recordedAssistTotal}.
                       </div>
                     </div>
                   </div>
@@ -941,7 +951,7 @@ export default async function CaptainResultsPage({
                                   name={`scorerGoals_${player.id}`}
                                   defaultValue={contribution?.goals ?? 0}
                                   min={0}
-                                  max={row.goalsFor}
+                                  max={row.playedGoalsFor}
                                   inputMode="numeric"
                                   className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
                                   aria-label={`Goals for ${player.name}`}
@@ -951,7 +961,7 @@ export default async function CaptainResultsPage({
                                   name={`assists_${player.id}`}
                                   defaultValue={contribution?.assists ?? 0}
                                   min={0}
-                                  max={row.goalsFor}
+                                  max={row.playedGoalsFor}
                                   inputMode="numeric"
                                   className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
                                   aria-label={`Assists for ${player.name}`}

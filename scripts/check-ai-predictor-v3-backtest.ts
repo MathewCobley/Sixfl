@@ -217,7 +217,14 @@ const pageSource = fs.readFileSync(
   "utf8",
 );
 
-assert.match(integritySource, /opponent-adjusted-poisson-v2/);
+// The live control acquired a minimum-one-game gate in #499. That version
+// label is not a promotion of either experimental V3 laboratory candidate.
+assert.equal(
+  /const PREDICTOR_MODEL_VERSION = "([^"]+)"/.exec(integritySource)?.[1],
+  "opponent-adjusted-poisson-v3-min-one-game",
+  "Retain the currently deployed control model and its first-match gate.",
+);
+assert.doesNotMatch(integritySource, /predictorV3Candidate/);
 assert.doesNotMatch(
   storedPredictionSource,
   /predictorV3Candidate/,

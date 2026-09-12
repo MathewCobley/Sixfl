@@ -1,3 +1,4 @@
+import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/api/admin/night-board/pitch-tally-sheets/route.ts
 // ========================================
@@ -560,7 +561,7 @@ async function getFixtures(input: {
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
       referee: { select: { name: true, email: true } },
-      result: { select: { homeScore: true, awayScore: true } },
+      result: { select: PREDICTOR_RESULT_SELECT },
     },
   });
 }
@@ -608,7 +609,7 @@ export async function GET(request: Request) {
             status: true,
             homeTeam: { select: { id: true } },
             awayTeam: { select: { id: true } },
-            result: { select: { homeScore: true, awayScore: true } },
+            result: { select: PREDICTOR_RESULT_SELECT },
           },
         })
       : Promise.resolve([]),
