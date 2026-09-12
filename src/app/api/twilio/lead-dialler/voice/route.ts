@@ -58,12 +58,11 @@ export async function POST(request: Request) {
   const rawPhone = lead.phoneNormalized?.trim() || lead.phone?.trim();
   const from = (
     process.env.TWILIO_PHONE_NUMBER ||
-    process.env.TWILIO_FROM_NUMBER ||
-    process.env.TWILIO_SMS_FROM
+    process.env.TWILIO_FROM_NUMBER
   )?.trim();
 
   if (!rawPhone || !from) {
-    response.say({ voice: "alice", language: "en-GB" }, "This lead does not have a callable number.");
+    response.say({ voice: "alice", language: "en-GB" }, "This lead does not have a callable number or the SIXFL voice number is not configured.");
     return new Response(response.toString(), {
       headers: { "Content-Type": "text/xml" },
     });
