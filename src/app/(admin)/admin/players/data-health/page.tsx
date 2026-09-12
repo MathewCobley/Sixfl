@@ -157,7 +157,7 @@ export default async function PlayerDataHealthPage({
                           <span className="text-white/40">{formatDate(run.startedAt)}</span>
                         </div>
                         <p className="mt-2 text-white/55">
-                          {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} unassigned duplicates closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
+                          {run.affectedUsers} people · {run.prospectsActivated} prospects linked · {run.prospectsClosedAsDuplicate} duplicate enquiries closed · {run.playerPoolProfilesJoined} PlayerPool profiles joined · {run.requestsJoined + run.requestsClosed} requests resolved · {run.leadsClosed} leads closed
                         </p>
                       </div>
                       <span className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/65 group-open:bg-white/10">
