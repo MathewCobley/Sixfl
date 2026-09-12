@@ -167,10 +167,11 @@ export async function POST(request: Request) {
     const message = lead.message?.trim() ? `${lead.message.trim()}\n\n${entry}` : entry;
     const now = new Date();
 
+    const shouldClose = outcome === "NOT_INTERESTED" || outcome === "JOINED";
     const nextStatus =
-      outcome === "NOT_INTERESTED"
+      shouldClose
         ? "CLOSED"
-        : outcome === "INTERESTED" || outcome === "JOINED"
+        : outcome === "INTERESTED"
           ? "QUALIFIED"
           : lead.status === "NEW"
             ? "CONTACTED"
@@ -182,7 +183,7 @@ export async function POST(request: Request) {
         message,
         status: nextStatus,
         contactedAt: now,
-        closedAt: outcome === "NOT_INTERESTED" ? now : undefined,
+        closedAt: shouldClose ? now : undefined,
       },
     });
 
