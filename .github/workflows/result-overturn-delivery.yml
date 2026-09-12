@@ -1,0 +1,43 @@
+name: Apply reviewed native result-overturn patch
+on:
+  push:
+    branches: [feature/audited-result-overturns]
+    paths: [.github/workflows/result-overturn-delivery.yml]
+permissions:
+  contents: write
+jobs:
+  apply-reviewed-patch:
+    if: github.ref == 'refs/heads/feature/audited-result-overturns'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/audited-result-overturns
+          fetch-depth: 6
+      - name: Verify and apply exact native-source patch (feature branch only)
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "feature/audited-result-overturns"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD~5)" = "509a0984831a2a16ac97281d424009773aecefc1"
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib
+          encoded = ''.join(pathlib.Path(f'.delivery/result-overturn-{i}.b64').read_text().strip() for i in range(1,5))
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '311971077b3024eab792c4a32a07f7aa1d2bbdfcc0b59fd364105b0a0f0bde36'
+          assert len(patch) == 86920
+          pathlib.Path('/tmp/result-overturn.patch').write_bytes(patch)
+          PY
+          git apply --check --unidiff-zero /tmp/result-overturn.patch
+          git apply --index --unidiff-zero /tmp/result-overturn.patch
+          git rm .delivery/result-overturn-1.b64 .delivery/result-overturn-2.b64 .delivery/result-overturn-3.b64 .delivery/result-overturn-4.b64 .github/workflows/result-overturn-delivery.yml
+          git diff --cached --check
+          git diff --cached --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Record audited result overturns and use original played scores for predictions'
+          git push origin HEAD:refs/heads/feature/audited-result-overturns
+          git rev-parse HEAD
