@@ -11,6 +11,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: admin-squad-layout-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -19,6 +22,13 @@ jobs:
       DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
       NEXTAUTH_SECRET: isolated-squad-layout-tests-only
       NEXTAUTH_URL: http://127.0.0.1:3217
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3217
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      # Inert constructor placeholders, never production credentials.
+      # Browser requests use synthetic data and intercepted status updates.
+      RESEND_API_KEY: re_isolated_squad_layout_not_a_real_key
+      STRIPE_SECRET_KEY: sk_test_isolated_squad_layout_not_a_real_key
+      OPENAI_API_KEY: sk-isolated-squad-layout-not-a-real-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
