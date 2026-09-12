@@ -60,6 +60,11 @@ jobs:
         run: |
           set -o pipefail
           npx tsx tests/result-overturn/database.ts 2>&1 | tee overturn-database.log
+      - name: Real email queue privacy, duplicate recipients and atomic retry tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsx tests/result-overturn/email-database.ts 2>&1 | tee overturn-email-database.log
       - name: Complete application typecheck and production build
         shell: bash
         run: |
@@ -72,6 +77,8 @@ jobs:
         run: npm install --prefix /tmp/overturn-browser --no-package-lock playwright@1.55.0 && /tmp/overturn-browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Desktop and mobile confirmation controls
         run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/browser.cjs
+      - name: Desktop and mobile fixed-copy email preview and confirmation
+        run: OVERTURN_PLAYWRIGHT=/tmp/overturn-browser/node_modules/playwright node tests/result-overturn/email-browser.cjs
       - name: Prove official-score regression is detected
         shell: bash
         run: |
