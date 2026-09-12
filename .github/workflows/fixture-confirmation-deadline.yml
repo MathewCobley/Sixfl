@@ -1,0 +1,57 @@
+name: Fixture confirmation deadline
+on:
+  pull_request:
+    paths:
+      - 'src/app/captain/team/**/fixtures/**'
+      - 'src/components/captain/*Confirmation*'
+      - 'scripts/apply-team-unavailability-response-copy.cjs'
+      - 'tests/fixture-confirmation-deadline.test.cjs'
+      - '.github/workflows/fixture-confirmation-deadline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fixture-confirmation-deadline-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused?connect_timeout=1
+      NEXTAUTH_SECRET: isolated-confirmation-deadline-tests-only
+      NEXTAUTH_URL: http://127.0.0.1:3219
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3219
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      RESEND_API_KEY: re_isolated_deadline_not_a_real_key
+      STRIPE_SECRET_KEY: sk_test_isolated_deadline_not_a_real_key
+      OPENAI_API_KEY: sk-isolated-deadline-not-a-real-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Native deadline, rendered states and late-confirmation safeguards
+        run: node --test tests/fixture-confirmation-deadline.test.cjs
+      - name: Run production preparation once
+        run: npm run prebuild && npx prisma generate
+      - name: Prepared deadline and critical-feature contracts
+        run: |
+          node --test tests/fixture-confirmation-deadline.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+      - name: Inventory final confirmation wording and its source owners
+        if: always()
+        run: |
+          mkdir -p .tmp/fixture-confirmation-deadline
+          git grep -n -i -E 'confirm.{0,160}(until kick-off|any time before kick-off|right up|hours before kick-off)|Confirmation overdue' -- src scripts > .tmp/fixture-confirmation-deadline/wording-inventory.txt || true
+          cp 'src/app/captain/team/[teamid]/fixtures/page.tsx' .tmp/fixture-confirmation-deadline/prepared-page.txt
+      - name: Full production build
+        run: npx next build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixture-confirmation-deadline-${{ github.sha }}
+          path: .tmp/fixture-confirmation-deadline
+          retention-days: 7
