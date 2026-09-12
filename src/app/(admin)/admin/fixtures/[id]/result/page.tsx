@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import OverturnResultForm from "@/components/admin/OverturnResultForm";
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { overturnResultAction } from "./overturn-actions";
 // ========================================
 // File: src/app/(admin)/admin/fixtures/[id]/result/page.tsx
 // ========================================
@@ -29,9 +33,9 @@ export default async function FixtureResultPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ returnTo?: string }>;
+  searchParams?: Promise<{ returnTo?: string; overturned?: string; overturnError?: string }>;
 }) {
-  await requireAdmin();
+  const access = await requireAdmin();
 
   const { id } = await params;
   const sp = (await searchParams) ?? {};
@@ -48,9 +52,9 @@ export default async function FixtureResultPage({
       position: true,
       league: { select: { name: true, season: true } },
       venue: { select: { name: true } },
-      homeTeam: { select: { name: true } },
-      awayTeam: { select: { name: true } },
-      result: { select: { homeScore: true, awayScore: true, isDisputed: true } },
+      homeTeam: { select: { id: true, name: true } },
+      awayTeam: { select: { id: true, name: true } },
+      result: { select: { homeScore: true, awayScore: true, isDisputed: true, updatedAt: true, overturn: true } },
     },
   });
 
@@ -76,13 +80,28 @@ export default async function FixtureResultPage({
         </div>
       </AdminCard>
 
+      {sp.overturned === "1" ? <p role="status" className="rounded-xl border border-emerald-300/25 p-4 text-emerald-100">Overturned result recorded. The table uses the awarded score; the predictor retains the on-pitch score. No messages or payments were triggered.</p> : null}
+      {sp.overturnError ? <p role="alert" className="rounded-xl border border-red-300/25 p-4 text-red-100">{sp.overturnError}</p> : null}
+      <OverturnedResultNotice overturn={fixture.result?.overturn} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/>
+      {fixture.result?.overturn ? <section className="space-y-3 rounded-2xl border border-white/15 p-5 text-sm text-white/80">
+        <h2 className="text-lg font-semibold">Recorded competition decision</h2>
+        <p>Official result: {fixture.homeTeam.name} {fixture.result.homeScore}–{fixture.result.awayScore} {fixture.awayTeam.name}</p>
+        <p>{fixture.result.overturn.decidedByName} · {formatDate(fixture.result.overturn.decidedAt)}</p>
+        <p>Rules: {fixture.result.overturn.rulesBasis}</p>
+        <p className="whitespace-pre-wrap">{fixture.result.overturn.evidenceNote}</p>
+        <p>Original score and decision are retained. Ordinary score corrections cannot overwrite this result.</p>
+      </section> : access.user?.role === "ADMIN" && fixture.status === "COMPLETED" && fixture.result ? <OverturnResultForm
+        fixtureId={fixture.id} requestId={randomUUID()} updatedAt={fixture.result.updatedAt.toISOString()}
+        homeTeam={fixture.homeTeam} awayTeam={fixture.awayTeam} homeScore={fixture.result.homeScore} awayScore={fixture.result.awayScore}
+        action={overturnResultAction}/> : null}
+
       {fixture.result?.isDisputed ? (
         <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
           This result is currently disputed. Updating the score will change the fixture result, but the dispute record may still need reviewing.
         </div>
       ) : null}
 
-      <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+      {!fixture.result?.overturn ? <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <form action={submitResultAction} className="space-y-5">
           <input type="hidden" name="fixtureId" value={fixture.id} />
           <input type="hidden" name="returnTo" value={returnTo} />
@@ -122,7 +141,7 @@ export default async function FixtureResultPage({
             </Link>
           </div>
         </form>
-      </AdminCard>
+      </AdminCard> : null}
     </div>
   );
 }

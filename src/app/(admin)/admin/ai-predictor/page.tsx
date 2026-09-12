@@ -193,12 +193,13 @@ export default async function AiPredictorAccuracyPage() {
         away_team."name" AS "awayTeamName",
         prediction."predictedHomeScore" AS "predictedHomeScore",
         prediction."predictedAwayScore" AS "predictedAwayScore",
-        result."homeScore" AS "actualHomeScore",
-        result."awayScore" AS "actualAwayScore",
+        CASE WHEN overturn.id IS NOT NULL THEN overturn."originalHomeScore" ELSE result."homeScore" END AS "actualHomeScore",
+        CASE WHEN overturn.id IS NOT NULL THEN overturn."originalAwayScore" ELSE result."awayScore" END AS "actualAwayScore",
         prediction."source" AS "source",
         prediction."generatedAt" AS "generatedAt"
       FROM "Fixture" fixture
       JOIN "MatchResult" result ON result."fixtureId" = fixture."id"
+      LEFT JOIN "MatchResultOverturn" overturn ON overturn."matchResultId" = result."id"
       JOIN "League" league ON league."id" = fixture."leagueId"
       JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
       JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
@@ -324,6 +325,7 @@ export default async function AiPredictorAccuracyPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             AI predictor monitoring
           </p>
+          <p className="mt-3 text-sm text-amber-100/80">For overturned matches, predictor accuracy and history use the original on-pitch score, not the awarded result.</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
             Predictor accuracy & coverage
           </h1>

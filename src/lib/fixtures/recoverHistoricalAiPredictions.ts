@@ -1,3 +1,4 @@
+import { PREDICTOR_RESULT_SELECT, getPredictorResult } from "@/lib/fixtures/result-score";
 import { createHash } from "crypto";
 import { Prisma } from "@prisma/client";
 
@@ -56,7 +57,7 @@ function hasPriorCompletedMatch(teamId: string, fixtures: WinChanceFixture[]) {
   return fixtures.some(
     (historyFixture) =>
       historyFixture.status === "COMPLETED" &&
-      Boolean(historyFixture.result) &&
+      Boolean(getPredictorResult(historyFixture.result)) &&
       (historyFixture.homeTeam.id === teamId || historyFixture.awayTeam.id === teamId),
   );
 }
@@ -121,7 +122,7 @@ export async function recoverMissingHistoricalAiPredictions(fixtureIds: string[]
         status: true,
         homeTeam: { select: { id: true, name: true } },
         awayTeam: { select: { id: true, name: true } },
-        result: { select: { homeScore: true, awayScore: true } },
+        result: { select: PREDICTOR_RESULT_SELECT },
       },
     });
 

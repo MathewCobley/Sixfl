@@ -1,3 +1,5 @@
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/(public)/leagues/[slug]/fixtures/page.tsx
 // ========================================
@@ -233,12 +235,7 @@ export default async function LeagueFixturesPublic({
         include: {
           homeTeam: true,
           awayTeam: true,
-          result: {
-            select: {
-              homeScore: true,
-              awayScore: true,
-            },
-          },
+          result: { select: PREDICTOR_RESULT_SELECT },
         },
       },
     },
@@ -382,6 +379,7 @@ export default async function LeagueFixturesPublic({
                         {fixture.result ? (
                           <div className="inline-flex min-w-[120px] items-center justify-center rounded-3xl border border-white/10 bg-white/[0.06] px-5 py-3 text-3xl font-black text-white shadow-inner shadow-black/20">
                             {fixture.result.homeScore} - {fixture.result.awayScore}
+
                           </div>
                         ) : (
                           <div className="inline-flex min-w-[86px] items-center justify-center rounded-3xl border border-white/10 bg-black/35 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white/45">
@@ -410,6 +408,7 @@ export default async function LeagueFixturesPublic({
                       />
                     </div>
 
+                    {fixture.result?.overturn ? <div className="px-5 pb-5 sm:px-6"><OverturnedResultNotice overturn={fixture.result.overturn} homeName={fixture.homeTeam.name} awayName={fixture.awayTeam.name}/></div> : null}
                     {winChance ? (
                       <div className="border-t border-white/10 px-5 pb-5 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
                         <WinChanceBlock

@@ -1,3 +1,5 @@
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/captain/team/[teamid]/results/page.tsx
 // ========================================
@@ -514,6 +516,7 @@ export default async function CaptainResultsPage({
       result: {
         include: {
           teamMetadata: true,
+          overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
           disputes: {
             where: { teamId: teamid },
             orderBy: { createdAt: "desc" },
@@ -733,6 +736,7 @@ export default async function CaptainResultsPage({
                     <p className="mt-2 text-sm text-white/65">
                       Your opponent: {row.opponent}
                     </p>
+                    <OverturnedResultNotice overturn={row.fixture.result?.overturn} homeName={row.fixture.homeTeam.name} awayName={row.fixture.awayTeam.name}/>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-200">

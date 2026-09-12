@@ -524,6 +524,7 @@ model MatchResult {
 
   fixture       Fixture               @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
   enteredByUser User?                 @relation("ResultEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  overturn      MatchResultOverturn?
   teamMetadata  MatchResultTeamMeta[]
   disputes      ResultDispute[]
 
@@ -531,6 +532,31 @@ model MatchResult {
   updatedAt DateTime @updatedAt
 
   @@index([fixtureId])
+}
+
+// One immutable decision preserves the real score; ordinary result edits cannot
+// replace an awarded result. No customer message or payment is created here.
+model MatchResultOverturn {
+  id String @id
+  matchResultId String @unique
+  fixtureId String @unique
+  homeTeamId String
+  awayTeamId String
+  homeTeamName String
+  awayTeamName String
+  originalHomeScore Int
+  originalAwayScore Int
+  originalEnteredAt DateTime
+  awardedHomeScore Int
+  awardedAwayScore Int
+  reasonCode String
+  evidenceNote String
+  rulesBasis String
+  decidedByUserId String
+  decidedByName String
+  decidedAt DateTime @default(now())
+  matchResult MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Restrict)
+  @@index([decidedAt])
 }
 
 model MatchResultTeamMeta {
