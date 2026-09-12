@@ -30,10 +30,13 @@ try {
   await page.screenshot({ path: 'artifacts/veo/admin-desktop.png', fullPage: true });
   assert.deepEqual(errors, []);
 
-  // These HTML artifacts are rendered from the real component and its shared
-  // fields after prebuild; only server auth/data are isolated by the unit harness.
+  // Real component markup after prebuild, plus the actual captain shell's
+  // mobile rules. Only server auth/data are isolated by the unit harness.
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.map(link => link.href));
-  const shell = name => `<!doctype html><html><head>${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body style="background:#080808"><main class="mx-auto max-w-5xl p-4">${readFileSync(`artifacts/veo/${name}.html`, 'utf8')}</main></body></html>`;
+  const layout = readFileSync('src/app/captain/team/[teamid]/layout.tsx', 'utf8');
+  const captainStyles = layout.match(/const captainMobileStyles = String\.raw`([\s\S]*?)`;/)?.[1];
+  assert.ok(captainStyles, 'Use the current captain layout styles, not a guessed preview stylesheet');
+  const shell = name => `<!doctype html><html><head>${styles.map(href => `<link rel="stylesheet" href="${href}">`).join('')}<style>${captainStyles}</style></head><body class="captain-team-shell" style="background:#080808"><main class="captain-team-main mx-auto max-w-5xl p-4">${readFileSync(`artifacts/veo/${name}.html`, 'utf8')}</main></body></html>`;
   const promo = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await promo.setContent(shell('captain-promo'), { waitUntil: 'networkidle' });
   const liveCard = promo.getByRole('region', { name: 'Veo Priority', exact: true });
@@ -42,6 +45,7 @@ try {
   assert.equal(await liveCard.getByRole('checkbox').isDisabled(), false);
   assert.equal(await promo.getByRole('complementary', { name: 'Veo preview notice' }).count(), 0);
   const captainCopy = (await liveCard.innerText()).replace(/\s+/g, ' ').trim();
+  const liveButtonWidth = (await liveCard.getByRole('button').boundingBox()).width;
   assert.ok(await promo.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Captain promo must fit mobile');
   await promo.screenshot({ path: 'artifacts/veo/captain-promo-mobile.png', fullPage: true });
   await promo.setViewportSize({ width: 1440, height: 1000 });
@@ -67,6 +71,7 @@ try {
     await button.scrollIntoViewIfNeeded();
     const box = await button.boundingBox();
     assert.ok(box);
+    assert.ok(Math.abs(box.width - liveButtonWidth) <= 1, 'Mobile preview and live request buttons must have the same width');
     await preview.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await preview.keyboard.press('Enter');
     await preview.keyboard.press('Space');

@@ -16,7 +16,7 @@ export default async function CaptainVeoPriorityCard({ teamId, leagueId }: { tea
     <div className="space-y-3">
       {!canRequest && (
         <aside aria-label="Veo preview notice" className="rounded-xl border border-amber-300/20 bg-amber-400/5 px-4 py-3 text-sm leading-6 text-amber-100/80">
-          Preview only — the captain sees the offer below. Request controls are visible but disabled in this view; no request will be sent.
+          Preview only — showing the captain's view below. You cannot submit a request from this preview.
         </aside>
       )}
       <section aria-label="Veo Priority" className="space-y-5 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 sm:p-6">

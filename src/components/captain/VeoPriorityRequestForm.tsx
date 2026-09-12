@@ -14,7 +14,7 @@ function RequestFields({ disabled, pending = false, preview = false }: { disable
         <input type="checkbox" name="agreed" required disabled={disabled} className="mt-1 h-5 w-5 shrink-0" />
         <span>I agree to an extra £5 on our team's match fee when we are scheduled on the Veo pitch, after SIXFL approves our request. There is no extra charge otherwise. I understand footage may be published publicly on SIXFL TV/YouTube and filming is not guaranteed for every match.</span>
       </label>
-      <button type={preview ? 'button' : 'submit'} disabled={disabled} className="min-h-11 rounded-xl border border-fuchsia-300/40 bg-fuchsia-500/20 px-5 py-3 font-semibold text-white transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-70">
+      <button type={preview ? 'button' : 'submit'} disabled={disabled} className="min-h-11 w-full rounded-xl border border-fuchsia-300/40 bg-fuchsia-500/20 px-5 py-3 font-semibold text-white transition hover:bg-fuchsia-500/30 disabled:cursor-not-allowed disabled:opacity-70 md:w-auto">
         {pending ? 'Sending request…' : 'Request Veo Priority'}
       </button>
       <p className="text-xs leading-5 text-white/60">No payment is taken when you request Priority. If approved, it applies to newly published fixtures only. Your existing fixtures and fees stay the same.</p>
