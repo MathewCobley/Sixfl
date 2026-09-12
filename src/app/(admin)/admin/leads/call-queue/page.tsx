@@ -70,7 +70,7 @@ export default async function LeadCallQueuePage() {
           <p className="text-sm font-bold uppercase tracking-[0.24em] text-emerald-400">Lead follow-up</p>
           <h1 className="mt-2 text-4xl font-black tracking-tight text-white md:text-5xl">Call queue</h1>
           <p className="mt-3 max-w-3xl text-white/60">
-            Work through open leads without copying numbers around. SIXFL rings your handset first, then connects the selected lead.
+            Work through open leads using the SIXFL browser phone. Allow microphone access, call from the admin screen and record the outcome before moving to the next lead.
           </p>
         </div>
         <Link href="/admin/leads" className="inline-flex rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10">
