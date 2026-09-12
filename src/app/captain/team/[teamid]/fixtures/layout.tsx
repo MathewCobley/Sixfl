@@ -1,3 +1,4 @@
+import CaptainVeoBookings from '@/components/captain/CaptainVeoBookings';
 import type { ReactNode } from 'react';
 import { prisma } from '@/lib/prisma';
 import { requireCaptain } from '@/lib/requireCaptain';
@@ -18,6 +19,7 @@ export default async function CaptainFixturesLayout({ children, params }: { chil
     FROM "VeoFixtureSnapshot" s JOIN "Fixture" f ON f.id = s."fixtureId"
     JOIN "Team" opponent ON opponent.id = CASE WHEN s."homeTeamId" = ${teamid} THEN s."awayTeamId" ELSE s."homeTeamId" END
     WHERE (s."homeTeamId" = ${teamid} OR s."awayTeamId" = ${teamid}) AND f."publishedAt" IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM "VeoMatchDecision" d WHERE d."fixtureId"=s."fixtureId")
       AND f.status::text NOT IN ('CANCELLED', 'POSTPONED') AND s."kickoffAt" >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '7 days'
     ORDER BY s."kickoffAt" LIMIT 8
   `;
@@ -32,6 +34,7 @@ export default async function CaptainFixturesLayout({ children, params }: { chil
       </div>)}
       <p className="text-xs leading-5 text-white/50">These are the prices agreed when the fixtures were published. Payments shows any later corrections or refunds. Video links appear when footage is added.</p>
     </section>}
+    <CaptainVeoBookings teamId={teamid} />
     {children}
   </div>;
 }

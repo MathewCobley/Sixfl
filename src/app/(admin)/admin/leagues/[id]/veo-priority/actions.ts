@@ -104,8 +104,10 @@ export async function saveVeoVideo(leagueId: string, form: FormData) {
       // Media-only edit: completed fixtures keep their result, schedule and financial locks.
       const updated = await tx.$executeRaw`
         UPDATE "Fixture" f SET "sixflTvUrl" = ${raw || null}, "updatedAt" = NOW()
-        FROM "VeoFixtureSnapshot" s WHERE s."fixtureId" = f.id AND f.id = ${fixtureId}
-          AND s."leagueId" = ${leagueId} AND f."leagueId" = ${leagueId} AND s.allocated
+        WHERE f.id = ${fixtureId} AND f."leagueId" = ${leagueId} AND (
+          EXISTS (SELECT 1 FROM "VeoFixtureSnapshot" s WHERE s."fixtureId" = f.id AND s."leagueId" = ${leagueId} AND s.allocated)
+          OR EXISTS (SELECT 1 FROM "VeoMatchDecision" d WHERE d."fixtureId" = f.id AND d."leagueId" = ${leagueId} AND d.allocated AND d."failedAt" IS NULL)
+        )
       `;
       if (updated !== 1) throw new VeoAllocationError('No Veo allocation exists for this fixture in this league.');
       const details = JSON.stringify({ kind: 'video_link', fixtureId, url: raw || null });

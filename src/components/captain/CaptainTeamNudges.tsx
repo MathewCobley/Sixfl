@@ -1,3 +1,4 @@
+import { readVeoFixtureOffer } from '@/lib/veo/confirmation';
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 
@@ -247,6 +248,7 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
   const showRatingsNudge = pendingRatingMatchCount > 0;
   const showKitNudge = !kitOrder || kitOrder.status === "DRAFT";
 
+  const veoOffer = pendingFixture ? await readVeoFixtureOffer(teamId, pendingFixture.fixture.id) : null;
   const kitCopy = getKitNudgeCopy(offerType);
   const confirmationCopy = pendingFixture
     ? getConfirmationUrgency(pendingFixture.fixture.kickoffAt)
@@ -290,7 +292,7 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
                 </p>
               ) : null}
             </div>
-            <form action={confirmFixtureFromNudgeAction} className="shrink-0">
+            {veoOffer ? <Link href={`/captain/team/${teamId}/fixtures?fixtureId=${pendingFixture.fixture.id}`} className="inline-flex min-h-14 shrink-0 items-center rounded-2xl border border-emerald-300/30 px-5 py-3 font-semibold text-white">Confirm fixture / choose Veo</Link> : (<form action={confirmFixtureFromNudgeAction} className="shrink-0">
               <input type="hidden" name="teamId" value={teamId} />
               <input
                 type="hidden"
@@ -300,7 +302,7 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
               <CaptainFixtureConfirmButton
                 className={`inline-flex min-h-14 items-center justify-center rounded-2xl px-6 py-3 text-base font-black text-black shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition ${confirmationCopy.buttonClasses}`}
               />
-            </form>
+            </form>)}
           </div>
         </section>
       ) : null}

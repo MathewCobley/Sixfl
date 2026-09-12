@@ -39,6 +39,8 @@ async function renderCard(offer, access = normalAccess) {
     '@/lib/requireCaptain': { requireCaptain: async () => access },
     '@/lib/veo/priority-requests': { readVeoOffer: async () => offer, VEO_REQUEST_TERMS: 'veo-priority-v1' },
     './VeoPriorityRequestForm': form,
+    '@/lib/veo/service': { readVeoSettings: async () => ({ confirmationMode: false }) },
+    './CaptainVeoConfirmationInfo': () => { throw new Error('Legacy test must stay on its legacy offer'); },
   }).default;
   return renderToStaticMarkup(await Card({ teamId: 'team', leagueId: 'league' }));
 }
