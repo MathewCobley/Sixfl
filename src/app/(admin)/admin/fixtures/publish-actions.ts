@@ -20,6 +20,7 @@ import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getEmailReplyDomain } from "@/lib/resend/client";
+import { prepareVeoPublication, VeoAllocationError } from "@/lib/veo/service";
 
 type PublishFixtureRecord = {
   id: string;
@@ -138,7 +139,9 @@ function isQueuedDispatch(status: NotificationDispatchStatus) {
 }
 
 function isRetryablePublishError(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === "P2034";
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)));
+  }
   return error instanceof Error && error.message === PUBLISH_RETRY_ERROR;
 }
 
@@ -170,6 +173,7 @@ async function claimUnpublishedLeagueFixtures(input: PublishScope): Promise<Publ
   return withSerializableRetry(async () => {
     return prisma.$transaction(
       async (tx) => {
+        await prepareVeoPublication(tx, input);
         const where = {
           leagueId: input.leagueId,
           publishedAt: null,
@@ -210,7 +214,7 @@ async function claimUnpublishedLeagueFixtures(input: PublishScope): Promise<Publ
         if (updateResult.count !== fixtureIds.length) throw new Error(PUBLISH_RETRY_ERROR);
         return unpublishedFixtures;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 },
     );
   });
 }
@@ -271,7 +275,15 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   });
   if (!league) throw new Error("League not found.");
 
-  const unpublishedFixtures = await claimUnpublishedLeagueFixtures(input);
+  let unpublishedFixtures: PublishFixtureRecord[];
+  try {
+    unpublishedFixtures = await claimUnpublishedLeagueFixtures(input);
+  } catch (error) {
+    if (error instanceof VeoAllocationError) {
+      redirect(`/admin/leagues/${input.leagueId}/veo-priority?error=${encodeURIComponent(error.message)}`);
+    }
+    throw error;
+  }
 
   if (unpublishedFixtures.length === 0) {
     revalidatePath("/admin/fixtures");
@@ -390,6 +402,7 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
   revalidatePath("/admin/night-board");
   revalidatePath(`/admin/leagues/${input.leagueId}`);
   revalidatePath(`/admin/leagues/${input.leagueId}/fixtures`);
+  revalidatePath(`/admin/leagues/${input.leagueId}/veo-priority`);
   if (league.slug) {
     revalidatePath(`/leagues/${league.slug}`);
     revalidatePath(`/leagues/${league.slug}/fixtures`);
