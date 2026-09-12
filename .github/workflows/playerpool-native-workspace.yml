@@ -1,0 +1,123 @@
+name: Isolated PlayerPool development verification
+on:
+  push:
+    branches: [maintenance/playerpool-native-workspace-20260912]
+permissions:
+  contents: write
+jobs:
+  native-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_response_check_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_response_check_test
+      SIXFL_ISOLATED_RESPONSE_CHECK_TEST: '1'
+      NEXTAUTH_SECRET: isolated-response-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      EMAIL_REPLY_DOMAIN: example.invalid
+      RESEND_API_KEY: re_test_unused
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify transport and apply the reviewed native diff to the exact feature base
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, gzip, hashlib
+          chunks = [Path(f'.native-work/playerpool.{i}').read_text().strip() for i in range(1,5)]
+          # Correct a known missing repeated pair in text transport, never source.
+          chunks[1] = chunks[1].replace('SD9BefWPPlK+', 'SD9BefWPPlPlK+')
+          expected = ['3bb79cfe60e558a7673b119e72fa0cc4e32d8165','f8d6294200f0edfa1eb31a271e46acd4382c1043','6bd8c9fdf3b2044756388c554bfc2809413db1f8','92f026c0f08318094654f78b227cb0c275b0512a']
+          for i,c in enumerate(chunks):
+              b=c.encode(); digest=hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+              assert digest == expected[i], f'Chunk {i+1} differs: {digest}'
+          patch=gzip.decompress(base64.b64decode(''.join(chunks),validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'ad4f8ab9cc1ec9fe9104ccb095626e581ce074cd19aae96bc076fdfc98bcf0fe'
+          Path('/tmp/playerpool.patch').write_bytes(patch)
+          PY
+          git checkout --detach a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a
+          git apply --check /tmp/playerpool.patch
+          git apply /tmp/playerpool.patch
+          git add -u
+          git add src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx prisma/migrations/20260912183000_player_pool_response_check/migration.sql tests/player-pool-response-check.test.ts
+          git diff --cached --check
+          git -c user.name='SIXFL source review' -c user.email='source-review@example.invalid' commit -m 'Implement guarded PlayerPool response checks and native unified contact history'
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,json
+          base='a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a'
+          names=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert len(names)==15, names
+          assert all(p.startswith(('src/','scripts/','tests/','prisma/')) for p in names)
+          entries=[]
+          for p in names:
+              e={'path':p,'mode':'100644','type':'blob'}
+              if Path(p).exists(): e['content']=Path(p).read_text()
+              else: e['sha']=None
+              entries.append(e)
+          tree=subprocess.check_output(['git','rev-parse',base+'^{tree}'],text=True).strip()
+          Path('/tmp/native-tree.json').write_text(json.dumps({'base_tree':tree,'tree':entries}))
+          print('Native candidate files:', '\n'.join(names))
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check native source before production preparation
+        run: |
+          node scripts/check-player-pool-profile-reminders.mjs
+          test ! -f scripts/apply-player-pool-nudge-history.cjs
+          sha256sum 'src/app/(admin)/admin/player-pool/page.tsx' src/lib/player-pool/contact-history.ts src/lib/player-pool/response-check.ts src/components/admin/player-pool/PlayerPoolContactHistory.tsx > /tmp/playerpool-source.sha
+          node scripts/audit-dom-bridges.mjs --changed-from a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a --fail-on-findings
+          node scripts/audit-dom-replacements.mjs --changed-from a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a
+      - name: Prepare application and preserve native ownership
+        run: |
+          npm run prebuild
+          sha256sum --check /tmp/playerpool-source.sha
+          node scripts/check-player-pool-profile-reminders.mjs
+          node scripts/check-critical-feature-contracts.mjs
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - name: Run history, concurrency, suppression, template and delivery-gate database tests
+        run: |
+          npx prisma db push --skip-generate
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-pool-response-check.test.ts"],outfile:".response-check-tests.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .response-check-tests.cjs
+      - run: npx next build
+      - name: Export verified native Git objects only; never update a ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST repos/MathewCobley/Sixfl/git/trees --input /tmp/native-tree.json > /tmp/native-tree-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          tree=json.loads(Path('/tmp/native-tree-result.json').read_text())['sha']
+          Path('/tmp/native-commit.json').write_text(json.dumps({'message':'Implement guarded PlayerPool response checks and native contact history','tree':tree,'parents':['a3bf0b6b00c81eb6ccd9809c1f0b5ab75e80bf8a']}))
+          PY
+          gh api --method POST repos/MathewCobley/Sixfl/git/commits --input /tmp/native-commit.json > /tmp/native-commit-result.json
+          echo "VERIFIED_NATIVE_COMMIT=$(jq -r .sha /tmp/native-commit-result.json)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playerpool-native-verification
+          path: |
+            /tmp/native-tree.json
+            /tmp/native-commit-result.json
+            /tmp/playerpool-source.sha
+          retention-days: 3
