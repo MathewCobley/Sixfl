@@ -9,6 +9,8 @@ jobs:
   source:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_veo_test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,15 +19,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Package source and offline development dependencies only
+      - run: npm ci && npm run prebuild && npx prisma generate
+      - name: Package generated client and schema only
         run: |
-          mkdir -p /tmp/veo-development-source
-          tar -czf /tmp/veo-development-source/source.tgz src scripts prisma tests config docs .github AGENTS.md package.json package-lock.json tsconfig.json next.config.* postcss.config.* eslint.config.*
-          tar -czf /tmp/veo-development-source/dependencies.tgz node_modules
+          mkdir -p /tmp/veo-development-client
+          tar -czf /tmp/veo-development-client/client.tgz node_modules/.prisma node_modules/@prisma/engines prisma/schema.prisma
       - uses: actions/upload-artifact@v4
         with:
-          name: veo-development-source
-          path: /tmp/veo-development-source/
+          name: veo-development-client
+          path: /tmp/veo-development-client/
           retention-days: 1
           compression-level: 0
