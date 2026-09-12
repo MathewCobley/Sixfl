@@ -18,6 +18,8 @@ const {chromium}=require(process.env.OVERTURN_PLAYWRIGHT||'playwright');
    await page.getByLabel('Applicable rules and decision basis').fill('League Rules v2.3 sections 4, 8 and 14');
    await page.getByLabel('Evidence and review notes — admin only').fill('Test only: ten players took part; approval checked; response opportunity recorded.');
    await page.locator('input[name="confirmed"]').check();
+   const confirmationBox=await page.locator('input[name="confirmed"]').boundingBox();
+   assert.ok(confirmationBox && confirmationBox.width>=16 && confirmationBox.height>=16,'confirmation checkbox must remain clearly visible at this width');
    assert.match(await page.getByRole('status').innerText(),/Will test team 0–3 Nomads test team/);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal overflow');
    await page.screenshot({path:`${dir}/confirmation-${width}.png`,fullPage:true});
