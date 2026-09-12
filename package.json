@@ -26,6 +26,7 @@
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "2.2.0",
     "@prisma/client": "^6.19.2",
+    "@twilio/voice-sdk": "^2.18.4",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "canvas": "^3.2.3",

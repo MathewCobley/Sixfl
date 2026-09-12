@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type CallStatus = { id: string; calledAt: string | null };
@@ -159,7 +160,7 @@ export default function LeadCallNotesCell({ leadId }: { leadId: string }) {
         </button>
       )}
 
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         {!noteOpen ? (
           <button
             type="button"
@@ -202,6 +203,15 @@ export default function LeadCallNotesCell({ leadId }: { leadId: string }) {
             </div>
           </form>
         )}
+
+        {!noteOpen ? (
+          <Link
+            href="/admin/leads/call-queue"
+            className="text-xs font-semibold text-sky-200 hover:text-sky-100"
+          >
+            Open dialler →
+          </Link>
+        ) : null}
       </div>
 
       {feedback ? (
