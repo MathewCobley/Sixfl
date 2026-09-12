@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
+import CaptainFixtureConfirmation from "@/components/captain/CaptainFixtureConfirmation";
 import TeamShirt from "@/components/fixtures/TeamShirt";
 import SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -289,45 +290,6 @@ function revalidateFixtureConfirmationPaths(teamid: string) {
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/issues");
   revalidatePath("/admin/fixtures/unavailable");
-}
-
-async function confirmFixtureAction(formData: FormData) {
-  "use server";
-
-  const teamid = String(formData.get("teamid") ?? "").trim();
-  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
-  const access = await requireCaptain(teamid);
-
-  try {
-    await getConfirmableFixture(fixtureId, teamid, {
-      allowLateConfirmation: true,
-    });
-
-    await prisma.fixtureCaptainConfirmation.upsert({
-      where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
-      update: {
-        status: "CONFIRMED",
-        note: null,
-        confirmedAt: new Date(),
-        issueRaisedAt: null,
-        confirmedByUserId: access.user?.id ?? null,
-      },
-      create: {
-        fixtureId,
-        teamId: teamid,
-        status: "CONFIRMED",
-        confirmedAt: new Date(),
-        confirmedByUserId: access.user?.id ?? null,
-      },
-    });
-
-    revalidateFixtureConfirmationPaths(teamid);
-  } catch (error) {
-    console.error("Captain fixture confirmation failed", error);
-    redirect(buildFixtureRedirect(teamid, { fixtureId, error: getFriendlyErrorMessage(error) }));
-  }
-
-  redirect(buildFixtureRedirect(teamid, { fixtureId, saved: "confirmed" }));
 }
 
 async function markFixtureUnavailableAction(formData: FormData) {
@@ -637,21 +599,7 @@ export default async function CaptainFixturesPage({
                     If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
 
-                  <form action={confirmFixtureAction} className="mt-4">
-                    <input type="hidden" name="teamid" value={team.id} />
-                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-                    <button
-                      type="submit"
-                      disabled={isSelectedFixtureConfirmed}
-                      className={`inline-flex min-h-12 w-full items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-                        isSelectedFixtureConfirmed
-                          ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/75"
-                          : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
-                      }`}
-                    >
-                      {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
-                    </button>
-                  </form>
+                  <CaptainFixtureConfirmation teamId={team.id} fixtureId={selectedFixture.id} confirmed={isSelectedFixtureConfirmed} />
 
                   <a
                     href={selectedFixtureEmailHref}
@@ -669,22 +617,8 @@ export default async function CaptainFixturesPage({
                       You can confirm yes at any time before kick-off. If you need to say no, change a response or raise an issue, use the online options until {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off; after that, contact SIXFL directly.
                     </p>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <form action={confirmFixtureAction}>
-                        <input type="hidden" name="teamid" value={team.id} />
-                        <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-                        <button
-                          type="submit"
-                          disabled={isSelectedFixtureConfirmed}
-                          className={`inline-flex min-h-14 w-full items-center justify-center rounded-2xl border px-5 py-3 text-center text-sm font-semibold transition ${
-                            isSelectedFixtureConfirmed
-                              ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
-                              : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
-                          }`}
-                        >
-                          {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
-                        </button>
-                      </form>
+                    <div className="mt-4 grid gap-4">
+                      <CaptainFixtureConfirmation teamId={team.id} fixtureId={selectedFixture.id} confirmed={isSelectedFixtureConfirmed} />
 
                       <form action={markFixtureUnavailableAction}>
                         <input type="hidden" name="teamid" value={team.id} />

@@ -6,7 +6,7 @@ import { allocateVeoNight, veoFee, type VeoFixture, type VeoHistory, type VeoSet
 // A transaction supplies exactly these methods without exposing nested transactions.
 type Db = Pick<typeof prisma, '$queryRaw' | '$executeRaw' | 'fixture'>;
 export class VeoAllocationError extends Error {}
-export type LeagueVeoSettings = VeoSettings & { revision: number };
+export type LeagueVeoSettings = VeoSettings & { revision: number; confirmAtFixture: boolean };
 export type VeoTeam = { id: string; name: string; teamMode: string; standardMatchFeePence: number | null; priority: boolean };
 export type VeoNightFixture = VeoFixture & {
   kickoffAt: Date; homeName: string; awayName: string; publishedAt: Date | null;
@@ -23,9 +23,9 @@ export function validVeoDate(value: string): boolean {
 }
 export async function readVeoSettings(leagueId: string, db: Db = prisma): Promise<LeagueVeoSettings> {
   const rows = await db.$queryRaw<LeagueVeoSettings[]>`
-    SELECT "enabled", "pitch", "venueId", "maxMatches", "revision" FROM "VeoLeagueSettings" WHERE "leagueId" = ${leagueId}
+    SELECT "enabled", "pitch", "venueId", "maxMatches", "revision", "confirmAtFixture" FROM "VeoLeagueSettings" WHERE "leagueId" = ${leagueId}
   `;
-  return rows[0] ?? { enabled: false, pitch: '', venueId: null, maxMatches: 3, revision: 0 };
+  return rows[0] ?? { enabled: false, pitch: '', venueId: null, maxMatches: 3, revision: 0, confirmAtFixture: true };
 }
 export async function readVeoTeams(leagueId: string, db: Db = prisma): Promise<VeoTeam[]> {
   return db.$queryRaw<VeoTeam[]>`
@@ -97,7 +97,9 @@ export function quoteVeoFixture(f: VeoNightFixture, allocated: boolean) {
 export async function prepareVeoPublication(db: Db, scope: { leagueId: string; round?: number; divisionId?: string | null }) {
   // Settings changes and parallel publishes serialize on the same existing league row.
   await db.$queryRaw`SELECT id FROM "League" WHERE id = ${scope.leagueId} FOR UPDATE`;
-  if (!(await readVeoSettings(scope.leagueId, db)).enabled) return;
+  const settings = await readVeoSettings(scope.leagueId, db);
+  // Confirmation choices are finalised separately; never price a request at publication.
+  if (!settings.enabled || settings.confirmAtFixture) return;
   const targets = await db.fixture.findMany({
     where: { leagueId: scope.leagueId, publishedAt: null, status: 'SCHEDULED', kickoffAt: { gt: new Date() },
       ...(typeof scope.round === 'number' ? { round: scope.round } : {}), ...(scope.divisionId ? { divisionId: scope.divisionId } : {}) },
