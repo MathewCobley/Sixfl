@@ -1,0 +1,19 @@
+'use client';
+import {useActionState,useEffect} from 'react';
+import {useRouter} from 'next/navigation';
+import {finaliseVeoChoicesAction,recordingOutcomeAction,type VeoAdminState} from './fixture-actions';
+const initial:VeoAdminState={ok:false,message:''};
+const button='min-h-11 rounded-xl border border-fuchsia-300/30 bg-fuchsia-500/15 px-4 py-3 text-sm font-semibold disabled:opacity-50';
+function Feedback({state}:{state:VeoAdminState}) {return state.message?<p role={state.ok?'status':'alert'} className={`rounded-xl border p-3 text-sm ${state.ok?'border-emerald-300/30 text-emerald-100':'border-amber-300/30 text-amber-100'}`}>{state.message}</p>:null;}
+export function FinaliseChoicesForm({leagueId,date,fingerprint,count}:{leagueId:string;date:string;fingerprint:string;count:number}) {
+ const [state,action,pending]=useActionState(finaliseVeoChoicesAction.bind(null,leagueId,date),initial);
+ const router=useRouter();useEffect(()=>{if(state.message)router.refresh();},[state,router]);
+ return <form action={action} className="space-y-3"><Feedback state={state}/><input type="hidden" name="fingerprint" value={fingerprint}/><label className="flex items-start gap-3 text-sm leading-6"><input type="checkbox" name="reviewed" required disabled={pending||count===0} className="mt-1"/>I have reviewed the whole evening, including both leagues/divisions sharing this camera. I accept the displayed pitch swaps without changing opponents or kick-off times.</label><button disabled={pending||count===0} className={button}>{pending?'Confirming…':`Confirm ${count} Veo booking${count===1?'':'s'}`}</button></form>;
+}
+export function RecordingOutcomeForm({leagueId,fixtureId,ready,completed}:{leagueId:string;fixtureId:string;ready:boolean;completed:boolean}) {
+ const [state,action,pending]=useActionState(recordingOutcomeAction.bind(null,leagueId,fixtureId),initial);
+ const router=useRouter();useEffect(()=>{if(state.message)router.refresh();},[state,router]);
+ return <div className="space-y-3"><Feedback state={state}/>
+ {!ready&&completed&&<details><summary className="cursor-pointer py-2 font-semibold text-fuchsia-100">Recording ready — add video and bill accepted requests</summary><form action={action} className="mt-3 space-y-3"><input type="hidden" name="outcome" value="READY"/><label className="block text-sm">YouTube / SIXFL TV link<input name="videoUrl" type="url" required placeholder="https://www.youtube.com/watch?v=…" className="mt-2 min-h-11 w-full rounded-xl border border-white/20 bg-black/20 p-3"/></label><input type="hidden" name="note" value="Usable match recording checked by administrator."/><label className="flex items-start gap-2 text-sm leading-6"><input type="checkbox" name="reviewed" required className="mt-1"/>I have checked the usable match recording. Add the agreed £5 charge once to each accepted paying team, not to the other team.</label><button disabled={pending} className={button}>Save recording and add agreed Veo charges</button></form></details>}
+ <details><summary className="cursor-pointer py-2 text-amber-100">{ready?'Recording unusable — reverse Veo charges':'Cancel Veo / recording failed'}</summary><form action={action} className="mt-3 space-y-3"><input type="hidden" name="outcome" value={completed?'FAILED':'CANCELLED'}/><label className="block text-sm">Reason<textarea name="note" required minLength={5} maxLength={1000} rows={2} className="mt-2 w-full rounded-xl border border-white/20 bg-black/20 p-3"/></label><label className="flex items-start gap-2 text-sm leading-6"><input type="checkbox" name="reviewed" required className="mt-1"/>Cancel this filming booking. Void only its Veo charges and return any Veo payment received to team credit. Keep the original match fee unchanged.</label><button disabled={pending} className={button}>Close filming booking</button></form></details></div>;
+}

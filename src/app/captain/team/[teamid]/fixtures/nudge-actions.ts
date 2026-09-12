@@ -1,5 +1,6 @@
 "use server";
 
+import { readVeoSettings } from "@/lib/veo/service";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -40,6 +41,11 @@ export async function confirmFixtureFromNudgeAction(formData: FormData) {
   const fixtureId = String(formData.get("fixtureId") ?? "").trim();
 
   await requireCaptain(teamId);
+  const veoFixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { leagueId: true, homeTeamId: true, awayTeamId: true } });
+  if (veoFixture && [veoFixture.homeTeamId, veoFixture.awayTeamId].includes(teamId)) {
+    const settings = await readVeoSettings(veoFixture.leagueId);
+    if (settings.enabled && settings.confirmAtFixture) redirect(`/captain/team/${teamId}/fixtures?fixtureId=${encodeURIComponent(fixtureId)}`);
+  }
 
   let errorMessage: string | null = null;
 

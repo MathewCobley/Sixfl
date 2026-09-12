@@ -1,3 +1,4 @@
+import CaptainVeoBookings from '@/components/captain/CaptainVeoBookings';
 import type { ReactNode } from 'react';
 import { prisma } from '@/lib/prisma';
 import { requireCaptain } from '@/lib/requireCaptain';
@@ -32,6 +33,7 @@ export default async function CaptainFixturesLayout({ children, params }: { chil
       </div>)}
       <p className="text-xs leading-5 text-white/50">These are the prices agreed when the fixtures were published. Payments shows any later corrections or refunds. Video links appear when footage is added.</p>
     </section>}
+    <CaptainVeoBookings teamId={teamid} />
     {children}
   </div>;
 }

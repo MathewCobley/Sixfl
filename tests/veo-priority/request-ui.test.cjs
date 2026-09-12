@@ -38,35 +38,23 @@ async function renderCard(offer, access = normalAccess) {
     'next/link': ({ children, ...props }) => React.createElement('a', props, children),
     '@/lib/requireCaptain': { requireCaptain: async () => access },
     '@/lib/veo/priority-requests': { readVeoOffer: async () => offer, VEO_REQUEST_TERMS: 'veo-priority-v1' },
-    './VeoPriorityRequestForm': form,
+    './FixtureVeoConfirmationForm': {StopFutureVeoForm: () => React.createElement('span',null,'Turn off future Veo Priority')},
   }).default;
   return renderToStaticMarkup(await Card({ teamId: 'team', leagueId: 'league' }));
 }
 test('real captain card is absent when the shared service says the league is off or team ineligible', async () => {
   assert.equal(await renderCard(null), '');
 });
-test('eligible captain sees the real opt-in form, agreement, price and public-filming disclosure', async () => {
-  const html = await renderCard({ priority: false, request: null });
-  for (const word of ['Get more of your matches', 'Request Veo Priority', '£5', 'not £5 per player', 'YouTube', 'name="agreed"', 'required', 'name="termsVersion"']) assert.ok(html.includes(word), word);
-  assert.ok(!html.includes('name="actorId"'));
-  fs.mkdirSync('artifacts/veo', { recursive: true });
-  fs.writeFileSync('artifacts/veo/captain-promo.html', html);
-});
-test('pending, approved and declined cards persist without another sign-up button', async () => {
-  for (const [offer, expected] of [
-    [{ priority: false, request: { status: 'PENDING' } }, 'awaiting SIXFL approval'],
-    [{ priority: true, request: { status: 'APPROVED' } }, 'Veo Priority is ON'],
-    [{ priority: false, request: { status: 'DECLINED' } }, 'not approved'],
-  ]) {
-    const html = await renderCard(offer);
-    assert.ok(html.includes(expected)); assert.ok(!html.includes('Request Veo Priority</button>'));
+test('captain overview directs to the shared fixture options, including in a safe preview', async () => {
+  for(const access of [normalAccess,...previewAccess]) {
+    const html=await renderCard({priority:false,request:null},access);
+    for(const text of ['Open fixtures and choose Veo','Just this match','This and future matches','£5 extra for the whole team','YouTube'])assert.ok(html.includes(text),text);
+    assert.doesNotMatch(html, /Request Veo Priority<|<form/);
   }
 });
-test('administrator, captain-only preview and development fallback cannot present a consent button', async () => {
-  for (const access of previewAccess) {
-    const html = await renderCard({ priority: false, request: null }, access);
-    assert.ok(html.includes('read-only preview')); assert.ok(!html.includes('<form'));
-  }
+test('legacy pending request and approved preference remain visible', async () => {
+  assert.ok((await renderCard({priority:false,request:{status:'PENDING'}})).includes('awaiting SIXFL review'));
+  assert.ok((await renderCard({priority:true,request:{status:'APPROVED'}})).includes('saved preference'));
 });
 test('native action refuses every preview mode and binds the real actor and exact team server-side', async () => {
   let access = previewAccess[0];

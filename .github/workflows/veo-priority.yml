@@ -5,11 +5,13 @@ on:
       - 'src/lib/veo/**'
       - 'src/app/**/veo-priority/**'
       - 'src/components/captain/*Veo*'
+      - 'src/components/captain/CaptainFixtureConfirmation.tsx'
       - 'src/app/captain/team/[teamid]/page.tsx'
       - 'src/app/(admin)/admin/leagues/[id]/layout.tsx'
       - 'src/app/(admin)/admin/fixtures/publish-actions.ts'
       - 'src/app/captain/team/[teamid]/fixtures/layout.tsx'
-      - 'prisma/migrations/*veo_priority*/**'
+      - 'prisma/migrations/*veo*/**'
+      - 'src/app/captain/team/**/fixtures/**'
       - 'tests/veo-priority/**'
       - '.github/workflows/veo-priority.yml'
   push:
@@ -57,11 +59,11 @@ jobs:
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
       - name: Native request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs
+        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/fixture-choice-ui.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
       - name: Prepared request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs
+        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/fixture-choice-ui.test.cjs
       - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
@@ -80,13 +82,19 @@ jobs:
           SQL
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912001500_veo_priority_pilot/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912010000_veo_priority_requests/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260709210000_team_credit_ledger/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912140000_veo_fixture_choices/migration.sql
       - name: Real allocation database safety checks
         run: npx tsx tests/veo-priority/database.ts
       - name: Real request and approval database safety checks
         run: npx tsx tests/veo-priority/requests.ts
+      - name: Fixture choice, shared camera and optional-payment database safety
+        run: npx tsx tests/veo-priority/fixture-bookings.ts
       - name: Production build
         shell: bash
-        run: npx next build 2>&1 | tee veo-build.log
+        run: |
+          set -o pipefail
+          npx next build 2>&1 | tee veo-build.log
       - name: Check production authentication boundary
         shell: bash
         run: |

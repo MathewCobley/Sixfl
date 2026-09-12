@@ -53,7 +53,7 @@ async function main() {
   assert.equal((await readVeoSnapshots(league.id, date)).length, 0);
   pass('missing settings are OFF; fixtures, prices and snapshots untouched');
 
-  await prisma.$executeRaw`INSERT INTO "VeoLeagueSettings" ("leagueId", enabled, pitch, "venueId") VALUES (${league.id}, true, 'Pitch 1', ${venue.id})`;
+  await prisma.$executeRaw`INSERT INTO "VeoLeagueSettings" ("leagueId", enabled, pitch, "venueId", "confirmAtFixture") VALUES (${league.id}, true, 'Pitch 1', ${venue.id}, false)`;
   for (const n of [2, 3, 6, 7, 10]) await prisma.$executeRaw`INSERT INTO "VeoTeamPriority" ("leagueId", "teamId", enabled) VALUES (${league.id}, ${teamIds[n]}, true)`;
   const preview = await previewVeoNight(league.id, date);
   assert.deepEqual(preview.choices.map(c => c.fixtureId), [fixtureIds[1], fixtureIds[3], fixtureIds[5]]);
@@ -99,7 +99,7 @@ async function main() {
   pass('partial-night publication fails safely instead of silently misallocating across divisions');
 
   const freeLeague = await prisma.league.create({ data: { id: id('free-league'), name: 'Veo free fixture test', slug: id('free-slug') }, select: { id: true } });
-  await prisma.$executeRaw`INSERT INTO "VeoLeagueSettings" ("leagueId", enabled, pitch, "venueId") VALUES (${freeLeague.id}, true, '1', ${venue.id})`;
+  await prisma.$executeRaw`INSERT INTO "VeoLeagueSettings" ("leagueId", enabled, pitch, "venueId", "confirmAtFixture") VALUES (${freeLeague.id}, true, '1', ${venue.id}, false)`;
   for (const teamId of teamIds.slice(0, 2)) await prisma.$executeRaw`INSERT INTO "VeoTeamPriority" ("leagueId", "teamId", enabled) VALUES (${freeLeague.id}, ${teamId}, true)`;
   const freeFixture = await prisma.fixture.create({ data: { id: id('free'), leagueId: freeLeague.id, venueId: venue.id, homeTeamId: teamIds[0], awayTeamId: teamIds[1], kickoffAt: start, pitch: '1', homeMatchFeePence: 0, awayMatchFeePence: 4000, matchFeePence: 4000 }, select: { id: true } });
   await publish(freeLeague.id);
