@@ -1,0 +1,22 @@
+name: Veo confirmation source snapshot
+on:
+  push:
+    branches: [feature/veo-fixture-confirmation]
+    paths: [.github/workflows/veo-fixture-dev-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package tracked source only (no credentials or production data)
+        run: |
+          git archive HEAD src scripts prisma tests config docs .github package.json package-lock.json tsconfig.json AGENTS.md | gzip > /tmp/sixfl-veo-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sixfl-veo-source
+          path: /tmp/sixfl-veo-source.tar.gz
+          retention-days: 1
