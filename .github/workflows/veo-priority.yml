@@ -40,6 +40,11 @@ jobs:
       NEXTAUTH_SECRET: isolated-veo-safety-test-only
       NEXTAUTH_URL: http://127.0.0.1:3100
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
+      # Inert placeholders satisfy constructors in unrelated application routes.
+      # No real credentials, sends or payment operations are used by these tests.
+      RESEND_API_KEY: re_isolated_veo_test_not_a_real_key
+      STRIPE_SECRET_KEY: sk_test_isolated_veo_not_a_real_key
+      OPENAI_API_KEY: sk-isolated-veo-not-a-real-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,7 +70,8 @@ jobs:
       # Production runs prebuild -> prisma generate -> next build once. Preparation
       # already ran above so that database checks use the same generated schema.
       - name: Production build
-        run: npx next build
+        shell: bash
+        run: npx next build 2>&1 | tee veo-build.log
       - name: Check production authentication boundary
         shell: bash
         run: |
@@ -100,6 +106,7 @@ jobs:
           name: veo-safety-${{ github.sha }}
           path: |
             artifacts/veo/
+            veo-build.log
             veo-dev.log
             veo-production.log
             veo-auth-headers.txt
