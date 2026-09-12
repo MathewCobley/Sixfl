@@ -19,8 +19,8 @@ export default async function LeadCallQueuePage() {
     where: {
       status: { in: ["NEW", "CONTACTED", "QUALIFIED"] },
       AND: [
-        { phone: { not: null } },
-        { phone: { not: "" } },
+        { phoneNormalized: { not: null } },
+        { phoneNormalized: { not: "" } },
       ],
     },
     orderBy: [{ contactedAt: "asc" }, { createdAt: "asc" }],
@@ -79,7 +79,7 @@ export default async function LeadCallQueuePage() {
       </div>
 
       <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/90">
-        Use this for live SIXFL calls only. Do not call a lead who has asked not to be contacted; recording “Not interested” closes the lead and removes it from this queue.
+        Use this for live SIXFL calls only. Do not call a lead who has asked not to be contacted; recording “Not interested” closes the lead and removes it from this queue. Only validated UK mobile numbers are included.
       </div>
 
       <LeadDiallerQueue initialLeads={serialized} />
