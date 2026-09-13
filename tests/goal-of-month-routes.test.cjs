@@ -102,7 +102,7 @@ for(const from of ['captain','player']) {
 }
 for(const [key,label,nextKey,nextLabel] of [['2026-09','September 2026','2026-10','October 2026'],['2026-12','December 2026','2027-01','January 2027']]) {
   test(`${label} voting stays on the award month despite the newer nomination round`,()=>{
-    const html=renderPromo(competition([period(nextKey,nextLabel,[candidate('new','2026-10')])],{...period(key,label,[candidate('finalist',key)]),open:true}));
+    const html=renderPromo(competition([period(nextKey,nextLabel,[candidate('new',nextKey)])],{...period(key,label,[candidate('finalist',key)]),open:true}));
     assert.ok(plain(html).includes(`${label.replace(/ \d{4}$/,'')} Goal of the Month`));
     assert.match(html,/Voting is open — choose your winner/);assert.match(html,/Vote now/);
     assert.match(html,/data-goal="finalist"/);assert.doesNotMatch(html,/data-goal="new"|Current nominees/);
@@ -129,7 +129,7 @@ test('shared dashboard owner inventory contains no old generic nomination title'
   const found=[];
   function walk(dir){for(const entry of fs.readdirSync(path.join(root,dir),{withFileTypes:true})){const file=path.join(dir,entry.name);if(entry.isDirectory())walk(file);else if(/\.(?:tsx?|[cm]?js)$/.test(file))fs.readFileSync(path.join(root,file),'utf8').split('\n').forEach((line,i)=>{if(/GoalOfWeekDashboardPromo|Goal of the Month — current nominees/.test(line))found.push(`${file}:${i+1}:${line.trim()}`);});}}
   walk('src');walk('scripts');
-  assert.ok(found.some(line=>line.includes('src/app/captain/team/[teamid]/page.tsx')&&line.includes('GoalOfWeekDashboardPromo')));
+  assert.ok(found.some(line=>line.includes('src/components/captain/CaptainSupportPanel.tsx')&&line.includes('GoalOfWeekDashboardPromo')));
   assert.ok(found.some(line=>line.includes('src/app/player/team/[teamid]/layout.tsx')&&line.includes('GoalOfWeekDashboardPromo')));
   assert.ok(!found.some(line=>line.includes('Goal of the Month — current nominees')));
   console.log('Monthly dashboard source owners:\n'+found.join('\n'));
