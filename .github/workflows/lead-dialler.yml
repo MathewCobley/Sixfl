@@ -1,0 +1,45 @@
+name: Lead dialler reliability
+
+on:
+  pull_request:
+    paths:
+      - "src/app/(admin)/admin/layout.tsx"
+      - "src/app/(admin)/admin/leads/call-queue/**"
+      - "src/app/api/admin/leads/dialler/**"
+      - "src/app/api/twilio/lead-dialler/**"
+      - "src/components/admin/leads/LeadDiallerLaunchButton.tsx"
+      - "src/components/admin/leads/LeadDiallerQueue.tsx"
+      - "tests/lead-dialler-autodial.test.cjs"
+      - ".github/workflows/lead-dialler.yml"
+
+jobs:
+  verify:
+    name: Filtered queue and Auto Dial
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check lead dialler contract before source preparation
+        run: node --test tests/lead-dialler-autodial.test.cjs
+
+      - name: Check DOM bridge policy
+        run: |
+          npm run audit:dom
+          npm run audit:dom:changed
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Re-check lead dialler contract after source preparation
+        run: node --test tests/lead-dialler-autodial.test.cjs
