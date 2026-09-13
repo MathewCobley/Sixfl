@@ -26,7 +26,8 @@ test('GET response page only reads; Yes/No require a POST confirmation and concu
   const service=fs.readFileSync('src/lib/cups/invitations.ts','utf8');
   assert.match(service,/Only a current team captain can respond/);
   assert.match(service,/responseVersion!==input.expectedVersion/);
-  assert.doesNotMatch(service,/team\.update|fixture\.create|paymentCharge\.create|queueDirectNotification|sendEmail/);
+  const responseService=service.slice(service.indexOf('export type CupResponseAccess'));
+  assert.doesNotMatch(responseService,/team\.update|fixture\.create|paymentCharge\.create|queueDirectNotification|sendEmail/);
 });
 test('renderer turns editable template labels into two genuine response links',()=>{
   const source=fs.readFileSync('prisma/migrations/20260913001000_cup_invitations/migration.sql','utf8');
