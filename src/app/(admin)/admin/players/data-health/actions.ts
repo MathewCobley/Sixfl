@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { runSafePlayerDataHealthCleanup } from "@/lib/players/player-data-health-safe";
 import { confirmRecruitmentIdentity } from "@/lib/players/player-data-health-reconcile";
+import { markPlayerDataHealthDifferentPeople } from "@/lib/players/player-data-health-exclusions";
 
 function refresh(enquiryTeamId?: string | null) {
   for (const path of ["/admin/players/data-health", "/admin/player-pool", "/admin/player-prospects", "/admin/leads"]) revalidatePath(path);
@@ -23,7 +24,6 @@ export async function runCleanupNowAction(form: FormData) {
     console.error("Manual data health cleanup failed", error);
     destination = "/admin/players/data-health?error=Cleanup+could+not+finish.+Review+the+run+history+before+retrying.";
   }
-  // Redirect is a Next.js control-flow exception, not a cleanup failure.
   redirect(destination);
 }
 export async function confirmIdentityAction(form: FormData) {
@@ -42,6 +42,27 @@ export async function confirmIdentityAction(form: FormData) {
     destination = `/admin/players/data-health?cleaned=${encodeURIComponent(message)}`;
   } catch (error) {
     console.error("Data health identity review failed", error);
+    destination = "/admin/players/data-health?error=" + encodeURIComponent(error instanceof Error ? error.message : "Review failed. Refresh and check again.");
+  }
+  redirect(destination);
+}
+
+export async function markDifferentPeopleAction(form: FormData) {
+  const { user } = await requireAdmin();
+  const text = (key: string) => String(form.get(key) ?? "").trim();
+  if (!user?.id || text("differentConfirmed") !== "yes") {
+    redirect("/admin/players/data-health?error=Confirm+that+these+are+different+people+first");
+  }
+  let destination: string;
+  try {
+    const result = await markPlayerDataHealthDifferentPeople({
+      kind: text("kind"), recordId: text("recordId"), userId: text("userId"),
+      fingerprint: text("fingerprint"), actorUserId: user.id, reason: text("differentReason"),
+    });
+    refresh(result.enquiryTeamId);
+    destination = `/admin/players/data-health?cleaned=${encodeURIComponent("Marked as different people. This exact pairing will no longer be suggested; both records remain unchanged.")}`;
+  } catch (error) {
+    console.error("Data health different-person review failed", error);
     destination = "/admin/players/data-health?error=" + encodeURIComponent(error instanceof Error ? error.message : "Review failed. Refresh and check again.");
   }
   redirect(destination);
