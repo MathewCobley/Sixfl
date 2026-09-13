@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { CupInvitationError, type CupResponse, type CupTerms } from "./invitation-policy";
-export type CupDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "user" | "team" | "league" | "teamMember" | "notificationRecipient" | "notificationPreference" | "notificationTemplate" | "notificationDispatch">;
+export type CupDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "user" | "team" | "league" | "teamMember" | "emailTemplate" | "notificationRecipient" | "notificationPreference" | "notificationTemplate" | "notificationDispatch">;
 export type CupSettings = { cupLeagueId: string; matchFeePence: number; venueNote: string; scheduleNote: string; responseDeadline: Date; state: string; version: number; revision: number; termsHash: string };
 export type Cup = { id: string; name: string; season: string | null; leagueType: string; cupFormat: string; isActive: boolean; isInterLeague: boolean; settings: CupSettings | null };
 export type Invitation = { id: string; cupLeagueId: string; teamId: string; settingsVersion: number; terms: CupTerms; response: CupResponse; responseVersion: number; respondedAt: Date | null; respondedByName: string | null; lastReminderAt: Date | null; createdAt: Date };
