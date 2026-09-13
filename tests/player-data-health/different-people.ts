@@ -22,7 +22,7 @@ before(async () => {
   userId = user.id;
   await prisma.teamMember.create({ data: { teamId, userId, role: "PLAYER" } });
   const prospect = await prisma.teamPlayerProspect.create({ data: {
-    firstName: "Jack", lastName: "Walker", email: `${randomUUID()}@example.invalid`, phone: "07932469695", status: "BACKUP",
+    firstName: "Jack", lastName: "Walker", email: `${randomUUID()}@example.invalid`, phone: "07932469695", status: "NEW",
   } });
   prospectId = prospect.id;
 });
