@@ -39,11 +39,12 @@ function ChoiceStatus({offer}:{offer:FixtureVeoOffer|null}) {
 }
 function FormContents({props,disabled,preview}:{props:Props;disabled:boolean;preview:boolean}) {
   const {offer,confirmed}=props;
+  const actionLabel=confirmed?'✓ Confirmed you can play · Update Veo choice':'Confirm you can play · Save Veo choice';
   return <>
     <ChoiceStatus offer={offer}/>
     {confirmed&&<p className="font-semibold text-emerald-100">✓ Your team is confirmed to play</p>}
     {offer?.available&&<Fields offer={offer} disabled={disabled}/>}
-    {(!confirmed||offer?.available)&&<button type={preview?'button':'submit'} disabled={disabled} className={button}>{disabled&&!preview?'Saving…':confirmed?'Save Veo choice':'Confirm our team can play'}</button>}
+    {(!confirmed||offer?.available)&&<button type={preview?'button':'submit'} disabled={disabled} className={button}>{disabled&&!preview?'Saving…':actionLabel}</button>}
     {!confirmed&&<p className="text-xs leading-5 text-white/65">Veo Priority is optional. You do not need to select it to confirm your team’s attendance.</p>}
   </>;
 }
