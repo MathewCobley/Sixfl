@@ -195,27 +195,18 @@ export async function resendAdminEmailAction(formData: FormData) {
     select: {
       id: true,
       toEmail: true,
-      notificationDispatchId: true,
-      dispatch: {
-        select: {
-          id: true,
-          status: true,
-        },
-      },
+      sentAt: true,
     },
   });
 
-  if (
-    !message?.notificationDispatchId ||
-    !message.toEmail?.trim() ||
-    message.dispatch?.status !== NotificationDispatchStatus.SENT
-  ) {
+  if (!message?.sentAt || !message.toEmail?.trim()) {
     redirect(buildMessagesHref({ filter, threadId, extras: { error: "email_resend_unavailable" } }));
   }
 
   try {
     const result = await queueStoredAdminEmailResend({
-      originalDispatchId: message.notificationDispatchId,
+      messageId: message.id,
+      threadId,
       expectedRecipientEmail: message.toEmail,
       createdByUserId: actorId,
       actorName: access.user?.name || access.user?.email || "SIXFL admin",
