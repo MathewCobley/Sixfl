@@ -10,11 +10,12 @@ const props={teamId:'team',fixtureId:'fixture',leagueId:'league',confirmed:false
 function render(input){return renderToStaticMarkup(React.createElement(forms.default,input));}
 function save(name,html){fs.mkdirSync('artifacts/veo',{recursive:true});fs.writeFileSync(`artifacts/veo/${name}.html`,html);}
 test('confirmation offers NONE/MATCH/ONGOING, defaults off and explains the conditional whole-team price',()=>{
-const html=render(props);for(const text of ['Just this match','this and future matches','No thanks','£5 extra for the whole team','Confirm our team can play','usable recording','YouTube','added separately'])assert.ok(html.toLowerCase().includes(text.toLowerCase()),text);
+const html=render(props);for(const text of ['Just this match','this and future matches','No thanks','£5 extra for the whole team','Confirm you can play · Save Veo choice','usable recording','YouTube','added separately'])assert.ok(html.toLowerCase().includes(text.toLowerCase()),text);
 assert.equal((html.match(/type="radio"/g)||[]).length,3);assert.match(html,/<input[^>]+checked=""[^>]+value="NONE"/);assert.doesNotMatch(html,/value="(?:MATCH|ONGOING)"[^>]*checked/);save('confirmation-live',html);
 });
 test('saved preference defaults ongoing; skip and stop are separate; accepted booking shows no new purchase choice',()=>{
 const html=render({...props,offer:{...offer,defaultChoice:'ONGOING',preference:true}});assert.ok(html.includes('Skip Veo Priority for this match'));assert.ok(html.includes('Turn off future Veo Priority'));assert.match(html,/<input[^>]+checked=""[^>]+value="ONGOING"/);
+const confirmedEditable=render({...props,confirmed:true,offer:{...offer,available:true,defaultChoice:'MATCH'}});assert.ok(confirmedEditable.includes('✓ Confirmed you can play · Update Veo choice'));assert.ok(confirmedEditable.includes('✓ Your team is confirmed to play'));
 const accepted=render({...props,confirmed:true,offer:{...offer,available:false,bookingState:'PLANNED',requestStatus:'ACCEPTED',agreedPence:500}});assert.ok(accepted.includes('Veo confirmed for this match'));assert.doesNotMatch(accepted,/type="radio"/);save('confirmation-ongoing',html);
 });
 test('preview retains exactly the same choices but has no form, hidden action data or working submit',()=>{
