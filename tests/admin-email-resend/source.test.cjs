@@ -4,6 +4,13 @@ const fs = require("node:fs");
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
+function functionBlock(source, name) {
+  const start = source.indexOf(`export async function ${name}`);
+  assert.notEqual(start, -1, `${name} must exist`);
+  const nextExport = source.indexOf("\nexport async function ", start + 1);
+  return source.slice(start, nextExport === -1 ? source.length : nextExport);
+}
+
 test("resend panel only offers successfully sent admin-authored emails and requires confirmation", () => {
   const panel = read("src/components/admin/messages/AdminEmailResendPanel.tsx");
   const router = read("src/components/admin/messages/AdminMessageThreadReplyRouter.tsx");
@@ -21,17 +28,17 @@ test("resend panel only offers successfully sent admin-authored emails and requi
 
 test("server action revalidates the real sent message and never trusts browser content", () => {
   const actions = read("src/app/(admin)/admin/messages/actions.ts");
+  const resendAction = functionBlock(actions, "resendAdminEmailAction");
 
-  assert.match(actions, /resendAdminEmailAction/);
-  assert.match(actions, /await requireAdmin\(\)/);
-  assert.match(actions, /channel: "EMAIL"/);
-  assert.match(actions, /direction: "OUTBOUND"/);
-  assert.match(actions, /participantRole: "ADMIN"/);
-  assert.match(actions, /message\?\.sentAt/);
-  assert.match(actions, /queueStoredAdminEmailResend/);
-  assert.match(actions, /messageId: message\.id/);
-  assert.doesNotMatch(actions, /formData\.get\("subject"\)/);
-  assert.doesNotMatch(actions, /formData\.get\("body"\)/);
+  assert.match(resendAction, /await requireAdmin\(\)/);
+  assert.match(resendAction, /channel: "EMAIL"/);
+  assert.match(resendAction, /direction: "OUTBOUND"/);
+  assert.match(resendAction, /participantRole: "ADMIN"/);
+  assert.match(resendAction, /message\?\.sentAt/);
+  assert.match(resendAction, /queueStoredAdminEmailResend/);
+  assert.match(resendAction, /messageId: message\.id/);
+  assert.doesNotMatch(resendAction, /formData\.get\("subject"\)/);
+  assert.doesNotMatch(resendAction, /formData\.get\("body"\)/);
 });
 
 test("resend helper copies stored thread content, preserves preferences and creates a distinct queued record", () => {
