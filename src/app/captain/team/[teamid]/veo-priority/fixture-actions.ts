@@ -11,15 +11,16 @@ function refresh(teamId:string) {
 }
 export async function confirmFixtureWithVeoAction(teamId:string,fixtureId:string,_previous:FixtureVeoFormState,form:FormData):Promise<FixtureVeoFormState> {
   const access=await requireCaptain(teamId);
-  if (access.accessMode!=='captain' || access.isAdmin || !access.isCaptain || !access.user?.id) return {ok:false,attendanceConfirmed:false,message:'Preview only — no confirmation or request has been sent.'};
+  const canAct=!!access.user?.id && (access.isAdmin || (access.accessMode==='captain' && access.isCaptain));
+  if (!canAct) return {ok:false,attendanceConfirmed:false,message:'Preview only — no confirmation or request has been sent.'};
   let attendanceConfirmed=false;
   try {
     // Confirmation has its own validated transaction and remains saved even if the
     // optional request is stale/unavailable. No Veo choice can create a charge here.
-    if (form.get('confirmAttendance')==='yes') { await confirmCaptainAttendance(fixtureId,teamId,access.user.id); attendanceConfirmed=true; }
+    if (form.get('confirmAttendance')==='yes') { await confirmCaptainAttendance(fixtureId,teamId,access.user!.id); attendanceConfirmed=true; }
     if (form.has('veoChoice')) {
       const choice=parseVeoFixtureChoice(form.get('veoChoice'));
-      await saveFixtureVeoChoice({fixtureId,teamId,actorId:access.user.id,choice,termsVersion:String(form.get('veoTerms')??''),version:String(form.get('veoVersion')??'')});
+      await saveFixtureVeoChoice({fixtureId,teamId,actorId:access.user!.id,choice,termsVersion:String(form.get('veoTerms')??''),version:String(form.get('veoVersion')??'')});
       refresh(teamId);
       return {ok:true,attendanceConfirmed,message:choice==='NONE'?'Your team is confirmed. No Veo Priority requested for this match. Your saved future preference is unchanged.':`Your team is confirmed. Veo requested — awaiting SIXFL confirmation.${choice==='ONGOING'?' Your preference is also saved for future confirmations.':''} No extra payment has been taken.`};
     }
@@ -34,9 +35,10 @@ export async function confirmFixtureWithVeoAction(teamId:string,fixtureId:string
 }
 export async function stopFutureVeoPriorityAction(teamId:string,leagueId:string,_previous:FixtureVeoFormState):Promise<FixtureVeoFormState> {
   const access=await requireCaptain(teamId);
-  if (access.accessMode!=='captain' || access.isAdmin || !access.isCaptain || !access.user?.id) return {ok:false,attendanceConfirmed:false,message:'Preview only — no preference was changed.'};
+  const canAct=!!access.user?.id && (access.isAdmin || (access.accessMode==='captain' && access.isCaptain));
+  if (!canAct) return {ok:false,attendanceConfirmed:false,message:'Preview only — no preference was changed.'};
   try {
-    await stopFutureVeoPriority(teamId,leagueId,access.user.id);refresh(teamId);
+    await stopFutureVeoPriority(teamId,leagueId,access.user!.id);refresh(teamId);
     return {ok:true,attendanceConfirmed:false,message:'Future Veo Priority is off. Pending recurring requests were withdrawn; one-match requests and already accepted bookings are unchanged.'};
   } catch(error) { return {ok:false,attendanceConfirmed:false,message:error instanceof VeoBookingError?error.message:'Could not save the preference. Please try again.'}; }
 }
