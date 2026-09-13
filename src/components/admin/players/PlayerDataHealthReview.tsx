@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { RecruitmentMatch } from "@/lib/players/player-data-health-matches";
 import { REGISTRATION_PENDING_STATUSES } from "@/lib/managed-squad/registration-reminder-policy";
-import { confirmIdentityAction } from "@/app/(admin)/admin/players/data-health/actions";
+import { confirmIdentityAction, markDifferentPeopleAction } from "@/app/(admin)/admin/players/data-health/actions";
 import HealthSubmitButton from "./HealthSubmitButton";
 
 function isSameNameOnlyEvidence(evidence: string[]) {
@@ -11,7 +11,7 @@ function isSameNameOnlyEvidence(evidence: string[]) {
 export default function PlayerDataHealthReview({ matches }: { matches: RecruitmentMatch[] }) {
   return <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
     <div className="border-b border-white/10 px-5 py-4"><h2 className="text-xl font-semibold text-white">Recruitment overlaps and possible duplicates</h2>
-      <p className="mt-2 text-sm text-white/60">Green records are eligible for safe cleanup. Amber records require a person-by-person check. <strong className="text-amber-100">A matching name on its own is not evidence that two records are the same person.</strong> Multiple teams on one account are not duplicate accounts.</p></div>
+      <p className="mt-2 text-sm text-white/60">Green records are eligible for safe cleanup. Amber records require a person-by-person check. <strong className="text-amber-100">A matching name on its own is not evidence that two records are the same person.</strong> If you establish that two records belong to different people, record that decision here and the exact pairing will not be suggested again.</p></div>
     {!matches.length ? <p className="p-6 text-white/60">No matching records in this view.</p> : <div className="divide-y divide-white/10">{matches.map(match => {
       const r = match.record;
       const sameNameOnly = !match.safe && match.candidates.some(c => isSameNameOnlyEvidence(c.evidence));
@@ -34,13 +34,23 @@ export default function PlayerDataHealthReview({ matches }: { matches: Recruitme
         <div className="grid gap-3 md:grid-cols-2">{match.candidates.map(c => {
           const weakNameOnly = isSameNameOnlyEvidence(c.evidence);
           return <div key={c.userId} className={`min-w-0 break-words rounded-xl border p-4 ${weakNameOnly ? 'border-amber-400/30 bg-amber-500/[0.05]' : 'border-white/10 bg-black/20'}`}>
-          <h4 className="font-semibold text-white">{c.name || "Unnamed account"}</h4><p className="mt-1 text-sm text-white/65">Registered email: {c.email || "No login email"}</p>
-          <p className="text-sm text-white/65">Mobile: {c.phones.join(', ') || "Not saved"}</p>
-          <p className="mt-2 text-sm text-emerald-200">Squad: {c.teams.map(t => t.name).join(', ')}</p>
-          <p className="mt-2 text-xs leading-5 text-amber-100/85">Match evidence: {c.evidence.join(' · ')}</p>
-          {weakNameOnly ? <p className="mt-2 text-xs font-semibold leading-5 text-amber-100">Same name only — not enough evidence to identify this as the same person.</p> : null}
-          <Link href={`/admin/players/audit?q=${encodeURIComponent(c.email || c.name || c.userId)}`} className="mt-3 inline-block text-sm font-semibold text-emerald-200 underline">{weakNameOnly ? "Investigate registered player" : "Inspect registered player"}</Link>
-        </div>})}</div>
+            <h4 className="font-semibold text-white">{c.name || "Unnamed account"}</h4><p className="mt-1 text-sm text-white/65">Registered email: {c.email || "No login email"}</p>
+            <p className="text-sm text-white/65">Mobile: {c.phones.join(', ') || "Not saved"}</p>
+            <p className="mt-2 text-sm text-emerald-200">Squad: {c.teams.map(t => t.name).join(', ')}</p>
+            <p className="mt-2 text-xs leading-5 text-amber-100/85">Match evidence: {c.evidence.join(' · ')}</p>
+            {weakNameOnly ? <p className="mt-2 text-xs font-semibold leading-5 text-amber-100">Same name only — not enough evidence to identify this as the same person.</p> : null}
+            <Link href={`/admin/players/audit?q=${encodeURIComponent(c.email || c.name || c.userId)}`} className="mt-3 inline-block text-sm font-semibold text-emerald-200 underline">{weakNameOnly ? "Investigate registered player" : "Inspect registered player"}</Link>
+            {!match.safe ? <details className="mt-4 rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3">
+              <summary className="cursor-pointer text-sm font-bold text-sky-100">These are different people</summary>
+              <form action={markDifferentPeopleAction} className="mt-3 space-y-3 text-sm text-white/75">
+                <input type="hidden" name="kind" value={r.kind}/><input type="hidden" name="recordId" value={r.id}/><input type="hidden" name="userId" value={c.userId}/><input type="hidden" name="fingerprint" value={match.fingerprint}/>
+                <p className="text-xs leading-5 text-white/60">This keeps both records exactly as they are and only tells Player Data Health not to suggest this exact pairing again.</p>
+                <label className="block">Brief reason<textarea name="differentReason" minLength={5} maxLength={1000} required className="mt-2 block min-h-20 w-full rounded-xl border border-white/20 bg-black/25 p-3" placeholder="For example: different email, mobile and team; checked records and they are different people." /></label>
+                <label className="flex items-start gap-3 rounded-xl border border-sky-400/20 p-3"><input type="checkbox" name="differentConfirmed" value="yes" required className="mt-1"/><span>I have checked this pairing and confirm these are different people.</span></label>
+                <HealthSubmitButton>Mark as different people</HealthSubmitButton>
+              </form>
+            </details> : null}
+          </div>})}</div>
         <div className="flex flex-wrap gap-4 text-sm text-emerald-200">
           {r.kind === 'PROSPECT' ? <Link className="underline" href={`/admin/player-prospects/${r.id}/communications`}>Recruitment communications</Link> : <Link className="underline" href={`/admin/leads/${r.id}`}>Open player lead</Link>}
           <Link className="underline" href={`/admin/players/audit?q=${encodeURIComponent(r.email || r.name)}`}>Full identity audit</Link>
