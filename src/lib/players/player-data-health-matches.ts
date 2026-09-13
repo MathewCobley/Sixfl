@@ -83,6 +83,16 @@ export function matchRecruitmentRecords(records: RecruitmentRecord[], members: S
   });
 }
 
+async function readDifferentPersonExclusions(db: IdentityReadDb) {
+  const registry = await db.$queryRaw<Array<{ tableName: string | null }>>(Prisma.sql`
+    SELECT to_regclass('public."PlayerDataHealthExclusion"')::text AS "tableName"
+  `);
+  if (!registry[0]?.tableName) return [] as Array<{recordType:string;recordId:string;userId:string}>;
+  return db.$queryRaw<Array<{recordType:string;recordId:string;userId:string}>>(Prisma.sql`
+    SELECT "recordType", "recordId", "userId" FROM "PlayerDataHealthExclusion"
+  `);
+}
+
 export async function getPlayerRecruitmentMatches(db: IdentityReadDb = prisma, profileIds?: string[]): Promise<RecruitmentMatch[]> {
   if (profileIds && !profileIds.length) return [];
   const members = await db.$queryRaw<SquadIdentity[]>(Prisma.sql`
@@ -110,9 +120,7 @@ export async function getPlayerRecruitmentMatches(db: IdentityReadDb = prisma, p
       NULL::text AS "publicCode", NULL::text AS "profileStatus", "updatedAt", NULL::timestamp AS "profileUpdatedAt"
     FROM "InterestLead" WHERE "interestType" = 'PLAYER' AND status <> 'CLOSED' ORDER BY id
   `);
-  const exclusions = await db.$queryRaw<Array<{recordType:string;recordId:string;userId:string}>>(Prisma.sql`
-    SELECT "recordType", "recordId", "userId" FROM "PlayerDataHealthExclusion"
-  `).catch(() => []);
+  const exclusions = await readDifferentPersonExclusions(db);
   const excluded = new Set(exclusions.map(row => `${row.recordType}:${row.recordId}:${row.userId}`));
   const records = [...prospects, ...leads].filter(r => profileIds || hasLiveRecruitment(r));
   return matchRecruitmentRecords(records, members)
