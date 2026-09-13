@@ -351,6 +351,13 @@ export async function processNotificationQueue(limit = 25) {
         result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: "Dispatch already claimed or cancelled." });
         continue;
       }
+      if (dispatch.channel !== "EMAIL" && (dispatch.sourceType === "CUP_INTEREST_INVITATION" || dispatch.sourceType === "CUP_INTEREST_REMINDER")) {
+        const reason = "Cup invitations are email only.";
+        await markNotificationDispatchCancelled(dispatch.id, reason);
+        result.skipped += 1;
+        result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: reason });
+        continue;
+      }
       const metadata = getMetadataRecord(dispatch.metadata);
       const unpublishedFixtureBlockReason = isLegacyRefereeNotice(dispatch.sourceType) ? LEGACY_REFEREE_REASON : await getUnpublishedFixtureBlockReason({
         sourceType: dispatch.sourceType,
@@ -420,6 +427,15 @@ export async function processNotificationQueue(limit = 25) {
           await markNotificationDispatchCancelled(dispatch.id, confirmationBlock);
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: confirmationBlock });
+          continue;
+        }
+        const cupBlock = dispatch.sourceType === "CUP_INTEREST_INVITATION" || dispatch.sourceType === "CUP_INTEREST_REMINDER"
+          ? await (await import("@/lib/cups/invitation-delivery")).cupInvitationDeliveryBlock(dispatch)
+          : null;
+        if (cupBlock) {
+          await markNotificationDispatchCancelled(dispatch.id, cupBlock);
+          result.skipped += 1;
+          result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: cupBlock });
           continue;
         }
         const sendResult = await sendEmailWithResend({

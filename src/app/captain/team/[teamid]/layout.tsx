@@ -1,3 +1,4 @@
+import CupInvitationNotice from "@/components/cups/CupInvitationNotice";
 // ========================================
 // File: src/app/captain/team/[teamid]/layout.tsx
 // ========================================
@@ -371,6 +372,7 @@ export default async function CaptainTeamLayout({
           label: "Table",
         },
         { href: `/captain/team/${teamid}/results-history`, label: "Team results" },
+        { href: `/captain/team/${teamid}/cup-invitations`, label: "Cup invitations" },
         ...(displayLeagueSlug
           ? [{ href: `/leagues/${displayLeagueSlug}/results`, label: "League results" }]
           : []),
@@ -545,6 +547,7 @@ export default async function CaptainTeamLayout({
 
         <main className="captain-team-main min-w-0 space-y-8">
           <CaptainSupportPanel teamId={team.id} />
+          {access.isCaptain && access.user ? <CupInvitationNotice teamId={team.id} userId={access.user.id} /> : null}
           {children}
           <CaptainAdminFeeRouteNotice teamId={team.id} />
         </main>

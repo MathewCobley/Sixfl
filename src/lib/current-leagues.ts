@@ -68,11 +68,11 @@ export async function getCurrentLeagueOptions(includeLeagueId?: string | null) {
   }
 }
 
-export async function getCurrentLeagueIds(includeLeagueId?: string | null) {
+export async function getCurrentLeagueIds(includeLeagueId?: string | null, db: Pick<typeof prisma, "$queryRaw" | "league"> = prisma) {
   const includeId = includeLeagueId?.trim() || null;
 
   try {
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    const rows = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT l."id"
       FROM "League" l
       LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
@@ -92,7 +92,7 @@ export async function getCurrentLeagueIds(includeLeagueId?: string | null) {
 
     return rows.map((row) => row.id);
   } catch {
-    const rows = await prisma.league.findMany({
+    const rows = await db.league.findMany({
       where: includeId
         ? {
             OR: [

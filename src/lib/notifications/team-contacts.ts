@@ -16,6 +16,7 @@ import {
   getPhoneDisplayValue,
   normalizePhoneNumber,
 } from "@/lib/notifications/phone";
+import { syncTeamCaptainPhonesFromKnownContacts } from "@/lib/notifications/team-captain-contact-sync";
 
 export type TeamContactPoint = {
   key: string;
@@ -105,8 +106,10 @@ function getRoleLabel(role: TeamRole) {
 
 export async function getTeamContactSnapshot(
   teamId: string,
+  options: { syncPhones?: boolean; client?: Pick<typeof prisma, "team" | "notificationRecipient"> } = {},
 ): Promise<TeamContactSnapshot | null> {
-  const team = await prisma.team.findUnique({
+  const client = options.client ?? prisma;
+  const team = await client.team.findUnique({
     where: { id: teamId },
     select: {
       id: true,
@@ -164,9 +167,14 @@ export async function getTeamContactSnapshot(
     return null;
   }
 
-  const recipient = await getNotificationRecipientBySource({
-    sourceType: NotificationRecipientSourceType.TEAM,
-    sourceId: team.id,
+  // Email-only previews and capability checks must never backfill phone records.
+  const { profiles: captainProfiles } = options.syncPhones === false
+    ? { profiles: new Map<string, { phone: string | null }>() }
+    : await syncTeamCaptainPhonesFromKnownContacts(team.id);
+
+  const recipient = await client.notificationRecipient.findFirst({
+    where: { sourceType: NotificationRecipientSourceType.TEAM, sourceId: team.id },
+    include: { preferences: true },
   });
 
   const contacts: TeamContactPoint[] = [];
@@ -223,9 +231,11 @@ export async function getTeamContactSnapshot(
   }
 
   for (const member of team.members) {
+    const memberPhone = displayPhone(captainProfiles.get(member.id)?.phone);
     const key = contactKey({
       name: member.user.name,
       email: member.user.email,
+      phone: memberPhone,
       source: `member:${member.id}`,
     });
 
@@ -238,7 +248,7 @@ export async function getTeamContactSnapshot(
       source: "Team member",
       name: cleanValue(member.user.name),
       email: cleanValue(member.user.email),
-      phone: null,
+      phone: memberPhone,
       isPrimary: contacts.length === 0,
     });
   }

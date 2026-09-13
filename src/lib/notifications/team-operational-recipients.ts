@@ -8,7 +8,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
-import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
+import { getTeamContactSnapshot, upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 
 export async function upsertAdditionalCaptainOperationalRecipients(input: {
   teamId: string;
@@ -109,4 +109,24 @@ export async function upsertTeamOperationalSmsRecipients(teamId: string) {
     [primaryRecipient, ...additionalCaptains],
     (recipient) => recipient.phone?.replace(/\D/g, "") || null,
   );
+}
+
+/** Read-only counterpart for previews and signed cup-link access checks. */
+export async function getTeamOperationalEmailContacts(teamId: string, db: Pick<typeof prisma, "team" | "teamMember" | "notificationRecipient"> = prisma) {
+  const snapshot = await getTeamContactSnapshot(teamId, { syncPhones: false, client: db });
+  if (!snapshot) return [];
+  const captains = await db.teamMember.findMany({
+    where: { teamId, role: TeamRole.CAPTAIN }, orderBy: { createdAt: "asc" },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  });
+  const candidates = [
+    { sourceType: "TEAM" as const, sourceId: teamId, name: snapshot.primaryContact.name || snapshot.teamName, email: snapshot.primaryContact.email },
+    ...captains.map(c => ({ sourceType: "USER" as const, sourceId: c.userId, name: c.user.name || "Team captain", email: c.user.email })),
+  ];
+  const seen = new Set<string>();
+  return candidates.flatMap(c => {
+    const email = c.email?.trim().toLowerCase();
+    if (!email || seen.has(email)) return [];
+    seen.add(email); return [{ ...c, email }];
+  });
 }
