@@ -36,7 +36,7 @@ async function screen(width,data,kind='panel') {
     };
   },{data,goal});
   await page.addScriptTag({content:bundle});await page.evaluate(kind=>window.mount(kind),kind);
-  await page.getByRole('heading',{name:kind==='promo'?/Goal of the Month — current nominees/:/current nominees/}).waitFor();
+  await page.getByRole('heading',{name:kind==='promo'?/September Goal of the Month/:/current nominees/}).waitFor();
   return{context,page};
 }
 for(const width of [390,1440]) {
@@ -58,7 +58,7 @@ for(const width of [390,1440]) {
       await page.getByRole('button',{name:/Play footage for Example FC/}).click();
       const frame=page.locator('iframe');await frame.waitFor();assert.match(await frame.getAttribute('src'),/youtube-nocookie.com\/embed\/dQw4w9WgXcQ/);assert.equal((await frame.getAttribute('src')).includes('autoplay=1'),false);
       await page.evaluate(()=>window.mount('promo'));
-      await page.getByRole('heading',{name:/Goal of the Month — current nominees/}).waitFor();
+      await page.getByRole('heading',{name:'September Goal of the Month',exact:true}).waitFor();
       await page.locator('[data-monthly-goal="goal-one"]').waitFor();
       assert.equal(await page.getByRole('link',{name:/Nominate \/ view all goals/}).getAttribute('href'),'/goal-of-the-month?from=captain&teamId=team-one');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
@@ -71,6 +71,32 @@ for(const width of [390,1440]) {
       await page.evaluate(()=>window.mode='fail');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('alert').filter({hasText:'Could not save'}).waitFor();
       assert.equal(await page.getByLabel('Recorded fixture').inputValue(),'fixture-one');assert.equal(await page.getByLabel('Goal number in the match').inputValue(),'1');assert.equal(await page.getByRole('button',{name:'Submit nomination',exact:true}).isEnabled(),true);
       assert.equal(await page.evaluate(()=>window.posts.length),1);await page.evaluate(()=>window.mode='success');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('button',{name:'You nominated this goal'}).waitFor();assert.equal(await page.evaluate(()=>window.posts.length),2);
+    }finally{await context.close();}
+  });
+  test(`dashboard month follows overlap, voting and next-round data at ${width}px`,async()=>{
+    const {context,page}=await screen(width,payload(),'promo');
+    try{
+      await page.getByText('Current nominees',{exact:true}).waitFor();
+      await page.evaluate(()=>{
+        window.goalData.nominations.push({...window.goalData.nominations[0],key:'2026-10',label:'October 2026',candidates:[{...window.testGoal,id:'october-goal',monthKey:'2026-10'}]});
+        window.mount('promo');
+      });
+      await page.getByRole('heading',{name:'October Goal of the Month',exact:true}).waitFor();
+      assert.equal(await page.locator('[data-monthly-period="2026-09"] [data-monthly-goal="goal-one"]').count(),1);
+      assert.equal(await page.locator('[data-monthly-period="2026-10"] [data-monthly-goal="october-goal"]').count(),1);
+      await page.evaluate(()=>{
+        window.goalData.nominations=window.goalData.nominations.slice(1);
+        window.goalData.voting={...window.goalData.voting,open:true,candidates:[window.testGoal]};window.mount('promo');
+      });
+      await page.getByText('Voting is open — choose your winner',{exact:true}).waitFor();
+      await page.getByRole('heading',{name:'September Goal of the Month',exact:true}).waitFor();
+      assert.equal(await page.getByRole('heading',{name:'October Goal of the Month',exact:true}).count(),0);
+      assert.equal(await page.getByRole('link',{name:'Vote now →',exact:true}).count(),1);
+      await page.evaluate(()=>{window.goalData.voting.open=false;window.mount('promo');});
+      await page.getByRole('heading',{name:'October Goal of the Month',exact:true}).waitFor();
+      assert.equal(await page.getByRole('heading',{name:'September Goal of the Month',exact:true}).count(),0);
+      assert.equal(await page.evaluate(()=>window.posts.length),0);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     }finally{await context.close();}
   });
 }
