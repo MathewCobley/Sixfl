@@ -23,28 +23,9 @@ const deliveryIssuesPagePath = "src/app/(admin)/admin/delivery-issues/page.tsx";
 const resendWebhookRoutePath = "src/app/api/webhooks/resend/route.ts";
 const notificationWebhooksPath = "src/lib/notifications/webhooks.ts";
 
-patchFile(adminLayoutPath, [
-  {
-    label: "admin email delivery banner import",
-    before: 'import AdminSidebar from "@/components/admin/AdminSidebar";',
-    after: [
-      'import AdminSidebar from "@/components/admin/AdminSidebar";',
-      'import AdminDeliveryIssueBanner from "@/components/admin/notifications/AdminDeliveryIssueBanner";',
-    ].join("\n"),
-  },
-  {
-    label: "admin email delivery banner render",
-    before: '        <main className="w-full min-w-0 flex-1">{children}</main>',
-    after: [
-      '        <main className="w-full min-w-0 flex-1">',
-      '          <div className="space-y-5">',
-      '            <AdminDeliveryIssueBanner />',
-      '            {children}',
-      '          </div>',
-      '        </main>',
-    ].join("\n"),
-  },
-]);
+// The admin delivery banner is now owned directly by the React layout source.
+// Do not rewrite the layout during prebuild: exact-string source transforms are
+// brittle and can break deployments when unrelated layout markup changes.
 
 patchFile(deliveryIssuesPagePath, [
   {
@@ -141,8 +122,12 @@ for (const filePath of [
 ]) {
   const source = fs.readFileSync(path.join(root, filePath), "utf8");
 
-  if (filePath === adminLayoutPath && !source.includes("AdminDeliveryIssueBanner")) {
-    throw new Error("Admin email delivery banner was not mounted.");
+  if (
+    filePath === adminLayoutPath &&
+    (!source.includes('import AdminDeliveryIssueBanner from "@/components/admin/notifications/AdminDeliveryIssueBanner";') ||
+      !source.includes("<AdminDeliveryIssueBanner />"))
+  ) {
+    throw new Error("Admin email delivery banner must be mounted directly in the admin layout source.");
   }
   if (
     filePath === deliveryIssuesPagePath &&
