@@ -9,6 +9,7 @@ import {
   NotificationDispatchStatus,
 } from "@prisma/client";
 
+import { resendAdminEmailAction } from "@/app/(admin)/admin/messages/actions";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -41,6 +42,11 @@ type TimelineItem = {
   origin: string;
   templateName: string | null;
   failureReason: string | null;
+  resend: {
+    messageId: string;
+    threadId: string;
+    recipientEmail: string;
+  } | null;
 };
 
 function dispatchStatus(status: NotificationDispatchStatus) {
@@ -251,6 +257,7 @@ export default async function TeamCommunicationsPage({
       origin: getMetadataLabel(dispatch.metadata),
       templateName: dispatch.template?.name ?? null,
       failureReason: dispatch.failureReason,
+      resend: null,
     }));
 
   const messageTimeline: TimelineItem[] = threads.flatMap((thread) =>
@@ -261,6 +268,19 @@ export default async function TeamCommunicationsPage({
         direction === "Inbound"
           ? message.fromEmail || message.fromNumber || null
           : message.toEmail || message.toNumber || null;
+      const recipientEmail = message.toEmail?.trim() || "";
+      const resend =
+        message.channel === NotificationChannel.EMAIL &&
+        message.direction === "OUTBOUND" &&
+        message.participantRole === "ADMIN" &&
+        Boolean(message.sentAt) &&
+        Boolean(recipientEmail)
+          ? {
+              messageId: message.id,
+              threadId: thread.id,
+              recipientEmail,
+            }
+          : null;
 
       return {
         id: `message-${message.id}`,
@@ -276,6 +296,7 @@ export default async function TeamCommunicationsPage({
         origin: direction === "Inbound" ? "Inbox thread" : "Message thread",
         templateName: message.dispatch?.template?.name ?? null,
         failureReason: null,
+        resend,
       } satisfies TimelineItem;
     }),
   );
@@ -296,6 +317,7 @@ export default async function TeamCommunicationsPage({
     origin: "Converted lead history",
     templateName: null,
     failureReason: null,
+    resend: null,
   }));
 
   const timeline = [
@@ -502,6 +524,27 @@ export default async function TeamCommunicationsPage({
                       {item.origin}
                     </span>
                   </div>
+                  {item.resend ? (
+                    <form action={resendAdminEmailAction} className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
+                      <input type="hidden" name="messageId" value={item.resend.messageId} />
+                      <input type="hidden" name="threadId" value={item.resend.threadId} />
+                      <input type="hidden" name="filter" value="all" />
+                      <p className="text-sm font-semibold text-white">Resend this email</p>
+                      <p className="mt-1 text-xs leading-5 text-white/55">
+                        Sends the exact saved email again to {item.resend.recipientEmail}. The original record stays unchanged.
+                      </p>
+                      <label className="mt-3 flex items-start gap-2 text-sm text-white/65">
+                        <input type="checkbox" name="confirmed" required className="mt-1" />
+                        <span>I have checked the recipient and want to resend this exact email.</span>
+                      </label>
+                      <button
+                        type="submit"
+                        className="mt-3 inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/15 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+                      >
+                        Resend email
+                      </button>
+                    </form>
+                  ) : null}
                   {item.failureReason ? (
                     <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
                       {item.failureReason}
