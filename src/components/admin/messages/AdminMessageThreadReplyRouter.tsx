@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useFormStatus } from "react-dom";
 
 import { sendAdminEmailReplyAction } from "@/app/(admin)/admin/messages/email-reply-actions";
+import AdminEmailResendPanel from "@/components/admin/messages/AdminEmailResendPanel";
 import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
 
 type SelectedThread = React.ComponentProps<typeof AdminMessageThread>["thread"];
@@ -156,6 +157,14 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
             <ReplyButton disabled={!canReply} />
           </form>
         </div>
+      ) : null}
+
+      {labelledThread ? (
+        <AdminEmailResendPanel
+          threadId={labelledThread.id}
+          selectedFilter={selectedFilter}
+          messages={labelledThread.messages}
+        />
       ) : null}
 
       <AdminMessageThread selectedFilter={selectedFilter} thread={labelledThread} />
