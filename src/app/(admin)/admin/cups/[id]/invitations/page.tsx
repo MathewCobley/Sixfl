@@ -2,6 +2,7 @@ import Link from "next/link";
 import AdminSelect from "@/components/admin/AdminSelect";
 import CupInvitationComposer from "@/components/cups/CupInvitationComposer";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { prisma } from "@/lib/prisma";
 import { getCupInvitationReport } from "@/lib/cups/invitations";
 import { cupDate, filterCupRows, responseLabel } from "@/lib/cups/invitation-policy";
 import { previewCupMailAction,sendCupMailAction } from "../invitation-actions";
@@ -10,9 +11,12 @@ export default async function CupInvitationsPage({params,searchParams}:{params:P
   const {cup,rows,counts}=await getCupInvitationReport(id,access.user?.id||"");
   const filtered=filterCupRows(rows,filters),leagues=[...new Map(rows.filter(r=>r.sourceLeagueId).map(r=>[r.sourceLeagueId!,r.sourceLeagueName||"League"])).entries()];
   const query=new URLSearchParams(Object.entries(filters).filter((e):e is [string,string]=>typeof e[1]==="string")).toString();
+  const emailTemplates=(await prisma.emailTemplate.findMany({where:{isActive:true,audience:"TEAM"},orderBy:{name:"asc"},select:{id:true,name:true,key:true,body:true}}))
+    .filter(template=>template.body.includes("SIXFL_POLL_OPTIONS_START")&&template.body.includes("SIXFL_POLL_OPTIONS_END")&&((template.body.includes("{{yesResponseUrl}}")&&template.body.includes("{{noResponseUrl}}"))||(template.body.includes("{{yesUrl}}")&&template.body.includes("{{noUrl}}"))))
+    .map(template=>({id:template.id,name:template.name,key:template.key}));
   return <div className="space-y-6"><div className="grid gap-3" style={{gridTemplateColumns:"repeat(auto-fit,minmax(8rem,1fr))"}}>{[["Invited",counts.invited],["Yes — interested",counts.yes],["No",counts.no],["Awaiting response",counts.pending],["Re-invite needed",counts.outdated],["Confirmed entrants",counts.entrants],["Delivery problems",counts.problems]].map(([label,value])=><div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><p className="text-xs text-white/55">{label}</p><p className="mt-2 text-2xl font-bold">{value}</p></div>)}</div>
     <p className="text-sm text-white/60">One response per team. A Yes is interest only; confirm agreed entries separately in Cup entrants. Deadline: {cupDate(cup.settings?.responseDeadline??null)}. Invitation status: {cup.settings?.state||"Not configured"}.</p>
-    {cup.settings?.state==="OPEN"?<CupInvitationComposer cupId={id} teams={rows.map(r=>({id:r.id,teamName:r.teamName,league:r.sourceLeagueName||"No current league",response:r.response,entered:r.entered,eligible:r.eligible&&!r.withdrawn}))} previewAction={previewCupMailAction} sendAction={sendCupMailAction}/>:<p className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">Save the invitation details, choose a deadline and set invitations to Open in <Link href={`/admin/cups/${id}`} className="underline">Cup setup</Link> before sending.</p>}
+    {cup.settings?.state==="OPEN"?<CupInvitationComposer cupId={id} teams={rows.map(r=>({id:r.id,teamName:r.teamName,league:r.sourceLeagueName||"No current league",response:r.response,entered:r.entered,eligible:r.eligible&&!r.withdrawn}))} templates={emailTemplates} previewAction={previewCupMailAction} sendAction={sendCupMailAction}/>:<p className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">Save the invitation details, choose a deadline and set invitations to Open in <Link href={`/admin/cups/${id}`} className="underline">Cup setup</Link> before sending.</p>}
     <section className="space-y-4"><h2 className="text-xl font-semibold">Response report</h2>
     <form className="grid items-end gap-3" style={{gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,12rem),1fr))"}}>
       <label className="text-sm">Team search<input name="q" defaultValue={filters.q} className="mt-2 w-full rounded-xl border border-white/15 bg-black/20 p-3"/></label>
