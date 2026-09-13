@@ -14,6 +14,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { queueStoredAdminEmailResend } from "@/lib/notifications/admin-email-resend";
 import {
   archiveMessageThread,
   getMessageThreadById,
@@ -164,6 +165,75 @@ export async function cancelQueuedSmsMessageAction(formData: FormData) {
   await revalidateMessageViews(threadId);
 
   redirect(buildMessagesHref({ filter, threadId, extras: { cancelled: 1 } }));
+}
+
+export async function resendAdminEmailAction(formData: FormData) {
+  const access = await requireAdmin();
+
+  const messageId = getTrimmedValue(formData.get("messageId"));
+  const threadId = getTrimmedValue(formData.get("threadId"));
+  const filter = getTrimmedValue(formData.get("filter")) || "open";
+  const confirmed = getTrimmedValue(formData.get("confirmed")) === "on";
+  const actorId = access.user?.id?.trim() || "";
+
+  if (!messageId || !threadId || !actorId) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "email_resend_unavailable" } }));
+  }
+
+  if (!confirmed) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "email_resend_confirmation" } }));
+  }
+
+  const message = await prisma.messageEntry.findFirst({
+    where: {
+      id: messageId,
+      threadId,
+      channel: "EMAIL",
+      direction: "OUTBOUND",
+      participantRole: "ADMIN",
+    },
+    select: {
+      id: true,
+      toEmail: true,
+      notificationDispatchId: true,
+      dispatch: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (
+    !message?.notificationDispatchId ||
+    !message.toEmail?.trim() ||
+    message.dispatch?.status !== NotificationDispatchStatus.SENT
+  ) {
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "email_resend_unavailable" } }));
+  }
+
+  try {
+    const result = await queueStoredAdminEmailResend({
+      originalDispatchId: message.notificationDispatchId,
+      expectedRecipientEmail: message.toEmail,
+      createdByUserId: actorId,
+      actorName: access.user?.name || access.user?.email || "SIXFL admin",
+    });
+
+    await revalidateMessageViews(threadId);
+    redirect(
+      buildMessagesHref({
+        filter,
+        threadId,
+        extras: result.reused ? { resend_existing: 1 } : { resent: 1 },
+      }),
+    );
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    await revalidateMessageViews(threadId);
+    redirect(buildMessagesHref({ filter, threadId, extras: { error: "email_resend_blocked" } }));
+  }
 }
 
 export async function reassignMessageThreadTeamAction(formData: FormData) {
