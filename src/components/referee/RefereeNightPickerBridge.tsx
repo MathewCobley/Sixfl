@@ -239,13 +239,15 @@ export default function RefereeNightPickerBridge() {
   useEffect(() => {
     if (pathname !== "/referee") return;
 
+    // The referee dashboard is server-rendered before this effect runs, so the
+    // night schedule is already available here. A body-wide MutationObserver
+    // used to rebuild the picker after every DOM change, but renderNightPicker()
+    // itself changes the DOM. That made the observer trigger itself indefinitely
+    // and could leave mobile browsers pegged and unable to respond to taps.
     const frame = window.requestAnimationFrame(renderNightPicker);
-    const observer = new MutationObserver(renderNightPicker);
-    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
       document.querySelector("[data-referee-night-picker='1']")?.remove();
     };
   }, [pathname]);
