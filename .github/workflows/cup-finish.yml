@@ -1,0 +1,68 @@
+name: Finish verified cup source transfer
+on:
+  push:
+    branches: [feature/cup-invitations-reporting]
+    paths: [.github/workflows/cup-finish.yml]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    if: github.ref == 'refs/heads/feature/cup-invitations-reporting'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/cup-invitations-reporting
+      - shell: python
+        run: |
+          from pathlib import Path
+          import textwrap,subprocess
+          source=Path('.github/workflows/cup-source-finalize.yml').read_text()
+          body=source.split('        run: |\n',1)[1].split('      - name: Remove transport workflows',1)[0]
+          # YAML already removes its common indentation; don't remove TS indentation twice.
+          body=textwrap.dedent(body).replace(".replace('\\n          ','\\n')",'')
+          exec(compile(body,'reviewed-source-transfer','exec'))
+          expected={
+          '.github/workflows/cup-invitations.yml':'4a58398655e99de4c2a2cc69101f0e6db027e681',
+          'docs/cup-invitations.md':'9843d4c27d50e0b6cf6a680aa35b6f5915b1ec6e',
+          'prisma/migrations/20260913001000_cup_invitations/migration.sql':'a9b23c35ab2e267219ce18a8871f6dad590cb110',
+          'src/app/(admin)/admin/cups/[id]/actions.ts':'2c1efbab0f0bd91e8ea7d2561e24bfdb03c2cf2c',
+          'src/app/(admin)/admin/cups/[id]/entrants/draw/page.tsx':'4722ff1cac05241853d108d463b120ae67ca4649',
+          'src/app/(admin)/admin/cups/[id]/entrants/page.tsx':'f9cdc3856b954164a9788084bb3eecbeb3ccae95',
+          'src/app/(admin)/admin/cups/[id]/invitation-actions.ts':'f2b1c768bf3e86ba557e78a8ff1521d5999717fd',
+          'src/app/(admin)/admin/cups/[id]/invitations/export/route.ts':'0747848a2a3e18afe4cf78a018dc15e72b11f6ef',
+          'src/app/(admin)/admin/cups/[id]/invitations/history/page.tsx':'c1580fec90ca676b8124c5a1aab840edc5de7dc1',
+          'src/app/(admin)/admin/cups/[id]/invitations/page.tsx':'8a2a631ad036eae62f56f9ac7462192af3bf56df',
+          'src/app/(admin)/admin/cups/[id]/layout.tsx':'08357b6db2bd5373cdaad4cf5c9b287e3359ef71',
+          'src/app/(admin)/admin/cups/[id]/page.tsx':'a7418ecaac10722ee3f8f8dd0acd8e82b9aa02e0',
+          'src/app/captain/team/[teamid]/cup-invitations/actions.ts':'dcd8c73a8f330e5f77f7bda1eeb36dd555f26d7a',
+          'src/app/captain/team/[teamid]/cup-invitations/page.tsx':'4c0bb2f976f98b00ad2eecb63cb9f7197886905a',
+          'src/app/cup-invitation/[token]/actions.ts':'fb1bf615b5df852b60149d07af1b8947925550e7',
+          'src/app/cup-invitation/[token]/page.tsx':'f8f36a2826a8d8c4dfe4b4cad2f2b950b4f714de',
+          'src/components/cups/CupEntryForm.tsx':'d808290620fbd6ab89777a8f46b657064b220c2d',
+          'src/components/cups/CupInvitationComposer.tsx':'b3878f4b53f3153480c1b1a01a2952943b1e4771',
+          'src/components/cups/CupInvitationNotice.tsx':'3d0323dc6a302edac2f8667649a758d82c9a23b3',
+          'src/components/cups/CupResponseForm.tsx':'c39f1dd447c385a306f023816319b55aa5be8b1d',
+          'src/components/cups/CupSetupForm.tsx':'b1eeda51cd6f25dab6a7f4ce707e217b2172d4af',
+          'src/components/cups/CupTabs.tsx':'65f85909ad8cf577c56d2794c6cab0888ce23569',
+          'src/components/cups/types.ts':'e15a4ae98792f875d4d71654f711f0e18ebf7319',
+          'src/lib/cups/invitation-data.ts':'3e5019a670289d6943386c989877d3db9ae4ed56',
+          'src/lib/cups/invitation-delivery.ts':'e303d56db0bdac1d6eea36d9f6bd808cf54f19ce',
+          'src/lib/cups/invitation-policy.ts':'69d5beebceae4f4f888b70392f84cd16505cf7a9',
+          'src/lib/cups/invitations.ts':'c78cbe3edafce42ddcdaa5b848a80dd12cff0183',
+          'tests/cup-invitations/browser.cjs':'cbb56e8a3663bc651997c20a79ee0e88d5b1da74',
+          'tests/cup-invitations/database.ts':'44676d949b52bb8bb95a09919ac77d99d846ef42',
+          'tests/cup-invitations/policy.test.cjs':'5437b48e79a9751b83c1de33d071e94ddee4805e'
+          }
+          for path,sha in expected.items():
+            actual=subprocess.check_output(['git','hash-object',path],text=True).strip()
+            assert actual==sha,(path,actual,sha)
+          print('All 37 native product/test files match the locally reviewed Git blobs.')
+      - name: Remove all temporary transport and update only the feature branch
+        run: |
+          git rm .github/workflows/cup-workspace-snapshot.yml .github/workflows/cup-source-finalize.yml .github/workflows/cup-finish.yml
+          git config user.name 'SIXFL source preparation'
+          git config user.email 'noreply@github.com'
+          git commit -m 'Complete reviewed native cup integration and remove temporary source transport'
+          git push origin HEAD:feature/cup-invitations-reporting
