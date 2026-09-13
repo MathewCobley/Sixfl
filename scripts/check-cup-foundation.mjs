@@ -24,6 +24,11 @@ const createActions = read("src/app/(admin)/admin/cups/actions.ts");
 const entrantActions = read("src/app/(admin)/admin/cups/[id]/actions.ts");
 const cupsPage = read("src/app/(admin)/admin/cups/page.tsx");
 const cupPage = read("src/app/(admin)/admin/cups/[id]/page.tsx");
+const invitationService = read("src/lib/cups/invitations.ts");
+const cupData = read("src/lib/cups/invitation-data.ts");
+const entrantForm = read("src/components/cups/CupEntryForm.tsx");
+const setupForm = read("src/components/cups/CupSetupForm.tsx");
+const drawPage = read("src/app/(admin)/admin/cups/[id]/entrants/draw/page.tsx");
 const sidebar = read("src/components/admin/AdminSidebar.tsx");
 const currentLeagues = read("src/lib/current-leagues.ts");
 const adminLeagues = read("src/app/(admin)/admin/leagues/page.tsx");
@@ -59,11 +64,12 @@ expect(
 
 expect(
   entrantActions.includes("await requireAdmin()") &&
-    entrantActions.includes('INSERT INTO "LeagueSeasonTeam"') &&
-    entrantActions.includes('ON CONFLICT ("leagueId", "teamId") DO UPDATE') &&
-    entrantActions.includes('FROM "Fixture"') &&
-    entrantActions.includes('SET "isActive" = false') &&
-    !entrantActions.includes("prisma.team.update"),
+    entrantActions.includes("changeCupEntry") &&
+    invitationService.includes('INSERT INTO "LeagueSeasonTeam"') &&
+    invitationService.includes('ON CONFLICT ("leagueId","teamId") DO UPDATE') &&
+    invitationService.includes('FROM "Fixture"') &&
+    invitationService.includes('SET "isActive"=false') &&
+    !entrantActions.includes("prisma.team.update") && !invitationService.includes("team.update"),
   "cup entrants must use separate season membership and cannot be withdrawn after cup fixtures exist",
 );
 
@@ -71,16 +77,16 @@ expect(
   cupsPage.includes("await requireAdmin()") &&
     cupsPage.includes('WHERE c."competitionType" = \'CUP\'') &&
     cupPage.includes("await requireAdmin()") &&
-    cupPage.includes('AND c."competitionType" = \'CUP\'') &&
-    cupPage.includes("Next: draw and bracket"),
+    cupData.includes('AND c."competitionType" = \'CUP\'') &&
+    drawPage.includes("Draw not created yet") && drawPage.includes("Automatic knockout draw generation"),
   "cup admin pages must be admin-only, scoped to CUP competitions and explicit that draw/bracket is a later stage",
 );
 
 expect(
   cupsPage.includes('import AdminSelect from "@/components/admin/AdminSelect"') &&
-    cupPage.includes('import AdminSelect from "@/components/admin/AdminSelect"') &&
+    entrantForm.includes('import AdminSelect from "@/components/admin/AdminSelect"') && setupForm.includes("AdminSelect") &&
     !cupsPage.includes("<select") &&
-    !cupPage.includes("<select"),
+    !cupPage.includes("<select") && !entrantForm.includes("<select") && !setupForm.includes("<select"),
   "cup forms must use the SIXFL AdminSelect combobox instead of native selects",
 );
 

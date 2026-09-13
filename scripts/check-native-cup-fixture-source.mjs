@@ -19,6 +19,13 @@ const files = [
   "src/app/api/admin/fixtures/matchup-grid/route.ts",
   "src/components/admin/fixtures/FixtureMatchupGrid.tsx",
 ];
+files.push(...[
+  "src/lib/notifications/team-contacts.ts", "src/lib/notifications/team-operational-recipients.ts",
+  "src/lib/cups/invitation-data.ts", "src/lib/cups/invitation-policy.ts", "src/lib/cups/invitations.ts", "src/lib/cups/invitation-delivery.ts",
+  "src/app/(admin)/admin/cups/[id]/layout.tsx", "src/app/(admin)/admin/cups/[id]/invitation-actions.ts",
+  "src/app/(admin)/admin/cups/[id]/invitations/page.tsx", "src/app/(admin)/admin/cups/[id]/entrants/page.tsx", "src/app/(admin)/admin/cups/[id]/entrants/draw/page.tsx",
+  "src/components/cups/CupSetupForm.tsx", "src/components/cups/CupInvitationComposer.tsx", "src/components/cups/CupResponseForm.tsx",
+]);
 const retired = [
   "apply-cup-admin-navigation.cjs",
   "apply-venue-neutral-fixtures-current.cjs",
