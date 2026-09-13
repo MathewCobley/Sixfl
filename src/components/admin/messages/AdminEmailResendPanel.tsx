@@ -60,7 +60,7 @@ export default function AdminEmailResendPanel({
         message.channel === "EMAIL" &&
         message.direction === "OUTBOUND" &&
         message.participantRole === "ADMIN" &&
-        message.dispatch?.status === "SENT" &&
+        Boolean(message.sentAt) &&
         Boolean(message.toEmail?.trim()),
     )
     .sort(
@@ -79,7 +79,7 @@ export default function AdminEmailResendPanel({
       : error === "email_resend_confirmation"
         ? { tone: "error", text: "Confirm the resend before queuing the email." }
         : error === "email_resend_unavailable"
-          ? { tone: "error", text: "That message cannot be resent from this thread. Only a successfully sent admin email with its original send record can be resent." }
+          ? { tone: "error", text: "That message cannot be resent from this thread. Only a successfully sent admin email can be resent." }
           : error === "email_resend_blocked"
             ? { tone: "error", text: "The email was not queued. The saved recipient address or notification permissions may have changed; send a new email instead if needed." }
             : null;
