@@ -76,3 +76,61 @@ test('monthly homepage prioritises its winner but does not relabel previous week
     assert.ok(html.includes(winner?'Monthly clip':'Goal of the Week archive'));assert.ok(html.includes('/goal-of-the-month'));
   }
 });
+
+const promoPath='src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx';
+const candidate=(id,monthKey)=>({id,monthKey});
+const period=(key,label,candidates=[])=>({key,label,candidates});
+const competition=(nominations,voting={key:'2026-08',label:'August 2026',open:false,candidates:[]},winners=[])=>({nominations,voting,winners});
+function renderPromo(data,{from='captain',loading=false,error=''}={}) {
+  const component=load(promoPath,{
+    'next/link':{default:props=>React.createElement('a',props)},
+    '@/components/goal-of-month/GoalNomineeCard':{default:({goal,winner})=>React.createElement('article',{'data-goal':goal.id,'data-winner':winner?'true':undefined},goal.monthKey)},
+    '@/components/goal-of-month/useMonthlyGoals':{useMonthlyGoals:()=>({data,loading,error,refresh(){throw Error('External requests forbidden');}})},
+  }).default;
+  return renderToStaticMarkup(React.createElement(component,{teamId:'team-one',href:`/goal-of-the-week?from=${from}&teamId=team-one&previewMembershipId=membership-one`}));
+}
+const plain=html=>html.replace(/<[^>]+>/g,'');
+for(const from of ['captain','player']) {
+  test(`${from} dashboard names September and preserves the preview return link`,()=>{
+    const html=renderPromo(competition([period('2026-09','September 2026',[candidate('sep','2026-09')])]),{from});
+    assert.match(html,/<h2[^>]*>September Goal of the Month<\/h2>/);
+    assert.match(html,/Current nominees/);
+    assert.match(plain(html),/See a great goal from September\? Nominate it here\./);
+    assert.ok(html.includes(`/goal-of-the-month?from=${from}&amp;teamId=team-one&amp;previewMembershipId=membership-one`));
+    assert.equal((html.match(/data-goal="sep"/g)||[]).length,1);
+  });
+}
+for(const [key,label,nextKey,nextLabel] of [['2026-09','September 2026','2026-10','October 2026'],['2026-12','December 2026','2027-01','January 2027']]) {
+  test(`${label} voting stays on the award month despite the newer nomination round`,()=>{
+    const html=renderPromo(competition([period(nextKey,nextLabel,[candidate('new','2026-10')])],{...period(key,label,[candidate('finalist',key)]),open:true}));
+    assert.ok(plain(html).includes(`${label.replace(/ \d{4}$/,'')} Goal of the Month`));
+    assert.match(html,/Voting is open — choose your winner/);assert.match(html,/Vote now/);
+    assert.match(html,/data-goal="finalist"/);assert.doesNotMatch(html,/data-goal="new"|Current nominees/);
+  });
+}
+test('overlap names both nomination months without mixing their nominee cards',()=>{
+  const html=renderPromo(competition([period('2026-09','September 2026',[candidate('sep','2026-09')]),period('2026-10','October 2026',[candidate('oct','2026-10')])]));
+  const sep=html.indexOf('data-monthly-period="2026-09"'),oct=html.indexOf('data-monthly-period="2026-10"');
+  assert.ok(sep>=0&&oct>sep);
+  assert.match(html.slice(sep,oct),/September Goal of the Month/);assert.match(html.slice(sep,oct),/data-goal="sep"/);assert.doesNotMatch(html.slice(sep,oct),/data-goal="oct"/);
+  assert.match(html.slice(oct),/October Goal of the Month/);assert.match(html.slice(oct),/data-goal="oct"/);
+});
+test('three-clip budget, empty periods, winner, loading and error feedback are preserved',()=>{
+  const html=renderPromo(competition([period('2026-09','September 2026',[1,2,3].map(i=>candidate(`sep-${i}`,'2026-09'))),period('2026-10','October 2026',[candidate('oct','2026-10')])]));
+  assert.equal((html.match(/data-goal=/g)||[]).length,3);
+  assert.match(html,/More nominees are available on the competition page/);assert.doesNotMatch(html,/No October nominees yet/);
+  const empty=renderPromo(competition([period('2026-09','September 2026')],undefined,[candidate('winner','2026-08')]));
+  assert.match(empty,/September Goal of the Month/);assert.match(empty,/No September nominees yet/);assert.match(empty,/Latest monthly winner/);assert.match(empty,/data-goal="winner" data-winner="true"/);
+  const loading=renderPromo(null,{loading:true});assert.match(loading,/Loading nominated goals/);assert.doesNotMatch(loading,/September|October|data-monthly-period/);
+  assert.match(renderPromo(null,{error:'Competition unavailable'}),/Competition unavailable.*Try again/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root,promoPath),'utf8'),/Date\.now\(|new Date\(/);
+});
+test('shared dashboard owner inventory contains no old generic nomination title',()=>{
+  const found=[];
+  function walk(dir){for(const entry of fs.readdirSync(path.join(root,dir),{withFileTypes:true})){const file=path.join(dir,entry.name);if(entry.isDirectory())walk(file);else if(/\.(?:tsx?|[cm]?js)$/.test(file))fs.readFileSync(path.join(root,file),'utf8').split('\n').forEach((line,i)=>{if(/GoalOfWeekDashboardPromo|Goal of the Month — current nominees/.test(line))found.push(`${file}:${i+1}:${line.trim()}`);});}}
+  walk('src');walk('scripts');
+  assert.ok(found.some(line=>line.includes('src/app/captain/team/[teamid]/page.tsx')&&line.includes('GoalOfWeekDashboardPromo')));
+  assert.ok(found.some(line=>line.includes('src/app/player/team/[teamid]/layout.tsx')&&line.includes('GoalOfWeekDashboardPromo')));
+  assert.ok(!found.some(line=>line.includes('Goal of the Month — current nominees')));
+  console.log('Monthly dashboard source owners:\n'+found.join('\n'));
+});
