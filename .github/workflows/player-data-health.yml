@@ -56,6 +56,10 @@ jobs:
           npx prisma db push --skip-generate
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/database.ts"],outfile:".data-health-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
           node --test .data-health-test.cjs
+      - name: Different-person decisions persist without changing either record
+        run: |
+          node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/different-people.ts"],outfile:".data-health-different-people-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'
+          node --test .data-health-different-people-test.cjs
       - name: Other-team closure keeps current squad memberships and history
         run: |
           node -e 'require("esbuild").buildSync({entryPoints:["tests/player-data-health/other-team.ts"],outfile:".data-health-other-team-test.cjs",bundle:true,platform:"node",packages:"external",jsx:"automatic"})'

@@ -36,6 +36,16 @@ export function hasLiveRecruitment(record: RecruitmentRecord) {
     Boolean(record.profileStatus && !inactivePool.has(record.profileStatus)) || Boolean(record.openRequestTeamIds?.length);
 }
 
+function finalizeRecruitmentMatch(record: RecruitmentRecord, candidates: IdentityCandidate[]): RecruitmentMatch {
+  const one = candidates.length === 1 ? candidates[0] : null;
+  const anotherTeam = Boolean(one && ((record.teamId && !one.teams.some(t => t.id === record.teamId)) || record.openRequestTeamIds?.some(id => !one.teams.some(t => t.id === id))));
+  const explicitStatus = closed.has(record.status) || Boolean(record.profileStatus && ["PAUSED", "NOT_LOOKING", "DECLINED", "CLOSED"].includes(record.profileStatus));
+  const safe = Boolean(one?.definite && !anotherTeam && !explicitStatus && hasLiveRecruitment(record));
+  const reason = candidates.length > 1 ? "Multiple possible accounts — review required" : anotherTeam ? "Recruitment is assigned to a different team — retained for review" : explicitStatus ? "Existing paused/declined status — do not overwrite automatically" : safe ? "Safe recruitment cleanup; account and squad stay unchanged" : one ? one.reason : "No existing squad match";
+  const fingerprint = createHash("sha256").update(JSON.stringify({record, candidates})).digest("hex");
+  return { record, candidates, safe, reason, fingerprint };
+}
+
 /** Pure matching, indexed by contact/link/name. Never merges accounts or changes data. */
 export function matchRecruitmentRecords(records: RecruitmentRecord[], members: SquadIdentity[]): RecruitmentMatch[] {
   const indexes = Array.from({ length: 5 }, () => new Map<string, Set<string>>());
@@ -69,14 +79,18 @@ export function matchRecruitmentRecords(records: RecruitmentRecord[], members: S
         teams: [...new Map(rows.map(m => [m.teamId, { id: m.teamId, name: m.teamName }])).values()].sort((a,b) => a.id.localeCompare(b.id)),
         evidence, definite, reason: definite ? "Existing squad identity matched" : "Possible match only — verify the person" };
     });
-    const one = candidates.length === 1 ? candidates[0] : null;
-    const anotherTeam = Boolean(one && ((record.teamId && !one.teams.some(t => t.id === record.teamId)) || record.openRequestTeamIds?.some(id => !one.teams.some(t => t.id === id))));
-    const explicitStatus = closed.has(record.status) || Boolean(record.profileStatus && ["PAUSED", "NOT_LOOKING", "DECLINED", "CLOSED"].includes(record.profileStatus));
-    const safe = Boolean(one?.definite && !anotherTeam && !explicitStatus && hasLiveRecruitment(record));
-    const reason = candidates.length > 1 ? "Multiple possible accounts — review required" : anotherTeam ? "Recruitment is assigned to a different team — retained for review" : explicitStatus ? "Existing paused/declined status — do not overwrite automatically" : safe ? "Safe recruitment cleanup; account and squad stay unchanged" : one ? one.reason : "No existing squad match";
-    const fingerprint = createHash("sha256").update(JSON.stringify({record, candidates})).digest("hex");
-    return { record, candidates, safe, reason, fingerprint };
+    return finalizeRecruitmentMatch(record, candidates);
   });
+}
+
+async function readDifferentPersonExclusions(db: IdentityReadDb) {
+  const registry = await db.$queryRaw<Array<{ tableName: string | null }>>(Prisma.sql`
+    SELECT to_regclass('public."PlayerDataHealthExclusion"')::text AS "tableName"
+  `);
+  if (!registry[0]?.tableName) return [] as Array<{recordType:string;recordId:string;userId:string}>;
+  return db.$queryRaw<Array<{recordType:string;recordId:string;userId:string}>>(Prisma.sql`
+    SELECT "recordType", "recordId", "userId" FROM "PlayerDataHealthExclusion"
+  `);
 }
 
 export async function getPlayerRecruitmentMatches(db: IdentityReadDb = prisma, profileIds?: string[]): Promise<RecruitmentMatch[]> {
@@ -106,8 +120,12 @@ export async function getPlayerRecruitmentMatches(db: IdentityReadDb = prisma, p
       NULL::text AS "publicCode", NULL::text AS "profileStatus", "updatedAt", NULL::timestamp AS "profileUpdatedAt"
     FROM "InterestLead" WHERE "interestType" = 'PLAYER' AND status <> 'CLOSED' ORDER BY id
   `);
+  const exclusions = await readDifferentPersonExclusions(db);
+  const excluded = new Set(exclusions.map(row => `${row.recordType}:${row.recordId}:${row.userId}`));
   const records = [...prospects, ...leads].filter(r => profileIds || hasLiveRecruitment(r));
-  return matchRecruitmentRecords(records, members).filter(r => r.candidates.length > 0);
+  return matchRecruitmentRecords(records, members)
+    .map(match => finalizeRecruitmentMatch(match.record, match.candidates.filter(candidate => !excluded.has(`${match.record.kind}:${match.record.id}:${candidate.userId}`))))
+    .filter(match => match.candidates.length > 0);
 }
 
 /** Shared by email/SMS preflight and the provider gate. Any uncertain match pauses chases, never merges identities. */
