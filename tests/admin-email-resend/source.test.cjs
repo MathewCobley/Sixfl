@@ -11,7 +11,7 @@ test("resend panel only offers successfully sent admin-authored emails and requi
   assert.match(panel, /message\.channel === "EMAIL"/);
   assert.match(panel, /message\.direction === "OUTBOUND"/);
   assert.match(panel, /message\.participantRole === "ADMIN"/);
-  assert.match(panel, /message\.dispatch\?\.status === "SENT"/);
+  assert.match(panel, /Boolean\(message\.sentAt\)/);
   assert.match(panel, /name="confirmed" required/);
   assert.match(panel, /Resend email/);
   assert.match(panel, /exact saved email/);
@@ -19,7 +19,7 @@ test("resend panel only offers successfully sent admin-authored emails and requi
   assert.match(router, /messages=\{labelledThread\.messages\}/);
 });
 
-test("server action revalidates the real message and never trusts browser content", () => {
+test("server action revalidates the real sent message and never trusts browser content", () => {
   const actions = read("src/app/(admin)/admin/messages/actions.ts");
 
   assert.match(actions, /resendAdminEmailAction/);
@@ -27,21 +27,23 @@ test("server action revalidates the real message and never trusts browser conten
   assert.match(actions, /channel: "EMAIL"/);
   assert.match(actions, /direction: "OUTBOUND"/);
   assert.match(actions, /participantRole: "ADMIN"/);
-  assert.match(actions, /NotificationDispatchStatus\.SENT/);
+  assert.match(actions, /message\?\.sentAt/);
   assert.match(actions, /queueStoredAdminEmailResend/);
+  assert.match(actions, /messageId: message\.id/);
   assert.doesNotMatch(actions, /formData\.get\("subject"\)/);
   assert.doesNotMatch(actions, /formData\.get\("body"\)/);
 });
 
-test("resend helper copies stored content, preserves preferences and creates a distinct queued record", () => {
+test("resend helper copies stored thread content, preserves preferences and creates a distinct queued record", () => {
   const helper = read("src/lib/notifications/admin-email-resend.ts");
 
-  assert.match(helper, /subject: original\.subject/);
-  assert.match(helper, /bodyText: original\.bodyText/);
-  assert.match(helper, /bodyHtml: original\.bodyHtml/);
-  assert.match(helper, /templateId: original\.templateId/);
+  assert.match(helper, /prisma\.messageEntry\.findFirst/);
+  assert.match(helper, /participantRole: "ADMIN"/);
+  assert.match(helper, /subject: message\.subject/);
+  assert.match(helper, /bodyText: message\.textBody\?\.trim\(\) \|\| message\.body/);
+  assert.match(helper, /bodyHtml: message\.htmlBody/);
   assert.match(helper, /sourceType: RESEND_SOURCE_TYPE/);
-  assert.match(helper, /sourceId: original\.id/);
+  assert.match(helper, /sourceId: message\.id/);
   assert.match(helper, /NotificationDispatchStatus\.QUEUED/);
   assert.match(helper, /currentRecipientEmail !== expectedRecipientEmail/);
   assert.match(helper, /isSuppressed/);
