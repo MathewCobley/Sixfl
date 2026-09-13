@@ -11,6 +11,14 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
+      NEXTAUTH_SECRET: admin-email-resend-ci-secret
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      EMAIL_REPLY_DOMAIN: replies.example.invalid
+      RESEND_API_KEY: re_ci_not_real
+      STRIPE_SECRET_KEY: sk_test_ci_not_real
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
