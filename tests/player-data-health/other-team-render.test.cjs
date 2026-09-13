@@ -13,7 +13,7 @@ async function render(matches) {
       entryPoints: ['src/components/admin/players/PlayerDataHealthReview.tsx'],
       bundle: true, platform: 'node', packages: 'external', format: 'cjs', jsx: 'automatic', write: false,
       plugins: [{ name: 'inert-server-actions', setup(build) {
-        build.onLoad({ filter: /[\\/]data-health[\\/]actions\.ts$/ }, () => ({ contents: 'export async function confirmIdentityAction() {}', loader: 'ts' }));
+        build.onLoad({ filter: /[\\/]data-health[\\/]actions\.ts$/ }, () => ({ contents: 'export async function confirmIdentityAction() {}\nexport async function markDifferentPeopleAction() {}', loader: 'ts' }));
         build.onLoad({ filter: /HealthSubmitButton\.tsx$/ }, () => ({ contents: 'export default function Button({children}) { return <button type="submit">{children}</button>; }', loader: 'tsx' }));
       }}],
     });
@@ -38,15 +38,25 @@ test('native closure option is explicit, team-bound, unchecked and preserves bot
   assert.match(html, /Do not register this player with Old enquiry club/);
   assert.match(html, /pattern="CONFIRM"/);
 });
+test('review cards allow an explicit audited different-person decision without changing either record', async () => {
+  const html = await render([base]);
+  assert.match(html, /These are different people/);
+  assert.match(html, /name="differentReason"/);
+  assert.match(html, /name="differentConfirmed"/);
+  assert.match(html, /value="current-user"/);
+  assert.match(html, /keeps both records exactly as they are/);
+});
 test('closure option is not offered for a current team, an unassigned enquiry or a stopped prospect', async () => {
   for (const record of [ { ...base.record, teamId: 'first' }, { ...base.record, teamId: null }, { ...base.record, status: 'DECLINED' } ]) {
     assert.doesNotMatch(await render([{ ...base, record }]), /name="closeOtherTeamEnquiryId"/);
   }
 });
-test('server action forwards explicit team choice and refreshes the obsolete team views without moving a squad', () => {
+test('server actions refresh review views without moving a squad', () => {
   const source = fs.readFileSync('src/app/(admin)/admin/players/data-health/actions.ts', 'utf8');
   assert.match(source, /const closeOtherTeamEnquiryId = text\("closeOtherTeamEnquiryId"\) \|\| undefined/);
   assert.match(source, /reason: text\("reason"\), closeOtherTeamEnquiryId/);
+  assert.match(source, /markPlayerDataHealthDifferentPeople/);
+  assert.match(source, /differentConfirmed/);
   assert.match(source, /refresh\(result\.enquiryTeamId\)/);
   assert.doesNotMatch(source, /teamMember\.(?:create|delete|update)/);
 });
