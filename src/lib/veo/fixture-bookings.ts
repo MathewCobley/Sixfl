@@ -19,10 +19,12 @@ export async function veoTransaction<T>(work: (db: Db) => Promise<T>): Promise<T
   }
 }
 async function actor(db: Db, userId: string, teamId?: string) {
-  const rows = teamId ? await db.$queryRaw<{id:string}[]>`SELECT u.id FROM "User" u JOIN "TeamMember" m ON m."userId"=u.id
-    WHERE u.id=${userId} AND u.role::text <> 'ADMIN' AND m."teamId"=${teamId} AND m.role::text='CAPTAIN'`
+  const rows = teamId ? await db.$queryRaw<{id:string}[]>`SELECT u.id FROM "User" u
+    WHERE u.id=${userId} AND (u.role::text='ADMIN' OR EXISTS (
+      SELECT 1 FROM "TeamMember" m WHERE m."userId"=u.id AND m."teamId"=${teamId} AND m.role::text='CAPTAIN'
+    ))`
     : await db.$queryRaw<{id:string}[]>`SELECT id FROM "User" WHERE id=${userId} AND role::text='ADMIN'`;
-  if (!rows.length) throw new VeoBookingError(teamId ? 'Only an active captain of this exact team can save this choice.' : 'Administrator access is required.');
+  if (!rows.length) throw new VeoBookingError(teamId ? 'Only an administrator or captain of this exact team can save this choice.' : 'Administrator access is required.');
 }
 async function match(db: Db, fixtureId: string): Promise<MatchRow> {
   const rows = await db.$queryRaw<MatchRow[]>`SELECT h.name AS "homeName",a.name AS "awayName",f.id,f."leagueId",f."homeTeamId",f."awayTeamId",f."kickoffAt",f."publishedAt",f."venueId",f.pitch,f.status::text,
