@@ -28,6 +28,8 @@ export async function updateManualFreeKitOfferAction(formData: FormData) {
   if (!teamId) redirect("/admin/teams?freeKit=missing_team");
   if (!confirmed) redirect(destination(teamId, "confirm_required"));
 
+  let resultCode = "unchanged";
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{
@@ -52,10 +54,14 @@ export async function updateManualFreeKitOfferAction(formData: FormData) {
       const team = rows[0];
       if (!team) throw new Error("TEAM_NOT_FOUND");
 
+      // An offer recorded on the original registration remains authoritative.
+      // The manual switch must never remove that founding-team entitlement.
       if (!enabled && team.leadWantsFreeKit) {
         throw new Error("ORIGINAL_REGISTRATION_OFFER");
       }
 
+      // Do not remove an entitlement once the team has started using it. That
+      // would make an existing kit order/payment inconsistent with its pricing.
       if (!enabled && team.wantsFreeKit) {
         const [orderRows, chargeRows] = await Promise.all([
           tx.$queryRaw<Array<{ id: string; status: string }>>(Prisma.sql`
@@ -86,7 +92,9 @@ export async function updateManualFreeKitOfferAction(formData: FormData) {
 
       await tx.$executeRaw(Prisma.sql`
         UPDATE "Team"
-        SET "wantsFreeKit" = ${enabled}
+        SET
+          "wantsFreeKit" = ${enabled},
+          "updatedAt" = NOW()
         WHERE "id" = ${teamId}
       `);
 
@@ -105,13 +113,7 @@ export async function updateManualFreeKitOfferAction(formData: FormData) {
       timeout: 15000,
     });
 
-    revalidatePath(`/admin/teams/${teamId}`);
-    revalidatePath("/admin/teams/free-kit");
-    revalidatePath("/admin/kits");
-    revalidatePath(`/captain/team/${teamId}`);
-    revalidatePath(`/captain/team/${teamId}/kit`);
-
-    redirect(destination(teamId, result.changed ? (enabled ? "granted" : "removed") : "unchanged"));
+    resultCode = result.changed ? (enabled ? "granted" : "removed") : "unchanged";
   } catch (error) {
     const code = error instanceof Error ? error.message : "SAVE_FAILED";
     if (code === "ORIGINAL_REGISTRATION_OFFER") {
@@ -126,4 +128,12 @@ export async function updateManualFreeKitOfferAction(formData: FormData) {
     console.error("Manual free kit offer update failed", error);
     redirect(destination(teamId, "save_failed"));
   }
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath("/admin/teams/free-kit");
+  revalidatePath("/admin/kits");
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/kit`);
+
+  redirect(destination(teamId, resultCode));
 }
