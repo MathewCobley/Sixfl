@@ -148,65 +148,13 @@ async function queueRemovedTeamNotice(input: {
     Number(smsDispatch.status === NotificationDispatchStatus.QUEUED)
   );
 }
-
-async function queueOpponentChangedNotice(input: {
-  fixtureId: string;
-  teamId: string;
-  previousOpponentName: string;
-  nextOpponentName: string;
-  nextFixtureSummary: string;
-  leagueId: string;
-  leagueLabel: string;
-  sourceId: string;
-}) {
-  const { recipient, snapshot } = await upsertTeamNotificationRecipient(
-    input.teamId,
-  );
-  const contactName = snapshot.primaryContact.name ?? snapshot.teamName;
-  const dashboardUrl = buildCaptainFixturesUrl(input.teamId, input.fixtureId);
-  const emailBody = [
-    \`Hi \${contactName},\`,
-    "",
-    \`Your opposition has changed from \${input.previousOpponentName} to \${input.nextOpponentName}.\`,
-    "",
-    "Your kick-off time, venue and fixture status are unchanged, so your existing confirmation still stands. You do not need to reconfirm.",
-    "",
-    "Updated fixture:",
-    input.nextFixtureSummary,
-    "",
-    "{{cta}}",
-    "",
-    "If the new opposition creates a problem for your team, please contact SIXFL directly so we can manage it.",
-  ].join("\\n");
-
-  const emailDispatch = await queueDirectNotification({
-    recipientId: recipient.id,
-    channel: NotificationChannel.EMAIL,
-    audience: NotificationAudience.TEAM,
-    subject: \`SIXFL fixture update: your opposition is now \${input.nextOpponentName}\`,
-    body: emailBody,
-    isTransactional: true,
-    sourceType: OPPONENT_CHANGED_SOURCE_TYPE,
-    sourceId: \`\${input.sourceId}:\${input.teamId}\`,
-    emailCta: { label: "View fixture", url: dashboardUrl },
-    metadata: {
-      fixtureId: input.fixtureId,
-      teamId: input.teamId,
-      leagueId: input.leagueId,
-      leagueLabel: input.leagueLabel,
-      notificationKind: "OPPONENT_CHANGED_NO_RECONFIRMATION",
-      previousOpponentName: input.previousOpponentName,
-      nextOpponentName: input.nextOpponentName,
-    },
-  });
-
-  return Number(emailDispatch.status === NotificationDispatchStatus.QUEUED);
-}
 `;
 
     source = source.replace(anchor, `${helper}${anchor}`);
     changed = true;
-  } else if (!source.includes("async function queueOpponentChangedNotice(input: {")) {
+  }
+
+  if (!source.includes("async function queueOpponentChangedNotice(input: {")) {
     const anchor = "\nexport async function POST(request: Request) {";
     if (!source.includes(anchor)) {
       throw new Error(
@@ -349,35 +297,35 @@ async function queueOpponentChangedNotice(input: {
     );
   }
 
-  replaceOnce(
-    [
-      "  await prisma.fixtureCaptainConfirmation.updateMany({",
-      "    where: {",
-      "      fixtureId: fixture.id,",
-      "      teamId: { in: nextParticipantTeamIds },",
-      "      status: FixtureCaptainConfirmationStatus.CONFIRMED,",
-      "    },",
-      "    data: {",
-      "      status: FixtureCaptainConfirmationStatus.PENDING,",
-      "      confirmedAt: null,",
-      "      confirmedByUserId: null,",
-      '      note: "Fixture changed after previous confirmation. Team needs to reconfirm.",',
-    ].join("\n"),
-    [
-      "  await prisma.fixtureCaptainConfirmation.updateMany({",
-      "    where: {",
-      "      fixtureId: fixture.id,",
-      "      teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },",
-      "      status: FixtureCaptainConfirmationStatus.CONFIRMED,",
-      "    },",
-      "    data: {",
-      "      status: FixtureCaptainConfirmationStatus.PENDING,",
-      "      confirmedAt: null,",
-      "      confirmedByUserId: null,",
-      '      note: "Fixture details changed after previous confirmation. Team needs to reconfirm.",',
-    ].join("\n"),
-    "scheduled retained-team confirmation reset",
+  const scheduledBranchStart = source.indexOf(
+    "  if (!shouldSendReconfirmNoticeForStatus(status)) {",
   );
+  if (scheduledBranchStart < 0) {
+    throw new Error(
+      "Opponent-change fixture notice could not find the scheduled change branch.",
+    );
+  }
+
+  const scheduledResetFilter =
+    "      teamId: { in: nextParticipantTeamIds },";
+  const preservedResetFilter =
+    "      teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },";
+  if (!source.includes(preservedResetFilter)) {
+    const scheduledResetPosition = source.indexOf(
+      scheduledResetFilter,
+      scheduledBranchStart,
+    );
+    if (scheduledResetPosition < 0) {
+      throw new Error(
+        "Opponent-change fixture notice could not find the scheduled confirmation reset filter.",
+      );
+    }
+    source =
+      source.slice(0, scheduledResetPosition) +
+      preservedResetFilter +
+      source.slice(scheduledResetPosition + scheduledResetFilter.length);
+    changed = true;
+  }
 
   replaceOnce(
     [
@@ -507,15 +455,8 @@ async function queueOpponentChangedNotice(input: {
     );
   }
 
-  const scheduledBranchStart = source.indexOf(
-    "  if (!shouldSendReconfirmNoticeForStatus(status)) {",
-  );
-  const scheduledBranch =
-    scheduledBranchStart >= 0 ? source.slice(scheduledBranchStart) : "";
-  if (
-    !scheduledBranch ||
-    scheduledBranch.includes("for (const teamId of affectedTeamIds) {")
-  ) {
+  const scheduledBranch = source.slice(scheduledBranchStart);
+  if (scheduledBranch.includes("for (const teamId of affectedTeamIds) {")) {
     throw new Error(
       "Newly added teams must not receive the pre-save generic update email; the saved fixture action sends their correct confirmation instead.",
     );
