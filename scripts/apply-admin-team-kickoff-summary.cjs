@@ -187,3 +187,7 @@ require("./apply-team-specific-fixture-fee-final-guard.cjs");
 // Team-lead decline delivery guards must see the final prepared notification
 // source, including all compatibility and payment-safety preparation above.
 require("./apply-team-lead-decline-stop-chasing.cjs");
+
+// Ordinary Team Messages must never try to send Cup-only templates. The Cup
+// invitation workflow owns those fields and provides preview/confirmation.
+require("./apply-team-message-template-scope.cjs");
