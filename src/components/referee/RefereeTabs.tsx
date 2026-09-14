@@ -4,6 +4,8 @@
 
 import Link from "next/link";
 
+import { requireReferee } from "@/lib/admin";
+
 type RefereeTabKey = "overview" | "availability" | "match-rules";
 
 type Props = {
@@ -43,12 +45,22 @@ function withPreviewRoute(href: string, previewRefereeId?: string | null) {
   return `/admin/referees/${encodeURIComponent(previewRefereeId)}/referee-preview?to=${encodeURIComponent(href)}`;
 }
 
-export default function RefereeTabs({ active, previewRefereeId }: Props) {
+export default async function RefereeTabs({ active, previewRefereeId }: Props) {
+  let effectivePreviewRefereeId = previewRefereeId;
+
+  // Overview already has the preview id to hand. Other referee pages can omit it;
+  // in that case resolve preview context on the server rather than scanning or
+  // rewriting links in the browser after render.
+  if (effectivePreviewRefereeId === undefined) {
+    const { user, isAdminPreview } = await requireReferee();
+    effectivePreviewRefereeId = isAdminPreview ? user.id : null;
+  }
+
   return (
     <nav className="grid gap-3 sm:grid-cols-3">
       {tabs.map((tab) => {
         const isActive = active === tab.key;
-        const href = withPreviewRoute(tab.href, previewRefereeId);
+        const href = withPreviewRoute(tab.href, effectivePreviewRefereeId);
 
         return (
           <Link
