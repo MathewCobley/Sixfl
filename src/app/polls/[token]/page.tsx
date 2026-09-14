@@ -42,6 +42,8 @@ type OptionRow = {
   id: string;
   label: string;
   sortOrder: number;
+  responseMessage: string | null;
+  followUpPrompt: string | null;
 };
 
 type SelectedOptionRow = {
@@ -82,7 +84,7 @@ async function getRecipient(token: string) {
 
 async function getOptions(pollId: string) {
   return prisma.$queryRaw<OptionRow[]>(Prisma.sql`
-    SELECT "id", "label", "sortOrder"
+    SELECT "id", "label", "sortOrder", "responseMessage", "followUpPrompt"
     FROM "SIXFLPollOption"
     WHERE "pollId" = ${pollId}
     ORDER BY "sortOrder" ASC, "label" ASC
@@ -102,6 +104,7 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
   const sp = (await searchParams) ?? {};
   const saved = getSearchParam(sp.saved) === "1";
   const error = getSearchParam(sp.error);
+  const requestedPrefillOptionId = getSearchParam(sp.option);
 
   const recipient = await getRecipient(token);
   if (!recipient) notFound();
@@ -114,15 +117,25 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
   const selectedQuantityByOptionId = new Map(
     selectedRowsFromJoin.map((row) => [row.optionId, Math.max(1, row.quantity || 1)]),
   );
-  const selectedOptionIds = selectedRowsFromJoin.length > 0
+  const persistedSelectedOptionIds = selectedRowsFromJoin.length > 0
     ? selectedRowsFromJoin.map((row) => row.optionId)
     : recipient.selectedOptionId
       ? [recipient.selectedOptionId]
       : [];
-  const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.id));
+  const prefillOptionId = options.some((option) => option.id === requestedPrefillOptionId)
+    ? requestedPrefillOptionId
+    : "";
+  const formSelectedOptionIds = prefillOptionId
+    ? [prefillOptionId]
+    : persistedSelectedOptionIds;
+  const selectedOptions = options.filter((option) => persistedSelectedOptionIds.includes(option.id));
   const isActive = recipient.status === "ACTIVE";
   const isMultiple = recipient.choiceMode === "MULTIPLE";
   const allowQuantity = recipient.allowQuantity;
+  const hasAnswerSpecificFollowUps = !isMultiple && options.some((option) => Boolean(option.followUpPrompt?.trim()));
+  const savedResponseMessages = selectedOptions
+    .map((option) => option.responseMessage?.trim())
+    .filter((message): message is string => Boolean(message));
 
   return (
     <main className="min-h-screen bg-[#06120e] px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -145,9 +158,20 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
           </div>
         </section>
 
-        {saved ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">Thanks — your answer has been recorded.</div> : null}
+        {saved ? (
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
+            {savedResponseMessages.length > 0 ? (
+              <div className="space-y-2">
+                {savedResponseMessages.map((message) => <p key={message}>{message}</p>)}
+              </div>
+            ) : (
+              <>Thanks — your answer has been recorded.</>
+            )}
+          </div>
+        ) : null}
         {error === "closed" ? <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">This poll is not currently open for voting.</div> : null}
         {error === "invalid" ? <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">Please choose at least one valid option.</div> : null}
+        {error === "followup" ? <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Please answer the extra question for the option you selected before submitting.</div> : null}
 
         {selectedOptions.length > 0 ? (
           <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
@@ -168,16 +192,27 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
 
             <div className="space-y-3">
               {options.map((option) => {
-                const checked = selectedOptionIds.includes(option.id);
+                const checked = formSelectedOptionIds.includes(option.id);
+                const wasPersisted = persistedSelectedOptionIds.includes(option.id);
                 const quantity = selectedQuantityByOptionId.get(option.id) ?? 1;
+                const inputId = `poll-option-${option.id}`;
                 return (
-                  <div key={option.id} className={[
-                    "rounded-2xl border p-4 transition",
-                    checked ? "border-emerald-400/30 bg-emerald-500/10" : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
-                  ].join(" ")}
-                  >
-                    <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-white/85">
-                      <input type={isMultiple ? "checkbox" : "radio"} name="optionId" value={option.id} defaultChecked={checked} disabled={!isActive} required={!isMultiple} />
+                  <div key={option.id} className="rounded-2xl border border-white/10 bg-black/20 p-4 transition">
+                    <input
+                      id={inputId}
+                      type={isMultiple ? "checkbox" : "radio"}
+                      name="optionId"
+                      value={option.id}
+                      defaultChecked={checked}
+                      disabled={!isActive}
+                      required={!isMultiple}
+                      className="peer sr-only"
+                    />
+                    <label
+                      htmlFor={inputId}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-2 py-2 text-sm font-semibold text-white/85 transition peer-checked:border-emerald-400/30 peer-checked:bg-emerald-500/10 peer-checked:text-emerald-50"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/25 text-[10px] peer-checked:border-emerald-300">✓</span>
                       <span>{option.label}</span>
                     </label>
 
@@ -196,15 +231,34 @@ export default async function PollVotePage({ params, searchParams }: PageProps) 
                         />
                       </label>
                     ) : null}
+
+                    {!isMultiple && option.followUpPrompt?.trim() ? (
+                      <div className="mt-4 hidden rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4 peer-checked:block">
+                        <label className="space-y-2 text-sm font-semibold text-emerald-50">
+                          {option.followUpPrompt}
+                          <textarea
+                            name={`note_${option.id}`}
+                            rows={4}
+                            defaultValue={wasPersisted ? recipient.note ?? "" : ""}
+                            placeholder="Type your answer here"
+                            disabled={!isActive}
+                            className="w-full rounded-2xl border border-emerald-400/20 bg-black/30 px-4 py-3 text-sm font-normal text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50 disabled:opacity-60"
+                          />
+                        </label>
+                        <p className="mt-2 text-xs leading-5 text-emerald-100/60">Please complete this before submitting your answer.</p>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
 
-            <label className="space-y-2 text-sm font-semibold text-white">
-              Optional note
-              <textarea name="note" rows={4} defaultValue={recipient.note ?? ""} placeholder={isMultiple ? "For example: Monday and Tuesday work, but Tuesday would need to be after 8pm." : "For example: Thursday works, but only after 8pm."} disabled={!isActive} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50 disabled:opacity-60" />
-            </label>
+            {isMultiple || !hasAnswerSpecificFollowUps ? (
+              <label className="space-y-2 text-sm font-semibold text-white">
+                Optional note
+                <textarea name="note" rows={4} defaultValue={recipient.note ?? ""} placeholder={isMultiple ? "For example: Monday and Tuesday work, but Tuesday would need to be after 8pm." : "Add anything else that would help us."} disabled={!isActive} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50 disabled:opacity-60" />
+              </label>
+            ) : null}
 
             <button type="submit" disabled={!isActive} className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-6 text-sm font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/45">
               {selectedOptions.length > 0 ? "Update answer" : "Submit answer"}
