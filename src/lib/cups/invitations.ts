@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type NotificationTemplate } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getStaticEmailCtaUrl } from "@/lib/email/template-cta";
 import { getTeamOperationalEmailContacts } from "@/lib/notifications/team-operational-recipients";
-import { buildQueuedContentFromTemplate, queueNotificationFromTemplate } from "@/lib/notifications/service";
+import { buildQueuedContentFromTemplate, queueDirectNotification, queueNotificationFromTemplate } from "@/lib/notifications/service";
 import { getUnresolvedEmailPlaceholderReason } from "@/lib/notifications/renderer";
 import { parseLondonDateTime, toLondonDateInputValue, toLondonTimeInputValue } from "@/lib/datetime/london";
 import { assertCupAdmin, assertCupOpen, cupTerms, eligibleCupTeams, isCupEntrant, loadCup, loadInvitation, type Cup, type CupDb, type Invitation } from "./invitation-data";
@@ -13,6 +14,7 @@ export { failure as cupErrorMessage };
 const json = (value: unknown) => JSON.stringify(value);
 const fingerprint = (value: unknown) => createHash("sha256").update(json(value)).digest("hex");
 const baseUrl = () => (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://www.sixfl.co.uk").replace(/\/+$/, "");
+
 export async function cupAudit(db: CupDb, cupId: string, teamId: string | null, actorId: string | null, actorName: string, event: string, details: unknown) {
   await db.$executeRaw`INSERT INTO "CupInvitationAudit" (id,"cupLeagueId","teamId","actorUserId","actorName",event,details)
     VALUES (${randomUUID()},${cupId},${teamId},${actorId},${actorName},${event},${json(details)}::jsonb)`;
@@ -50,6 +52,7 @@ export async function saveCupInvitationSettings(input: { cupId: string; actorId:
     return {version,revision,detailsChanged:changed};
   });
 }
+
 export type CupReportRow = {
   id: string; teamName: string; sourceLeagueId: string | null; sourceLeagueName: string | null;
   eligible: boolean; entered: boolean; withdrawn: boolean; response: string; invitation: Invitation | null;
@@ -85,17 +88,60 @@ export async function getCupInvitationReport(cupId: string, actorId: string) {
   return {cup,rows:report,counts:summaryCounts(report)};
 }
 export function termsEqual(a: CupTerms,b: CupTerms) { return Object.keys(b).every(k=>a[k as keyof CupTerms]===b[k as keyof CupTerms]); }
-async function loadTemplate(kind: CupMailKind, db: CupDb = prisma) {
+
+type CupMailTemplate = {
+  source: "CAMPAIGN" | "SYSTEM";
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  subject: string | null;
+  body: string;
+  ctaLabel: string | null;
+  ctaUrlKey: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function hasCupResponseButtons(body: string) {
+  const responsePair =
+    (body.includes("{{yesResponseUrl}}") && body.includes("{{noResponseUrl}}")) ||
+    (body.includes("{{yesUrl}}") && body.includes("{{noUrl}}"));
+  return responsePair && body.includes("SIXFL_POLL_OPTIONS_START") && body.includes("SIXFL_POLL_OPTIONS_END");
+}
+
+async function loadTemplate(kind: CupMailKind, templateId?: string, db: CupDb = prisma): Promise<CupMailTemplate> {
+  if (templateId) {
+    const template = await db.emailTemplate.findUnique({where:{id:templateId}});
+    if (!template?.isActive || template.audience!=="TEAM") throw new CupInvitationError("Choose an active Team email template for the cup message.");
+    if (!hasCupResponseButtons(template.body)) throw new CupInvitationError("This template does not contain the Cup YES / NO response buttons. Add them in the normal email template builder first.");
+    return {source:"CAMPAIGN",id:template.id,key:template.key,name:template.name,description:template.description,subject:template.subject,body:template.body,ctaLabel:template.ctaLabel,ctaUrlKey:template.ctaUrlKey,isActive:template.isActive,createdAt:template.createdAt,updatedAt:template.updatedAt};
+  }
   const key = kind === "INITIAL" ? "cup-interest-invitation" : "cup-interest-reminder";
   const template = await db.notificationTemplate.findUnique({where:{key}});
-  if (!template?.isActive || template.channel!=="EMAIL" || template.audience!=="TEAM" || template.kind!=="TRANSACTIONAL") throw new CupInvitationError("Enable the transactional team cup email in System Templates first.");
-  if (!template.body.includes("{{yesUrl}}") || !template.body.includes("{{noUrl}}")) throw new CupInvitationError("Keep both {{yesUrl}} and {{noUrl}} in the cup template.");
-  return template;
+  if (!template?.isActive || template.channel!=="EMAIL" || template.audience!=="TEAM" || template.kind!=="TRANSACTIONAL") throw new CupInvitationError("Choose a normal Team email template with Cup YES / NO response buttons.");
+  if (!hasCupResponseButtons(template.body)) throw new CupInvitationError("The cup email template is missing its YES / NO response buttons.");
+  return {source:"SYSTEM",id:template.id,key:template.key,name:template.name,description:template.description,subject:template.subject,body:template.body,ctaLabel:template.ctaLabel,ctaUrlKey:template.ctaUrlKey,isActive:template.isActive,createdAt:template.createdAt,updatedAt:template.updatedAt};
 }
+
+function renderableTemplate(template: CupMailTemplate): NotificationTemplate {
+  return {id:template.id,key:template.key,name:template.name,description:template.description,kind:"TRANSACTIONAL",channel:"EMAIL",audience:"TEAM",subject:template.subject,body:template.body,ctaLabel:template.ctaLabel,ctaUrlKey:template.ctaUrlKey,isActive:template.isActive,createdAt:template.createdAt,updatedAt:template.updatedAt};
+}
+
 function variables(terms: CupTerms,teamName: string,name: string,url: string) {
+  const yesUrl=`${url}?answer=YES`,noUrl=`${url}?answer=NO`;
   return { ...terms, matchFee: money(terms.matchFeePence), teamName, firstName:name.trim().split(/\s+/)[0] || "there",
-    responseDeadline:cupDate(terms.responseDeadline), yesUrl:`${url}?answer=YES`, noUrl:`${url}?answer=NO` };
+    responseDeadline:cupDate(terms.responseDeadline), yesUrl, noUrl, yesResponseUrl:yesUrl, noResponseUrl:noUrl };
 }
+
+function directCta(template: CupMailTemplate, vars: ReturnType<typeof variables>) {
+  const label=template.ctaLabel?.trim(),key=template.ctaUrlKey?.trim();
+  if(!label || !key)return undefined;
+  const staticUrl=getStaticEmailCtaUrl(key),dynamic=String((vars as Record<string, unknown>)[key] ?? "").trim(),url=staticUrl || dynamic;
+  return url?{label,url}:undefined;
+}
+
 function selectionReason(row: CupReportRow, kind: CupMailKind) {
   if (!row.eligible) return "Not currently an eligible league team.";
   if (row.withdrawn) return "This team has been withdrawn from the cup.";
@@ -107,21 +153,23 @@ function selectionReason(row: CupReportRow, kind: CupMailKind) {
   if (!row.contacts.length) return "No team email contact. Update the captain/team contact first.";
   return null;
 }
-export async function previewCupInvitations(input:{cupId:string;actorId:string;teamIds:string[];kind:CupMailKind}) {
+
+export async function previewCupInvitations(input:{cupId:string;actorId:string;teamIds:string[];kind:CupMailKind;templateId?:string}) {
   if (!input.teamIds.length || input.teamIds.length>100 || !["INITIAL","REMINDER"].includes(input.kind)) throw new CupInvitationError("Select between 1 and 100 teams and a valid email action.");
   const report=await getCupInvitationReport(input.cupId,input.actorId);assertCupOpen(report.cup);
-  const template=await loadTemplate(input.kind), terms=cupTerms(report.cup);
+  const template=await loadTemplate(input.kind,input.templateId), terms=cupTerms(report.cup);
   const selected=[...new Set(input.teamIds)].sort().map(id=>{const row=report.rows.find(r=>r.id===id);if(!row)throw new CupInvitationError("A selected team is no longer available. Refresh the list.");return row;});
   const teams=selected.map(row=>({teamId:row.id,teamName:row.teamName,error:selectionReason(row,input.kind),contacts:row.contacts,
     previews:row.contacts.map(contact=>{
-      const content=buildQueuedContentFromTemplate({template,variables:variables(terms,row.teamName,contact.name,`${baseUrl()}/cup-invitation/preview`)});
-      if (getUnresolvedEmailPlaceholderReason({channel:"EMAIL",...content})) throw new CupInvitationError("The cup template has unresolved fields. Check System Templates.");
+      const content=buildQueuedContentFromTemplate({template:renderableTemplate(template),variables:variables(terms,row.teamName,contact.name,`${baseUrl()}/cup-invitation/preview`)});
+      if (getUnresolvedEmailPlaceholderReason({channel:"EMAIL",...content})) throw new CupInvitationError("The selected cup template has unresolved fields. Check it in the normal email template builder.");
       return {email:contact.email,...content};
     })}));
   const previewKey=fingerprint({version:report.cup.settings!.version,terms,template,kind:input.kind,teams:teams.map(t=>({id:t.teamId,error:t.error,contacts:t.contacts}))});
-  return {previewKey,teams,version:report.cup.settings!.version,templateFingerprint:fingerprint(template)};
+  return {previewKey,teams,version:report.cup.settings!.version,templateFingerprint:fingerprint(template),templateId:template.source==="CAMPAIGN"?template.id:undefined,templateName:template.name};
 }
-export async function sendCupInvitations(input:{cupId:string;actorId:string;teamIds:string[];kind:CupMailKind;previewKey:string;confirmed:boolean}) {
+
+export async function sendCupInvitations(input:{cupId:string;actorId:string;teamIds:string[];kind:CupMailKind;templateId?:string;previewKey:string;confirmed:boolean}) {
   if(!input.confirmed)throw new CupInvitationError("Review the preview and confirm before sending.");
   const preview=await previewCupInvitations(input);
   if(preview.previewKey!==input.previewKey)throw new CupInvitationError("The cup, recipients or template changed. Preview the emails again before sending.");
@@ -154,7 +202,7 @@ export async function sendCupInvitations(input:{cupId:string;actorId:string;team
           invite=await loadInvitation(cup.id,target.teamId,db);
           await cupAudit(db,cup.id,target.teamId,actor.id,actor.name || "Administrator","INVITED",{version:cup.settings!.version,terms});
         }
-        const template=await loadTemplate(input.kind,db);
+        const template=await loadTemplate(input.kind,input.templateId,db);
         if(fingerprint(template)!==preview.templateFingerprint)throw new CupInvitationError("Email template changed. Preview again.");
         const batch=input.kind==="INITIAL"?0:Math.floor(Date.now()/86400000);
         let queued=0,existing=0,skipped=0;
@@ -167,9 +215,10 @@ export async function sendCupInvitations(input:{cupId:string;actorId:string;team
           await db.notificationPreference.upsert({where:{recipientId:recipient.id},update:{},create:{recipientId:recipient.id}});
           const messageId=randomUUID(),url=`${baseUrl()}/cup-invitation/${cupResponseToken(messageId,terms.responseDeadline)}`;
           await db.$executeRaw`INSERT INTO "CupInvitationMessage" (id,"invitationId","settingsVersion",kind,batch,"recipientId","recipientEmail","recipientName") VALUES (${messageId},${invite!.id},${cup.settings!.version},${input.kind},${batch},${recipient.id},${contact.email},${contact.name})`;
-          const dispatch=await queueNotificationFromTemplate({templateKey:template.key,recipientId:recipient.id,
-            variables:variables(terms,target.teamName,contact.name,url),sourceType:input.kind==="INITIAL"?CUP_MAIL_SOURCES[0]:CUP_MAIL_SOURCES[1],sourceId:messageId,
-            metadata:{cupLeagueId:cup.id,teamId:target.teamId,invitationId:invite!.id},createdByUserId:actor.id},db);
+          const vars=variables(terms,target.teamName,contact.name,url),sourceType=input.kind==="INITIAL"?CUP_MAIL_SOURCES[0]:CUP_MAIL_SOURCES[1];
+          const dispatch=template.source==="CAMPAIGN"
+            ? await queueDirectNotification({recipientId:recipient.id,channel:"EMAIL",audience:"TEAM",subject:template.subject,body:template.body,isTransactional:true,variables:vars as Prisma.InputJsonValue,emailCta:directCta(template,vars),sourceType,sourceId:messageId,metadata:{cupLeagueId:cup.id,teamId:target.teamId,invitationId:invite!.id,campaignTemplateId:template.id},createdByUserId:actor.id},db)
+            : await queueNotificationFromTemplate({templateKey:template.key,recipientId:recipient.id,variables:vars,sourceType,sourceId:messageId,metadata:{cupLeagueId:cup.id,teamId:target.teamId,invitationId:invite!.id},createdByUserId:actor.id},db);
           await db.$executeRaw`UPDATE "CupInvitationMessage" SET "dispatchId"=${dispatch.id} WHERE id=${messageId}`;
           if(dispatch.status==="QUEUED")queued++;else skipped++;
         }
@@ -184,6 +233,7 @@ export async function sendCupInvitations(input:{cupId:string;actorId:string;team
   }
   return results;
 }
+
 export type CupResponseAccess = {token:string} | {cupId:string;teamId:string;actorId:string};
 export async function getCupResponseContext(access:CupResponseAccess,db:CupDb=prisma,lock=false) {
   let cupId:string,teamId:string,actorId:string|null=null,actorName:string;

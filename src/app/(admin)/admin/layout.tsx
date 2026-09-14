@@ -25,6 +25,7 @@ import AdminDivisionSelectBridge from "@/components/admin/leagues/AdminDivisionS
 import AdminLeagueSeasonsBridge from "@/components/admin/leagues/AdminLeagueSeasonsBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import NightBoardSaveNotice from "@/components/admin/night-board/NightBoardSaveNotice";
+import AdminDeliveryIssueBanner from "@/components/admin/notifications/AdminDeliveryIssueBanner";
 import AdminPlayerFeePaymentLabelsBridge from "@/components/admin/payments/AdminPlayerFeePaymentLabelsBridge";
 import AdminVoidPaymentChargesBridge from "@/components/admin/payments/AdminVoidPaymentChargesBridge";
 import PlayerPoolNudgeBridge from "@/components/admin/player-pool/PlayerPoolNudgeBridge";
@@ -134,10 +135,13 @@ export default async function AdminLayout({
         </aside>
 
         <main className="w-full min-w-0 flex-1">
-          <Suspense fallback={null}>
-            <LeadDiallerLaunchButton />
-          </Suspense>
-          {children}
+          <div className="space-y-5">
+            <AdminDeliveryIssueBanner />
+            <Suspense fallback={null}>
+              <LeadDiallerLaunchButton />
+            </Suspense>
+            {children}
+          </div>
         </main>
       </div>
     </div>
