@@ -20,7 +20,7 @@ export async function submitTeamMoveResponseAction(formData: FormData) {
   const answer = safeToken(formData.get("answer")).toUpperCase();
 
   if (!token) {
-    redirect("/team-move/invalid?error=Missing%20response%20link.");
+    redirect("/");
   }
 
   if (answer !== "YES" && answer !== "NO") {
