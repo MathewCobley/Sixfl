@@ -15,6 +15,11 @@ import { prisma } from "@/lib/prisma";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
+import {
+  hasTeamMoveResponseBlock,
+  renderTeamMoveResponseBlock,
+} from "@/lib/teams/move-response-markers";
+import { getTeamMoveResponseUrls } from "@/lib/teams/move-response";
 
 type BroadcastVariables = Record<string, string | number | boolean | null>;
 
@@ -238,6 +243,7 @@ export async function sendTeamBroadcastMessage(input: Input) {
         select: {
           name: true,
           season: true,
+          isMoving: true,
         },
       },
     },
@@ -247,8 +253,27 @@ export async function sendTeamBroadcastMessage(input: Input) {
     throw new Error("Team not found");
   }
 
+  const needsMoveResponse = hasTeamMoveResponseBlock(input.body);
+  if (needsMoveResponse && input.channel !== NotificationChannel.EMAIL) {
+    throw new Error("League move YES / NO response buttons can only be sent by email.");
+  }
+  if (needsMoveResponse && (!team.leagueId || !team.league?.isMoving)) {
+    throw new Error("League move responses are only available for teams in a league marked as moving.");
+  }
+
+  const moveResponseUrls =
+    needsMoveResponse && team.leagueId
+      ? getTeamMoveResponseUrls({ teamId: team.id, leagueId: team.leagueId })
+      : null;
+  const bodyWithMoveResponse = moveResponseUrls
+    ? renderTeamMoveResponseBlock(input.body, {
+        yesUrl: moveResponseUrls.yesUrl,
+        noUrl: moveResponseUrls.noUrl,
+      })
+    : input.body;
+
   const pollContent = await resolvePollContent({
-    body: input.body,
+    body: bodyWithMoveResponse,
     pollId: input.pollId,
     team: {
       id: team.id,
@@ -317,6 +342,12 @@ export async function sendTeamBroadcastMessage(input: Input) {
       templateKey: input.templateKey ?? null,
       ctaLabel: pollContent.cta?.label ?? input.ctaLabel ?? null,
       ctaUrl: pollContent.cta?.url ?? input.ctaUrl ?? null,
+      ...(needsMoveResponse
+        ? {
+            teamMoveResponse: true,
+            teamMoveLeagueId: team.leagueId,
+          }
+        : {}),
       ...pollContent.metadata,
       ...(input.metadata ?? {}),
     },
