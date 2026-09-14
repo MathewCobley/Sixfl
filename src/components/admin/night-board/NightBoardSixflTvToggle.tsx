@@ -6,6 +6,7 @@ type AdminTvFixture = {
   id: string;
   sixflTvRecorded: boolean;
   sixflTvUrl: string | null;
+  veoBookingConfirmed?: boolean;
 };
 
 let fixtureStatePromise: Promise<Map<string, AdminTvFixture>> | null = null;
@@ -27,6 +28,7 @@ function loadFixtureState() {
               id: fixtureId,
               sixflTvRecorded: true,
               sixflTvUrl: null,
+              veoBookingConfirmed: false,
             });
           }
         }
@@ -42,6 +44,7 @@ function loadFixtureState() {
 
 export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: string }) {
   const [checked, setChecked] = useState(false);
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -52,7 +55,9 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
     void loadFixtureState()
       .then((fixtures) => {
         if (cancelled) return;
-        setChecked(Boolean(fixtures.get(fixtureId)?.sixflTvRecorded));
+        const fixture = fixtures.get(fixtureId);
+        setChecked(Boolean(fixture?.sixflTvRecorded));
+        setBookingConfirmed(Boolean(fixture?.veoBookingConfirmed));
       })
       .catch(() => {
         if (!cancelled) setMessage("Could not load SIXFL TV status");
@@ -68,6 +73,7 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
 
   async function save(nextChecked: boolean) {
     const previous = checked;
+    const previousBookingConfirmed = bookingConfirmed;
     setChecked(nextChecked);
     setSaving(true);
     setMessage("");
@@ -84,39 +90,70 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
 
       const payload = (await response.json().catch(() => null)) as {
         error?: string;
+        veoBookingConfirmed?: boolean;
+        acceptedVeoRequests?: number;
       } | null;
 
       if (!response.ok) {
         throw new Error(payload?.error || "Could not save SIXFL TV status.");
       }
 
-      setMessage(nextChecked ? "Selected for SIXFL TV" : "Not selected for SIXFL TV");
+      const confirmed = Boolean(payload?.veoBookingConfirmed);
+      setBookingConfirmed(confirmed);
+      if (nextChecked && confirmed) {
+        const accepted = payload?.acceptedVeoRequests ?? 0;
+        setMessage(
+          accepted > 0
+            ? `Veo booking confirmed · ${accepted} Priority request${accepted === 1 ? "" : "s"} accepted · captain choice locked`
+            : "Veo booking confirmed · captain choice locked",
+        );
+      } else {
+        setMessage(nextChecked ? "Selected for SIXFL TV" : "Not selected for SIXFL TV");
+      }
     } catch (error) {
       setChecked(previous);
+      setBookingConfirmed(previousBookingConfirmed);
       setMessage(error instanceof Error ? error.message : "Could not save SIXFL TV status.");
     } finally {
       setSaving(false);
     }
   }
 
+  const locked = checked && bookingConfirmed;
+
   return (
     <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-3 text-xs text-fuchsia-100">
-      <label className="flex cursor-pointer items-center justify-between gap-3 font-semibold">
+      <label className={`flex items-center justify-between gap-3 font-semibold ${locked ? "cursor-default" : "cursor-pointer"}`}>
         <span>
           SIXFL TV
-          <span className="ml-2 font-normal text-fuchsia-100/55">Record this match</span>
+          <span className="ml-2 font-normal text-fuchsia-100/55">
+            {locked ? "Veo booking confirmed" : "Record this match"}
+          </span>
         </span>
         <input
           type="checkbox"
           checked={checked}
-          disabled={loading || saving}
+          disabled={loading || saving || locked}
           onChange={(event) => void save(event.target.checked)}
           className="h-4 w-4 accent-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-50"
         />
       </label>
       <div className="mt-1 text-[10px] leading-4 text-fuchsia-100/55">
-        {loading ? "Loading status…" : saving ? "Saving…" : message || (checked ? "Selected for SIXFL TV" : "Not selected")}
+        {loading
+          ? "Loading status…"
+          : saving
+            ? "Saving and confirming Veo booking…"
+            : message || (locked ? "Confirmed · captain can no longer change this match" : checked ? "Selected for SIXFL TV" : "Not selected")}
       </div>
+      {checked && !bookingConfirmed && !loading && !saving ? (
+        <button
+          type="button"
+          onClick={() => void save(true)}
+          className="mt-2 rounded-lg border border-fuchsia-300/25 bg-fuchsia-400/10 px-2.5 py-1.5 text-[11px] font-semibold text-fuchsia-50 hover:bg-fuchsia-400/15"
+        >
+          Confirm this Veo booking
+        </button>
+      ) : null}
     </div>
   );
 }
