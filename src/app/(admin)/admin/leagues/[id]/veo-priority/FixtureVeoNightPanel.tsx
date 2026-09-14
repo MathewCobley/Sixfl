@@ -1,6 +1,7 @@
 import {prisma} from '@/lib/prisma';
 import {previewFixtureVeoNight} from '@/lib/veo/fixture-bookings';
 import {FinaliseChoicesForm,RecordingOutcomeForm} from './FixtureDecisionForms';
+import VeoChoiceHistory from './VeoChoiceHistory';
 const time=(d:Date)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}).format(d);
 export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:string;date:string}) {
  let preview:Awaited<ReturnType<typeof previewFixtureVeoNight>>|null=null,error='';
@@ -13,7 +14,7 @@ export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:str
  AND to_char(b."kickoffAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London','YYYY-MM-DD')=${date} ORDER BY b."kickoffAt",b."fixtureId"`;
  return <section aria-label="Fixture Veo requests" className="space-y-5 rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/5 p-5 sm:p-6">
   <h2 className="text-xl font-bold">Fixture requests and filming decisions</h2>
-  <p className="text-sm leading-6 text-white/70">Captains choose one match or a remembered preference when confirming attendance. Both options have equal priority. Review the full camera evening below, then confirm bookings. This does not change any original match payment or take money.</p>
+  <p className="text-sm leading-6 text-white/70">Captains choose one match or a remembered preference when confirming attendance. Both options have equal priority. Selecting SIXFL TV on the Night Board now confirms that fixture immediately and locks the captain choice. You can still use the full-evening confirmation below when you want SIXFL to allocate the proposed camera schedule automatically.</p>
   <form method="get" className="flex flex-wrap items-end gap-3"><label className="block text-sm">Match date (UK)<input type="date" name="date" required defaultValue={date} className="mt-2 block min-h-11 rounded-xl border border-white/20 bg-black/20 p-3"/></label><button className="min-h-11 rounded-xl border border-white/20 p-3">Show requests</button></form>
   {error&&<p role="alert" className="text-sm text-amber-100">{error}</p>}
   {preview&&!preview.settings.enabled&&<p className="text-sm text-white/65">Veo is off. Existing accepted bookings remain visible; no new request is accepted.</p>}
@@ -26,6 +27,7 @@ export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:str
    <FinaliseChoicesForm leagueId={leagueId} date={date} fingerprint={preview.fingerprint} count={preview.choices.length}/>
   </>}
   <div className="space-y-3"><h3 className="font-semibold">Accepted bookings and recordings</h3>{bookings.map(b=><div key={b.fixtureId} className="space-y-3 rounded-xl border border-white/15 p-4"><h4 className="font-semibold">{time(b.kickoffAt)} · {b.homeName} vs {b.awayName}</h4><p className="text-sm text-white/70">Pitch {b.pitch} · {b.state==='PLANNED'?'Filming confirmed — not billed yet':b.state==='READY'?'Recording ready — Veo charges added':'Closed — no Veo charge due'} · {b.paying} accepted £5 request{b.paying===1?'':'s'}</p>{b.url&&<a href={b.url} target="_blank" rel="noopener noreferrer" className="text-sm text-fuchsia-100 underline">Watch recording</a>}{['PLANNED','READY'].includes(b.state)&&<RecordingOutcomeForm leagueId={b.leagueId} fixtureId={b.fixtureId} ready={b.state==='READY'} completed={b.status==='COMPLETED'}/>}</div>)}{!bookings.length&&<p className="text-sm text-white/60">No accepted filming bookings on this date.</p>}</div>
+  <VeoChoiceHistory leagueId={leagueId}/>
   <p className="text-xs leading-5 text-white/55">After a completed match, confirm the usable recording to create each agreed £5 as a separate Team payments line. Failed recordings are not billed. If a billed recording proves unusable, closing it voids the Veo charge and credits only money actually received. One-off requests and remembered preferences never stack two charges.</p>
  </section>;
 }
