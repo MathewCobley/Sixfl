@@ -1,0 +1,36 @@
+const fs = require('node:fs');
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const route = fs.readFileSync('src/app/api/admin/fixtures/sixfl-tv/route.ts', 'utf8');
+const toggle = fs.readFileSync('src/components/admin/night-board/NightBoardSixflTvToggle.tsx', 'utf8');
+const helper = fs.readFileSync('src/lib/veo/night-board.ts', 'utf8');
+const history = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/VeoChoiceHistory.tsx', 'utf8');
+
+test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
+  assert.match(route, /confirmNightBoardVeoFixture/);
+  assert.match(route, /veoBookingConfirmed/);
+  assert.match(helper, /INSERT INTO "VeoMatchBooking"/);
+  assert.match(helper, /status = 'ACCEPTED'/);
+  assert.match(helper, /"sixflTvRecorded" = true/);
+  assert.match(helper, /maximum/);
+});
+
+test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
+  assert.match(toggle, /captain choice locked/);
+  assert.match(toggle, /disabled=\{loading \|\| saving \|\| locked\}/);
+  assert.match(route, /Cancel it from the league Veo Priority page/);
+});
+
+test('Veo admin shows audited captain choice history', () => {
+  assert.match(history, /Veo choice history/);
+  assert.match(history, /fixture_veo_choice/);
+  assert.match(history, /stop_future_priority/);
+  assert.match(history, /team_priority/);
+});
+
+test('new wiring stays native and does not add a DOM bridge', () => {
+  for (const source of [route, toggle, helper, history]) {
+    assert.doesNotMatch(source, /MutationObserver|document\.querySelector|document\.querySelectorAll/);
+  }
+});
