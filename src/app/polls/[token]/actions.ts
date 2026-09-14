@@ -23,7 +23,7 @@ function parseQuantity(value: FormDataEntryValue | null) {
 
 export async function submitPollVoteAction(formData: FormData) {
   const token = clean(formData.get("token"));
-  const note = clean(formData.get("note")) || null;
+  const genericNote = clean(formData.get("note")) || null;
   const requestedOptionIds = Array.from(
     new Set(formData.getAll("optionId").map((value) => clean(value)).filter(Boolean)),
   );
@@ -53,14 +53,15 @@ export async function submitPollVoteAction(formData: FormData) {
     redirect(`/polls/${encodeURIComponent(token)}?error=closed`);
   }
 
-  const validOptions = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
+  const validOptions = await prisma.$queryRaw<Array<{ id: string; followUpPrompt: string | null }>>(Prisma.sql`
+    SELECT "id", "followUpPrompt"
     FROM "SIXFLPollOption"
     WHERE "pollId" = ${poll.pollId}
       AND "id" IN (${Prisma.join(requestedOptionIds)})
   `);
 
-  const validOptionIds = validOptions.map((option) => option.id);
+  const validOptionById = new Map(validOptions.map((option) => [option.id, option]));
+  const validOptionIds = requestedOptionIds.filter((optionId) => validOptionById.has(optionId));
   const selectedOptionIds = poll.choiceMode === "MULTIPLE"
     ? validOptionIds
     : validOptionIds.slice(0, 1);
@@ -71,6 +72,22 @@ export async function submitPollVoteAction(formData: FormData) {
 
   const now = new Date();
   const primaryOptionId = selectedOptionIds[0] ?? null;
+  const primaryOption = primaryOptionId ? validOptionById.get(primaryOptionId) ?? null : null;
+  const optionSpecificNote = primaryOptionId
+    ? clean(formData.get(`note_${primaryOptionId}`))
+    : "";
+
+  if (
+    poll.choiceMode !== "MULTIPLE" &&
+    primaryOption?.followUpPrompt?.trim() &&
+    !optionSpecificNote
+  ) {
+    redirect(
+      `/polls/${encodeURIComponent(token)}?error=followup&option=${encodeURIComponent(primaryOptionId ?? "")}`,
+    );
+  }
+
+  const note = optionSpecificNote || genericNote || null;
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`
