@@ -6,6 +6,7 @@ const route = fs.readFileSync('src/app/api/admin/fixtures/sixfl-tv/route.ts', 'u
 const toggle = fs.readFileSync('src/components/admin/night-board/NightBoardSixflTvToggle.tsx', 'utf8');
 const helper = fs.readFileSync('src/lib/veo/night-board.ts', 'utf8');
 const history = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/VeoChoiceHistory.tsx', 'utf8');
+const nightBoardPriority = fs.readFileSync('src/app/(admin)/admin/night-board/veo-priority-actions.ts', 'utf8');
 
 test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
   assert.match(route, /confirmNightBoardVeoFixture/);
@@ -22,6 +23,13 @@ test('confirmed Night Board booking is visibly locked instead of silently untick
   assert.match(route, /Cancel it from the league Veo Priority page/);
 });
 
+test('Night Board only shows Veo Priority for a team still in that fixture', () => {
+  assert.match(
+    nightBoardPriority,
+    /r\."teamId" = f\."homeTeamId" OR r\."teamId" = f\."awayTeamId"/,
+  );
+});
+
 test('Veo admin shows audited captain choice history', () => {
   assert.match(history, /Veo choice history/);
   assert.match(history, /fixture_veo_choice/);
@@ -30,7 +38,7 @@ test('Veo admin shows audited captain choice history', () => {
 });
 
 test('new wiring stays native and does not add a DOM bridge', () => {
-  for (const source of [route, toggle, helper, history]) {
+  for (const source of [route, toggle, helper, history, nightBoardPriority]) {
     assert.doesNotMatch(source, /MutationObserver|document\.querySelector|document\.querySelectorAll/);
   }
 });
