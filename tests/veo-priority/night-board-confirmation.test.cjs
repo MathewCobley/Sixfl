@@ -17,6 +17,16 @@ test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
   assert.match(helper, /maximum/);
 });
 
+test('accepted Veo Priority is charged as soon as Night Board confirms filming', () => {
+  assert.match(helper, /ensureAcceptedVeoCharges/);
+  assert.match(helper, /paymentCharge\.create/);
+  assert.match(helper, /amountPence: 500/);
+  assert.match(helper, /dueDate: fixture\.kickoffAt/);
+  assert.match(helper, /chargeTiming: 'booking_confirmation'/);
+  assert.match(helper, /If the recording fails, this charge is voided and any payment received is returned to team credit/);
+  assert.match(helper, /initial\.bookingState === 'PLANNED'/);
+});
+
 test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
   assert.match(toggle, /captain choice locked/);
   assert.match(toggle, /disabled=\{loading \|\| saving \|\| locked\}/);
