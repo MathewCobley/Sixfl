@@ -11,12 +11,19 @@ import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 export const dynamic = "force-dynamic";
 
-function redirectToPoll(token: string, state: "saved" | "closed" | "invalid") {
+function redirectToPoll(
+  token: string,
+  state: "saved" | "closed" | "invalid" | "followup",
+  optionId?: string,
+) {
   const url = new URL(`/polls/${encodeURIComponent(token)}`, `${getPublicSiteUrl()}/`);
 
   if (state === "saved") url.searchParams.set("saved", "1");
   if (state === "closed") url.searchParams.set("error", "closed");
   if (state === "invalid") url.searchParams.set("error", "invalid");
+  if (state === "followup") {
+    url.searchParams.set("option", optionId ?? "");
+  }
 
   return NextResponse.redirect(url, 303);
 }
@@ -28,13 +35,20 @@ export async function GET(
   const { token, optionId } = await context.params;
 
   const rows = await prisma.$queryRaw<
-    Array<{ recipientId: string; pollId: string; status: string; choiceMode: string }>
+    Array<{
+      recipientId: string;
+      pollId: string;
+      status: string;
+      choiceMode: string;
+      followUpPrompt: string | null;
+    }>
   >(Prisma.sql`
     SELECT
       recipient."id" AS "recipientId",
       poll."id" AS "pollId",
       poll."status",
-      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode"
+      COALESCE(poll."choiceMode", 'SINGLE') AS "choiceMode",
+      option."followUpPrompt"
     FROM "SIXFLPollRecipient" recipient
     INNER JOIN "SIXFLPoll" poll ON poll."id" = recipient."pollId"
     INNER JOIN "SIXFLPollOption" option ON option."id" = ${optionId} AND option."pollId" = poll."id"
@@ -46,6 +60,10 @@ export async function GET(
 
   if (!poll) return redirectToPoll(token, "invalid");
   if (poll.status !== "ACTIVE") return redirectToPoll(token, "closed");
+
+  if (poll.choiceMode !== "MULTIPLE" && poll.followUpPrompt?.trim()) {
+    return redirectToPoll(token, "followup", optionId);
+  }
 
   const now = new Date();
 
