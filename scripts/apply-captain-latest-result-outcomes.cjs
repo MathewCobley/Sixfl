@@ -8,6 +8,33 @@ const pagePath = path.join(
 let source = fs.readFileSync(pagePath, "utf8");
 
 const marker = 'data-captain-result-outcome="true"';
+const originalMarker = 'data-original-played-result="true"';
+
+const resultSelectBefore = `            id: true,
+            homeScore: true,
+            awayScore: true,
+            isDisputed: true,
+            disputes:`;
+const resultSelectAfter = `            id: true,
+            homeScore: true,
+            awayScore: true,
+            isDisputed: true,
+            overturn: {
+              select: {
+                originalHomeScore: true,
+                originalAwayScore: true,
+              },
+            },
+            disputes:`;
+
+if (!source.includes("originalHomeScore: true")) {
+  if (!source.includes(resultSelectBefore)) {
+    throw new Error(
+      "Expected captain recent-result select was not found. The overview may have changed.",
+    );
+  }
+  source = source.replace(resultSelectBefore, resultSelectAfter);
+}
 
 if (!source.includes(marker)) {
   const before = `              const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
@@ -34,6 +61,24 @@ if (!source.includes(marker)) {
                         verb: "Drew",
                         tone: "border-amber-400/30 bg-amber-500/15 text-amber-100",
                       };
+              const originalGoalsFor = fixture.result!.overturn
+                ? isHome
+                  ? fixture.result!.overturn.originalHomeScore
+                  : fixture.result!.overturn.originalAwayScore
+                : null;
+              const originalGoalsAgainst = fixture.result!.overturn
+                ? isHome
+                  ? fixture.result!.overturn.originalAwayScore
+                  : fixture.result!.overturn.originalHomeScore
+                : null;
+              const originalVerb =
+                originalGoalsFor == null || originalGoalsAgainst == null
+                  ? null
+                  : originalGoalsFor > originalGoalsAgainst
+                    ? "Won"
+                    : originalGoalsFor < originalGoalsAgainst
+                      ? "Lost"
+                      : "Drew";
               return (
                 <div
                   key={fixture.id}
@@ -61,6 +106,14 @@ if (!source.includes(marker)) {
                       <div className="mt-2 text-lg font-black text-white">
                         {outcome.verb} {goalsFor} - {goalsAgainst}
                       </div>
+                      {originalVerb ? (
+                        <div
+                          data-original-played-result="true"
+                          className="mt-2 text-sm font-semibold text-amber-100/90"
+                        >
+                          Original played result: {originalVerb} {originalGoalsFor} - {originalGoalsAgainst}
+                        </div>
+                      ) : null}
                       <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/35">
                         Your team’s score first
                       </div>
@@ -76,21 +129,60 @@ if (!source.includes(marker)) {
   }
 
   source = source.replace(before, after);
-  fs.writeFileSync(pagePath, source, "utf8");
+} else if (!source.includes(originalMarker)) {
+  const oldScoreBlock = `                      <div className="mt-2 text-lg font-black text-white">
+                        {outcome.verb} {goalsFor} - {goalsAgainst}
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/35">`;
+  const newScoreBlock = `                      <div className="mt-2 text-lg font-black text-white">
+                        {outcome.verb} {goalsFor} - {goalsAgainst}
+                      </div>
+                      {fixture.result!.overturn ? (
+                        <div
+                          data-original-played-result="true"
+                          className="mt-2 text-sm font-semibold text-amber-100/90"
+                        >
+                          Original played result: {isHome
+                            ? fixture.result!.overturn.originalHomeScore > fixture.result!.overturn.originalAwayScore
+                              ? "Won"
+                              : fixture.result!.overturn.originalHomeScore < fixture.result!.overturn.originalAwayScore
+                                ? "Lost"
+                                : "Drew"
+                            : fixture.result!.overturn.originalAwayScore > fixture.result!.overturn.originalHomeScore
+                              ? "Won"
+                              : fixture.result!.overturn.originalAwayScore < fixture.result!.overturn.originalHomeScore
+                                ? "Lost"
+                                : "Drew"} {isHome ? fixture.result!.overturn.originalHomeScore : fixture.result!.overturn.originalAwayScore} - {isHome ? fixture.result!.overturn.originalAwayScore : fixture.result!.overturn.originalHomeScore}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/35">`;
+
+  if (!source.includes(oldScoreBlock)) {
+    throw new Error(
+      "Existing captain outcome row was found but its score block could not be upgraded.",
+    );
+  }
+  source = source.replace(oldScoreBlock, newScoreBlock);
 }
+
+fs.writeFileSync(pagePath, source, "utf8");
 
 if (
   !source.includes(marker) ||
+  !source.includes(originalMarker) ||
+  !source.includes("Original played result:") ||
+  !source.includes("originalHomeScore: true") ||
+  !source.includes("originalAwayScore: true") ||
   !source.includes("Your team’s score first") ||
   !source.includes('label: "WIN"') ||
   !source.includes('label: "LOSS"') ||
   !source.includes('label: "DRAW"')
 ) {
   throw new Error(
-    "Captain latest results must clearly identify wins, losses and draws.",
+    "Captain latest results must show team-perspective outcomes and preserve any original played result.",
   );
 }
 
 console.log(
-  "Captain latest scores now show the opponent, an explicit WIN/LOSS/DRAW badge and a team-perspective result.",
+  "Captain latest scores now show the awarded result plus the original played result when a result has been overturned.",
 );
