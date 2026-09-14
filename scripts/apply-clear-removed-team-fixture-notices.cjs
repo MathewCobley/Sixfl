@@ -282,9 +282,9 @@ async function queueOpponentChangedNotice(input: {
   );
 
   const oldConfirmationTeamFilter =
-    "        teamId: { in: affectedTeamIds },";
+    "teamId: { in: affectedTeamIds },";
   const newConfirmationTeamFilter =
-    "        teamId: { in: nextParticipantTeamIds },";
+    "teamId: { in: nextParticipantTeamIds },";
   const oldFilterCount = countOccurrences(source, oldConfirmationTeamFilter);
   const newFilterCount = countOccurrences(source, newConfirmationTeamFilter);
 
@@ -307,9 +307,9 @@ async function queueOpponentChangedNotice(input: {
   }
 
   const scheduledResetFilter =
-    "      teamId: { in: nextParticipantTeamIds },";
+    "teamId: { in: nextParticipantTeamIds },";
   const preservedResetFilter =
-    "      teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },";
+    "teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },";
   if (!source.includes(preservedResetFilter)) {
     const scheduledResetPosition = source.indexOf(
       scheduledResetFilter,
