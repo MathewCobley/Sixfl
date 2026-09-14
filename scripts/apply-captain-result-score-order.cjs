@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-captain-latest-result-outcomes.cjs");
+
 const filePath = path.join(
   process.cwd(),
   "src",
