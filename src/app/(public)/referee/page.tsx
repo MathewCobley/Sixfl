@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 
 import RefereeTabs from "@/components/referee/RefereeTabs";
 import { requireReferee } from "@/lib/admin";
@@ -12,6 +12,7 @@ import {
   formatDateTimeInLondon,
   toLondonDateInputValue,
 } from "@/lib/datetime/london";
+import { prisma } from "@/lib/prisma";
 import {
   formatMoney,
   formatNightDate,
@@ -19,6 +20,19 @@ import {
   type RefereeNightStatus,
   type RefereeNightSummary,
 } from "@/lib/referee-nights";
+
+type OnsiteRefereeSummary = {
+  nightId: string;
+  totalReferees: number;
+  refereeNames: string[];
+  coReferees: string[];
+};
+
+type OnsiteRefereeRow = {
+  nightId: string;
+  totalReferees: number | bigint;
+  refereeNames: string[] | null;
+};
 
 function statusClasses(status: RefereeNightStatus) {
   switch (status) {
@@ -82,6 +96,78 @@ function formatLedgerDate(value: Date | null) {
     month: "short",
     year: "numeric",
   });
+}
+
+function normaliseName(value: string | null | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function makeTextList(values: string[]) {
+  if (values.length === 0) return "You are the only listed referee for this night.";
+  if (values.length === 1) return `Refereeing with: ${values[0]}.`;
+
+  const last = values[values.length - 1];
+  const rest = values.slice(0, -1).join(", ");
+  return `Refereeing with: ${rest} and ${last}.`;
+}
+
+async function getOnsiteRefereeSummaries(
+  refereeId: string,
+  currentRefereeName: string,
+): Promise<OnsiteRefereeSummary[]> {
+  const rows = await prisma.$queryRaw<OnsiteRefereeRow[]>(Prisma.sql`
+    WITH my_nights AS (
+      SELECT id, "leagueId", "venueId", "nightDate"
+      FROM "RefereeNight"
+      WHERE "refereeId" = ${refereeId}
+        AND status <> 'CANCELLED'
+    )
+    SELECT
+      mn.id AS "nightId",
+      COUNT(DISTINCT rn."refereeId")::int AS "totalReferees",
+      ARRAY_AGG(
+        DISTINCT COALESCE(NULLIF(u.name, ''), u.email)
+        ORDER BY COALESCE(NULLIF(u.name, ''), u.email)
+      ) AS "refereeNames"
+    FROM my_nights mn
+    JOIN "RefereeNight" rn
+      ON rn."leagueId" = mn."leagueId"
+      AND rn."nightDate" = mn."nightDate"
+      AND rn."venueId" IS NOT DISTINCT FROM mn."venueId"
+      AND rn.status <> 'CANCELLED'
+    JOIN "User" u ON u.id = rn."refereeId"
+    GROUP BY mn.id
+  `);
+
+  return rows.map((row) => {
+    const refereeNames = (row.refereeNames ?? [])
+      .map(normaliseName)
+      .filter(Boolean);
+
+    return {
+      nightId: row.nightId,
+      totalReferees: Number(row.totalReferees ?? refereeNames.length),
+      refereeNames,
+      coReferees: refereeNames.filter((name) => name !== currentRefereeName),
+    };
+  });
+}
+
+function getLegacyCutoffDate(todayLondonDate: string) {
+  const cutoff = new Date(`${todayLondonDate}T12:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - 14);
+  return cutoff.toISOString().slice(0, 10);
+}
+
+function isLegacyOpenNight(night: RefereeNightSummary, legacyCutoffDate: string) {
+  return (
+    (night.status === "DRAFT" || night.status === "REOPENED") &&
+    night.nightDate < legacyCutoffDate
+  );
+}
+
+function isClosedNight(night: RefereeNightSummary) {
+  return ["SUBMITTED", "APPROVED", "SETTLED", "CANCELLED"].includes(night.status);
 }
 
 function CurrentViewBanner({
@@ -152,10 +238,10 @@ function RefereeIdentityBanner({
             Referee account
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            {refereeName} referee dashboard
+            {refereeName}&apos;s match night dashboard
           </h1>
           <p className="mt-2 text-sm leading-6 text-emerald-50/75">
-            This page only shows nights, fees and ledger entries assigned to this referee.
+            Your referee nights, availability, match sheets, cashup and payments are all shown here.
           </p>
         </div>
 
@@ -233,10 +319,12 @@ function NightCard({
   night,
   isNext,
   todayLondonDate,
+  onsite,
 }: {
   night: RefereeNightSummary;
   isNext: boolean;
   todayLondonDate: string;
+  onsite?: OnsiteRefereeSummary;
 }) {
   const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
   const isPayable = isNightPayable(night, todayLondonDate);
@@ -285,10 +373,22 @@ function NightCard({
             href={`/referee/night/${night.id}`}
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
           >
-            {canOpen ? "Open night" : "View night"}
+            {canOpen ? "Open night sheet" : "View night"}
           </Link>
         </div>
       </div>
+
+      {onsite ? (
+        <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-50/80">
+          <div className="font-semibold text-white">
+            {onsite.totalReferees} referee{onsite.totalReferees === 1 ? "" : "s"} on site this night
+          </div>
+          <div className="mt-1 text-sky-50/70">{makeTextList(onsite.coReferees)}</div>
+          <div className="mt-2 text-xs text-sky-50/45">
+            Listed referees: {onsite.refereeNames.join(", ") || "Not set"}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -379,9 +479,19 @@ function RefereeLedger({
                   Fee {formatMoney(night.feePence)} · Cash collected {formatMoney(night.cashCollectedPence)} · {getLedgerSettlementLabel(night, todayLondonDate)}
                 </div>
               </div>
-              <div className="text-left md:text-right">
-                <div className="text-lg font-semibold text-white">{formatMoney(getLedgerBalanceAmount(night, todayLondonDate))}</div>
-                <div className="text-xs text-white/45">{getLedgerBalanceLabel(night, todayLondonDate)}</div>
+              <div className="flex items-center gap-3 md:justify-end">
+                <div className="text-left md:text-right">
+                  <div className="text-lg font-semibold text-white">{formatMoney(getLedgerBalanceAmount(night, todayLondonDate))}</div>
+                  <div className="text-xs text-white/45">{getLedgerBalanceLabel(night, todayLondonDate)}</div>
+                </div>
+                {night.status === "REOPENED" ? (
+                  <Link
+                    href={`/referee/night/${night.id}`}
+                    className="inline-flex items-center rounded-xl border border-violet-400/30 bg-violet-500/15 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/20"
+                  >
+                    Open reopened night
+                  </Link>
+                ) : null}
               </div>
             </div>
           ))}
@@ -391,46 +501,81 @@ function RefereeLedger({
   );
 }
 
-function NightSchedule({
-  nights,
+function NightSheets({
+  openNights,
+  closedNights,
+  legacyNights,
   nextNight,
   todayLondonDate,
+  onsiteByNightId,
 }: {
-  nights: RefereeNightSummary[];
+  openNights: RefereeNightSummary[];
+  closedNights: RefereeNightSummary[];
+  legacyNights: RefereeNightSummary[];
   nextNight: RefereeNightSummary | null;
   todayLondonDate: string;
+  onsiteByNightId: Map<string, OnsiteRefereeSummary>;
 }) {
   return (
-    <details id="referee-nights" className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
-      <summary className="flex cursor-pointer list-none flex-col gap-2 px-6 py-5 transition hover:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden">
+    <section id="referee-night-picker" className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-5 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Assigned nights
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+            Night sheets
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Night schedule</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Choose the night you want to work on</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+            Only current referee nights that need action are shown here. Historic imported fixture records stay in the league records and do not need a referee night sheet.
+          </p>
         </div>
         <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
-          {nights.length} total · open schedule
+          {openNights.length} open
         </div>
-      </summary>
+      </div>
 
-      {nights.length === 0 ? (
-        <div className="border-t border-white/10 px-6 py-8 text-sm text-white/55">
-          No referee nights are assigned yet.
-        </div>
-      ) : (
-        <div className="space-y-4 border-t border-white/10 p-5">
-          {nights.map((night) => (
+      <div className={`mt-5 grid gap-3 ${openNights.length > 1 ? "lg:grid-cols-2" : ""}`}>
+        {openNights.length > 0 ? (
+          openNights.map((night) => (
             <NightCard
               key={night.id}
               night={night}
               isNext={nextNight?.id === night.id}
               todayLondonDate={todayLondonDate}
+              onsite={onsiteByNightId.get(night.id)}
             />
-          ))}
+          ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">
+            No current open referee night sheets.
+          </div>
+        )}
+      </div>
+
+      {legacyNights.length > 0 ? (
+        <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50/75">
+          {legacyNights.length} historic imported fixture record{legacyNights.length === 1 ? "" : "s"} hidden from referee work. Results and payments remain on the league/admin records; no referee night action is needed.
         </div>
-      )}
-    </details>
+      ) : null}
+
+      {closedNights.length > 0 ? (
+        <details className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white/75 [&::-webkit-details-marker]:hidden">
+            Submitted / closed nights ({closedNights.length})
+          </summary>
+          <div className="grid gap-3 border-t border-white/10 p-4 lg:grid-cols-2">
+            {closedNights.slice(0, 5).map((night) => (
+              <NightCard
+                key={night.id}
+                night={night}
+                isNext={false}
+                todayLondonDate={todayLondonDate}
+                onsite={onsiteByNightId.get(night.id)}
+              />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </section>
   );
 }
 
@@ -443,12 +588,24 @@ export default async function RefereePage() {
   }
 
   const todayLondonDate = toLondonDateInputValue(new Date());
-  const nights = await getRefereeNightSummaries({ refereeId: user.id });
+  const refereeName = user.name || user.email || "this referee";
+  const currentRefereeName = normaliseName(user.name) || normaliseName(user.email) || "You";
+  const [nights, onsiteSummaries] = await Promise.all([
+    getRefereeNightSummaries({ refereeId: user.id }),
+    getOnsiteRefereeSummaries(user.id, currentRefereeName),
+  ]);
+  const onsiteByNightId = new Map(onsiteSummaries.map((summary) => [summary.nightId, summary]));
 
+  const legacyCutoffDate = getLegacyCutoffDate(todayLondonDate);
+  const legacyNights = nights.filter((night) => isLegacyOpenNight(night, legacyCutoffDate));
+  const currentOpenNights = nights
+    .filter((night) => !isLegacyOpenNight(night, legacyCutoffDate))
+    .filter((night) => !isClosedNight(night))
+    .sort(sortNightSoonestFirst);
+  const closedNights = nights
+    .filter(isClosedNight)
+    .sort(sortNightNewestFirst);
   const activeNights = nights.filter((night) => night.status !== "CANCELLED");
-  const openNights = nights.filter(
-    (night) => night.status !== "SETTLED" && night.status !== "CANCELLED",
-  );
   const submittedNights = nights.filter((night) => night.status === "SUBMITTED");
   const settledNights = nights.filter((night) => night.status === "SETTLED");
   const payableActiveNights = activeNights.filter((night) =>
@@ -463,8 +620,7 @@ export default async function RefereePage() {
     0,
   );
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
-  const nextNight = [...openNights].sort(sortNightSoonestFirst)[0] ?? null;
-  const refereeName = user.name || user.email || "this referee";
+  const nextNight = currentOpenNights[0] ?? null;
   const previewRefereeId = authenticatedUser.role === UserRole.ADMIN ? user.id : null;
 
   return (
@@ -522,7 +678,7 @@ export default async function RefereePage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <SummaryTile label="Open nights" value={openNights.length} text="Need action or cashup." tone="emerald" />
+              <SummaryTile label="Open nights" value={currentOpenNights.length} text="Need action or cashup." tone="emerald" />
               <SummaryTile label="Due to you" value={formatMoney(outstandingDueToReferee)} text="Due after completed or submitted nights." tone="amber" />
               <SummaryTile label="Submitted" value={submittedNights.length} text="Waiting for SIXFL review." tone="neutral" />
               <SummaryTile label="Due SIXFL" value={formatMoney(outstandingDueToSixfl)} text="Cash due after completed nights." tone="sky" />
@@ -545,12 +701,21 @@ export default async function RefereePage() {
             text="Quick reference for how SIXFL matches should be managed."
           />
           <ActionCard
-            href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-nights"}
+            href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-night-picker"}
             label="Next action"
-            title={nextNight ? "Open night sheet" : "View schedule"}
+            title={nextNight ? "Open night sheet" : "View night sheets"}
             text={nextNight ? "Enter results, cash and notes for your next night." : "No open night is currently assigned."}
           />
         </section>
+
+        <NightSheets
+          openNights={currentOpenNights}
+          closedNights={closedNights}
+          legacyNights={legacyNights}
+          nextNight={nextNight}
+          todayLondonDate={todayLondonDate}
+          onsiteByNightId={onsiteByNightId}
+        />
 
         <section className="grid gap-4 md:grid-cols-3">
           <SummaryTile label="Fixtures covered" value={totalFixtures} text="Across all assigned referee nights." />
@@ -559,11 +724,6 @@ export default async function RefereePage() {
         </section>
 
         <RefereeLedger nights={nights} todayLondonDate={todayLondonDate} />
-        <NightSchedule
-          nights={nights}
-          nextNight={nextNight}
-          todayLondonDate={todayLondonDate}
-        />
       </div>
     </main>
   );
