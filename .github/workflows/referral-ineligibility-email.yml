@@ -37,7 +37,7 @@ jobs:
       - run: npm ci
       - run: node --test tests/referral-ineligibility-email/*.test.cjs
       - run: npm run prebuild && npx prisma generate
-      - run: node --test tests/referral-ineligibility-email/*.test.cjs tests/referral-eligibility/*.test.cjs
+      - run: node --test tests/referral-ineligibility-email/*.test.cjs tests/referral-eligibility/*.test.cjs tests/email-preview-isolation.test.cjs
       - name: Disposable schema and actual migrations
         run: |
           npx prisma db push --skip-generate
@@ -57,6 +57,10 @@ jobs:
           REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-eligibility/browser.cjs
           REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-ineligibility-email/browser.cjs
           REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-ineligibility-email/layout-browser.cjs
+      - name: Reproduce the post-render width restriction and verify the native admin shell
+        run: REFERRAL_PLAYWRIGHT=/tmp/referral-browser/node_modules/playwright node tests/referral-ineligibility-email/admin-shell-browser.cjs
+      - name: Preserve real email preview isolation
+        run: EMAIL_PREVIEW_PLAYWRIGHT_MODULE=/tmp/referral-browser/node_modules/playwright node --test tests/email-preview-isolation.browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

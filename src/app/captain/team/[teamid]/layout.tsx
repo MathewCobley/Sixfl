@@ -20,7 +20,6 @@ import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
 import PendingActivationReturnLinks from "@/components/captain/PendingActivationReturnLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
-import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
 import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
 import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
@@ -406,7 +405,6 @@ export default async function CaptainTeamLayout({
     <div className="captain-team-shell min-h-screen bg-[#07130f] text-white">
       <style>{captainMobileStyles}</style>
       <CaptainRedirectErrorNoticeFix />
-      <QueuedSmsReasonHints />
       <ProspectsReadableLayout />
       <CaptainFixtureBadgesBridge />
       <CaptainMatchdayAvailabilityBadgesBridge />

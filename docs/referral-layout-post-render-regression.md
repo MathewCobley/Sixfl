@@ -1,0 +1,7 @@
+# Referral width after client effects
+
+The full-width referral layout was correct before client effects, but the admin shell still mounted the legacy `QueuedSmsReasonHints` email preview helper. It selected all rounded, overflow-hidden white divs containing SIXFL, including the referral list, recoloured the list and set its first child's maximum width to 720px (minimum 620px). Its global observer reapplied that mutation on later page changes. More referral CSS could not remove that cause.
+
+Remove that helper from the shared admin layout and retire its unused duplicate, `AdminEmailPreviewLayoutBridge`. Existing admin email consumers already use the owned, responsive sandboxed `EmailHtmlPreview`; those previews require no global layout mutation. No referral, queue, template, email, payment or audit data is changed.
+
+The frozen original helper is retained only under tests as a negative control (blob dd95a44c1210c40be11cc47605219636380993c0). Browser tests render the actual admin shell and actual referral route output, exercise client effects and subsequent content changes, demonstrate the old 720px limit, then assert full-width cards at mobile/tablet/desktop sizes without it. Auth/read services and unrelated widgets are isolated; tests never submit a live form or contact external providers. Existing native email preview consumer/isolation checks remain in place. A source/prebuild inventory contract prevents either helper from returning to production.
