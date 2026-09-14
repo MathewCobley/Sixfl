@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { TeamMoveConfirmationStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import type { TeamMoveConfirmationStatus } from "@/lib/teams/move-confirmation";
 
 const RESPONSE_LINK_LIFETIME_MS = 1000 * 60 * 60 * 24 * 60;
 
@@ -35,8 +35,9 @@ export function createTeamMoveResponseToken(input: {
 export function readTeamMoveResponseToken(token: string, now = Date.now()) {
   try {
     if (!token || token.length > 2048) throw new Error();
-    const [payload, signature] = token.split(".");
-    if (!payload || !signature || token.split(".").length !== 2) throw new Error();
+    const parts = token.split(".");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error();
+    const [payload, signature] = parts;
 
     const actual = Buffer.from(signature, "base64url");
     const expected = sign(payload);
@@ -51,8 +52,9 @@ export function readTeamMoveResponseToken(token: string, now = Date.now()) {
     if (
       typeof parsed.teamId !== "string" ||
       typeof parsed.leagueId !== "string" ||
+      typeof parsed.expires !== "number" ||
       !Number.isFinite(parsed.expires) ||
-      Number(parsed.expires) <= now
+      parsed.expires <= now
     ) {
       throw new Error();
     }
@@ -60,7 +62,7 @@ export function readTeamMoveResponseToken(token: string, now = Date.now()) {
     return {
       teamId: parsed.teamId,
       leagueId: parsed.leagueId,
-      expires: Number(parsed.expires),
+      expires: parsed.expires,
     };
   } catch {
     throw new TeamMoveResponseError(
@@ -122,7 +124,7 @@ export async function getTeamMoveResponseContext(token: string) {
     team: {
       id: team.id,
       name: team.name,
-      status: team.moveConfirmationStatus,
+      status: team.moveConfirmationStatus as TeamMoveConfirmationStatus,
     },
     league: {
       id: team.league.id,
@@ -137,16 +139,14 @@ export async function saveTeamMoveResponse(input: {
   response: "CONFIRMED" | "DECLINED";
 }) {
   const context = await getTeamMoveResponseContext(input.token);
-  const status =
-    input.response === "CONFIRMED"
-      ? TeamMoveConfirmationStatus.CONFIRMED
-      : TeamMoveConfirmationStatus.DECLINED;
+  const status: TeamMoveConfirmationStatus = input.response;
   const updatedAt = new Date();
 
   const updated = await prisma.team.updateMany({
     where: {
       id: context.team.id,
       leagueId: context.league.id,
+      league: { is: { isMoving: true } },
     },
     data: {
       moveConfirmationStatus: status,
