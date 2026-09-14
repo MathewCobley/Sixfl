@@ -56,6 +56,9 @@ export async function loadNightBoardVeoPriorities(input: {
     JOIN "Team" h ON h.id = f."homeTeamId"
     JOIN "Team" a ON a.id = f."awayTeamId"
     WHERE r.status::text = 'REQUESTED'
+      -- A request can outlive an opponent/team replacement on the fixture. The
+      -- Night Board must only show Priority for teams that are still playing it.
+      AND (r."teamId" = f."homeTeamId" OR r."teamId" = f."awayTeamId")
       AND f."publishedAt" IS NOT NULL
       AND f.status::text IN ('SCHEDULED', 'COMPLETED')
       AND to_char(
