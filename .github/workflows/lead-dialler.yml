@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node 24
         uses: actions/setup-node@v4
@@ -39,6 +41,8 @@ jobs:
           npm run audit:dom:changed
 
       - name: Build production application
+        env:
+          RESEND_API_KEY: re_ci_build_only
         run: npm run build
 
       - name: Re-check lead dialler contract after source preparation

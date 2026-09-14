@@ -81,7 +81,7 @@ export default function LeadDiallerQueue({
   backHref?: string;
 }) {
   const [leads, setLeads] = useState(initialLeads);
-  const [selectedId, setSelectedId] = useState(initialLeads[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialLeads[0]?.id ?? null);
   const [callState, setCallState] = useState<CallState>("idle");
   const [autoDialEnabled, setAutoDialEnabled] = useState(false);
   const [muted, setMuted] = useState(false);
