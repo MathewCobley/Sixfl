@@ -2,11 +2,9 @@
 // File: src/components/referee/RefereeTabs.tsx
 // ========================================
 
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+
+import { requireReferee } from "@/lib/admin";
 
 type RefereeTabKey = "overview" | "availability" | "match-rules";
 
@@ -47,81 +45,27 @@ function withPreviewRoute(href: string, previewRefereeId?: string | null) {
   return `/admin/referees/${encodeURIComponent(previewRefereeId)}/referee-preview?to=${encodeURIComponent(href)}`;
 }
 
-function getPreviewIdFromBanner() {
-  if (typeof document === "undefined") return null;
+export default async function RefereeTabs({ active, previewRefereeId }: Props) {
+  let effectivePreviewRefereeId = previewRefereeId;
 
-  const exitLink = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((link) =>
-    /\/admin\/referees\/[^/]+\/referee-preview\/exit/.test(link.getAttribute("href") ?? ""),
-  );
-
-  const href = exitLink?.getAttribute("href") ?? "";
-  return href.match(/\/admin\/referees\/([^/]+)\/referee-preview\/exit/)?.[1] ?? null;
-}
-
-function isRefereeAppHref(href: string) {
-  return href === "/referee" || href.startsWith("/referee/");
-}
-
-export default function RefereeTabs({ active, previewRefereeId }: Props) {
-  const searchParams = useSearchParams();
-  const previewFromQuery = searchParams.get("previewRefereeId");
-  const [previewFromBanner, setPreviewFromBanner] = useState<string | null>(null);
-  const effectivePreviewRefereeId = previewRefereeId || previewFromQuery || previewFromBanner;
-
-  useEffect(() => {
-    setPreviewFromBanner(getPreviewIdFromBanner());
-  }, []);
-
-  useEffect(() => {
-    if (!effectivePreviewRefereeId) return;
-
-    const rewriteRefereeLinks = () => {
-      const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href^='/referee']"));
-
-      for (const link of links) {
-        const href = link.getAttribute("href") ?? "";
-        if (!isRefereeAppHref(href)) continue;
-        link.setAttribute("href", withPreviewRoute(href, effectivePreviewRefereeId));
-      }
-    };
-
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target.closest("a") : null;
-      if (!(target instanceof HTMLAnchorElement)) return;
-
-      const href = target.getAttribute("href") ?? "";
-      if (!isRefereeAppHref(href)) return;
-
-      event.preventDefault();
-      window.location.href = withPreviewRoute(href, effectivePreviewRefereeId);
-    };
-
-    rewriteRefereeLinks();
-    document.addEventListener("click", handleClick, true);
-
-    return () => {
-      document.removeEventListener("click", handleClick, true);
-    };
-  }, [effectivePreviewRefereeId]);
-
-  const renderedTabs = useMemo(
-    () =>
-      tabs.map((tab) => ({
-        ...tab,
-        href: withPreviewRoute(tab.href, effectivePreviewRefereeId),
-      })),
-    [effectivePreviewRefereeId],
-  );
+  // Overview already has the preview id to hand. Other referee pages can omit it;
+  // in that case resolve preview context on the server rather than scanning or
+  // rewriting links in the browser after render.
+  if (effectivePreviewRefereeId === undefined) {
+    const { user, isAdminPreview } = await requireReferee();
+    effectivePreviewRefereeId = isAdminPreview ? user.id : null;
+  }
 
   return (
     <nav className="grid gap-3 sm:grid-cols-3">
-      {renderedTabs.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = active === tab.key;
+        const href = withPreviewRoute(tab.href, effectivePreviewRefereeId);
 
         return (
           <Link
             key={tab.key}
-            href={tab.href}
+            href={href}
             className={[
               "rounded-3xl border p-4 transition",
               isActive
