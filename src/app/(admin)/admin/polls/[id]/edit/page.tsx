@@ -39,6 +39,8 @@ type OptionRow = {
   label: string;
   sortOrder: number;
   voteCount: number;
+  responseMessage: string | null;
+  followUpPrompt: string | null;
 };
 
 const POLL_STATUSES = [
@@ -76,11 +78,13 @@ async function getOptions(pollId: string) {
       option."id",
       option."label",
       option."sortOrder",
+      option."responseMessage",
+      option."followUpPrompt",
       COUNT(DISTINCT selected."recipientId")::int AS "voteCount"
     FROM "SIXFLPollOption" option
     LEFT JOIN "SIXFLPollRecipientOption" selected ON selected."optionId" = option."id"
     WHERE option."pollId" = ${pollId}
-    GROUP BY option."id", option."label", option."sortOrder"
+    GROUP BY option."id", option."label", option."sortOrder", option."responseMessage", option."followUpPrompt"
     ORDER BY option."sortOrder" ASC, option."label" ASC
   `);
 }
@@ -140,7 +144,7 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           </span>
         </div>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-          Edit the wording, answer type, email button text and options. Existing options are renamed rather than deleted so existing votes do not break.
+          Edit the wording, answer type, email button text and options. Each answer can also have its own confirmation message and follow-up question.
         </p>
       </div>
 
@@ -179,7 +183,7 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
 
           <section className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.04] p-5">
             <h2 className="text-lg font-semibold text-white">Answer type</h2>
-            <p className="mt-1 text-sm text-white/55">Use multiple choice when a team may be available on more than one night.</p>
+            <p className="mt-1 text-sm text-white/55">Use multiple choice when a team may be available on more than one night. Answer-specific follow-up questions are designed for single-choice polls.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label>
                 <input type="radio" name="choiceMode" value="SINGLE" defaultChecked={poll.choiceMode !== "MULTIPLE"} className="peer sr-only" />
@@ -233,20 +237,49 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           <section className="rounded-3xl border border-white/10 bg-black/20 p-5">
             <div>
               <h2 className="text-lg font-semibold text-white">Existing options</h2>
-              <p className="mt-1 text-sm text-white/55">Rename options here. Options with existing votes are preserved so results stay linked.</p>
+              <p className="mt-1 text-sm text-white/55">For each answer you can customise what the team sees after choosing it, and optionally ask one extra question.</p>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-4">
               {options.map((option) => (
-                <div key={option.id} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-[minmax(0,1fr)_120px] md:items-center">
+                <div key={option.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <input type="hidden" name="optionId" value={option.id} />
-                  <label className="space-y-2 text-sm font-semibold text-white">
-                    Option text
-                    <input name="optionLabel" defaultValue={option.label} className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40" />
-                  </label>
-                  <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/60">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Votes</div>
-                    <div className="mt-1 text-lg font-semibold text-white">{option.voteCount}</div>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_120px] md:items-start">
+                    <div className="space-y-4">
+                      <label className="space-y-2 text-sm font-semibold text-white">
+                        Option text
+                        <input name="optionLabel" defaultValue={option.label} className="h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none focus:border-emerald-400/40" />
+                      </label>
+
+                      <label className="space-y-2 text-sm font-semibold text-white">
+                        Message shown after this answer is submitted
+                        <textarea
+                          name="optionResponseMessage"
+                          rows={3}
+                          defaultValue={option.responseMessage ?? ""}
+                          placeholder={`For example: Thanks — you've selected ${option.label}. We'll use this when we balance the divisions.`}
+                          className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                        />
+                        <span className="block text-xs font-normal text-white/45">Leave blank to use the normal “Thanks — your answer has been recorded” message.</span>
+                      </label>
+
+                      <label className="space-y-2 text-sm font-semibold text-white">
+                        Follow-up question for this answer
+                        <textarea
+                          name="optionFollowUpPrompt"
+                          rows={2}
+                          defaultValue={option.followUpPrompt ?? ""}
+                          placeholder="For example: Which SIXFL team do you think you are most similar to?"
+                          className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-normal text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                        />
+                        <span className="block text-xs font-normal text-white/45">If set on a single-choice poll, this question appears only when the team selects this answer and must be completed before submission.</span>
+                      </label>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/60">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Votes</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{option.voteCount}</div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -256,6 +289,7 @@ export default async function EditPollPage({ params, searchParams }: PageProps) 
           <label className="space-y-2 text-sm font-semibold text-white">
             Add new options — one per line
             <textarea name="newOptions" rows={5} placeholder={"Another option\nOne more option"} className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40" />
+            <span className="block text-xs font-normal text-white/45">Save first, then the new options will appear above so you can add their confirmation messages or follow-up questions.</span>
           </label>
 
           <div className="flex flex-wrap gap-3">
