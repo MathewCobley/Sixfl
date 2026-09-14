@@ -5,12 +5,48 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+let cachedVoiceCallerId: string | null | undefined;
+
 function normalizeUkPhone(value: string) {
   const compact = value.replace(/[^\d+]/g, "");
   if (compact.startsWith("+44")) return compact;
   if (compact.startsWith("44")) return `+${compact}`;
   if (compact.startsWith("0")) return `+44${compact.slice(1)}`;
   return compact.startsWith("+") ? compact : `+${compact}`;
+}
+
+async function resolveVoiceCallerId() {
+  const configured = (
+    process.env.TWILIO_PHONE_NUMBER ||
+    process.env.TWILIO_FROM_NUMBER
+  )?.trim();
+
+  if (configured) return normalizeUkPhone(configured);
+  if (cachedVoiceCallerId !== undefined) return cachedVoiceCallerId;
+
+  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+  if (!accountSid || !authToken) {
+    cachedVoiceCallerId = null;
+    return cachedVoiceCallerId;
+  }
+
+  try {
+    const client = twilio(accountSid, authToken);
+    const numbers = await client.incomingPhoneNumbers.list({ limit: 50 });
+    const preferred =
+      numbers.find((number) => number.capabilities?.voice && number.phoneNumber?.startsWith("+44")) ||
+      numbers.find((number) => number.capabilities?.voice);
+
+    cachedVoiceCallerId = preferred?.phoneNumber
+      ? normalizeUkPhone(preferred.phoneNumber)
+      : null;
+  } catch (error) {
+    console.error("Could not resolve a Twilio voice caller ID", error);
+    cachedVoiceCallerId = null;
+  }
+
+  return cachedVoiceCallerId;
 }
 
 async function getFormParams(request: Request) {
@@ -57,13 +93,11 @@ export async function POST(request: Request) {
   }
 
   // Only validated UK mobile numbers may be dialled. This is deliberately
-  // re-checked here even though imports validate numbers, so legacy or manually
-  // edited overseas numbers can never be sent to Twilio Voice.
+  // re-checked here even though the call-list page validates numbers too, so a
+  // stale browser tab or manually edited overseas number can never be sent to
+  // Twilio Voice.
   const destination = normalizeUkMobileNumber(lead.phoneNormalized || lead.phone);
-  const from = (
-    process.env.TWILIO_PHONE_NUMBER ||
-    process.env.TWILIO_FROM_NUMBER
-  )?.trim();
+  const from = await resolveVoiceCallerId();
 
   if (!destination) {
     response.say({ voice: "alice", language: "en-GB" }, "This lead does not have a valid UK mobile number and cannot be called.");
@@ -97,7 +131,7 @@ export async function POST(request: Request) {
   ]);
 
   const dial = response.dial({
-    callerId: normalizeUkPhone(from),
+    callerId: from,
     answerOnBridge: true,
     timeout: 25,
   });

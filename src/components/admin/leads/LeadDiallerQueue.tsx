@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Call, Device } from "@twilio/voice-sdk";
 
 export type DiallerLead = {
@@ -21,6 +21,11 @@ export type DiallerLead = {
 
 type Outcome = "INTERESTED" | "CALLBACK" | "NO_ANSWER" | "NOT_INTERESTED" | "JOINED";
 type CallState = "idle" | "connecting" | "ringing" | "connected" | "ended";
+
+type SaveOutcomeOptions = {
+  automatic?: boolean;
+  continueAutoDial?: boolean;
+};
 
 function formatDateTime(value: string | null) {
   if (!value) return "Never";
@@ -47,16 +52,48 @@ function labelForType(value: string) {
   return value;
 }
 
-export default function LeadDiallerQueue({ initialLeads }: { initialLeads: DiallerLead[] }) {
+function leadLabel(lead: DiallerLead) {
+  return lead.contactName || lead.teamName || "lead";
+}
+
+async function fetchVoiceToken() {
+  const response = await fetch("/api/admin/leads/dialler/token", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    token?: string;
+    error?: string;
+  };
+
+  if (!response.ok || !payload.token) {
+    throw new Error(payload.error || "Could not prepare browser calling.");
+  }
+
+  return payload.token;
+}
+
+export default function LeadDiallerQueue({
+  initialLeads,
+  backHref = "/admin/leads",
+}: {
+  initialLeads: DiallerLead[];
+  backHref?: string;
+}) {
   const [leads, setLeads] = useState(initialLeads);
   const [selectedId, setSelectedId] = useState(initialLeads[0]?.id ?? null);
   const [callState, setCallState] = useState<CallState>("idle");
+  const [autoDialEnabled, setAutoDialEnabled] = useState(false);
   const [muted, setMuted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const [callbackAt, setCallbackAt] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  const leadsRef = useRef(initialLeads);
+  const selectedIdRef = useRef<string | null>(initialLeads[0]?.id ?? null);
+  const autoDialRef = useRef(false);
   const deviceRef = useRef<Device | null>(null);
   const callRef = useRef<Call | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -67,6 +104,7 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
   );
 
   const activeCall = callState === "connecting" || callState === "ringing" || callState === "connected";
+  const selectionLocked = activeCall || saving || callState === "ended";
 
   function stopTimer() {
     if (timerRef.current) {
@@ -75,7 +113,22 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
     }
   }
 
-  function cleanUpVoice() {
+  function resetOutcomeFields() {
+    setNote("");
+    setCallbackAt("");
+  }
+
+  function setSelectedLead(id: string | null) {
+    selectedIdRef.current = id;
+    setSelectedId(id);
+  }
+
+  function setAutoDial(value: boolean) {
+    autoDialRef.current = value;
+    setAutoDialEnabled(value);
+  }
+
+  function destroyVoice() {
     stopTimer();
     callRef.current = null;
     if (deviceRef.current) {
@@ -85,96 +138,245 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
   }
 
   useEffect(() => {
-    return () => cleanUpVoice();
+    return () => destroyVoice();
   }, []);
 
-  function selectNext(currentId: string, updatedLeads = leads) {
-    const index = updatedLeads.findIndex((lead) => lead.id === currentId);
-    const next = updatedLeads[index + 1] ?? updatedLeads[index - 1] ?? updatedLeads[0] ?? null;
-    setSelectedId(next?.id ?? null);
-    setNote("");
-    setCallbackAt("");
+  function advancePastLead(leadId: string) {
+    const current = leadsRef.current;
+    const currentIndex = current.findIndex((lead) => lead.id === leadId);
+    const remaining = current.filter((lead) => lead.id !== leadId);
+    const nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex, Math.max(remaining.length - 1, 0));
+    const next = remaining[nextIndex] ?? remaining[0] ?? null;
+
+    leadsRef.current = remaining;
+    setLeads(remaining);
+    setSelectedLead(next?.id ?? null);
+    resetOutcomeFields();
+    return next;
   }
 
-  function handleCallFinished(message: string) {
-    stopTimer();
-    setCallState("ended");
-    setMuted(false);
-    setFeedback(message);
-    callRef.current = null;
-    if (deviceRef.current) {
-      deviceRef.current.destroy();
-      deviceRef.current = null;
+  async function ensureDevice() {
+    if (deviceRef.current) return deviceRef.current;
+
+    const token = await fetchVoiceToken();
+    const device = new Device(token);
+
+    device.on("error", (error) => {
+      console.error("Twilio Voice device error", error);
+      setAutoDial(false);
+      setCallState("idle");
+      setFeedback(error.message || "The browser phone failed. Auto Dial has been paused.");
+    });
+
+    device.on("tokenWillExpire", () => {
+      void fetchVoiceToken()
+        .then((nextToken) => device.updateToken(nextToken))
+        .catch((error) => {
+          console.error("Could not refresh Twilio Voice token", error);
+        });
+    });
+
+    deviceRef.current = device;
+    return device;
+  }
+
+  async function recordOutcomeForLead(
+    lead: DiallerLead,
+    outcome: Outcome,
+    options: SaveOutcomeOptions = {},
+  ) {
+    const automatic = options.automatic === true;
+    const continueAutoDial = options.continueAutoDial === true;
+
+    if (saving) return;
+    if (!automatic && outcome === "CALLBACK" && !callbackAt) {
+      setFeedback("Choose the callback date and time first.");
+      return;
+    }
+
+    setSaving(true);
+    if (automatic) {
+      setFeedback("No answer — recording the attempt and moving to the next lead…");
+    } else {
+      setFeedback(null);
+    }
+
+    try {
+      const response = await fetch("/api/admin/leads/dialler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          action: "outcome",
+          leadId: lead.id,
+          outcome,
+          note: automatic ? "" : note,
+          callbackAt:
+            !automatic && outcome === "CALLBACK"
+              ? new Date(callbackAt).toISOString()
+              : undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        status?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Could not save outcome.");
+      }
+
+      setCallState("idle");
+      setElapsedSeconds(0);
+      const next = advancePastLead(lead.id);
+
+      if (continueAutoDial && autoDialRef.current && next) {
+        setFeedback(
+          automatic
+            ? `No answer recorded. Calling ${leadLabel(next)} next…`
+            : `Outcome saved. Calling ${leadLabel(next)} next…`,
+        );
+        window.setTimeout(() => {
+          if (autoDialRef.current) void startCall(next);
+        }, 700);
+      } else if (!next) {
+        setAutoDial(false);
+        setFeedback("Call list complete — there are no more leads in this filtered list.");
+      } else {
+        setFeedback(automatic ? "No answer recorded. Ready for the next lead." : "Outcome saved. Ready for the next lead.");
+      }
+    } catch (error) {
+      setAutoDial(false);
+      setCallState("ended");
+      setFeedback(
+        error instanceof Error
+          ? `${error.message} Auto Dial has been paused so this lead is not skipped.`
+          : "Could not save outcome. Auto Dial has been paused so this lead is not skipped.",
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function startCall() {
-    if (!selected || activeCall) return;
+  async function startCall(targetOverride?: DiallerLead) {
+    const target =
+      targetOverride ??
+      leadsRef.current.find((lead) => lead.id === selectedIdRef.current) ??
+      leadsRef.current[0] ??
+      null;
+
+    if (!target || callRef.current) return;
+
+    setSelectedLead(target.id);
     setCallState("connecting");
     setElapsedSeconds(0);
     setMuted(false);
-    setFeedback("Requesting microphone access and connecting to Twilio…");
+    setFeedback(
+      autoDialRef.current
+        ? `Auto Dial is preparing ${leadLabel(target)}…`
+        : "Requesting microphone access and connecting to Twilio…",
+    );
 
     try {
-      const tokenResponse = await fetch("/api/admin/leads/dialler/token", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const tokenPayload = (await tokenResponse.json().catch(() => ({}))) as {
-        token?: string;
-        error?: string;
-      };
-      if (!tokenResponse.ok || !tokenPayload.token) {
-        throw new Error(tokenPayload.error || "Could not prepare browser calling.");
-      }
-
-      cleanUpVoice();
-      const device = new Device(tokenPayload.token);
-      deviceRef.current = device;
-
-      device.on("error", (error) => {
-        console.error("Twilio Voice device error", error);
-        handleCallFinished(error.message || "The browser call failed.");
-      });
+      const device = await ensureDevice();
+      let finalized = false;
+      let answered = false;
 
       const call = await device.connect({
-        params: { LeadId: selected.id },
+        params: { LeadId: target.id },
         rtcConstraints: { audio: true },
       });
       callRef.current = call;
       setCallState("ringing");
-      setFeedback(`Calling ${selected.contactName || selected.teamName || "lead"} from the SIXFL number…`);
+      setFeedback(
+        autoDialRef.current
+          ? `Auto Dial: calling ${leadLabel(target)}. You will be connected when they answer.`
+          : `Calling ${leadLabel(target)} from the SIXFL number…`,
+      );
 
       const calledAt = new Date().toISOString();
-      setLeads((current) => current.map((lead) => lead.id === selected.id ? {
-        ...lead,
-        lastCalledAt: calledAt,
-        contactedAt: calledAt,
-        status: lead.status === "NEW" ? "CONTACTED" : lead.status,
-      } : lead));
+      const updatedLeads = leadsRef.current.map((lead) =>
+        lead.id === target.id
+          ? {
+              ...lead,
+              lastCalledAt: calledAt,
+              contactedAt: calledAt,
+              status: lead.status === "NEW" ? "CONTACTED" : lead.status,
+            }
+          : lead,
+      );
+      leadsRef.current = updatedLeads;
+      setLeads(updatedLeads);
+
+      const clearCall = () => {
+        stopTimer();
+        if (callRef.current === call) callRef.current = null;
+        setMuted(false);
+      };
+
+      const finishUnanswered = () => {
+        if (finalized) return;
+        finalized = true;
+        clearCall();
+        setCallState("ended");
+
+        if (autoDialRef.current) {
+          void recordOutcomeForLead(target, "NO_ANSWER", {
+            automatic: true,
+            continueAutoDial: true,
+          });
+        } else {
+          setFeedback("No answer. Record the outcome below, or call again.");
+        }
+      };
+
+      const finishConversation = () => {
+        if (finalized) return;
+        finalized = true;
+        clearCall();
+        setCallState("ended");
+        setFeedback(
+          autoDialRef.current
+            ? "Call ended. Record the outcome below; Auto Dial will continue with the next lead after you save it."
+            : "Call ended. Record the outcome below.",
+        );
+      };
 
       call.on("ringing", () => {
         setCallState("ringing");
       });
       call.on("accept", () => {
+        answered = true;
         setCallState("connected");
-        setFeedback("Connected — you are speaking through the SIXFL browser phone.");
+        setFeedback("Answered — connected to your browser/headset through the SIXFL number.");
         stopTimer();
         timerRef.current = setInterval(() => {
           setElapsedSeconds((seconds) => seconds + 1);
         }, 1000);
       });
-      call.on("disconnect", () => handleCallFinished("Call ended. Record the outcome below."));
-      call.on("cancel", () => handleCallFinished("Call cancelled. Record the outcome below if needed."));
-      call.on("reject", () => handleCallFinished("Call was rejected. Record the outcome below."));
+      call.on("disconnect", () => {
+        if (answered) finishConversation();
+        else finishUnanswered();
+      });
+      call.on("cancel", finishUnanswered);
+      call.on("reject", finishUnanswered);
       call.on("error", (error) => {
-        console.error("Twilio Voice call error", error);
-        handleCallFinished(error.message || "The call failed.");
+        if (finalized) return;
+        finalized = true;
+        clearCall();
+        setAutoDial(false);
+        setCallState("idle");
+        setFeedback(error.message || "The call failed. Auto Dial has been paused.");
       });
     } catch (error) {
-      cleanUpVoice();
+      callRef.current = null;
+      setAutoDial(false);
       setCallState("idle");
-      setFeedback(error instanceof Error ? error.message : "Could not start browser call.");
+      setFeedback(
+        error instanceof Error
+          ? `${error.message} Auto Dial has been paused.`
+          : "Could not start browser call. Auto Dial has been paused.",
+      );
     }
   }
 
@@ -190,68 +392,44 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
     setMuted(nextMuted);
   }
 
+  function toggleAutoDial() {
+    if (autoDialRef.current) {
+      setAutoDial(false);
+      setFeedback(
+        activeCall
+          ? "Auto Dial paused. The current call will continue, but the next lead will not be called automatically."
+          : "Auto Dial paused.",
+      );
+      return;
+    }
+
+    setAutoDial(true);
+    setFeedback("Auto Dial started. SIXFL will call one lead at a time.");
+    if (!activeCall && !saving && callState !== "ended") {
+      void startCall();
+    }
+  }
+
   async function saveOutcome(outcome: Outcome) {
     if (!selected || saving) return;
     if (activeCall) {
       setFeedback("End the current call before recording its outcome.");
       return;
     }
-    if (outcome === "CALLBACK" && !callbackAt) {
-      setFeedback("Choose the callback date and time first.");
-      return;
-    }
 
-    setSaving(true);
-    setFeedback(null);
-    try {
-      const response = await fetch("/api/admin/leads/dialler", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          action: "outcome",
-          leadId: selected.id,
-          outcome,
-          note,
-          callbackAt: outcome === "CALLBACK" ? new Date(callbackAt).toISOString() : undefined,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        status?: string;
-        error?: string;
-      };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not save outcome.");
-
-      setCallState("idle");
-      setElapsedSeconds(0);
-      if (outcome === "NOT_INTERESTED" || outcome === "JOINED") {
-        const remaining = leads.filter((lead) => lead.id !== selected.id);
-        setLeads(remaining);
-        selectNext(selected.id, remaining);
-      } else {
-        const updated = leads.map((lead) => lead.id === selected.id ? {
-          ...lead,
-          status: payload.status ?? lead.status,
-          contactedAt: new Date().toISOString(),
-        } : lead);
-        setLeads(updated);
-        selectNext(selected.id, updated);
-      }
-      setFeedback("Outcome saved. Ready for the next lead.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not save outcome.");
-    } finally {
-      setSaving(false);
-    }
+    await recordOutcomeForLead(selected, outcome, {
+      continueAutoDial: autoDialRef.current,
+    });
   }
 
   if (!selected) {
     return (
       <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center">
-        <h2 className="text-xl font-black text-white">Call queue clear</h2>
-        <p className="mt-2 text-sm text-white/55">There are no open leads with phone numbers to call.</p>
-        <Link href="/admin/leads" className="mt-5 inline-flex rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/10">Back to leads</Link>
+        <h2 className="text-xl font-black text-white">Call list complete</h2>
+        <p className="mt-2 text-sm text-white/55">There are no more callable leads in this filtered list.</p>
+        <Link href={backHref} className="mt-5 inline-flex rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/10">
+          Back to filtered leads
+        </Link>
       </div>
     );
   }
@@ -262,8 +440,8 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
     <div className="grid gap-5 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.6fr)]">
       <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         <div className="border-b border-white/10 px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/40">Queue</p>
-          <p className="mt-1 text-sm text-white/60">{leads.length} open lead{leads.length === 1 ? "" : "s"} with a phone number</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/40">Filtered call list</p>
+          <p className="mt-1 text-sm text-white/60">{leads.length} lead{leads.length === 1 ? "" : "s"} left in this session</p>
         </div>
         <div className="max-h-[70vh] overflow-y-auto">
           {leads.map((lead) => {
@@ -272,11 +450,10 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
               <button
                 key={lead.id}
                 type="button"
-                disabled={activeCall}
+                disabled={selectionLocked}
                 onClick={() => {
-                  setSelectedId(lead.id);
-                  setNote("");
-                  setCallbackAt("");
+                  setSelectedLead(lead.id);
+                  resetOutcomeFields();
                   setFeedback(null);
                   setCallState("idle");
                   setElapsedSeconds(0);
@@ -315,13 +492,34 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-wider text-white/35">Last called</div><div className="mt-1 font-bold text-white">{formatDateTime(selected.lastCalledAt)}</div></div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
+        <div className="mt-6 rounded-2xl border border-sky-400/20 bg-sky-500/[0.08] p-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-sky-200/80">Auto Dial</div>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-white/65">
+                Calls one lead at a time. If nobody answers it records “No answer” and tries the next lead. If they answer, the call is bridged to your browser/headset and the dialler waits for you to record the outcome before continuing.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-pressed={autoDialEnabled}
+              onClick={toggleAutoDial}
+              disabled={saving}
+              className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-5 py-2.5 text-sm font-black transition disabled:opacity-50 ${autoDialEnabled ? "border border-amber-300/30 bg-amber-400/15 text-amber-100 hover:bg-amber-400/20" : "bg-sky-400 text-black hover:bg-sky-300"}`}
+            >
+              {autoDialEnabled ? "Pause Auto Dial" : "Start Auto Dial"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-300/80">Browser phone</div>
               <div className="mt-1 text-xl font-black text-white">
-                {callState === "connected" ? formatDuration(elapsedSeconds) : callState === "ringing" ? "Ringing…" : callState === "connecting" ? "Connecting…" : callState === "ended" ? "Call ended" : "Ready"}
+                {callState === "connected" ? formatDuration(elapsedSeconds) : callState === "ringing" ? "Calling lead…" : callState === "connecting" ? "Preparing call…" : callState === "ended" ? "Call ended" : "Ready"}
               </div>
+              <div className="mt-1 text-xs text-white/45">Uses the microphone and speaker/headset selected by your browser or computer.</div>
             </div>
             {activeCall ? (
               <div className="flex gap-2">
@@ -345,19 +543,21 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
           </div>
         </div>
 
-        {!activeCall ? (
+        {!activeCall && !autoDialEnabled && callState !== "ended" ? (
           <button
             type="button"
-            onClick={startCall}
-            className="mt-4 flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-500 px-6 text-lg font-black text-black transition hover:bg-emerald-400"
+            onClick={() => void startCall()}
+            disabled={saving}
+            className="mt-4 flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-500 px-6 text-lg font-black text-black transition hover:bg-emerald-400 disabled:opacity-50"
           >
             Call {selected.contactName || selected.teamName || "lead"}
           </button>
         ) : null}
-        <p className="mt-2 text-center text-xs text-white/40">Audio stays in this browser. The lead sees the SIXFL Twilio number, not your personal number.</p>
+        <p className="mt-2 text-center text-xs text-white/40">The lead sees the SIXFL Twilio number, not your personal number.</p>
 
         <div className="mt-7 border-t border-white/10 pt-6">
           <h3 className="font-black text-white">Record the outcome</h3>
+          <p className="mt-1 text-xs text-white/45">After a completed conversation, Auto Dial will not call the next person until you choose an outcome.</p>
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
@@ -376,11 +576,11 @@ export default function LeadDiallerQueue({ initialLeads }: { initialLeads: Diall
             />
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <button type="button" disabled={saving || activeCall} onClick={() => saveOutcome("INTERESTED")} className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3 py-3 text-sm font-bold text-emerald-100 disabled:opacity-40">Interested</button>
-            <button type="button" disabled={saving || activeCall} onClick={() => saveOutcome("CALLBACK")} className="rounded-xl border border-sky-400/30 bg-sky-500/15 px-3 py-3 text-sm font-bold text-sky-100 disabled:opacity-40">Call back</button>
-            <button type="button" disabled={saving || activeCall} onClick={() => saveOutcome("NO_ANSWER")} className="rounded-xl border border-amber-400/30 bg-amber-500/15 px-3 py-3 text-sm font-bold text-amber-100 disabled:opacity-40">No answer</button>
-            <button type="button" disabled={saving || activeCall} onClick={() => saveOutcome("NOT_INTERESTED")} className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-3 text-sm font-bold text-red-100 disabled:opacity-40">Not interested</button>
-            <button type="button" disabled={saving || activeCall} onClick={() => saveOutcome("JOINED")} className="rounded-xl border border-violet-400/30 bg-violet-500/15 px-3 py-3 text-sm font-bold text-violet-100 disabled:opacity-40">Joined</button>
+            <button type="button" disabled={saving || activeCall} onClick={() => void saveOutcome("INTERESTED")} className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3 py-3 text-sm font-bold text-emerald-100 disabled:opacity-40">Interested</button>
+            <button type="button" disabled={saving || activeCall} onClick={() => void saveOutcome("CALLBACK")} className="rounded-xl border border-sky-400/30 bg-sky-500/15 px-3 py-3 text-sm font-bold text-sky-100 disabled:opacity-40">Call back</button>
+            <button type="button" disabled={saving || activeCall} onClick={() => void saveOutcome("NO_ANSWER")} className="rounded-xl border border-amber-400/30 bg-amber-500/15 px-3 py-3 text-sm font-bold text-amber-100 disabled:opacity-40">No answer</button>
+            <button type="button" disabled={saving || activeCall} onClick={() => void saveOutcome("NOT_INTERESTED")} className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-3 text-sm font-bold text-red-100 disabled:opacity-40">Not interested</button>
+            <button type="button" disabled={saving || activeCall} onClick={() => void saveOutcome("JOINED")} className="rounded-xl border border-violet-400/30 bg-violet-500/15 px-3 py-3 text-sm font-bold text-violet-100 disabled:opacity-40">Joined</button>
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 // File: src/app/(admin)/admin/layout.tsx
 // ========================================
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { ResultDisputeStatus } from "@prisma/client";
 
@@ -20,6 +20,7 @@ import FixtureCardResultLinksBridge from "@/components/admin/fixtures/FixtureCar
 import FixtureSeasonWordingBridge from "@/components/admin/fixtures/FixtureSeasonWordingBridge";
 import FixtureChangeNotificationSubmitBridge from "@/components/admin/fixtures/FixtureChangeNotificationSubmitBridge";
 import AdminLeadEditButtonBridge from "@/components/admin/leads/AdminLeadEditButtonBridge";
+import LeadDiallerLaunchButton from "@/components/admin/leads/LeadDiallerLaunchButton";
 import AdminDivisionSelectBridge from "@/components/admin/leagues/AdminDivisionSelectBridge";
 import AdminLeagueSeasonsBridge from "@/components/admin/leagues/AdminLeagueSeasonsBridge";
 import QueuedSmsReasonHints from "@/components/admin/messages/QueuedSmsReasonHints";
@@ -136,6 +137,9 @@ export default async function AdminLayout({
         <main className="w-full min-w-0 flex-1">
           <div className="space-y-5">
             <AdminDeliveryIssueBanner />
+            <Suspense fallback={null}>
+              <LeadDiallerLaunchButton />
+            </Suspense>
             {children}
           </div>
         </main>
