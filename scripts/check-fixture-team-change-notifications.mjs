@@ -28,22 +28,50 @@ const sourcePreparation = read(
 );
 
 for (const expected of [
+  'const OPPONENT_CHANGED_SOURCE_TYPE = "FIXTURE_OPPONENT_CHANGED_NOTICE";',
   "async function queueRemovedTeamNotice(input: {",
+  "async function queueOpponentChangedNotice(input: {",
   "const removedTeamIds = new Set(",
   "const scheduledNoticeTeamIds = [",
+  "const teamFacingDetailsChanged =",
   "teamId: { in: nextParticipantTeamIds },",
+  "teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },",
   "if (removedTeamIds.has(teamId)) {",
   "for (const teamId of scheduledNoticeTeamIds) {",
+  "if (!teamFacingDetailsChanged) {",
   "IMPORTANT: your team is no longer playing in the fixture below.",
   "The revised fixture does not involve",
   "You do not need to attend it or confirm it.",
+  "Your opposition has changed from",
+  "your existing confirmation still stands. You do not need to reconfirm.",
   'emailCta: { label: "View my fixtures", url: fixturesUrl }',
   'notificationKind: "TEAM_REMOVED_FROM_FIXTURE"',
+  'notificationKind: "OPPONENT_CHANGED_NO_RECONFIRMATION"',
 ]) {
   requireText(
     changeNoticeRoute,
     expected,
-    `Fixture change notices are missing the removed-team safeguard: ${expected}`,
+    `Fixture change notices are missing a team-change safeguard: ${expected}`,
+  );
+}
+
+const opponentHelperStart = changeNoticeRoute.indexOf(
+  "async function queueOpponentChangedNotice(input: {",
+);
+const postHandlerStart = changeNoticeRoute.indexOf(
+  "\nexport async function POST(request: Request) {",
+);
+const opponentHelper =
+  opponentHelperStart >= 0 && postHandlerStart > opponentHelperStart
+    ? changeNoticeRoute.slice(opponentHelperStart, postHandlerStart)
+    : "";
+
+if (!opponentHelper) {
+  throw new Error("Opposition-only fixture update helper is missing.");
+}
+if (opponentHelper.includes("NotificationChannel.SMS")) {
+  throw new Error(
+    "Opposition-only fixture changes must send an informational email only, not an SMS.",
   );
 }
 
@@ -64,6 +92,22 @@ if (
   );
 }
 
+requireText(
+  scheduledBranch,
+  "teamId: { in: teamFacingDetailsChanged ? retainedTeamIds : [] },",
+  "A retained team's confirmation must only be reset when its own team-facing fixture details changed.",
+);
+requireText(
+  scheduledBranch,
+  "if (!teamFacingDetailsChanged) {",
+  "Opposition-only changes must branch away from the reconfirmation flow.",
+);
+requireText(
+  scheduledBranch,
+  "queued += await queueOpponentChangedNotice({",
+  "A retained team must receive an informational opposition-change email.",
+);
+
 for (const expected of [
   "const addedTeamIds = [homeTeamId, awayTeamId].filter(",
   "await queueInitialFixtureConfirmationEmailForTeam({",
@@ -79,9 +123,9 @@ for (const expected of [
 requireText(
   sourcePreparation,
   'require("./apply-clear-removed-team-fixture-notices.cjs")',
-  "Production source preparation must apply the removed-team fixture notice safeguard.",
+  "Production source preparation must apply the fixture team-change safeguards.",
 );
 
 console.log(
-  "Fixture team-change notification contract passed: removed teams receive a no-action notice linked to their own fixtures, retained teams receive the updated-fixture notice, and newly added teams receive their correct confirmation only after the fixture is saved.",
+  "Fixture team-change notification contract passed: removed teams receive a no-action notice, retained teams keep confirmation and receive email-only notice for opposition-only changes, material detail changes still require retained teams to reconfirm, and newly added teams receive their correct confirmation only after save.",
 );
