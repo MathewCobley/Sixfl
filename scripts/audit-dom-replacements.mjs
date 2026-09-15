@@ -82,6 +82,27 @@ async function loadManifest() {
   return parsed.replacements;
 }
 
+function containsRequiredMarker(content, expected) {
+  if (content.includes(expected)) return true;
+
+  const jsxWrapper = expected.match(
+    /^(<([A-Za-z][\w.]*)\b[^>]*>)(\{children\})(<\/\2>)$/,
+  );
+  if (!jsxWrapper) return false;
+
+  const [, openingTag, , childMarker, closingTag] = jsxWrapper;
+  const openingIndex = content.indexOf(openingTag);
+  if (openingIndex < 0) return false;
+
+  const childIndex = content.indexOf(
+    childMarker,
+    openingIndex + openingTag.length,
+  );
+  if (childIndex < 0) return false;
+
+  return content.indexOf(closingTag, childIndex + childMarker.length) >= 0;
+}
+
 function validateSourcePathList({ id, field, value, allowEmpty = true }) {
   const errors = [];
   const paths = [];
@@ -226,7 +247,7 @@ async function verifyContracts(replacements) {
 
       const content = await readFile(absolutePath(repoPath), "utf8");
       for (const expected of check.contains) {
-        if (!content.includes(expected)) {
+        if (!containsRequiredMarker(content, expected)) {
           errors.push(
             `${id}: ${repoPath} no longer contains required replacement marker: ${JSON.stringify(expected)}.`,
           );
