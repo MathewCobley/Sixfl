@@ -53,8 +53,8 @@ export default async function RefereeTabs({ active, previewRefereeId }: Props) {
   let effectivePreviewRefereeId = previewRefereeId;
 
   // Overview already has the preview id to hand. Other referee pages can omit it;
-  // in that case resolve preview context entirely on the server rather than DOM
-  // scanning or rewriting links in the browser after render.
+  // in that case resolve preview context server-side only; never scan the DOM or
+  // rewrite rendered links in the browser.
   if (effectivePreviewRefereeId === undefined) {
     const { user, isAdminPreview } = await requireReferee();
     effectivePreviewRefereeId = isAdminPreview ? user.id : null;
