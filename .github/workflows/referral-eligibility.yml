@@ -1,11 +1,21 @@
 name: Referral eligibility safety
 on:
   pull_request:
+    paths:
+      - "src/**/*referral*"
+      - "src/**/*Referral*"
+      - "tests/referral-eligibility/**"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260805002000_team_referral_rewards/**"
+      - "prisma/migrations/20260825162500_team_referral_payout_details/**"
+      - "prisma/migrations/20260819232000_fixture_abandonment_workflow/**"
+      - "prisma/migrations/20260912193000_referral_ineligibility/**"
+      - ".github/workflows/referral-eligibility.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: referral-eligibility-${{ github.ref }}
+  group: referral-eligibility-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:

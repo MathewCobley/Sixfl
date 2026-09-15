@@ -1,8 +1,15 @@
 name: Completed fixture fee reductions
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/api/admin/payments/adjust-charge/**"
+      - "src/lib/payments/**"
+      - "src/lib/prisma.ts"
+      - "tests/completed-fixture-fee-reduction.test.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/completed-fixture-fee-reduction.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

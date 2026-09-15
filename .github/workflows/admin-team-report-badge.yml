@@ -6,23 +6,15 @@ on:
       - 'src/components/admin/teams/TeamMatchReportBadge.tsx'
       - 'src/app/(admin)/admin/teams/**'
       - 'src/app/captain/team/**/results/page.tsx'
-      - 'prisma/**'
-      - 'scripts/**'
+      - 'prisma/schema.prisma'
+      - 'scripts/check-critical-feature-contracts.mjs'
       - 'tests/admin-team-match-report-badge.test.cjs'
       - '.github/workflows/admin-team-report-badge.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/admin/team-match-report-activity.ts'
-      - 'src/components/admin/teams/TeamMatchReportBadge.tsx'
-      - 'src/app/(admin)/admin/teams/**'
-      - 'src/app/captain/team/**/results/page.tsx'
-      - 'tests/admin-team-match-report-badge.test.cjs'
-      - '.github/workflows/admin-team-report-badge.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: report-badge-${{ github.ref }}
+  group: report-badge-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   badges:

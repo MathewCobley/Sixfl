@@ -1,8 +1,21 @@
 name: Vercel function bundle budget
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/api/**"
+      - "src/app/**/route.ts"
+      - "src/lib/**"
+      - "src/app/(admin)/admin/teams/logos/**"
+      - "tests/team-logo-export.test.cjs"
+      - "tests/team-logo-bundle.test.cjs"
+      - "tests/vercel-function-bundles.test.mjs"
+      - "scripts/check-vercel-function-bundles.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "next.config.*"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/vercel-function-bundles.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
