@@ -1,0 +1,69 @@
+name: Admin free kit offer control
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/admin/teams/FreeKitOffer*'
+      - 'src/app/**/free-kit*/**'
+      - 'src/app/**/free-kit-actions.ts'
+      - 'src/app/api/captain/team/**/kit-offer-status/**'
+      - 'src/app/api/captain/team/**/legacy-kit-offer/**'
+      - 'src/app/api/captain/team/**/extra-kit-payments/**'
+      - 'src/lib/kits/**'
+      - 'tests/kits/free-kit-offer*'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/free-kit-offer-control.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: free-kit-offer-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  free-kit-offer:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_kit_offer_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_kit_offer_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Check native override and real PostgreSQL safety
+        run: node --test tests/kits/free-kit-offer.test.cjs
+      - run: npm run prebuild
+      - name: Check production-prepared override and pricing
+        run: KIT_OFFER_PREPARED=1 node --test tests/kits/free-kit-offer.test.cjs
+      - name: Check compatibility adapter idempotence
+        run: |
+          git diff --binary -- src/lib/kits/extra-kit-quantity.ts 'src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts' > /tmp/kit-before.diff
+          node scripts/apply-free-kit-expiry-paid-kit-mode.cjs
+          git diff --binary -- src/lib/kits/extra-kit-quantity.ts 'src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts' > /tmp/kit-after.diff
+          diff -u /tmp/kit-before.diff /tmp/kit-after.diff
+      - name: Inspect remaining entitlement consumers
+        if: always()
+        run: |
+          git grep -n -E 'wantsFreeKit|freeKitOfferExpiredAt|getTeamFreeKitOffer|not removable' -- src scripts || true
+      - name: Generate prepared Prisma client and check types
+        run: npx prisma generate && npx tsc --noEmit

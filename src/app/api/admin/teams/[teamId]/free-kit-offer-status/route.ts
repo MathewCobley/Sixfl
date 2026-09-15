@@ -1,110 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
-import { prisma } from "@/lib/prisma";
+import { FreeKitOfferError, getTeamFreeKitOffer, setTeamFreeKitOffer, type TeamFreeKitOffer } from "@/lib/kits/free-kit-offer";
 import { requireAdmin } from "@/lib/requireAdmin";
 
-type TeamOfferAdminRow = {
-  teamId: string;
-  teamName: string;
-  wantsFreeKit: boolean;
-  freeKitOfferExpiredAt: Date | null;
-  freeKitOfferExpiryReason: string | null;
-  hasExistingOrder: boolean;
-};
-
-async function getTeamOfferStatus(teamId: string) {
-  const rows = await prisma.$queryRaw<TeamOfferAdminRow[]>(Prisma.sql`
-    SELECT
-      team."id" AS "teamId",
-      team."name" AS "teamName",
-      COALESCE(team."wantsFreeKit", FALSE) AS "wantsFreeKit",
-      team."freeKitOfferExpiredAt" AS "freeKitOfferExpiredAt",
-      team."freeKitOfferExpiryReason" AS "freeKitOfferExpiryReason",
-      EXISTS (
-        SELECT 1
-        FROM "TeamKitOrder" kit_order
-        WHERE kit_order."teamId" = team."id"
-      ) AS "hasExistingOrder"
-    FROM "Team" team
-    WHERE team."id" = ${teamId}
-    LIMIT 1
-  `);
-
-  return rows[0] ?? null;
+const noStore = { "Cache-Control": "no-store" };
+function payload(row: TeamFreeKitOffer) {
+  return { teamId: row.teamId, teamName: row.teamName, wantsFreeKit: row.wantsFreeKit,
+    leadWantsFreeKit: row.leadWantsFreeKit, enabled: row.enabled, includedEligible: row.includedEligible,
+    expired: Boolean(row.expiredAt), expiredAt: row.expiredAt, reason: row.reason,
+    hasExistingOrder: row.hasExistingOrder, hasKitCharges: row.hasKitCharges, revision: row.revision };
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ teamId: string }> },
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ teamId: string }> }) {
   await requireAdmin();
   const { teamId } = await params;
-  const row = await getTeamOfferStatus(teamId);
-
-  if (!row) {
-    return NextResponse.json({ error: "Team not found" }, { status: 404 });
-  }
-
-  return NextResponse.json({
-    teamId: row.teamId,
-    teamName: row.teamName,
-    wantsFreeKit: Boolean(row.wantsFreeKit),
-    expired: Boolean(row.freeKitOfferExpiredAt),
-    expiredAt: row.freeKitOfferExpiredAt,
-    reason: row.freeKitOfferExpiryReason,
-    hasExistingOrder: Boolean(row.hasExistingOrder),
-  });
+  const row = await getTeamFreeKitOffer(teamId);
+  return row ? NextResponse.json(payload(row), { headers: noStore })
+    : NextResponse.json({ error: "Team not found" }, { status: 404, headers: noStore });
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ teamId: string }> },
-) {
-  await requireAdmin();
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ teamId: string }> }) {
+  const { user } = await requireAdmin();
+  if (!user?.id) return NextResponse.json({ error: "Sign in as an administrator." }, { status: 403, headers: noStore });
   const { teamId } = await params;
-  const body = (await request.json().catch(() => null)) as { expired?: unknown } | null;
-
-  if (typeof body?.expired !== "boolean") {
-    return NextResponse.json({ error: "expired must be a boolean" }, { status: 400 });
+  const origin = request.headers.get("origin");
+  const allowed = [new URL(request.url).origin];
+  for (const value of [process.env.NEXTAUTH_URL, process.env.NEXT_PUBLIC_SITE_URL]) {
+    if (value) { try { allowed.push(new URL(value).origin); } catch { /* Invalid optional setting. */ } }
   }
-
-  const current = await getTeamOfferStatus(teamId);
-  if (!current) {
-    return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  if (!origin || !allowed.includes(origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+    return NextResponse.json({ error: "Open Team settings on the SIXFL website before saving." }, { status: 403, headers: noStore });
   }
-
-  if (body.expired && current.hasExistingOrder) {
-    return NextResponse.json(
-      {
-        error:
-          "This team already has a kit order. Its existing kit entitlement is preserved.",
-      },
-      { status: 409 },
-    );
+  const body = await request.json().catch(() => null) as { expired?: unknown; reason?: unknown; revision?: unknown } | null;
+  if (typeof body?.expired !== "boolean" || typeof body.revision !== "string") {
+    return NextResponse.json({ error: "Reload the current offer and choose a valid setting." }, { status: 400, headers: noStore });
   }
-
-  const reason = body.expired
-    ? "Admin marked the unclaimed free-kit offer as not applied / expired. Original free-kit interest remains on record. Paid kit ordering remains available."
-    : null;
-
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "Team"
-    SET
-      "freeKitOfferExpiredAt" = ${body.expired ? new Date() : null},
-      "freeKitOfferExpiryReason" = ${reason},
-      "updatedAt" = NOW()
-    WHERE "id" = ${teamId}
-  `);
-
-  const updated = await getTeamOfferStatus(teamId);
-  return NextResponse.json({
-    teamId: updated?.teamId ?? teamId,
-    teamName: updated?.teamName ?? current.teamName,
-    wantsFreeKit: Boolean(updated?.wantsFreeKit),
-    expired: Boolean(updated?.freeKitOfferExpiredAt),
-    expiredAt: updated?.freeKitOfferExpiredAt ?? null,
-    reason: updated?.freeKitOfferExpiryReason ?? null,
-    hasExistingOrder: Boolean(updated?.hasExistingOrder),
-  });
+  try {
+    const result = await setTeamFreeKitOffer({ teamId, enabled: !body.expired, actorUserId: user.id,
+      expectedRevision: body.revision, reason: typeof body.reason === "string" ? body.reason : "" });
+    revalidatePath("/admin/teams", "layout");
+    revalidatePath("/admin/kits");
+    revalidatePath(`/captain/team/${teamId}`, "layout");
+    return NextResponse.json(payload(result.state), { headers: noStore });
+  } catch (error) {
+    if (error instanceof FreeKitOfferError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status, headers: noStore });
+    console.error("Free kit offer update failed", error);
+    return NextResponse.json({ error: "The offer could not be saved. Reload before trying again." }, { status: 500, headers: noStore });
+  }
 }
