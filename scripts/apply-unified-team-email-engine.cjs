@@ -69,10 +69,9 @@ leagueActions = leagueActions.replace(
 fs.writeFileSync(leagueActionsPath, leagueActions, "utf8");
 
 // ---------------------------------------------------------------------------
-// Team Messages: earlier compatibility patches used a dedicated Cup branch.
-// Keep those old safeguards in the prepared source but make the branch
-// unreachable; every team-contact message now enters the same canonical router.
-// Individual player/prospect messages remain direct recipient messages.
+// Team Messages: remove the older route-specific Cup send branch from the
+// prepared source. All team-contact messages now enter the same canonical
+// router. Individual player/prospect messages remain direct-recipient messages.
 // ---------------------------------------------------------------------------
 let teamActions = fs.readFileSync(teamBulkActionsPath, "utf8");
 const unifiedImport =
@@ -86,10 +85,18 @@ if (!teamActions.includes(unifiedImport)) {
   );
 }
 
-teamActions = teamActions.replace(
-  "  if (channel === NotificationChannel.EMAIL && isCupTemplate) {",
-  "  if (false && channel === NotificationChannel.EMAIL && isCupTemplate) {",
-);
+const legacyCupStart = teamActions.indexOf("  // ordinary Team Messages Cup send\n");
+if (legacyCupStart !== -1) {
+  const legacyCupEnd = teamActions.indexOf(
+    '  if (usesPoll && parsedRecipients.some((item) => item.parsed.type !== "team")) {',
+    legacyCupStart,
+  );
+  if (legacyCupEnd === -1) {
+    throw new Error("Unified email patch found the old Cup branch but not its end marker.");
+  }
+  teamActions = teamActions.slice(0, legacyCupStart) + teamActions.slice(legacyCupEnd);
+}
+
 teamActions = teamActions.replace(
   '    if (parsed.type === "team" && usesPoll) {',
   '    if (parsed.type === "team") {',
@@ -115,6 +122,10 @@ for (const [file, markers] of [
   for (const marker of markers) {
     if (!finalSource.includes(marker)) throw new Error(`Unified email marker missing in ${file}: ${marker}`);
   }
+}
+
+if (fs.readFileSync(teamBulkActionsPath, "utf8").includes("ordinary Team Messages Cup send")) {
+  throw new Error("Legacy Team Messages Cup branch survived unified email preparation.");
 }
 
 console.log("Unified SIXFL team-email engine applied to Team Messages and League Broadcast.");
