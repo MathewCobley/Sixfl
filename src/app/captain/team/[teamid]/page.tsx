@@ -5,6 +5,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLeagueTable";
 import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";
 import CaptainVeoPriorityCard from "@/components/captain/CaptainVeoPriorityCard";
@@ -197,6 +199,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
             homeScore: true,
             awayScore: true,
             isDisputed: true,
+            overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
             disputes: { where: { teamId: { in: relatedTeamIds }, status: { in: ["OPEN", "REVIEW"] } }, select: { id: true, status: true } },
           },
         },
@@ -211,7 +214,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
       },
       orderBy: [{ kickoffAt: "desc" }],
       include: {
-        result: { include: { teamMetadata: { where: { teamId: { in: relatedTeamIds } } } } },
+        result: { include: { overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT }, teamMetadata: { where: { teamId: { in: relatedTeamIds } } } } },
       },
     }),
     prisma.resultDispute.count({ where: { teamId: { in: relatedTeamIds }, status: { in: ["OPEN", "REVIEW"] } } }),
@@ -256,7 +259,9 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
   const needsCompletionCount = completionResults.filter((fixture) => {
     if (!fixture.result) return false;
     const isHome = relatedTeamIds.includes(fixture.homeTeamId);
-    const goalsFor = isHome ? fixture.result.homeScore : fixture.result.awayScore;
+    const playedResult = getPredictorResult(fixture.result);
+    if (!playedResult) return false;
+    const goalsFor = isHome ? playedResult.homeScore : playedResult.awayScore;
     const teamMeta = fixture.result.teamMetadata[0] ?? null;
     const goalsRecorded = teamMeta?.goalsRecorded ?? 0;
     const playerOfMatchName = teamMeta?.playerOfMatchName ?? null;
@@ -434,8 +439,62 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
               const opponent = isHome ? fixture.awayTeam.name : fixture.homeTeam.name;
               const goalsFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
               const goalsAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+              const outcome =
+                goalsFor > goalsAgainst
+                  ? {
+                      label: "WIN",
+                      verb: "Won",
+                      tone: "border-emerald-400/30 bg-emerald-500/15 text-emerald-100",
+                    }
+                  : goalsFor < goalsAgainst
+                    ? {
+                        label: "LOSS",
+                        verb: "Lost",
+                        tone: "border-red-400/30 bg-red-500/15 text-red-100",
+                      }
+                    : {
+                        label: "DRAW",
+                        verb: "Drew",
+                        tone: "border-amber-400/30 bg-amber-500/15 text-amber-100",
+                      };
               return (
-                <div key={fixture.id} className="px-6 py-5"><div className="flex items-center justify-between gap-4"><div><div className="text-base font-semibold text-white">{opponent}</div><div className="mt-1 text-sm text-white/60">{formatDateTime(fixture.kickoffAt)}</div></div><div className="text-right"><div className="text-lg font-semibold text-white">{goalsFor} - {goalsAgainst}</div></div></div></div>
+                <div
+                  key={fixture.id}
+                  data-captain-result-outcome="true"
+                  className="px-6 py-5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+                        Opponent
+                      </div>
+                      <div className="mt-1 text-base font-semibold text-white">
+                        {opponent}
+                      </div>
+                      <div className="mt-1 text-sm text-white/60">
+                        {formatDateTime(fixture.kickoffAt)}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black tracking-[0.08em] ${outcome.tone}`}
+                      >
+                        {fixture.result!.overturn ? `AWARDED ${outcome.label}` : outcome.label}
+                      </span>
+                      <div className="mt-2 text-lg font-black text-white">
+                        {fixture.result!.overturn ? "Awarded" : outcome.verb} {goalsFor} - {goalsAgainst}
+                      </div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/35">
+                        Your team’s score first
+                      </div>
+                    </div>
+                  </div>
+                  <OverturnedResultNotice
+                    overturn={fixture.result!.overturn}
+                    homeName={fixture.homeTeam.name}
+                    awayName={fixture.awayTeam.name}
+                  />
+                </div>
               );
             })}
           </div>

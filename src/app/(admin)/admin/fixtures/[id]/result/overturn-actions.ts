@@ -13,10 +13,19 @@ export async function overturnResultAction(form: FormData) {
   let saved;
   try {
     saved = await recordResultOverturn({
-      fixtureId, actorUserId: access.user.id, requestId: value("requestId"), winnerTeamId: value("winnerTeamId"),
-      reasonCode: value("reasonCode"), evidenceNote: value("evidenceNote"), rulesBasis: value("rulesBasis"),
-      expectedResultUpdatedAt: value("expectedResultUpdatedAt"), expectedHomeScore: Number(value("expectedHomeScore")),
-      expectedAwayScore: Number(value("expectedAwayScore")), confirmed: value("confirmed") === "yes",
+      fixtureId,
+      actorUserId: access.user.id,
+      requestId: value("requestId"),
+      winnerTeamId: value("winnerTeamId"),
+      reasonCode: value("reasonCode"),
+      evidenceNote: value("evidenceNote"),
+      rulesBasis: value("rulesBasis"),
+      originalHomeScore: Number(value("originalHomeScore")),
+      originalAwayScore: Number(value("originalAwayScore")),
+      expectedResultUpdatedAt: value("expectedResultUpdatedAt"),
+      expectedHomeScore: Number(value("expectedHomeScore")),
+      expectedAwayScore: Number(value("expectedAwayScore")),
+      confirmed: value("confirmed") === "yes",
     });
   } catch (error) {
     if (!(error instanceof ResultOverturnError)) console.error("[result-overturn] Save failed", error);
