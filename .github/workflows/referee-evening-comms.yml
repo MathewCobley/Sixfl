@@ -1,8 +1,17 @@
 name: Referee evening communications
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*referee*"
+      - "src/**/*Referee*"
+      - "src/app/(admin)/admin/night-board/**"
+      - "tests/referee-evening-*.test.ts"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260626120500_add_referee_nights/**"
+      - "prisma/migrations/20260626133000_add_referee_profiles/**"
+      - "prisma/migrations/20260706193000_referee_night_confirmations/**"
+      - ".github/workflows/referee-evening-comms.yml"
+  workflow_dispatch:
 concurrency:
   group: referee-evening-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
