@@ -11,6 +11,7 @@ on:
       - "src/app/api/**/*payment*"
       - "tests/player-ledger.test.ts"
       - "tests/player-charge-correction*.cjs"
+      - "tests/settled-player-ledger-protection/**"
       - "scripts/check-critical-feature-contracts.mjs"
       - "prisma/schema.prisma"
       - "prisma/migrations/20260506170000_link_player_match_fee_payments/**"
@@ -56,9 +57,13 @@ jobs:
           cache: npm
       - run: tar -czf /tmp/ledger-native-review.tar.gz src prisma scripts tests docs .github config package.json package-lock.json tsconfig.json next.config.*
       - run: npm ci
+      - name: Native settled-ledger protection contract
+        run: node --test tests/settled-player-ledger-protection/contract.test.cjs
       - run: npm run prebuild
       - run: npx prisma generate
       - run: node scripts/check-critical-feature-contracts.mjs
+      - name: Prepared settled-ledger protection contract
+        run: node --test tests/settled-player-ledger-protection/contract.test.cjs
       - name: Create disposable base schema before applying the real ledger migration
         run: |
           node - <<'JS'

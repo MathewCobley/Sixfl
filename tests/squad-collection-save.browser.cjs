@@ -12,7 +12,7 @@ before(async()=>{
  const saveCaptainSquadPaymentCollectionWithFeedback=async(data)=>{window.calls.push([...data.entries()]);if(window.mode==='hold')return new Promise(r=>window.finish=r);if(window.mode==='reject')return {status:'error',message:'Synthetic server rejection — review this collection.'};if(window.mode==='throw')throw Error('Synthetic lost acknowledgement');return {status:'saved',message:'Player collection saved. 8 payment link emails queued — not yet confirmed delivered.'};};
  const Link=({children,...p})=><a {...p}>{children}</a>;const fixtureTitle=()=> 'Test Team vs Test Opponent';const formatDateTime=()=> 'Test fixture';
  const collectionMethod=(status)=>status==='WAIVED'?'waived':'link';const team={id:'team'};const teamid='team';
- const ledgerByFee=new Map([['protected',{controlled:true}]]);
+ const ledgerByFee=new Map([['protected',{controlled:true,balancePence:500}]]);
  const playersForForm=[{kind:'member',id:'zero',value:'member:zero',label:'No charge player',emailRequired:false,checked:false,fee:{id:'zero',status:'WAIVED',amountPence:0}},...Array.from({length:8},(_,i)=>({kind:'member',id:'m'+(i+1),value:'member:m'+(i+1),label:'Player '+(i+1),contact:'player'+(i+1)+'@example.invalid',emailRequired:false,checked:true,fee:{id:'fee-'+i,status:'OPEN',amountPence:500}})),{kind:'member',id:'locked',value:'member:locked',label:'Protected player',emailRequired:false,checked:true,fee:{id:'protected',status:'OPEN',amountPence:500}}];
  const defaultAmount=getInitialCollectionDefaultPence(playersForForm.map(p=>p.fee));
  function Sample({id}){const selectedFixture={id,kickoffAt:new Date(),venue:{name:'Test Venue'}};return (${jsx});}

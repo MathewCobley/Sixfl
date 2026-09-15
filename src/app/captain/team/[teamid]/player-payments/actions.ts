@@ -4,7 +4,7 @@
 
 "use server";
 
-import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
+import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection, readPlayerLedgerState } from "@/lib/payments/player-ledger";
 import { parseSquadCollectionAmount, validateSquadCollectionAmounts } from "@/lib/payments/squad-collection-form";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -132,6 +132,11 @@ function replaceCollectionNote(existingNote: string | null, nextNote: string) {
 
 function isLockedPlayerFee(status: PlayerMatchFeeStatus) {
   return status === "PAID";
+}
+
+async function isPlayerFeeLedgerBalanceProtected(feeId: string) {
+  const state = await readPlayerLedgerState(feeId);
+  return state?.controlled === true && state.balancePence > 0;
 }
 
 function getCollectionNote(input: {
@@ -445,7 +450,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerControlled(existing.id))) continue;
+      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerBalanceProtected(existing.id))) continue;
 
       const data = {
         amountPence: playerAmountPence,
@@ -490,7 +495,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
         select: { id: true, status: true, note: true },
       });
 
-      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerControlled(existing.id))) continue;
+      if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerBalanceProtected(existing.id))) continue;
 
       const data = {
         amountPence: playerAmountPence,
