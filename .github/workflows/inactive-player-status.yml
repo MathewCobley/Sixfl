@@ -2,10 +2,19 @@ name: Inactive player status contract
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    paths:
+      - "src/lib/managed-squad/squadStatus.ts"
+      - "src/app/captain/team/[teamid]/squad/status-actions.ts"
+      - "src/app/api/jobs/managed-squad-availability-reminders/route.ts"
+      - "prisma/migrations/20260829190000_allow_inactive_team_member_status/**"
+      - "package.json"
+      - "scripts/check-inactive-player-status-storage.mjs"
+      - ".github/workflows/inactive-player-status.yml"
   workflow_dispatch:
+
+concurrency:
+  group: inactive-player-status-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   inactive-player-status:

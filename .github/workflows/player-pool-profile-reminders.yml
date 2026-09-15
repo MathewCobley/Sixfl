@@ -2,10 +2,20 @@ name: PlayerPool profile reminders
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    paths:
+      - "src/lib/player-pool/profile-reminders.ts"
+      - "src/lib/player-pool/response-check.ts"
+      - "src/app/api/admin/player-pool/**"
+      - "src/components/admin/player-pool/**"
+      - "src/app/(admin)/admin/player-pool/page.tsx"
+      - "prisma/migrations/20260912183000_player_pool_response_check/**"
+      - "scripts/check-player-pool-profile-reminders.mjs"
+      - ".github/workflows/player-pool-profile-reminders.yml"
   workflow_dispatch:
+
+concurrency:
+  group: player-pool-profile-reminders-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   profile-reminders:

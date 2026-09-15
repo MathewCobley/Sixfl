@@ -2,13 +2,27 @@ name: Critical pages
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    paths:
+      - "src/app/(public)/page.tsx"
+      - "src/app/(public)/layout.tsx"
+      - "src/app/globals.css"
+      - "src/components/home/**"
+      - "src/components/layout/AppHeader.tsx"
+      - "src/lib/homepage-leagues.ts"
+      - "scripts/check-critical-pages.mjs"
+      - "scripts/apply-goal-of-week.cjs"
+      - "tests/critical-pages/**"
+      - "public/Sixfl-tv.png"
+      - "public/logos/sixfl-ai-predictor.png"
+      - ".github/workflows/critical-pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: critical-pages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   homepage:

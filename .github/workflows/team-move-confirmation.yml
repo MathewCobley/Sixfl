@@ -1,11 +1,27 @@
 name: Team move confirmation
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/teams/move-confirmation.ts"
+      - "src/app/(admin)/admin/teams/move-confirmation-actions.ts"
+      - "src/components/admin/teams/TeamMoveConfirmationSelect.tsx"
+      - "src/app/(admin)/admin/teams/page.tsx"
+      - "src/app/(admin)/admin/teams/[id]/page.tsx"
+      - "src/components/admin/leagues/LeagueForm.tsx"
+      - "src/app/(admin)/admin/leagues/actions.ts"
+      - "src/app/(admin)/admin/leagues/[id]/page.tsx"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260906124500_team_move_confirmation/**"
+      - "prisma/migrations/20260906142000_league_move_tracking/**"
+      - "tests/team-move-confirmation*.cjs"
+      - "tests/league-move-scope*.cjs"
+      - ".github/workflows/team-move-confirmation.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-move-confirmation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   team-move:
     runs-on: ubuntu-latest

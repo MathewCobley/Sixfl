@@ -2,11 +2,23 @@ name: Multi-captain fixture notifications
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/notifications/team-operational-recipients.ts"
+      - "src/lib/fixtures/confirmation-emails.ts"
+      - "src/lib/fixtures/confirmation-reminders.ts"
+      - "src/lib/notifications/team-contacts.ts"
+      - "src/lib/notifications/team-captain-contact-sync.ts"
+      - "prisma/migrations/20260911203000_backfill_captain_contact_phones/**"
+      - "scripts/check-multi-captain-fixture-notifications.mjs"
+      - ".github/workflows/multi-captain-fixture-notifications.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: multi-captain-fixtures-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   multi-captain-fixtures:

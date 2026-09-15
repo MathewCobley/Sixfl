@@ -1,10 +1,17 @@
 name: Team lead decline browser controls
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/components/admin/leads/TeamLeadDecisionControls.tsx"
+      - "src/app/api/admin/leads/**"
+      - "tests/team-lead-decline.browser.cjs"
+      - ".github/workflows/team-lead-decline-browser.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-lead-decline-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   browser:
     runs-on: ubuntu-latest

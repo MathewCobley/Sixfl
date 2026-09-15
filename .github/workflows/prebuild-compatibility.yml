@@ -8,6 +8,10 @@ on:
       - "package.json"
       - ".github/workflows/prebuild-compatibility.yml"
 
+concurrency:
+  group: prebuild-compatibility-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   prebuild:
     runs-on: ubuntu-latest

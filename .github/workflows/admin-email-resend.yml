@@ -1,6 +1,14 @@
 name: Admin email resend
 on:
   pull_request:
+    paths:
+      - "src/app/(admin)/admin/messages/**"
+      - "src/app/(admin)/admin/communications/**"
+      - "src/components/admin/communications/**"
+      - "src/lib/notifications/**"
+      - "src/lib/email/**"
+      - "tests/admin-email-resend/**"
+      - ".github/workflows/admin-email-resend.yml"
   workflow_dispatch:
 permissions:
   contents: read

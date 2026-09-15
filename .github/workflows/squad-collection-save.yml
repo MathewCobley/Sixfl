@@ -1,8 +1,14 @@
 name: Squad collection save regression
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/squad-collection-form.ts"
+      - "src/components/payments/SquadPaymentCollectionForm.tsx"
+      - "src/app/captain/team/[teamid]/player-payments/**"
+      - "tests/squad-collection-save.*"
+      - "scripts/check-standard-team-player-payment-links.mjs"
+      - ".github/workflows/squad-collection-save.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

@@ -1,9 +1,17 @@
 name: Guest payment browser controls
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/captain/team/**/player-payments/**"
+      - "src/components/payments/**"
+      - "src/lib/payments/**"
+      - "tests/guest-payment-links-ui.mjs"
+      - "scripts/check-standard-team-player-payment-links.mjs"
+      - ".github/workflows/guest-payment-browser.yml"
   workflow_dispatch:
+concurrency:
+  group: guest-payment-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   guest-payment-browser:
     runs-on: ubuntu-latest

@@ -1,11 +1,19 @@
 name: Admin email preview isolation
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/(admin)/**"
+      - "src/components/admin/**"
+      - "src/lib/email/**"
+      - "tests/email-preview-isolation*.cjs"
+      - "tests/helpers/email-preview-render.cjs"
+      - ".github/workflows/email-preview-isolation.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: email-preview-isolation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   email-preview:
     runs-on: ubuntu-latest
