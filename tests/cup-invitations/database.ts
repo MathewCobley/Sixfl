@@ -94,7 +94,7 @@ async function main(){
  await prisma.team.update({where:{id:d.id},data:{contactEmail:"changed-again@example.invalid"}});
  assert.ok(await cupInvitationDeliveryBlock(dd));await assert.rejects(getCupResponseContext({token:cupResponseToken(dm.id,revision.responseDeadline)}),/current team contact/);
  await prisma.notificationTemplate.update({where:{key:"cup-interest-invitation"},data:{isActive:false}});
- await assert.rejects(previewCupInvitations({cupId:cup.id,actorId:admin.id,teamIds:[a.id],kind:"INITIAL"}),/Enable/);
+ await assert.rejects(previewCupInvitations({cupId:cup.id,actorId:admin.id,teamIds:[a.id],kind:"INITIAL"}),/Choose a normal Team email template/);
  await prisma.notificationTemplate.update({where:{key:"cup-interest-invitation"},data:{isActive:true}});
  console.log("PASS closed/reopened/material revisions, missing contacts, suppression, opt-out, disabled templates and revoked contacts");
  // Reminders use the real queue and stop after any response, including manual retries.
