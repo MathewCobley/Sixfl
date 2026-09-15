@@ -2,7 +2,25 @@ name: Captain request controls
 
 on:
   pull_request:
+    paths:
+      - 'src/components/captain/CaptainTemporaryPlayerRequestSummary.tsx'
+      - 'src/components/captain/TemporaryPlayerRequestDeclineButton.tsx'
+      - 'src/components/captain/TemporaryPlayerRequestsPanel.tsx'
+      - 'src/components/captain/temporary-player-request-client.ts'
+      - 'src/components/captain/FixtureGuestApprovals.tsx'
+      - 'src/app/api/captain/team/**/temporary-player-requests/**'
+      - 'src/lib/temporary-player-requests*'
+      - 'src/lib/fixtures/guest-approval*'
+      - 'tests/captain-request-controls.test.cjs'
+      - '.github/workflows/captain-request-controls.yml'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
+
+concurrency:
+  group: captain-request-controls-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -25,6 +43,7 @@ jobs:
       - name: Check prepared request controls
         run: node --test tests/captain-request-controls.test.cjs
       - name: List shared UI consumers and remaining legacy copy
+        if: always()
         run: |
           git grep -n -E 'CaptainTemporaryPlayerRequestSummary|TemporaryPlayerRequestsPanel|FixtureGuestApprovals' -- src scripts || true
           git grep -n -E 'Guest approvals|Fixture-specific permission|the captain can set their fee' -- src scripts || true
