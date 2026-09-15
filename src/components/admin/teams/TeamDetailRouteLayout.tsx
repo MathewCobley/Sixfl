@@ -1,9 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 export default function TeamDetailRouteLayout({ teamId }: { teamId: string }) {
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (pathname === `/admin/teams/${teamId}`) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [pathname, teamId]);
 
   if (pathname !== `/admin/teams/${teamId}/communications`) {
     return null;
