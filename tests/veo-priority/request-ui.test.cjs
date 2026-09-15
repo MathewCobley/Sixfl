@@ -36,6 +36,7 @@ async function renderCard(offer, access = normalAccess) {
   } }).default;
   const Card = load(cardPath, {
     'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+    '@/lib/prisma': { prisma: { $queryRaw: async () => [] } },
     '@/lib/requireCaptain': { requireCaptain: async () => access },
     '@/lib/veo/priority-requests': { readVeoOffer: async () => offer, VEO_REQUEST_TERMS: 'veo-priority-v1' },
     './FixtureVeoConfirmationForm': {StopFutureVeoForm: () => React.createElement('span',null,'Turn off future Veo Priority')},
