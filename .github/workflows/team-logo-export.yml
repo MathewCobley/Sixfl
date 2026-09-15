@@ -1,11 +1,22 @@
 name: Selectable team logo export
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*team*logo*"
+      - "src/**/*Team*Logo*"
+      - "src/**/*badge*"
+      - "src/**/*Badge*"
+      - "tests/team-logo-export.test.cjs"
+      - "scripts/check-team-logo-export-browser.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/team-logo-export.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-logo-export-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   logo-export:
     runs-on: ubuntu-latest
