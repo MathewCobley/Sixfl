@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
 
+import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
+import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
+
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getStoredAiPreviewsByFixtureIds } from "@/lib/fixtures/storedAiPredictions";
@@ -81,6 +84,7 @@ export default async function CaptainResultsHistoryPage({
         select: {
           homeScore: true,
           awayScore: true,
+          overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT },
           teamMetadata: {
             select: {
               teamId: true,
@@ -122,6 +126,11 @@ export default async function CaptainResultsHistoryPage({
               const opponent = isHome ? fixture.awayTeam : fixture.homeTeam;
               const actualFor = isHome ? fixture.result!.homeScore : fixture.result!.awayScore;
               const actualAgainst = isHome ? fixture.result!.awayScore : fixture.result!.homeScore;
+              // The table uses the awarded score; assess a stored prediction
+              // against the performance that actually happened on the pitch.
+              const playedResult = getPredictorResult(fixture.result);
+              const playedFor = playedResult ? (isHome ? playedResult.homeScore : playedResult.awayScore) : null;
+              const playedAgainst = playedResult ? (isHome ? playedResult.awayScore : playedResult.homeScore) : null;
               const matchDetails =
                 fixture.result!.teamMetadata.find((item) => item.teamId === teamIdForFixture) ?? null;
               const scorers = parseScorers(matchDetails?.scorers);
@@ -145,12 +154,13 @@ export default async function CaptainResultsHistoryPage({
               const exact =
                 predictedFor !== null &&
                 predictedAgainst !== null &&
-                predictedFor === actualFor &&
-                predictedAgainst === actualAgainst;
+                predictedFor === playedFor &&
+                predictedAgainst === playedAgainst;
               const correctResult =
                 predictedFor !== null &&
                 predictedAgainst !== null &&
-                outcome(predictedFor, predictedAgainst) === outcome(actualFor, actualAgainst);
+                playedFor !== null && playedAgainst !== null &&
+                outcome(predictedFor, predictedAgainst) === outcome(playedFor, playedAgainst);
 
               return (
                 <article key={fixture.id} className="grid gap-4 px-5 py-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6">
@@ -183,10 +193,12 @@ export default async function CaptainResultsHistoryPage({
                             ? "rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-100"
                             : "rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/50"}
                         >
-                          {exact ? "Exact score 🎯" : correctResult ? "Correct result" : "Prediction missed"}
+                          {playedResult === null ? "Original result unavailable" : exact ? "Exact score 🎯" : correctResult ? "Correct result" : "Prediction missed"}
                         </span>
                       ) : null}
                     </div>
+
+                    {fixture.result!.overturn ? <p className="mt-2 text-xs text-white/55">Prediction checked against the original on-field result.</p> : null}
 
                     {scorers.length > 0 || playerOfMatch ? (
                       <div className="mt-3 space-y-1 text-sm text-white/65">
@@ -208,8 +220,17 @@ export default async function CaptainResultsHistoryPage({
 
                   <div className="text-left sm:text-right">
                     <div className="text-2xl font-semibold text-white">{actualFor} - {actualAgainst}</div>
-                    <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/35">Actual result</div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/35">{fixture.result!.overturn ? "Awarded result" : "Actual result"}</div>
                   </div>
+                  {fixture.result!.overturn ? (
+                    <div className="min-w-0 sm:col-span-2">
+                      <OverturnedResultNotice
+                        overturn={fixture.result!.overturn}
+                        homeName={fixture.homeTeam.name}
+                        awayName={fixture.awayTeam.name}
+                      />
+                    </div>
+                  ) : null}
                 </article>
               );
             })}

@@ -8,6 +8,7 @@ export class ResultOverturnError extends Error {}
 export type ResultOverturnInput = {
   fixtureId: string; actorUserId: string; requestId: string; winnerTeamId: string;
   reasonCode: string; evidenceNote: string; rulesBasis: string;
+  originalHomeScore: number; originalAwayScore: number;
   expectedResultUpdatedAt: string; expectedHomeScore: number; expectedAwayScore: number;
   confirmed: boolean;
 };
@@ -18,6 +19,10 @@ async function administrator(db: Db, id: string) {
   return actor;
 }
 
+function validScore(value: number) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
 /** No payments, notifications, predictor regeneration or fixture updates. The
  * recorded score is the official competition result; the audit holds the play. */
 export async function recordResultOverturn(input: ResultOverturnInput) {
@@ -25,6 +30,8 @@ export async function recordResultOverturn(input: ResultOverturnInput) {
   if (!input.confirmed) throw new ResultOverturnError("Confirm the played result, evidence and awarded winner first.");
   if (!/^[0-9a-f-]{36}$/i.test(input.requestId)) throw new ResultOverturnError("Reload the form before saving.");
   if (!RESULT_OVERTURN_REASONS.some(r => r.value === input.reasonCode)) throw new ResultOverturnError("Choose a valid decision reason.");
+  if (!validScore(input.originalHomeScore) || !validScore(input.originalAwayScore))
+    throw new ResultOverturnError("Enter a valid original on-pitch score for both teams.");
   const evidenceNote = input.evidenceNote.trim();
   const rulesBasis = input.rulesBasis.trim();
   if (evidenceNote.length < 10 || evidenceNote.length > 4000 || rulesBasis.length < 5 || rulesBasis.length > 500)
@@ -45,10 +52,14 @@ export async function recordResultOverturn(input: ResultOverturnInput) {
     const awardedHomeScore = input.winnerTeamId === fixture.homeTeamId ? 3 : 0;
     const awardedAwayScore = input.winnerTeamId === fixture.awayTeamId ? 3 : 0;
     if (!awardedHomeScore && !awardedAwayScore) throw new ResultOverturnError("The awarded winner must be one of these two teams.");
+    if (input.originalHomeScore === awardedHomeScore && input.originalAwayScore === awardedAwayScore)
+      throw new ResultOverturnError("The original on-pitch score must be different from the awarded 3–0 result.");
     if (result.overturn) {
       const d = result.overturn;
       if (d.id === input.requestId && d.decidedByUserId === actor.id && d.awardedHomeScore === awardedHomeScore &&
-          d.awardedAwayScore === awardedAwayScore && d.reasonCode === input.reasonCode && d.evidenceNote === evidenceNote && d.rulesBasis === rulesBasis)
+          d.awardedAwayScore === awardedAwayScore && d.originalHomeScore === input.originalHomeScore &&
+          d.originalAwayScore === input.originalAwayScore && d.reasonCode === input.reasonCode &&
+          d.evidenceNote === evidenceNote && d.rulesBasis === rulesBasis)
         return { ...receipt, alreadySaved: true };
       throw new ResultOverturnError("This result already has an immutable overturn decision. Open its recorded history.");
     }
@@ -63,7 +74,7 @@ export async function recordResultOverturn(input: ResultOverturnInput) {
       id: input.requestId, matchResultId: result.id, fixtureId: fixture.id,
       homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId,
       homeTeamName: fixture.homeTeam.name, awayTeamName: fixture.awayTeam.name,
-      originalHomeScore: result.homeScore, originalAwayScore: result.awayScore, originalEnteredAt: result.enteredAt,
+      originalHomeScore: input.originalHomeScore, originalAwayScore: input.originalAwayScore, originalEnteredAt: result.enteredAt,
       awardedHomeScore, awardedAwayScore, reasonCode: input.reasonCode, evidenceNote, rulesBasis,
       decidedByUserId: actor.id, decidedByName: actor.name || actor.email || "SIXFL administrator",
     } });
