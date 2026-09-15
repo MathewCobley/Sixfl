@@ -247,8 +247,11 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
               Referee comms: {displayName}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              Reply by email or SMS using the shared Communications controls below. Both stay in the same conversation timeline.
+              Start a new email with its own subject, or reply by email or SMS below. All messages are saved in Communications history.
             </p>
+            <Link href={`/admin/messages/referees/${referee.id}/new`} className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300">
+              New email
+            </Link>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
@@ -266,9 +269,9 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
       {messageThreads.length === 0 ? (
         <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">No thread yet</div>
-          <h2 className="mt-2 text-xl font-semibold text-white">Start with the referee welcome email</h2>
+          <h2 className="mt-2 text-xl font-semibold text-white">Send your first message</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/75">
-            Send the welcome email from the referee profile. That creates the normal Communications thread, then all later email/SMS replies can be handled from the proper timeline here.
+            Use New email above to write a message with your own subject. No welcome email is required; the message will be saved in Communications history.
           </p>
         </section>
       ) : null}

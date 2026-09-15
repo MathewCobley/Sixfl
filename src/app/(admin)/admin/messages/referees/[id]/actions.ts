@@ -91,6 +91,17 @@ async function syncRefereeRecipient(input: {
   createdFromLeadId?: string | null;
   standardNightFeePence?: number | null;
 }) {
+  // A new message must not re-enable a contact's existing email/SMS opt-outs.
+  // The shared upsert leaves suppression and the preference row untouched.
+  const existing = await prisma.notificationRecipient.findFirst({
+    where: { sourceType: NotificationRecipientSourceType.REFEREE, sourceId: input.userId },
+    select: {
+      transactionalEmailOptIn: true,
+      transactionalSmsOptIn: true,
+      marketingEmailOptIn: true,
+      marketingSmsOptIn: true,
+    },
+  });
   return upsertNotificationRecipient({
     sourceType: NotificationRecipientSourceType.REFEREE,
     sourceId: input.userId,
@@ -98,10 +109,10 @@ async function syncRefereeRecipient(input: {
     displayName: input.name,
     email: input.email,
     phone: input.phone,
-    transactionalEmailOptIn: true,
-    transactionalSmsOptIn: true,
-    marketingEmailOptIn: false,
-    marketingSmsOptIn: false,
+    transactionalEmailOptIn: existing?.transactionalEmailOptIn ?? true,
+    transactionalSmsOptIn: existing?.transactionalSmsOptIn ?? true,
+    marketingEmailOptIn: existing?.marketingEmailOptIn ?? false,
+    marketingSmsOptIn: existing?.marketingSmsOptIn ?? false,
     metadata: {
       refereeUserId: input.userId,
       sourceLeadId: input.createdFromLeadId ?? null,
@@ -112,6 +123,7 @@ async function syncRefereeRecipient(input: {
 
 export async function sendCentralRefereeEmailAction(formData: FormData) {
   const { user: adminUser } = await requireAdmin();
+  if (!adminUser?.id) redirect("/login");
 
   const refereeId = readString(formData, "refereeId");
   const subject = readString(formData, "subject");
@@ -121,13 +133,16 @@ export async function sendCentralRefereeEmailAction(formData: FormData) {
   if (!subject || !body) {
     redirect(getCentralRefereeCommsPath(refereeId, { error: "Email subject and body are required." }));
   }
+  if (subject.length > 200 || /[\r\n]/.test(subject) || body.length > 20000) {
+    redirect(getCentralRefereeCommsPath(refereeId, { error: "Use a single-line subject of up to 200 characters and a message of up to 20,000 characters." }));
+  }
 
   const contact = await getRefereeContact(refereeId);
   if (!contact) redirect("/admin/referees");
 
   const email = contact.referee.email?.trim().toLowerCase();
-  if (!email) {
-    redirect(getCentralRefereeCommsPath(refereeId, { error: "This referee does not have an email address." }));
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirect(getCentralRefereeCommsPath(refereeId, { error: "This referee needs a valid saved email address." }));
   }
 
   const recipient = await syncRefereeRecipient({
@@ -139,6 +154,8 @@ export async function sendCentralRefereeEmailAction(formData: FormData) {
     standardNightFeePence: contact.standardNightFeePence,
   });
 
+  // Individually typed correspondence, not reusable system/template copy.
+  // Keep the existing central queue, renderer and provider safeguards.
   const dispatch = await queueDirectNotification({
     recipientId: recipient.id,
     channel: NotificationChannel.EMAIL,
@@ -151,14 +168,14 @@ export async function sendCentralRefereeEmailAction(formData: FormData) {
       refereeUserId: contact.referee.id,
       centralComms: true,
     },
-    createdByUserId: adminUser?.id ?? null,
+    createdByUserId: adminUser.id,
   });
 
   if (dispatch.status !== NotificationDispatchStatus.QUEUED) {
-    redirect(getCentralRefereeCommsPath(refereeId, { error: "The email could not be queued." }));
+    redirect(getCentralRefereeCommsPath(refereeId, { error: "The email could not be queued. Check the referee’s messaging preferences and delivery settings." }));
   }
 
-  await linkQueuedEmailDispatchToThread({
+  const thread = await linkQueuedEmailDispatchToThread({
     notificationDispatchId: dispatch.id,
     recipientId: recipient.id,
     sourceType: "REFEREE",
@@ -168,7 +185,7 @@ export async function sendCentralRefereeEmailAction(formData: FormData) {
     subject: dispatch.subject ?? subject,
     bodyText: dispatch.bodyText,
     bodyHtml: dispatch.bodyHtml,
-    createdByUserId: adminUser?.id ?? null,
+    createdByUserId: adminUser.id,
   });
 
   revalidatePath("/admin/messaging");
@@ -176,7 +193,7 @@ export async function sendCentralRefereeEmailAction(formData: FormData) {
   revalidatePath(`/admin/messages/referees/${refereeId}`);
   revalidatePath(`/admin/referees/${refereeId}`);
 
-  redirect(getCentralRefereeCommsPath(refereeId, { saved: "email" }));
+  redirect(getCentralRefereeCommsPath(refereeId, { saved: "email", thread: thread.id }));
 }
 
 export async function sendCentralRefereeSmsAction(formData: FormData) {
