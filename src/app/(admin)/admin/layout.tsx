@@ -132,15 +132,15 @@ export default async function AdminLayout({
           />
         </aside>
 
-        <main className="w-full min-w-0 flex-1">
+        <div className="w-full min-w-0 flex-1">
           <div className="space-y-5">
             <AdminDeliveryIssueBanner />
             <Suspense fallback={null}>
               <LeadDiallerLaunchButton />
             </Suspense>
-            {children}
+            <main className="w-full min-w-0 flex-1">{children}</main>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

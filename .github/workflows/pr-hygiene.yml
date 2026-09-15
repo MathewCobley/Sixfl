@@ -1,0 +1,133 @@
+name: PR hygiene
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-hygiene-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  overlapping-work:
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for competing open PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- sixfl-pr-hygiene -->';
+            const { owner, repo } = context.repo;
+            const current = context.payload.pull_request;
+
+            const isProductionFile = (filename) =>
+              !filename.startsWith('.github/') &&
+              !filename.startsWith('docs/') &&
+              !filename.startsWith('tests/') &&
+              !filename.startsWith('artifacts/') &&
+              !filename.endsWith('.md');
+
+            const currentChanged = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: current.number, per_page: 100 },
+            );
+            const currentFiles = new Set(
+              currentChanged.map((file) => file.filename).filter(isProductionFile),
+            );
+
+            const openPulls = await github.paginate(
+              github.rest.pulls.list,
+              {
+                owner,
+                repo,
+                state: 'open',
+                base: 'main',
+                per_page: 100,
+                sort: 'updated',
+                direction: 'desc',
+              },
+            );
+
+            const overlaps = [];
+            for (const pr of openPulls) {
+              if (pr.number === current.number || pr.draft) continue;
+              const changed = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: pr.number, per_page: 100 },
+              );
+              const shared = [...new Set(
+                changed
+                  .map((file) => file.filename)
+                  .filter(isProductionFile)
+                  .filter((filename) => currentFiles.has(filename)),
+              )];
+              if (shared.length) overlaps.push({ number: pr.number, title: pr.title, shared });
+            }
+
+            const activeCount = openPulls.filter((pr) => !pr.draft).length;
+            const body = current.body ?? '';
+            const declaresSupersedes = /supersedes?\s*:?\s*#\d+/i.test(body);
+
+            const lines = [
+              marker,
+              '### SIXFL PR hygiene',
+              '',
+            ];
+
+            if (overlaps.length) {
+              lines.push(
+                `⚠️ This PR overlaps production files with **${overlaps.length} other open PR${overlaps.length === 1 ? '' : 's'}**.`,
+                '',
+                'Before continuing, keep one canonical implementation for the workstream. If this PR replaces an older attempt, add `Supersedes: #123` to the PR description and close the older PR once this replacement is ready.',
+                '',
+              );
+              for (const item of overlaps.slice(0, 8)) {
+                const files = item.shared.slice(0, 5).map((file) => `\`${file}\``).join(', ');
+                const more = item.shared.length > 5 ? ` (+${item.shared.length - 5} more)` : '';
+                lines.push(`- #${item.number} — ${item.title}: ${files}${more}`);
+              }
+              if (!declaresSupersedes) {
+                lines.push('', '❗ No `Supersedes: #...` declaration was found in this PR description.');
+              }
+              core.warning(`PR #${current.number} overlaps ${overlaps.length} other open PR(s).`);
+            } else {
+              lines.push('✅ No overlapping production files were found in the other open non-draft PRs.');
+            }
+
+            if (activeCount > 3) {
+              lines.push(
+                '',
+                `ℹ️ There are currently **${activeCount} active non-draft PRs** against \`main\`. SIXFL's working rule is to keep roughly three active development PRs at a time and close/supersede stale attempts promptly.`,
+              );
+            }
+
+            lines.push('', '_This check is advisory; safety and feature-specific CI remain authoritative._');
+            const commentBody = lines.join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: current.number, per_page: 100 },
+            );
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: current.number,
+                body: commentBody,
+              });
+            }

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { prisma } from '@/lib/prisma';
 import { normaliseVeoPitch } from './allocator';
@@ -18,6 +18,12 @@ type ActiveBooking = {
   durationMinutes: number;
 };
 
+type AcceptedRequest = {
+  teamId: string;
+  chargeId: string | null;
+  agreedPence: number | null;
+};
+
 function overlaps(input: { kickoffAt: Date; durationMinutes: number }, other: ActiveBooking) {
   const start = input.kickoffAt.getTime();
   const end = start + input.durationMinutes * 60_000;
@@ -26,10 +32,75 @@ function overlaps(input: { kickoffAt: Date; durationMinutes: number }, other: Ac
   return start < otherEnd && otherStart < end;
 }
 
+async function ensureAcceptedVeoCharges(
+  db: Pick<typeof prisma, '$queryRaw' | '$executeRaw' | 'paymentCharge'>,
+  fixture: {
+    id: string;
+    leagueId: string;
+    kickoffAt: Date;
+    homeName: string;
+    awayName: string;
+  },
+) {
+  const requests = await db.$queryRaw<AcceptedRequest[]>`
+    SELECT "teamId", "chargeId", "agreedPence"
+    FROM "VeoFixtureRequest"
+    WHERE "fixtureId" = ${fixture.id} AND status = 'ACCEPTED'
+    ORDER BY "teamId"
+    FOR UPDATE
+  `;
+
+  let created = 0;
+  for (const request of requests) {
+    if (request.chargeId || request.agreedPence !== 500) continue;
+
+    const standardTeam = await db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Team"
+      WHERE id = ${request.teamId} AND "teamMode"::text = 'STANDARD'
+    `;
+    if (!standardTeam.length) {
+      throw new VeoBookingError('The team payment model changed. Review this booking before adding the Veo charge.');
+    }
+
+    const charge = await db.paymentCharge.create({
+      data: {
+        id: `veo_${randomUUID()}`,
+        teamId: request.teamId,
+        leagueId: fixture.leagueId,
+        fixtureId: null,
+        title: `Veo Priority — ${fixture.homeName} vs ${fixture.awayName} (${londonVeoDate(fixture.kickoffAt)})`,
+        description: `Optional filming confirmed for fixture ${fixture.id}. The £5 Veo Priority charge is added when the filming slot is confirmed so the team balance is correct before the match. If the recording fails, this charge is voided and any payment received is returned to team credit.`,
+        amountPence: 500,
+        dueDate: fixture.kickoffAt,
+        paymentToken: randomBytes(24).toString('hex'),
+        status: 'OPEN',
+        latePaymentFeeStatus: 'WAIVED',
+        latePaymentFeeNote: 'No late fee on optional Veo recording.',
+      },
+      select: { id: true },
+    });
+
+    const linked = await db.$executeRaw`
+      UPDATE "VeoFixtureRequest"
+      SET "chargeId" = ${charge.id}, revision = revision + 1
+      WHERE "fixtureId" = ${fixture.id}
+        AND "teamId" = ${request.teamId}
+        AND status = 'ACCEPTED'
+        AND "chargeId" IS NULL
+    `;
+    if (linked > 0) created += 1;
+  }
+
+  return created;
+}
+
 /**
  * Night Board is the administrator's final filming decision. When Veo Priority is
  * enabled for the fixture league, selecting SIXFL TV must create the real booking
- * immediately so captains can no longer change that fixture's Veo choice.
+ * immediately so captains can no longer change that fixture's Veo choice. Any
+ * accepted £5 Priority add-on is also added immediately so the team's pre-match
+ * balance is complete; failed footage later voids the add-on and returns receipts
+ * to team credit through the existing Veo cancellation safeguards.
  *
  * Leagues without confirmation-time Veo keep the older plain SIXFL TV flag flow.
  */
@@ -54,11 +125,14 @@ export async function confirmNightBoardVeoFixture(input: {
       placeholder: boolean;
       legacy: boolean;
       bookingState: string | null;
+      homeName: string;
+      awayName: string;
     }>>`
       SELECT f.id, f."leagueId", f."kickoffAt", f."publishedAt", f."venueId", f.pitch, f.status::text,
         (h."isFixturePlaceholder" OR a."isFixturePlaceholder" OR h.id = a.id) AS placeholder,
         EXISTS (SELECT 1 FROM "VeoFixtureSnapshot" s WHERE s."fixtureId" = f.id) AS legacy,
-        (SELECT b.state FROM "VeoMatchBooking" b WHERE b."fixtureId" = f.id) AS "bookingState"
+        (SELECT b.state FROM "VeoMatchBooking" b WHERE b."fixtureId" = f.id) AS "bookingState",
+        h.name AS "homeName", a.name AS "awayName"
       FROM "Fixture" f
       JOIN "Team" h ON h.id = f."homeTeamId"
       JOIN "Team" a ON a.id = f."awayTeamId"
@@ -82,6 +156,7 @@ export async function confirmNightBoardVeoFixture(input: {
     }
     if (initial.bookingState) {
       if (initial.bookingState === 'PLANNED' || initial.bookingState === 'READY') {
+        await ensureAcceptedVeoCharges(db, initial);
         return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
       }
       throw new VeoBookingError('This Veo booking has already been closed and cannot be re-opened from the Night Board.');
@@ -110,6 +185,7 @@ export async function confirmNightBoardVeoFixture(input: {
     const target = preview.fixtures.find((fixture) => fixture.id === input.fixtureId);
     if (!target) throw new VeoBookingError('This fixture is not available in the Veo camera schedule.');
     if (target.bookingState === 'PLANNED' || target.bookingState === 'READY') {
+      await ensureAcceptedVeoCharges(db, target);
       return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
     }
 
@@ -185,12 +261,15 @@ export async function confirmNightBoardVeoFixture(input: {
       }
     }
 
+    const chargesCreated = await ensureAcceptedVeoCharges(db, target);
     const details = JSON.stringify({
       kind: 'night_board_veo_confirmed',
       fixtureId: target.id,
       date,
       cameraKey: preview.cameraKey,
       acceptedRequests,
+      chargesCreated,
+      chargeTiming: 'booking_confirmation',
       swappedPitch: anchor.id !== target.id,
       noBaseFeesChanged: true,
     });
