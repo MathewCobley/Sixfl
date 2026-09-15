@@ -1,28 +1,15 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const args = process.argv.slice(2);
-const fromIndex = args.indexOf("--changed-from");
-const changedFrom = fromIndex >= 0 ? args[fromIndex + 1] : null;
+const workflowRoot = path.join(root, ".github", "workflows");
 
-if (!changedFrom) {
-  console.error("Usage: node scripts/check-ci-workflow-scope.mjs --changed-from <sha>");
-  process.exit(2);
-}
-
-function changedWorkflowFiles() {
-  const output = execFileSync(
-    "git",
-    ["diff", "--name-only", `${changedFrom}...HEAD`, "--", ".github/workflows"],
-    { cwd: root, encoding: "utf8" },
-  );
-  return output
-    .split(/\r?\n/)
-    .map((value) => value.trim())
-    .filter((value) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(value))
-    .filter((value) => fs.existsSync(path.join(root, value)));
+function workflowFiles() {
+  return fs
+    .readdirSync(workflowRoot)
+    .filter((value) => /\.ya?ml$/i.test(value))
+    .map((value) => `.github/workflows/${value}`)
+    .sort();
 }
 
 function pullRequestBlock(source) {
@@ -39,8 +26,14 @@ const coreBroadPullRequestWorkflows = new Set([
   ".github/workflows/pr-hygiene.yml",
 ]);
 
+// This workflow keeps a lightweight post-deploy public-page verifier on main.
+// Its heavyweight `rules` job is explicitly disabled for push events.
+const allowedMainPushWorkflows = new Set([
+  ".github/workflows/matchday-player-limit-rules.yml",
+]);
+
 const failures = [];
-const files = changedWorkflowFiles();
+const files = workflowFiles();
 
 for (const file of files) {
   const source = fs.readFileSync(path.join(root, file), "utf8");
@@ -60,16 +53,25 @@ for (const file of files) {
   }
 
   const pushMain = /^\s{2}push:\s*(?:\n[\s\S]*?)?^\s{4}branches:\s*(?:\[\s*main\s*\]|\n\s{6}-\s*main\s*$)/m.test(source);
-  if (pushMain) {
+  if (pushMain && !coreBroadPullRequestWorkflows.has(file) && !allowedMainPushWorkflows.has(file)) {
     failures.push(`${file}: do not rerun feature CI on every push to main; PR verification plus production deployment is the default.`);
+  }
+
+  if (allowedMainPushWorkflows.has(file)) {
+    if (!/^\s{4}if:\s*github\.event_name != 'push'\s*$/m.test(source)) {
+      failures.push(`${file}: the heavyweight PR verification job must stay disabled on main push events.`);
+    }
+    if (!/^\s{2}live-publication:\s*$/m.test(source)) {
+      failures.push(`${file}: the allowed main-push exception is only for the lightweight live-publication verifier.`);
+    }
   }
 }
 
 if (failures.length) {
   console.error("\nCI WORKFLOW SCOPE POLICY FAILED\n");
   for (const failure of failures) console.error(` - ${failure}`);
-  console.error("\nKeep core safety checks broad, but scope feature checks by path and cancel superseded runs.\n");
+  console.error("\nKeep core safety checks broad, but scope every specialist PR check by path, cancel superseded runs, and avoid duplicate main-push CI.\n");
   process.exit(1);
 }
 
-console.log(`CI workflow scope policy passed for ${files.length} changed workflow file(s).`);
+console.log(`CI workflow scope policy passed for all ${files.length} workflow file(s).`);

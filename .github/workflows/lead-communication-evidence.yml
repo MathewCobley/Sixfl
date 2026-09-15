@@ -1,11 +1,21 @@
 name: Lead reply evidence and timeline
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/leads/**"
+      - "src/app/(admin)/admin/leads/**"
+      - "src/app/api/admin/leads/**"
+      - "src/components/admin/leads/**"
+      - "tests/lead-communication-evidence.test.cjs"
+      - "tests/lead-sms-status-links.test.cjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/lead-communication-evidence.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: lead-communication-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   lead-evidence:
     runs-on: ubuntu-latest

@@ -1,10 +1,25 @@
 name: Fixture fee inheritance
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/fixture-fee-policy.ts"
+      - "src/lib/payments/fixture-match-fees.ts"
+      - "src/app/(admin)/admin/fixtures/**"
+      - "src/app/api/admin/fixtures/**"
+      - "src/app/api/admin/night-board/update-match/**"
+      - "scripts/apply-publish-tbc-fee-safety.cjs"
+      - "scripts/apply-resilient-published-fee-repair.cjs"
+      - "scripts/fix-publish-tbc-fee-safety-compat.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "tests/fixture-fee-inheritance.test.cjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/fixture-fee-inheritance.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: fixture-fee-inheritance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   fee-inheritance:
     runs-on: ubuntu-latest

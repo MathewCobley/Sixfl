@@ -1,8 +1,17 @@
 name: Player data health identity review
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/players/player-data-health*.ts"
+      - "src/lib/player-pool/contact-history.ts"
+      - "src/app/(admin)/admin/players/data-health/**"
+      - "src/components/admin/players/**"
+      - "tests/player-data-health/**"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "scripts/check-player-pool-profile-reminders.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/player-data-health.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

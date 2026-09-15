@@ -1,8 +1,15 @@
 name: Player payment warning history
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/**"
+      - "src/components/admin/payments/**"
+      - "src/app/(admin)/admin/payments/**"
+      - "tests/player-payment-warning-history*.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/player-payment-warning-history.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

@@ -1,11 +1,25 @@
 name: Referral eligibility update email
 on:
   pull_request:
+    paths:
+      - "src/**/*referral*"
+      - "src/**/*Referral*"
+      - "src/components/admin/email/**"
+      - "tests/referral-ineligibility-email/**"
+      - "tests/referral-eligibility/**"
+      - "tests/email-preview-isolation*.cjs"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260805002000_team_referral_rewards/**"
+      - "prisma/migrations/20260825162500_team_referral_payout_details/**"
+      - "prisma/migrations/20260819232000_fixture_abandonment_workflow/**"
+      - "prisma/migrations/20260912193000_referral_ineligibility/**"
+      - "prisma/migrations/20260912203000_referral_ineligibility_email/**"
+      - ".github/workflows/referral-ineligibility-email.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: referral-ineligibility-email-${{ github.ref }}
+  group: referral-ineligibility-email-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:

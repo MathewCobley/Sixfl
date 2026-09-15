@@ -4,9 +4,13 @@ on:
   pull_request:
     paths:
       - "scripts/**"
-      - "src/app/captain/team/[teamid]/player-payments/**"
+      - "src/app/captain/team/**/player-payments/**"
       - "package.json"
       - ".github/workflows/prebuild-compatibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: prebuild-compatibility-${{ github.event.pull_request.number || github.ref }}

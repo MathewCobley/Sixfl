@@ -1,10 +1,20 @@
 name: Automatic pending squad activation
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*pending*squad*"
+      - "src/**/*Pending*Squad*"
+      - "src/lib/notifications/**"
+      - "tests/pending-squad-activation.test.ts"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/pending-squad-activation.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: pending-squad-activation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   activation:
     runs-on: ubuntu-latest

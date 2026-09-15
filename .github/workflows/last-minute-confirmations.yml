@@ -1,8 +1,19 @@
 name: Last-minute replacement confirmations
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/fixtures/**"
+      - "src/lib/notifications/**"
+      - "src/app/(admin)/admin/night-board/**"
+      - "tests/last-minute-confirmations.test.cjs"
+      - "scripts/check-last-minute-replacement-resolution.mjs"
+      - "scripts/check-night-board-fixture-notifications.mjs"
+      - "scripts/check-fixture-team-change-notifications.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "docs/last-minute-confirmation-policy.md"
+      - "prisma/schema.prisma"
+      - ".github/workflows/last-minute-confirmations.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -79,9 +90,6 @@ jobs:
           test ! -f .github/workflows/integrate-last-minute-once.yml
           git grep -nE 'getAllocatedReplacementConfirmationBlock|getFixtureConfirmationDeliveryBlock|cancelAllocatedReplacementConfirmationRequests|queueInitialFixtureConfirmationEmailForTeam|reconcileLastMinuteReplacement' -- src > replacement-inventory.txt
           git diff --exit-code -- src/lib/fixtures/replacement-confirmation-policy.ts
-          # The complete committed diff is checked above. Legacy prebuild scripts
-          # also rewrite unrelated kit files; check this feature's prepared paths
-          # here without treating their pre-existing whitespace as its regression.
           git diff --check -- src/lib/fixtures/replacement-confirmation-policy.ts src/lib/fixtures/confirmation-emails.ts src/lib/fixtures/confirmation-reminders.ts src/lib/fixtures/confirmation-warning-emails.ts src/lib/fixtures/last-minute-replacement-resolution.ts src/lib/fixtures/last-minute-replacement.ts src/lib/notifications/processor.ts tests/last-minute-confirmations.test.cjs docs/last-minute-confirmation-policy.md .github/workflows/last-minute-confirmations.yml
       - uses: actions/upload-artifact@v4
         if: always()

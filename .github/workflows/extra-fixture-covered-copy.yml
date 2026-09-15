@@ -9,15 +9,12 @@ on:
       - 'tests/extra-fixture-covered-copy.test.cjs'
       - 'scripts/check-last-minute-replacement-resolution.mjs'
       - '.github/workflows/extra-fixture-covered-copy.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/fixtures/last-minute-replacement*'
-      - 'prisma/migrations/20260906222500_neutral_extra_fixture_covered_templates/**'
-      - 'tests/extra-fixture-covered-copy.test.cjs'
-      - '.github/workflows/extra-fixture-covered-copy.yml'
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: extra-fixture-covered-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   neutral-closure:
     runs-on: ubuntu-latest

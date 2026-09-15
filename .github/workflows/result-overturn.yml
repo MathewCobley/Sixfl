@@ -1,11 +1,23 @@
 name: Overturned result and predictor integrity
 on:
   pull_request:
+    paths:
+      - "src/**/*result*"
+      - "src/**/*Result*"
+      - "src/lib/fixtures/**"
+      - "src/app/(admin)/admin/results/**"
+      - "src/app/captain/team/**/results/**"
+      - "src/app/captain/team/**/results-history/**"
+      - "tests/result-overturn/**"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260819232000_fixture_abandonment_workflow/**"
+      - "prisma/migrations/20260912120000_result_overturn_audit/**"
+      - ".github/workflows/result-overturn.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: result-overturn-${{ github.ref }}
+  group: result-overturn-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:

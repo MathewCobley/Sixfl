@@ -1,8 +1,16 @@
 name: PlayerPool response checks and contact history
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/(admin)/admin/player-pool/**"
+      - "src/lib/player-pool/**"
+      - "src/components/admin/player-pool/**"
+      - "tests/player-pool-response-check.test.ts"
+      - "scripts/check-player-pool-profile-reminders.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/player-pool-response-check.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

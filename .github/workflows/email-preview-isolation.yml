@@ -2,11 +2,17 @@ name: Admin email preview isolation
 on:
   pull_request:
     paths:
-      - "src/app/(admin)/**"
-      - "src/components/admin/**"
+      - "src/components/admin/email/**"
+      - "src/components/admin/messages/**"
+      - "src/components/admin/email-templates/**"
+      - "src/app/(admin)/admin/messages/**"
+      - "src/app/(admin)/admin/email-templates/**"
+      - "src/app/(admin)/admin/queue/**"
+      - "src/app/(admin)/admin/referrals/**"
       - "src/lib/email/**"
       - "tests/email-preview-isolation*.cjs"
       - "tests/helpers/email-preview-render.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
       - ".github/workflows/email-preview-isolation.yml"
   workflow_dispatch:
 permissions:

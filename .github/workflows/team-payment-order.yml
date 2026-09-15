@@ -1,11 +1,21 @@
 name: Team payment oldest-first policy
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/**"
+      - "src/app/pay/**"
+      - "src/app/captain/**"
+      - "scripts/apply-captain-team-credit-explanation.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "tests/team-payment-order*.test.cjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/team-payment-order.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-payment-order-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   payment-order:
     name: Preserve direct payment priority and squad allocations

@@ -1,8 +1,18 @@
 name: Individual player payment warning
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/**"
+      - "src/lib/notifications/**"
+      - "src/app/(admin)/admin/payments/**"
+      - "src/components/admin/payments/**"
+      - "tests/player-payment-warning*.test.cjs"
+      - "tests/player-payment-warning.browser.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "scripts/check-squad-invite-placeholders.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/player-payment-warning.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

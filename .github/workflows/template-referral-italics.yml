@@ -1,11 +1,21 @@
 name: Email referral button and italics
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/(admin)/admin/email-templates/**"
+      - "src/components/admin/email-templates/**"
+      - "src/app/(admin)/admin/messages/**"
+      - "src/components/admin/messages/**"
+      - "src/lib/email/**"
+      - "src/lib/communications/**"
+      - "tests/template-referral-italics*.cjs"
+      - ".github/workflows/template-referral-italics.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: template-referral-italics-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   editor:
     runs-on: ubuntu-latest

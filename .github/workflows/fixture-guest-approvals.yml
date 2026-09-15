@@ -1,9 +1,19 @@
 name: Fixture guest approval contracts
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/fixtures/guest-approvals.ts"
+      - "src/**/*guest*approval*"
+      - "src/**/*Guest*Approval*"
+      - "tests/fixture-guest-approvals.test.ts"
+      - "prisma/schema.prisma"
+      - ".github/workflows/fixture-guest-approvals.yml"
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fixture-guest-approvals-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   guest-approvals:
     runs-on: ubuntu-latest

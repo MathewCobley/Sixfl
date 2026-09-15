@@ -8,16 +8,11 @@ on:
       - "src/app/(admin)/admin/ai-predictor/backtest/page.tsx"
       - "scripts/check-ai-predictor-v3-backtest.ts"
       - ".github/workflows/ai-predictor-v3-laboratory.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "src/lib/fixtures/predictorV3Candidate.ts"
-      - "src/lib/fixtures/predictorBacktest.ts"
-      - "src/app/(admin)/admin/ai-predictor/backtest/page.tsx"
-      - "scripts/check-ai-predictor-v3-backtest.ts"
-      - ".github/workflows/ai-predictor-v3-laboratory.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ai-predictor-v3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   laboratory:
