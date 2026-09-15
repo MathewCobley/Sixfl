@@ -22,6 +22,7 @@ type RefereeWelcomeRow = {
   refereeId: string;
   status: string;
   at: Date | null;
+  failureReason: string | null;
 };
 
 type RefereeAccessRow = {
@@ -45,6 +46,7 @@ function formatShortDate(value: Date | null | undefined) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/London",
   }).format(value);
 }
 
@@ -81,36 +83,37 @@ function getErrorMessage(error?: string) {
 function dispatchStatusClasses(status?: string | null) {
   if (status === "SENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
   if (status === "QUEUED" || status === "PROCESSING") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
-  if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  if (status === "FAILED") return "border-red-400/20 bg-red-500/10 text-red-100";
+  // Cancellation describes this email only, not the referee's access or account.
   return "border-white/10 bg-white/[0.03] text-white/55";
 }
 
 function formatWelcomeLabel(row?: RefereeWelcomeRow | null) {
-  if (!row) return "Welcome not sent";
+  if (!row) return "Not sent";
   const when = formatShortDate(row.at);
 
   switch (row.status) {
     case "SENT":
-      return `Welcome sent ${when}`;
+      return `Sent — ${when}`;
     case "QUEUED":
-      return `Welcome queued ${when}`;
+      return `Queued — ${when}`;
     case "PROCESSING":
-      return `Welcome processing ${when}`;
+      return `Processing — ${when}`;
     case "FAILED":
-      return `Welcome failed ${when}`;
+      return `Not sent (failed) — ${when}`;
     case "SKIPPED":
-      return `Welcome skipped ${when}`;
+      return `Not sent (skipped) — ${when}`;
     case "CANCELLED":
-      return `Welcome cancelled ${when}`;
+      return `Not sent (cancelled) — ${when}`;
     default:
-      return `Welcome recorded ${when}`;
+      return `Status recorded — ${when}`;
   }
 }
 
 function getDashboardLabel(access?: RefereeAccessRow | null) {
-  if (!access?.lastLoginAt) return "Dashboard not opened yet";
+  if (!access?.lastLoginAt) return "No sign-in recorded yet";
   const activeText = access.activeSessionCount > 0 ? " · active session" : "";
-  return `Dashboard signed in ${formatShortDate(access.lastLoginAt)}${activeText}`;
+  return `Already accessed — ${formatShortDate(access.lastLoginAt)}${activeText}`;
 }
 
 function dashboardClasses(access?: RefereeAccessRow | null) {
@@ -198,7 +201,11 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
           SELECT DISTINCT ON (d."sourceId")
             d."sourceId" AS "refereeId",
             d."status"::text AS "status",
-            COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") AS "at"
+            d."failureReason" AS "failureReason",
+            CASE WHEN d."status" = 'CANCELLED'
+              THEN COALESCE(d."cancelledAt", d."processedAt", d."createdAt")
+              ELSE COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt")
+            END AS "at"
           FROM "NotificationDispatch" d
           LEFT JOIN "NotificationTemplate" template ON template."id" = d."templateId"
           WHERE d."sourceId" IN (${Prisma.join(refereeIds)})
@@ -209,7 +216,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
               OR d."metadata"::text ILIKE '%referee-welcome-login-email%'
               OR d."metadata"::text ILIKE '%central_referee_welcome_invite%'
             )
-          ORDER BY d."sourceId", COALESCE(d."sentAt", d."failedAt", d."processedAt", d."createdAt") DESC
+          ORDER BY d."sourceId", d."createdAt" DESC, d."id" DESC
         `)
       : [],
     refereeIds.length
@@ -313,7 +320,7 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
           <input type="text" name="q" defaultValue={query} placeholder="Search by referee name or email" className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none placeholder:text-white/35" />
           <div className="flex gap-3">
             <button type="submit" className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-500 px-5 text-sm font-semibold text-black transition hover:bg-emerald-400">Search</button>
-            <Link href="/admin/referees" className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10">Clear</Link>
+            <Link href="/admin/referees" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-semibold text-white transition hover:bg-white/10">Clear</Link>
           </div>
         </form>
       </div>
@@ -366,15 +373,22 @@ export default async function AdminRefereesPage({ searchParams }: { searchParams
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      <div className={`rounded-2xl border p-4 ${dispatchStatusClasses(welcome?.status)}`}>
+                    <div className="mt-5 space-y-3">
+                      <section aria-label="Dashboard access" className={`rounded-2xl border p-4 ${dashboardClasses(access)}`}>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Dashboard access</div>
+                        <div className="mt-2 text-base font-semibold text-white">{getDashboardLabel(access)}</div>
+                        {access?.lastLoginAt ? <p className="mt-1 text-xs opacity-70">Based on the last recorded account sign-in.</p> : null}
+                      </section>
+                      <section aria-label="Welcome email" className={`rounded-2xl border p-3 ${dispatchStatusClasses(welcome?.status)}`}>
                         <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Welcome email</div>
-                        <div className="mt-2 text-sm font-semibold text-white">{formatWelcomeLabel(welcome)}</div>
-                      </div>
-                      <div className={`rounded-2xl border p-4 ${dashboardClasses(access)}`}>
-                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] opacity-70">Dashboard sign-in</div>
-                        <div className="mt-2 text-sm font-semibold text-white">{getDashboardLabel(access)}</div>
-                      </div>
+                        <div className="mt-2 text-sm font-medium text-white">{formatWelcomeLabel(welcome)}</div>
+                        {welcome?.status === "CANCELLED" ? (
+                          <>
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm text-white/70"><span className="font-medium">Reason: </span>{welcome.failureReason?.trim() || "No cancellation reason recorded."}</p>
+                            <p className="mt-1 text-xs text-white/50">This email status does not change dashboard access.</p>
+                          </>
+                        ) : null}
+                      </section>
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-4">
