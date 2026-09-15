@@ -29,7 +29,7 @@ export function PlayerContributionTable({ rows, isAdmin, showAdjustmentDetails =
     </div>
     <div className="divide-y divide-white/10">{rows.map(row => <div key={row.id} data-player-contribution-pence={row.amountPence} className={`${columns} px-4 py-4`}>
       <div className="col-span-3 min-w-0 sm:col-span-1">
-        <p className="break-words text-sm font-semibold text-white">{row.name}</p>
+        <Link href={`./player-payments/account/${row.id}`} className="break-words text-sm font-semibold text-white underline decoration-white/25 underline-offset-4 transition hover:text-emerald-200 hover:decoration-emerald-300/60">{row.name}</Link>
         <p className={`mt-1 text-xs font-medium ${row.outstandingPence > 0 || row.statusLabel === "Check balance" ? "text-amber-100" : "text-emerald-100/80"}`}>{!showInternal && row.statusLabel === "Settled with adjustment" ? "Settled" : row.statusLabel}</p>
         {row.statusLabel === "Check balance" ? <p className="mt-2 text-xs leading-5 text-amber-100">{showInternal ? row.statusMeta : "Payment record needs review."}</p> : null}
         {row.contact ? <details className="mt-1 text-xs text-white/55"><summary className="cursor-pointer">Contact</summary><p className="mt-1 break-all">{row.contact}</p></details> : null}
