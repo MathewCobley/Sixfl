@@ -1,13 +1,13 @@
-export const KIT_OFFER_TERMS_VERSION = "2.2";
-export const KIT_OFFER_TERMS_EFFECTIVE_DATE = "22 August 2026";
-export const KIT_OFFER_TERMS_NEXT_REVIEW = "22 August 2027";
+export const KIT_OFFER_TERMS_VERSION = "2.3";
+export const KIT_OFFER_TERMS_EFFECTIVE_DATE = "13 September 2026";
+export const KIT_OFFER_TERMS_NEXT_REVIEW = "13 September 2027";
 
 export type KitOfferTermSection = {
   title: string;
   points: string[];
 };
 
-export const kitOfferTermsSections: KitOfferTermSection[] = [
+const kitOfferTermsV22Sections: KitOfferTermSection[] = [
   {
     title: "1. Who can receive the offer",
     points: [
@@ -93,7 +93,43 @@ export const kitOfferTermsSections: KitOfferTermSection[] = [
   },
 ];
 
+export const kitOfferTermsSections: KitOfferTermSection[] = kitOfferTermsV22Sections.map((section) => {
+  if (section.title.startsWith("10.")) {
+    return {
+      title: "10. Continued league membership, withdrawal, transfer and cash value",
+      points: [
+        "Kits supplied under a SIXFL free kit offer are conditional on the team remaining an active member of the league until the free kit has been delivered.",
+        "If a team withdraws from the league before its free kit has been delivered, its entitlement to the free kit ends immediately. SIXFL may cancel the order or retain the kit if production has already taken place, and the team will no longer be entitled to receive the free kit.",
+        "For these terms, withdrawal includes a team choosing to leave the league, failing to fulfil fixtures, or otherwise ceasing participation in the league. The same principle applies where a team is suspended or removed from the competition before delivery.",
+        "The free offer has no cash alternative and cannot be transferred to another team without SIXFL approval.",
+      ],
+    };
+  }
+
+  if (section.title.startsWith("11.")) {
+    return {
+      title: "11. Paid kits if a team leaves or is removed",
+      points: [
+        "This withdrawal condition does not apply to kits or additional items that the team or purchaser has paid for in full.",
+        "Paid-for kits and additional items will still be supplied even if the team subsequently withdraws, is suspended or is removed from a SIXFL competition, subject to the normal production and delivery terms.",
+        "Kit payments are accounted for separately from match fees, disciplinary charges and other league balances unless SIXFL and the purchaser expressly agree otherwise.",
+      ],
+    };
+  }
+
+  return { title: section.title, points: [...section.points] };
+});
+
 export const archivedKitOfferTermsDocuments = [
+  {
+    id: "founding-team-kit-terms-2-2",
+    document: "Founding Team Kit Offer Terms",
+    version: "2.2",
+    effectiveDate: "22 August 2026",
+    supersededDate: "13 September 2026",
+    status: "Superseded" as const,
+    sections: kitOfferTermsV22Sections,
+  },
   {
     id: "founding-team-kit-terms-2-1",
     document: "Founding Team Kit Offer Terms",
