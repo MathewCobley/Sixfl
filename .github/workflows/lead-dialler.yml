@@ -12,6 +12,10 @@ on:
       - "tests/lead-dialler-autodial.test.cjs"
       - ".github/workflows/lead-dialler.yml"
 
+concurrency:
+  group: lead-dialler-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Filtered queue and Auto Dial

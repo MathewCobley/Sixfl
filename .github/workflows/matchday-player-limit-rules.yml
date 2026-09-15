@@ -26,6 +26,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   rules:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:

@@ -21,6 +21,10 @@ on:
       - ".github/workflows/night-board-fixture-change.yml"
   workflow_dispatch:
 
+concurrency:
+  group: night-board-fixture-change-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify notification workflow

@@ -8,16 +8,12 @@ on:
       - 'prisma/migrations/20260906225000_cancel_resolved_replacement_sms/**'
       - 'tests/replacement-sms-lifecycle.test.cjs'
       - '.github/workflows/replacement-sms-lifecycle.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/fixtures/*replacement*'
-      - 'src/lib/notifications/**'
-      - 'prisma/migrations/20260906225000_cancel_resolved_replacement_sms/**'
-      - 'tests/replacement-sms-lifecycle.test.cjs'
-      - '.github/workflows/replacement-sms-lifecycle.yml'
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: replacement-sms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   cancelled-sms:
     runs-on: ubuntu-latest

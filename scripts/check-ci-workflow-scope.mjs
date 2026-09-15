@@ -26,6 +26,12 @@ const coreBroadPullRequestWorkflows = new Set([
   ".github/workflows/pr-hygiene.yml",
 ]);
 
+// This workflow keeps a lightweight post-deploy public-page verifier on main.
+// Its heavyweight `rules` job is explicitly disabled for push events.
+const allowedMainPushWorkflows = new Set([
+  ".github/workflows/matchday-player-limit-rules.yml",
+]);
+
 const failures = [];
 const files = workflowFiles();
 
@@ -47,8 +53,17 @@ for (const file of files) {
   }
 
   const pushMain = /^\s{2}push:\s*(?:\n[\s\S]*?)?^\s{4}branches:\s*(?:\[\s*main\s*\]|\n\s{6}-\s*main\s*$)/m.test(source);
-  if (pushMain && !coreBroadPullRequestWorkflows.has(file)) {
+  if (pushMain && !coreBroadPullRequestWorkflows.has(file) && !allowedMainPushWorkflows.has(file)) {
     failures.push(`${file}: do not rerun feature CI on every push to main; PR verification plus production deployment is the default.`);
+  }
+
+  if (allowedMainPushWorkflows.has(file)) {
+    if (!/^\s{4}if:\s*github\.event_name != 'push'\s*$/m.test(source)) {
+      failures.push(`${file}: the heavyweight PR verification job must stay disabled on main push events.`);
+    }
+    if (!/^\s{2}live-publication:\s*$/m.test(source)) {
+      failures.push(`${file}: the allowed main-push exception is only for the lightweight live-publication verifier.`);
+    }
   }
 }
 
