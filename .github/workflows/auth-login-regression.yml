@@ -2,9 +2,22 @@ name: SIXFL sign-in lifecycle regression
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/auth.ts"
+      - "src/lib/auth/**"
+      - "src/app/api/auth/**"
+      - "src/app/(public)/login/**"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/**"
+      - "scripts/apply-player-email-verification-v2.cjs"
+      - "scripts/apply-login-session-retention-guard.cjs"
+      - "tests/auth-sign-in-lifecycle.test.cjs"
+      - ".github/workflows/auth-login-regression.yml"
   workflow_dispatch:
+
+concurrency:
+  group: auth-login-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   login:
