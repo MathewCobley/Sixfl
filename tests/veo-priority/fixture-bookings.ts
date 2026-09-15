@@ -28,10 +28,10 @@ async function main(){
  const choice=async(n:number,value:VeoFixtureChoice)=>{const fixtureId=fixtures[Math.floor(n/2)];const offer=await readFixtureVeoOffer(fixtureId,teams[n]);assert.ok(offer?.available);return saveFixtureVeoChoice({fixtureId,teamId:teams[n],actorId:players[n],choice:value,termsVersion:VEO_FIXTURE_TERMS,version:offer.version});};
  assert.equal((await readFixtureVeoOffer(fixtures[0],teams[0]))?.defaultChoice,'NONE');
  await assert.rejects(choice(0,'MATCH'),/Confirm your team/);
- await assert.rejects(confirmCaptainAttendance(fixtures[0],teams[0],players[1]),/active captain/);
- await assert.rejects(confirmCaptainAttendance(fixtures[0],teams[0],admin.id),/active captain/);
+ await assert.rejects(confirmCaptainAttendance(fixtures[0],teams[0],players[1]),/administrator or captain of this exact team/);
+ await confirmCaptainAttendance(fixtures[0],teams[0],admin.id);
  await assert.rejects(confirmCaptainAttendance(fixtures[0],teams[2],players[2]),/not available/);
- pass('no opt-in by default; missing confirmation, wrong team, another captain and admins refused');
+ pass('no opt-in by default; missing confirmation and wrong-team captains are refused while an admin can confirm attendance');
  for(let i=0;i<12;i++)await confirmCaptainAttendance(fixtures[Math.floor(i/2)],teams[i],players[i]);
  const offer=await readFixtureVeoOffer(fixtures[0],teams[0]);assert.ok(offer);
  await Promise.all([1,2].map(()=>saveFixtureVeoChoice({fixtureId:fixtures[0],teamId:teams[0],actorId:players[0],choice:'MATCH',termsVersion:VEO_FIXTURE_TERMS,version:offer!.version})));
