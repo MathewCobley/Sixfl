@@ -38,6 +38,8 @@ fs.writeFileSync(broadcastPath, broadcast, "utf8");
 // ---------------------------------------------------------------------------
 // League Broadcast: all selected team messages now enter the canonical router.
 // That router decides whether the template is standard, poll or Cup workflow.
+// Workflow placeholders are therefore allowed through the generic unresolved-
+// token guard and resolved by the canonical router instead.
 // ---------------------------------------------------------------------------
 let leagueActions = fs.readFileSync(leagueActionsPath, "utf8");
 leagueActions = replaceOnce(
@@ -45,6 +47,20 @@ leagueActions = replaceOnce(
   'import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";',
   'import { sendSIXFLTeamCommunication } from "@/lib/communications/send-sixfl-team-communication";',
   "league communication sender import",
+);
+
+if (!leagueActions.includes("TEAM_EMAIL_WORKFLOW_TOKENS")) {
+  leagueActions = replaceOnce(
+    leagueActions,
+    'const POLL_TOKENS = ["pollOptions", "pollLink"];',
+    'const POLL_TOKENS = ["pollOptions", "pollLink"];\nconst TEAM_EMAIL_WORKFLOW_TOKENS = [\n  "cupName",\n  "cupFormat",\n  "matchFee",\n  "venueNote",\n  "scheduleNote",\n  "responseDeadline",\n  "yesResponseUrl",\n  "noResponseUrl",\n  "yesUrl",\n  "noUrl",\n];',
+    "league workflow token list",
+  );
+}
+
+leagueActions = leagueActions.replace(
+  "      extraTokens: selectedPollId ? POLL_TOKENS : [],",
+  "      extraTokens: [...(selectedPollId ? POLL_TOKENS : []), ...TEAM_EMAIL_WORKFLOW_TOKENS],",
 );
 leagueActions = leagueActions.replace(
   "const result = await sendTeamBroadcastMessage({",
@@ -92,7 +108,7 @@ fs.writeFileSync(teamBulkActionsPath, teamActions, "utf8");
 
 for (const [file, markers] of [
   [broadcastPath, ["isTransactional?: boolean", "input.isTransactional ?? true"]],
-  [leagueActionsPath, ["sendSIXFLTeamCommunication"]],
+  [leagueActionsPath, ["sendSIXFLTeamCommunication", "TEAM_EMAIL_WORKFLOW_TOKENS"]],
   [teamBulkActionsPath, ["sendSIXFLTeamCommunication", 'if (parsed.type === "team")', "sendMode: cupSendMode"]],
 ]) {
   const finalSource = fs.readFileSync(file, "utf8");
