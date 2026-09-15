@@ -2,11 +2,22 @@ name: Venue-neutral fixture scheduling
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/(admin)/admin/fixtures/generate/division-actions.ts"
+      - "src/app/api/admin/fixtures/generate-next-week/route.ts"
+      - "src/app/api/admin/fixtures/matchup-grid/route.ts"
+      - "src/components/admin/fixtures/FixtureMatchupGrid.tsx"
+      - "src/app/(admin)/admin/fixtures/generate/page.tsx"
+      - "scripts/check-venue-neutral-fixtures.mjs"
+      - ".github/workflows/venue-neutral-fixtures.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: venue-neutral-fixtures-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   venue-neutral-fixtures:
