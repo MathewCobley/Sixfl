@@ -130,6 +130,8 @@ export async function updatePollAction(formData: FormData) {
   const allowQuantity = parseBoolean(formData.get("allowQuantity"));
   const optionIds = formData.getAll("optionId").map((value) => clean(value)).filter(Boolean);
   const optionLabels = formData.getAll("optionLabel").map((value) => clean(value));
+  const optionResponseMessages = formData.getAll("optionResponseMessage").map((value) => clean(value));
+  const optionFollowUpPrompts = formData.getAll("optionFollowUpPrompt").map((value) => clean(value));
   const newOptions = parseOptions(clean(formData.get("newOptions")));
 
   if (!pollId || !title || !question) {
@@ -163,10 +165,14 @@ export async function updatePollAction(formData: FormData) {
     for (const [index, optionId] of optionIds.entries()) {
       const label = optionLabels[index]?.trim();
       if (!label) continue;
+      const responseMessage = optionResponseMessages[index]?.trim() || null;
+      const followUpPrompt = optionFollowUpPrompts[index]?.trim() || null;
 
       await tx.$executeRaw(Prisma.sql`
         UPDATE "SIXFLPollOption"
         SET "label" = ${label},
+            "responseMessage" = ${responseMessage},
+            "followUpPrompt" = ${followUpPrompt},
             "sortOrder" = ${index + 1},
             "updatedAt" = ${now}
         WHERE "id" = ${optionId}

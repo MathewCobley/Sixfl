@@ -82,6 +82,32 @@ async function loadManifest() {
   return parsed.replacements;
 }
 
+function containsRequiredMarker(content, expected) {
+  if (content.includes(expected)) return true;
+
+  // Replacement contracts sometimes record a compact JSX ownership marker such
+  // as <main ...>{children}</main>. Formatting or adding owned React content
+  // inside that same element must not invalidate the contract. For this narrow
+  // marker shape, still require the same opening tag, {children}, and matching
+  // closing tag to exist in that order. All other markers remain exact matches.
+  const jsxWrapper = expected.match(
+    /^(<([A-Za-z][\w.]*)\b[^>]*>)(\{children\})(<\/\2>)$/,
+  );
+  if (!jsxWrapper) return false;
+
+  const [, openingTag, , childMarker, closingTag] = jsxWrapper;
+  const openingIndex = content.indexOf(openingTag);
+  if (openingIndex < 0) return false;
+
+  const childIndex = content.indexOf(
+    childMarker,
+    openingIndex + openingTag.length,
+  );
+  if (childIndex < 0) return false;
+
+  return content.indexOf(closingTag, childIndex + childMarker.length) >= 0;
+}
+
 function validateSourcePathList({ id, field, value, allowEmpty = true }) {
   const errors = [];
   const paths = [];
@@ -226,7 +252,7 @@ async function verifyContracts(replacements) {
 
       const content = await readFile(absolutePath(repoPath), "utf8");
       for (const expected of check.contains) {
-        if (!content.includes(expected)) {
+        if (!containsRequiredMarker(content, expected)) {
           errors.push(
             `${id}: ${repoPath} no longer contains required replacement marker: ${JSON.stringify(expected)}.`,
           );
