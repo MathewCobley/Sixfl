@@ -131,3 +131,4 @@ if (fs.readFileSync(teamBulkActionsPath, "utf8").includes("ordinary Team Message
 console.log("Unified SIXFL team-email engine applied to Team Messages and League Broadcast.");
 
 require("./apply-referee-part-cash-payment.cjs");
+require("./apply-referee-part-cash-referee-view.cjs");
