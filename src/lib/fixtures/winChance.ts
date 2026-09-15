@@ -521,9 +521,8 @@ export function calculateFixtureWinChance(input: {
   const awayStats = statsByTeamId.get(input.awayTeamId);
   const homeGames = homeStats?.played ?? 0;
   const awayGames = awayStats?.played ?? 0;
-  const completedGames = homeGames + awayGames;
 
-  if (completedGames === 0) {
+  if (homeGames === 0 || awayGames === 0) {
     return {
       home: 35,
       draw: 30,
@@ -531,7 +530,7 @@ export function calculateFixtureWinChance(input: {
       predictedResult: { homeScore: 0, awayScore: 0, label: "Too early" },
       confidence: "Low",
       explanation:
-        "No completed results were found for these teams yet, so a score prediction will appear once there is usable match data.",
+        "A score prediction will appear once both teams have at least one completed result.",
     };
   }
 
