@@ -29,11 +29,26 @@ jobs:
       - name: Check native homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
 
+      - name: Check native referee welcome and dashboard status
+        run: node --test tests/critical-pages/referee-welcome-status.test.cjs
+
       - name: Apply the complete production source-preparation chain
         run: npm run prebuild
 
       - name: Check prepared homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
+
+      - name: Check prepared referee welcome and dashboard status
+        run: node --test tests/critical-pages/referee-welcome-status.test.cjs
+
+      - name: Audit referee welcome presentation and sending routes
+        shell: bash
+        run: |
+          git grep -n -E 'formatWelcomeLabel|REFEREE_INVITE|referee-welcome-login-email|central_referee_welcome_invite' -- src scripts || true
+          if git grep -n -F 'Welcome cancelled' -- src; then
+            echo 'The ambiguous referee welcome cancellation wording must not return.'
+            exit 1
+          fi
 
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
