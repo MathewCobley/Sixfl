@@ -1,210 +1,32 @@
+// Compatibility only: the older standard-pay-per-kit preparation still writes
+// these two functions. Delegate their final implementation to the native offer
+// service, which owns the rule and is tested before and after full prebuild.
+// Do not add business rules here. Re-running this adapter must be a no-op.
 const fs = require("node:fs");
 const path = require("node:path");
-
+const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 
-function patchFile(filePath, before, after, label) {
+function delegate(filePath, name, implementation) {
   const absolutePath = path.join(root, filePath);
-  let source = fs.readFileSync(absolutePath, "utf8");
-
-  if (source.includes(after)) return;
-  if (!source.includes(before)) {
-    throw new Error(`Expected ${label} source was not found in ${filePath}`);
-  }
-
-  source = source.replace(before, after);
-  fs.writeFileSync(absolutePath, source, "utf8");
+  const source = fs.readFileSync(absolutePath, "utf8");
+  const file = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
+  const node = file.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === name);
+  if (!node) throw new Error(`Missing legacy kit adapter ${name} in ${filePath}`);
+  const next = source.slice(0, node.getStart(file)) + implementation + source.slice(node.end);
+  if (next !== source) fs.writeFileSync(absolutePath, next, "utf8");
 }
 
-const quantityPath = "src/lib/kits/extra-kit-quantity.ts";
-const oldIncludedQuantity = `async function getIncludedKitQuantity(teamId: string) {
-  const rows = await prisma.$queryRaw<Array<{ included: boolean }>>(Prisma.sql\`
-    SELECT (
-      EXISTS (
-        SELECT 1
-        FROM "InterestLead" lead
-        WHERE lead."convertedTeamId" = \${teamId}
-          AND lead."wantsFreeKit" = TRUE
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM "Team" kit_team
-        WHERE kit_team."id" = \${teamId}
-          AND kit_team."wantsFreeKit" = TRUE
-      )
-    ) AS "included"
-  \`);
+delegate("src/lib/kits/extra-kit-quantity.ts", "getIncludedKitQuantity", `async function getIncludedKitQuantity(teamId: string) {
+  const { getTeamFreeKitOffer } = await import("@/lib/kits/free-kit-offer");
+  const offer = await getTeamFreeKitOffer(teamId);
+  return offer?.includedEligible ? TEAM_KIT_QUANTITY : 0;
+}`);
 
-  return rows[0]?.included ? TEAM_KIT_QUANTITY : 0;
-}`;
-const newIncludedQuantity = `async function getIncludedKitQuantity(teamId: string) {
-  const rows = await prisma.$queryRaw<Array<{ included: boolean }>>(Prisma.sql\`
-    SELECT (
-      (
-        EXISTS (
-          SELECT 1
-          FROM "InterestLead" lead
-          WHERE lead."convertedTeamId" = \${teamId}
-            AND lead."wantsFreeKit" = TRUE
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "Team" kit_team
-          WHERE kit_team."id" = \${teamId}
-            AND kit_team."wantsFreeKit" = TRUE
-        )
-      )
-      AND (
-        NOT EXISTS (
-          SELECT 1
-          FROM "Team" suppressed_team
-          WHERE suppressed_team."id" = \${teamId}
-            AND suppressed_team."freeKitOfferExpiredAt" IS NOT NULL
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "TeamKitOrder" current_order
-          WHERE current_order."teamId" = \${teamId}
-        )
-      )
-    ) AS "included"
-  \`);
+delegate("src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts", "getKitEligibility", `async function getKitEligibility(teamId: string) {
+  const { getTeamFreeKitOffer } = await import("@/lib/kits/free-kit-offer");
+  const offer = await getTeamFreeKitOffer(teamId);
+  return { eligible: Boolean(offer?.includedEligible), legacyOffer: Boolean(offer?.legacyOffer) };
+}`);
 
-  return rows[0]?.included ? TEAM_KIT_QUANTITY : 0;
-}`;
-patchFile(
-  quantityPath,
-  oldIncludedQuantity,
-  newIncludedQuantity,
-  "free-kit included quantity eligibility",
-);
-
-const paymentRoutePath =
-  "src/app/api/captain/team/[teamid]/extra-kit-payments/route.ts";
-const oldEligibility = `async function getKitEligibility(teamId: string) {
-  const rows = await prisma.$queryRaw<
-    Array<{ eligible: boolean; legacyOffer: boolean }>
-  >\`
-    SELECT
-      (
-        EXISTS (
-          SELECT 1
-          FROM "InterestLead" lead
-          WHERE lead."convertedTeamId" = \${teamId}
-            AND lead."wantsFreeKit" = TRUE
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "Team" kit_team
-          WHERE kit_team."id" = \${teamId}
-            AND kit_team."wantsFreeKit" = TRUE
-        )
-      ) AS "eligible",
-      (
-        EXISTS (
-          SELECT 1
-          FROM "InterestLead" lead
-          WHERE lead."convertedTeamId" = \${teamId}
-            AND lead."wantsFreeKit" = TRUE
-            AND lead."createdAt" < \${KIT_PACKAGE_CHANGEOVER_AT}
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "Team" legacy_team
-          WHERE legacy_team."id" = \${teamId}
-            AND legacy_team."wantsFreeKit" = TRUE
-            AND legacy_team."createdAt" < \${KIT_PACKAGE_CHANGEOVER_AT}
-        )
-      ) AS "legacyOffer"
-  \`;
-
-  return {
-    eligible: Boolean(rows[0]?.eligible),
-    legacyOffer: Boolean(rows[0]?.legacyOffer),
-  };
-}`;
-const newEligibility = `async function getKitEligibility(teamId: string) {
-  const rows = await prisma.$queryRaw<
-    Array<{
-      requestedFreeKit: boolean;
-      legacyOffer: boolean;
-      freeKitOfferExpired: boolean;
-      hasExistingOrder: boolean;
-    }>
-  >\`
-    SELECT
-      (
-        EXISTS (
-          SELECT 1
-          FROM "InterestLead" lead
-          WHERE lead."convertedTeamId" = \${teamId}
-            AND lead."wantsFreeKit" = TRUE
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "Team" kit_team
-          WHERE kit_team."id" = \${teamId}
-            AND kit_team."wantsFreeKit" = TRUE
-        )
-      ) AS "requestedFreeKit",
-      (
-        EXISTS (
-          SELECT 1
-          FROM "InterestLead" lead
-          WHERE lead."convertedTeamId" = \${teamId}
-            AND lead."wantsFreeKit" = TRUE
-            AND lead."createdAt" < \${KIT_PACKAGE_CHANGEOVER_AT}
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM "Team" legacy_team
-          WHERE legacy_team."id" = \${teamId}
-            AND legacy_team."wantsFreeKit" = TRUE
-            AND legacy_team."createdAt" < \${KIT_PACKAGE_CHANGEOVER_AT}
-        )
-      ) AS "legacyOffer",
-      EXISTS (
-        SELECT 1
-        FROM "Team" suppressed_team
-        WHERE suppressed_team."id" = \${teamId}
-          AND suppressed_team."freeKitOfferExpiredAt" IS NOT NULL
-      ) AS "freeKitOfferExpired",
-      EXISTS (
-        SELECT 1
-        FROM "TeamKitOrder" current_order
-        WHERE current_order."teamId" = \${teamId}
-      ) AS "hasExistingOrder"
-  \`;
-
-  const row = rows[0];
-  const requestedFreeKit = Boolean(row?.requestedFreeKit);
-  const hasExistingOrder = Boolean(row?.hasExistingOrder);
-  const freeKitOfferExpired = Boolean(row?.freeKitOfferExpired);
-
-  return {
-    eligible:
-      requestedFreeKit && (!freeKitOfferExpired || hasExistingOrder),
-    legacyOffer: Boolean(row?.legacyOffer),
-  };
-}`;
-patchFile(
-  paymentRoutePath,
-  oldEligibility,
-  newEligibility,
-  "free-kit eligibility with paid-kit fallback",
-);
-
-const quantitySource = fs.readFileSync(path.join(root, quantityPath), "utf8");
-const paymentRouteSource = fs.readFileSync(path.join(root, paymentRoutePath), "utf8");
-if (
-  !quantitySource.includes('suppressed_team."freeKitOfferExpiredAt" IS NOT NULL') ||
-  !quantitySource.includes('FROM "TeamKitOrder" current_order') ||
-  !paymentRouteSource.includes("requestedFreeKit && (!freeKitOfferExpired || hasExistingOrder)") ||
-  !paymentRouteSource.includes("const purchaseOnly = !eligibility.eligible;")
-) {
-  throw new Error("Free-kit expiry paid-kit fallback was not applied correctly.");
-}
-
-console.log(
-  "Expired unclaimed free-kit offers now fall back to the normal paid £20 kit flow; existing kit orders keep their entitlement.",
-);
+console.log("Prepared kit pricing delegates to the native audited team offer service.");
