@@ -2,12 +2,26 @@ name: Admin-only matchweek reports
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/app/(admin)/admin/matchweek-reports/**"
+      - "src/components/admin/matchweek-reports/**"
+      - "src/lib/matchweek-reports/**"
+      - "src/app/(admin)/admin/layout.tsx"
+      - "src/components/admin/AdminSidebar.tsx"
+      - "src/components/layout/AppHeader.tsx"
+      - "src/components/leagues/LeagueQuickLinks.tsx"
+      - "src/app/(public)/leagues/[slug]/weekly-report/**"
+      - "src/lib/requireAdmin.ts"
+      - "tests/admin-matchweek-reports.test.cjs"
+      - ".github/workflows/admin-matchweek-reports.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: admin-matchweek-reports-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   reports:
