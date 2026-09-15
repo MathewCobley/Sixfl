@@ -85,7 +85,7 @@ test("poll and response button blocks preserve surrounding paragraph breaks", ()
       "At this stage, a Yes registers your interest.",
     ].join("\n"),
   });
-  assert.match(pollHtml, /Please respond by Sunday\.<\/p>[\s\S]*At this stage, a Yes registers your interest\./);
+  assert.match(pollHtml, /Please respond by Sunday\.\s*<\/p>[\s\S]*At this stage, a Yes registers your interest\./);
   assert.ok(pollHtml.includes("Yes — our team is interested"));
   assert.ok(pollHtml.includes("No — not this time"));
 
@@ -99,7 +99,7 @@ test("poll and response button blocks preserve surrounding paragraph breaks", ()
       "Thanks for letting us know.",
     ].join("\n"),
   });
-  assert.match(responseHtml, /Please confirm your place\.<\/p>[\s\S]*Thanks for letting us know\./);
+  assert.match(responseHtml, /Please confirm your place\.\s*<\/p>[\s\S]*Thanks for letting us know\./);
   assert.ok(responseHtml.includes("YES, I still want to play"));
   assert.ok(responseHtml.includes("NO, remove me"));
 });
