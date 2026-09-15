@@ -1,10 +1,20 @@
 name: Team lead decline and stop chasing
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*lead*"
+      - "src/**/*Lead*"
+      - "src/lib/notifications/**"
+      - "tests/team-lead-decline.test.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/team-lead-decline.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-lead-decline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   decline:
     runs-on: ubuntu-latest

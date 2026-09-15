@@ -2,11 +2,22 @@ name: Email template create completion
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    paths:
+      - "src/app/(admin)/admin/email-templates/**"
+      - "src/components/admin/email-templates/**"
+      - "src/lib/email/**"
+      - "scripts/check-email-template-create-completion.mjs"
+      - "scripts/check-template-save-runtime.mjs"
+      - "scripts/check-template-save-browser.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/email-template-create-completion.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+concurrency:
+  group: email-template-create-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   template-create:
     name: Complete email template creation

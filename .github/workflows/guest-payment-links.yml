@@ -1,9 +1,19 @@
 name: Approved guest payment links
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/fixtures/guest-payments.ts"
+      - "src/**/*guest*payment*"
+      - "src/**/*Guest*Payment*"
+      - "tests/guest-payment-links.test.ts"
+      - "prisma/schema.prisma"
+      - ".github/workflows/guest-payment-links.yml"
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: guest-payment-links-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   guest-payments:
     runs-on: ubuntu-latest
