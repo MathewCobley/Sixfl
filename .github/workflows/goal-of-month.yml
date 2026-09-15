@@ -1,22 +1,35 @@
 name: Goal of the Month
 on:
   push:
-    branches: [feat/goal-of-month-nominee-clips, main]
+    branches: [feat/goal-of-month-nominee-clips]
     paths:
-      - 'src/**'
+      - 'src/components/goal-of-month/**'
+      - 'src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx'
+      - 'src/app/api/goal-of-month/**'
+      - 'src/app/api/goal-of-week/**'
+      - 'src/lib/goal-of-month/**'
+      - 'scripts/apply-goal-of-week.cjs'
+      - 'scripts/check-critical-feature-contracts.mjs'
       - 'prisma/migrations/20260907153000_goal_of_month/**'
       - 'tests/goal-of-month*'
       - '.github/workflows/goal-of-month.yml'
   pull_request:
     paths:
-      - 'src/**'
+      - 'src/components/goal-of-month/**'
+      - 'src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx'
+      - 'src/app/api/goal-of-month/**'
+      - 'src/app/api/goal-of-week/**'
+      - 'src/lib/goal-of-month/**'
+      - 'scripts/apply-goal-of-week.cjs'
+      - 'scripts/check-critical-feature-contracts.mjs'
       - 'prisma/migrations/20260907153000_goal_of_month/**'
       - 'tests/goal-of-month*'
       - '.github/workflows/goal-of-month.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: goal-of-month-${{ github.ref }}
+  group: goal-of-month-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   monthly-goals:
