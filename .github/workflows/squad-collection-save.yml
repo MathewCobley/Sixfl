@@ -4,8 +4,9 @@ on:
     paths:
       - "src/lib/payments/squad-collection-form.ts"
       - "src/components/payments/SquadPaymentCollectionForm.tsx"
-      - "src/app/captain/team/[teamid]/player-payments/**"
+      - "src/app/captain/team/**/player-payments/**"
       - "tests/squad-collection-save.*"
+      - "tests/settled-player-ledger-protection/**"
       - "scripts/check-standard-team-player-payment-links.mjs"
       - ".github/workflows/squad-collection-save.yml"
   workflow_dispatch:
