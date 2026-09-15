@@ -11,10 +11,12 @@ on:
       - 'prisma/migrations/**'
       - 'scripts/check-team-badge-upload.ts'
       - '.github/workflows/team-badge-upload.yml'
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: team-badge-upload-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   image-upload:
     runs-on: ubuntu-latest
