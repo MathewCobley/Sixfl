@@ -1,10 +1,20 @@
 name: First-match readiness briefing
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*first-match*"
+      - "src/**/*FirstMatch*"
+      - "src/lib/notifications/**"
+      - "tests/first-match-ready.test.ts"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/first-match-ready.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: first-match-ready-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   first-match:
     runs-on: ubuntu-latest
