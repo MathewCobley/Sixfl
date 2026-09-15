@@ -70,6 +70,40 @@ test("the real SIXFL renderer retains its email layout without exposing global r
   assert.ok(EmailHtmlPreview({ html }).props.srcDoc.includes(html));
 });
 
+test("poll and response button blocks preserve surrounding paragraph breaks", () => {
+  const { buildSIXFLEmailHtml } = load("src/lib/email/buildEmail.ts");
+
+  const pollHtml = buildSIXFLEmailHtml({
+    body: [
+      "Please respond by Sunday.",
+      "",
+      "SIXFL_POLL_OPTIONS_START",
+      "Yes — our team is interested: https://example.com/yes",
+      "No — not this time: https://example.com/no",
+      "SIXFL_POLL_OPTIONS_END",
+      "",
+      "At this stage, a Yes registers your interest.",
+    ].join("\n"),
+  });
+  assert.match(pollHtml, /Please respond by Sunday\.<\/p>[\s\S]*At this stage, a Yes registers your interest\./);
+  assert.ok(pollHtml.includes("Yes — our team is interested"));
+  assert.ok(pollHtml.includes("No — not this time"));
+
+  const responseHtml = buildSIXFLEmailHtml({
+    body: [
+      "Please confirm your place.",
+      "",
+      "YES, I still want to play: https://example.com/yes",
+      "NO, remove me from the squad list: https://example.com/no",
+      "",
+      "Thanks for letting us know.",
+    ].join("\n"),
+  });
+  assert.match(responseHtml, /Please confirm your place\.<\/p>[\s\S]*Thanks for letting us know\./);
+  assert.ok(responseHtml.includes("YES, I still want to play"));
+  assert.ok(responseHtml.includes("NO, remove me"));
+});
+
 test("every existing admin message, template and queue preview uses the shared component after prebuild", () => {
   for (const file of consumers) {
     const source = fs.readFileSync(path.join(root, file), "utf8");

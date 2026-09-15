@@ -28,8 +28,8 @@ const SIXFL_SIGNATURE_LINES = [
 
 const CTA_PLACEHOLDER = "{{cta}}";
 const RESPONSE_BUTTONS_PATTERN =
-  /(?:^|\n)\s*YES,\s*I still want to play:\s*(https?:\/\/\S+)\s*\n\s*NO,\s*remove me from the squad list:\s*(https?:\/\/\S+)\s*(?:\n|$)/i;
-const POLL_BUTTONS_PATTERN = /(?:^|\n)\s*SIXFL_POLL_OPTIONS_START\s*\n([\s\S]*?)\n\s*SIXFL_POLL_OPTIONS_END\s*(?:\n|$)/i;
+  /(?:^|\n)[ \t]*YES,[ \t]*I still want to play:[ \t]*(https?:\/\/\S+)[ \t]*\n[ \t]*NO,[ \t]*remove me from the squad list:[ \t]*(https?:\/\/\S+)[ \t]*(?:\n|$)/i;
+const POLL_BUTTONS_PATTERN = /(?:^|\n)[ \t]*SIXFL_POLL_OPTIONS_START[ \t]*\n([\s\S]*?)\n[ \t]*SIXFL_POLL_OPTIONS_END[ \t]*(?:\n|$)/i;
 const EMAIL_BRAND_MARKER_PATTERN =
   /(?:^|\n)\s*(?:\{\{\s*emailBrand\s*:\s*(sixfl-tv|player-pool)\s*\}\}|SIXFL_EMAIL_BRAND\s*:\s*(sixfl-tv|player-pool))\s*(?:\n|$)/gi;
 
