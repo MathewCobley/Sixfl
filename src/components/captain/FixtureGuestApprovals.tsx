@@ -33,8 +33,8 @@ export default function FixtureGuestApprovals({ teamId, canManage }: { teamId: s
   const fixtureId = useSearchParams().get("fixtureId") || "";
   if (!fixtureId) return canManage ? (
     <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
-      <h2 className="text-lg font-semibold text-white">Guest approvals</h2>
-      <p className="mt-2 text-sm leading-6 text-white/70">Choose the match in the fixture selector below and open it to approve a guest. Approval applies to one named player and one fixture only.</p>
+      <h2 className="text-lg font-semibold text-white">Guest players</h2>
+      <p className="mt-2 text-sm leading-6 text-white/70">Choose a match below to see guest players and their SIXFL permission. Guest permission applies only to that player and match.</p>
     </section>
   ) : null;
   return <GuestApprovalPanel key={`${teamId}:${fixtureId}`} teamId={teamId} fixtureId={fixtureId} canManage={canManage} />;
@@ -112,17 +112,18 @@ function GuestApprovalPanel({ teamId, fixtureId, canManage }: { teamId: string; 
     <section id="guest-approvals" className="rounded-3xl border border-emerald-400/25 bg-emerald-500/[0.06] p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/70">Fixture-specific permission</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">Guest approvals</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/70">SIXFL guest permission</p>
+          <h2 className="mt-1 text-xl font-semibold text-white">Guest players for this match</h2>
           {data ? <p className="mt-2 text-sm text-white/75">For <strong>{data.fixture.teamName}</strong> vs {data.fixture.opponentName} · {dateTime(data.fixture.kickoffAt)} (UK)</p> : null}
         </div>
-        {editable ? <button type="button" disabled={busy} className={buttonStyle} onClick={() => setShowForm(!showForm)}>Approve guest for this fixture</button> : null}
+        {editable ? <div className="space-y-1"><p className="text-xs font-semibold text-emerald-100/70">SIXFL admin only</p><button type="button" disabled={busy} className={buttonStyle} onClick={() => setShowForm(!showForm)}>Approve guest for this fixture</button></div> : null}
       </div>
-      <p className="mt-3 text-sm leading-6 text-white/60">Approval itself does not select a player, add a permanent squad member or request money. Once SIXFL has approved a guest, the captain can set their fee and send a payment link below without a second player request. Normal guest and matchday squad limits still apply.</p>
-      {loading ? <p role="status" className="mt-3 text-sm text-white/70">Loading guest approvals…</p> : null}
-      {error ? <div role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}<button type="button" disabled={busy || loading} className="ml-3 underline" onClick={() => { setError(""); void reload().catch((err: Error) => setError(err.message)); }}>Reload approvals</button></div> : null}
+      <p className="mt-3 text-sm leading-6 text-white/60">Only SIXFL can grant guest permission. Once a guest is approved, you can set their match fee and send their payment link below. They are not added to your permanent squad.</p>
+      <p className="mt-2 text-sm leading-6 text-white/60">Accepting or declining a player&apos;s request is separate from SIXFL guest permission. Normal guest and matchday squad limits still apply.</p>
+      {loading ? <p role="status" className="mt-3 text-sm text-white/70">Loading guest players…</p> : null}
+      {error ? <div role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100">{error}<button type="button" disabled={busy || loading} className="ml-3 underline" onClick={() => { setError(""); void reload().catch((err: Error) => setError(err.message)); }}>Reload guest players</button></div> : null}
       {message ? <p role="status" className="mt-4 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-100">{message}</p> : null}
-      {data && !data.fixture.editable ? <p className="mt-3 text-sm text-amber-100">Read-only: approvals cannot be added, revoked or backdated after kick-off, or while a fixture is not scheduled.</p> : null}
+      {data && !data.fixture.editable ? <p className="mt-3 text-sm text-amber-100">Guest permission cannot be changed once the match has started or when it is not scheduled.</p> : null}
       {showForm && editable && data ? (
         <div className="mt-5 space-y-4 rounded-2xl border border-white/15 bg-black/20 p-4">
           <form onSubmit={search} className="flex flex-wrap items-end gap-3">
@@ -151,7 +152,7 @@ function GuestApprovalPanel({ teamId, fixtureId, canManage }: { teamId: string; 
           </form> : null}
         </div>
       ) : null}
-      {data && data.approvals.length === 0 && !loading ? <p className="mt-4 text-sm text-white/65">No SIXFL guest approvals recorded for this team in this fixture.</p> : null}
+      {data && data.approvals.length === 0 && !loading ? <p className="mt-4 text-sm text-white/65">No guest players have been approved by SIXFL for your team in this match.</p> : null}
       <div className="mt-4 space-y-3">
         {data?.approvals.map((approval) => <article key={approval.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { ensureTemporaryPlayerPassTable } from "@/lib/temporary-player-passes";
+import TemporaryPlayerRequestDeclineButton from "./TemporaryPlayerRequestDeclineButton";
 
 type PendingRequest = {
   id: string;
@@ -89,7 +90,7 @@ export default async function CaptainTemporaryPlayerRequestSummary({
                 : `${requests.length} players are waiting for your response`}
             </h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-white/65">
-              The player selected your team and this fixture themselves. Review the request and choose Accept or Decline. Accepting links them to that fixture and creates their match fee for you to review.
+              A player has asked to play for your team in the match shown below. Review the request to set their fee and accept, or choose Decline here. Your response is separate from any guest permission needed from SIXFL.
             </p>
           </div>
           <span className="w-fit rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-100">
@@ -105,11 +106,11 @@ export default async function CaptainTemporaryPlayerRequestSummary({
                 key={request.id}
                 className="rounded-2xl border border-white/10 bg-black/20 p-4"
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="font-semibold text-white">{request.displayName}</div>
                     <div className="mt-1 text-sm text-white/70">
-                      {pastMatch ? "Claims they played for" : "Wants to play for"}{" "}
+                      {pastMatch ? "Says they played for" : "Wants to play for"}{" "}
                       <span className="font-semibold text-white">{request.teamName}</span>
                       {" · vs "}
                       {request.opponentName}
@@ -118,12 +119,20 @@ export default async function CaptainTemporaryPlayerRequestSummary({
                       {formatFixtureDate(request.kickoffAt)}
                     </div>
                   </div>
-                  <Link
-                    href={`/captain/team/${teamId}/match-fees?fixtureId=${encodeURIComponent(request.fixtureId)}`}
-                    className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-sky-300 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-sky-200"
-                  >
-                    Review request
-                  </Link>
+                  <div className="grid shrink-0 grid-cols-2 items-start gap-2 sm:grid-cols-1">
+                    <Link
+                      href={`/captain/team/${teamId}/match-fees?fixtureId=${encodeURIComponent(request.fixtureId)}`}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-300 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-sky-200"
+                    >
+                      Review request
+                    </Link>
+                    <TemporaryPlayerRequestDeclineButton
+                      teamId={teamId}
+                      fixtureId={request.fixtureId}
+                      requestId={request.id}
+                      playerName={request.displayName}
+                    />
+                  </div>
                 </div>
               </article>
             );

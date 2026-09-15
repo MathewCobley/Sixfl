@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  decideTemporaryPlayerRequest,
+  subscribeToTemporaryPlayerDecisions,
+} from "./temporary-player-request-client";
 
 type PendingRequest = {
   id: string;
@@ -27,12 +31,14 @@ function formatMoney(amountPence: number) {
 
 export default function TemporaryPlayerRequestsPanel() {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [feeAmounts, setFeeAmounts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const completedRequestIds = useRef(new Set<string>());
 
   useEffect(() => setMounted(true), []);
 
@@ -41,6 +47,20 @@ export default function TemporaryPlayerRequestsPanel() {
   );
   const teamId = captainMatch?.[1] ?? "";
   const fixtureId = searchParams.get("fixtureId") ?? "";
+
+  useEffect(() => {
+    completedRequestIds.current = new Set();
+    return subscribeToTemporaryPlayerDecisions((decision) => {
+      if (decision.teamId !== teamId || decision.fixtureId !== fixtureId) return;
+      completedRequestIds.current.add(decision.requestId);
+      setRequests((current) => current.filter((request) => request.id !== decision.requestId));
+      setFeeAmounts((current) => {
+        const next = { ...current };
+        delete next[decision.requestId];
+        return next;
+      });
+    });
+  }, [teamId, fixtureId]);
 
   useEffect(() => {
     if (!teamId || !fixtureId) {
@@ -60,7 +80,9 @@ export default function TemporaryPlayerRequestsPanel() {
           | { requests?: PendingRequest[] }
           | null;
         if (!cancelled && response.ok) {
-          const nextRequests = payload?.requests ?? [];
+          const nextRequests = (payload?.requests ?? []).filter(
+            (request) => !completedRequestIds.current.has(request.id),
+          );
           setRequests(nextRequests);
           setFeeAmounts((current) => {
             const next: Record<string, string> = {};
@@ -83,6 +105,7 @@ export default function TemporaryPlayerRequestsPanel() {
   }, [fixtureId, teamId]);
 
   async function decide(requestId: string, decision: "accept" | "decline") {
+    if (busyId || completedRequestIds.current.has(requestId)) return;
     const amount = feeAmounts[requestId]?.trim() ?? "";
     if (decision === "accept" && !amount) {
       setMessage(
@@ -95,32 +118,10 @@ export default function TemporaryPlayerRequestsPanel() {
     setMessage("");
 
     try {
-      const response = await fetch(
-        `/api/captain/team/${teamId}/temporary-player-requests`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fixtureId,
-            requestId,
-            decision,
-            ...(decision === "accept" ? { amount } : {}),
-          }),
-        },
-      );
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            error?: string;
-            player?: { displayName?: string; amountPence?: number };
-            decision?: string;
-          }
-        | null;
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.error ?? "The temporary-player request could not be updated.",
-        );
-      }
+      const payload = await decideTemporaryPlayerRequest({
+        teamId, fixtureId, requestId, decision,
+        ...(decision === "accept" ? { amount } : {}),
+      });
 
       setRequests((current) =>
         current.filter((request) => request.id !== requestId),
@@ -142,6 +143,7 @@ export default function TemporaryPlayerRequestsPanel() {
         window.setTimeout(() => window.location.reload(), 900);
       } else {
         setMessage(`${playerName}'s request has been declined.`);
+        router.refresh();
       }
     } catch (error) {
       setMessage(

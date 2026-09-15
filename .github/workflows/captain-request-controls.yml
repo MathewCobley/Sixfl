@@ -1,0 +1,30 @@
+name: Captain request controls
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  captain-request-controls:
+    name: Preserve captain request controls
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check native request controls
+        run: node --test tests/captain-request-controls.test.cjs
+      - name: Prepare production source
+        run: npm run prebuild
+      - name: Check prepared request controls
+        run: node --test tests/captain-request-controls.test.cjs
+      - name: List shared UI consumers and remaining legacy copy
+        run: |
+          git grep -n -E 'CaptainTemporaryPlayerRequestSummary|TemporaryPlayerRequestsPanel|FixtureGuestApprovals' -- src scripts || true
+          git grep -n -E 'Guest approvals|Fixture-specific permission|the captain can set their fee' -- src scripts || true
