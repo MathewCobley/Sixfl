@@ -147,7 +147,13 @@ for (const file of [
 test('native form wiring; no production source-preparation dependency', () => {
   const form = fs.readFileSync('src/components/admin/email-templates/EmailTemplateForm.tsx', 'utf8');
   assert.match(form, /onClick=\{insertItalicText\}/); assert.match(form, /toggleItalicSelection/);
-  assert.match(form, /label: "Referral page"/); assert.match(form, /event\.ctrlKey \|\| event\.metaKey/);
+  // Whitespace is not a feature: the native form may use compact formatting.
+  // Keep checking the exact label and both keyboard modifiers.
+  const referralLabel = /label:\s*"Referral page"/;
+  const italicShortcut = /event\.ctrlKey\s*\|\|\s*event\.metaKey/;
+  assert.match(form, referralLabel); assert.match(form, italicShortcut);
+  assert.doesNotMatch(form.replace(referralLabel, 'label:"Other page"'), referralLabel);
+  assert.doesNotMatch(form.replace(italicShortcut, 'event.altKey'), italicShortcut);
   assert.equal(fs.existsSync('scripts/prepare-editor-branch.cjs'), false);
   assert.equal(fs.existsSync('.github/workflows/editor-branch-preparation.yml'), false);
 });

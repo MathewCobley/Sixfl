@@ -100,7 +100,9 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
         ""
       ).trim()
     : "";
-  const showEmailReply = Boolean(labelledThread && labelledThread.channel === "EMAIL");
+  // A mixed conversation's channel label must not hide a usable email address.
+  // Keep address resolution aligned with the existing server email action.
+  const showEmailReply = Boolean(labelledThread && (labelledThread.channel === "EMAIL" || replyEmail));
   const canReply = Boolean(
     showEmailReply && replyEmail && labelledThread?.status === "OPEN",
   );
@@ -135,7 +137,7 @@ export default function AdminMessageThreadReplyRouter({ selectedFilter, thread }
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
           <h3 className="text-lg font-semibold text-white">Reply by email</h3>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            This is an email conversation. Replies from this box go back by email and stay in this timeline.
+            Replies from this box are sent by email and stay in this conversation alongside any SMS messages.
           </p>
 
           <form action={sendAdminEmailReplyAction} className="mt-4 space-y-4">
