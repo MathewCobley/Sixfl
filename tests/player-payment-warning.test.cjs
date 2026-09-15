@@ -18,6 +18,9 @@ let providerCalls = [], failProvider = false, authorised = true, actorId = 'test
 function loader() {
   const cache = new Map();
   const mocks = {
+    // These warning fixtures contain no abandonment decisions. Preserve that
+    // explicit baseline; the real override reader has its own PostgreSQL suite.
+    '@/lib/fixtures/abandonment-fee-policy': { getFeePreservedAbandonmentIds: async () => new Set() },
     '@/lib/requireAdmin': { requireAdmin: async () => { if (!authorised) throw new Error('Not authorised'); return { user: { id: actorId } }; } },
     'next/cache': { revalidatePath() {} },
     '@/lib/prisma': { prisma },
