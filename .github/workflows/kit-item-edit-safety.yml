@@ -9,15 +9,10 @@ on:
       - 'scripts/*kit*.cjs'
       - 'tests/admin-kit-item-edit.test.cjs'
       - '.github/workflows/kit-item-edit-safety.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/app/(admin)/admin/kits/**'
-      - 'src/components/admin/kits/**'
-      - 'src/lib/kits/**'
-      - 'scripts/*kit*.cjs'
-      - 'tests/admin-kit-item-edit.test.cjs'
-      - '.github/workflows/kit-item-edit-safety.yml'
+
+concurrency:
+  group: kit-item-edit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
