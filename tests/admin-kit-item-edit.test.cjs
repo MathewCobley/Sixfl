@@ -190,8 +190,15 @@ test("failed metadata update rolls back the kit item as well", async () => {
 test("prepared page preserves the catalogue, workflow controls, payment visibility and native row editor", () => {
   const page = fs.readFileSync("src/app/(admin)/admin/kits/page.tsx", "utf8");
   const editor = fs.readFileSync("src/components/admin/kits/KitOrderItemEditor.tsx", "utf8");
+  const sizeControl = fs.readFileSync("src/components/admin/kits/KitSizeConfirmationControl.tsx", "utf8");
   assert.equal((page.match(/<KitOrderItemEditor\b/g) || []).length, 1);
-  for (const token of ["KitDesignUploader", "updateKitOrderStatusAction", "updateKitOrderNotesAction", "getTeamKitSizeLabel(item.kitSize)", "listAdminKitPaymentActivity", "sizesConfirmed", 'name="secondaryColour"', "kit-design-"]) assert.ok(page.includes(token), token);
+  for (const token of ["KitDesignUploader", "updateKitOrderStatusAction", "updateKitOrderNotesAction", "getTeamKitSizeLabel(item.kitSize)", "listAdminKitPaymentActivity", 'name="secondaryColour"', "kit-design-"]) assert.ok(page.includes(token), token);
+  // The existing size checkbox owns its query and form; the page mounts it with
+  // the order ID rather than selecting a sizesConfirmed field itself.
+  assert.match(page, /<KitSizeConfirmationControl\s+orderId=\{order\.id\}\s+teamName=\{order\.teamName\}/);
+  assert.match(sizeControl, /SELECT "sizesConfirmed"/);
+  assert.match(sizeControl, /name="sizesConfirmed"/);
+  assert.match(sizeControl, /action=\{updateKitOrderSizesConfirmedAction\}/);
   assert.doesNotMatch(page, /name="style"|>Style<|design\.style|colour or style/);
   assert.doesNotMatch(editor, /<select\b|sockSize|querySelector|MutationObserver/);
   assert.match(editor, /FormListboxField/);
