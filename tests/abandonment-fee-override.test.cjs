@@ -16,7 +16,6 @@ const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const migration = 'prisma/migrations/20260915223000_abandonment_fee_override/migration.sql';
 const apply = file => execFileSync('psql', [process.env.DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-f', path.join(root, file)], { stdio: 'pipe' });
-const empty = () => {};
 let notices = [], normalNotices = [], cancelCalls = 0, processingFails = false, queueFails = false;
 const cache = new Map();
 const rendererPath = 'src/lib/notifications/renderer.ts';
@@ -57,12 +56,13 @@ function load(file) {
   return module.exports;
 }
 const service = () => load('src/lib/fixtures/abandonment.ts');
-const policy = () => load('src/lib/fixtures/abandonment-fee-policy.ts');
 const record = (fixture, extra={}) => service().recordFixtureAbandonment({ fixtureId: fixture.id, reason: 'VIOLENT_OR_THREATENING_CONDUCT', responsibleTeamId: fixture.homeTeamId, recordedByUserId: 'admin', feeDecision: 'UNCHANGED', feeOverrideReason: 'Only two minutes remained.', ...extra });
 const tables = ['PaymentCharge','PaymentTransaction','PlayerMatchFee','TeamCreditLedgerEntry','PlayerFeeLedgerState','PlayerLedgerEntry','PlayerRepaymentPlan','PlayerRepaymentRequest','NotificationDispatch'];
 async function moneySnapshot() {
   const result = {};
-  for (const table of tables) result[table] = await db.$queryRawUnsafe(`SELECT row_to_json(t) AS row FROM "${table}" t ORDER BY id`);
+  // Ledger state uses feeId rather than id. Order by the complete serialized
+  // row so every column remains part of the comparison for every table.
+  for (const table of tables) result[table] = await db.$queryRawUnsafe(`SELECT row_to_json(t) AS row FROM "${table}" t ORDER BY row_to_json(t)::text`);
   result.fixtureFees = await db.fixture.findMany({ orderBy: { id: 'asc' }, select: { id:true, matchFeePence:true, homeMatchFeePence:true, awayMatchFeePence:true } });
   return JSON.parse(JSON.stringify(result));
 }
