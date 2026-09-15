@@ -1,0 +1,44 @@
+name: Abandonment fee override
+on:
+  pull_request:
+    paths:
+      - 'src/lib/fixtures/**'
+      - 'src/components/referee/Abandon*'
+      - 'src/app/**/abandonment*'
+      - 'src/app/**/abandonment*/**'
+      - 'tests/abandonment*'
+      - 'prisma/migrations/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/abandonment-fee-override.yml'
+  workflow_dispatch:
+concurrency:
+  group: abandonment-fee-override-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Retain source for compatibility review
+        run: tar -czf /tmp/abandonment-original.tgz src scripts prisma tests docs .github package.json package-lock.json tsconfig.json
+      - run: npm run prebuild
+      - name: Inspect all abandonment consumers
+        run: |
+          git grep -n -E 'recordFixtureAbandonment|resendFixtureAbandonmentEmails|AbandonedMatchForm|responsibleFinalChargePence|FixtureAbandonment' -- src scripts > /tmp/abandonment-consumers.txt || true
+          tar -czf /tmp/abandonment-prepared.tgz src scripts prisma tests docs .github package.json package-lock.json tsconfig.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abandonment-source-review
+          path: |
+            /tmp/abandonment-original.tgz
+            /tmp/abandonment-prepared.tgz
+            /tmp/abandonment-consumers.txt
+          retention-days: 3
