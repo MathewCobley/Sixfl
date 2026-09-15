@@ -2,12 +2,16 @@ name: Abandonment fee override
 on:
   pull_request:
     paths:
-      - 'src/lib/fixtures/**'
+      - 'src/lib/fixtures/abandonment*'
+      - 'src/lib/payments/fixture-match-fees.ts'
+      - 'src/lib/payments/player-ledger.ts'
+      - 'src/lib/payments/player-payment-warning.ts'
       - 'src/components/referee/Abandon*'
       - 'src/app/**/abandonment*'
       - 'src/app/**/abandonment*/**'
       - 'tests/abandonment*'
       - 'prisma/migrations/**'
+      - 'prisma/schema.prisma'
       - 'scripts/**'
       - 'package*.json'
       - '.github/workflows/abandonment-fee-override.yml'
@@ -20,6 +24,18 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_abandonment_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sixfl_abandonment_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_abandonment_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,18 +43,30 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Retain source for compatibility review
-        run: tar -czf /tmp/abandonment-original.tgz src scripts prisma tests docs .github package.json package-lock.json tsconfig.json
       - run: npm run prebuild
-      - name: Inspect all abandonment consumers
+      - name: Generate client and create disposable schema
+        run: npx prisma generate && npx prisma db push --skip-generate
+      - name: Real PostgreSQL financial non-mutation and default-rule regressions
+        run: node --test tests/abandonment-fee-override.test.cjs
+      - name: Existing abandonment contracts
         run: |
-          git grep -n -E 'recordFixtureAbandonment|resendFixtureAbandonmentEmails|AbandonedMatchForm|responsibleFinalChargePence|FixtureAbandonment' -- src scripts > /tmp/abandonment-consumers.txt || true
+          node scripts/check-fixture-abandonment-workflow.mjs
+          node scripts/check-abandoned-result-decision.mjs
+          node scripts/check-fixture-abandonment-runtime-resilience.mjs
+          node scripts/check-fixture-abandonment-email-recovery.mjs
+          node scripts/check-fixture-formal-conduct-notice.mjs
+      - name: Type-check prepared application
+        run: npx tsc --noEmit
+      - name: Inspect final shared sources
+        if: always()
+        run: |
+          git grep -n -E 'recordFixtureAbandonment|resendFixtureAbandonmentEmails|AbandonmentFeeDecisionFields|getFeePreservedAbandonmentIds|feeDecision' -- src/lib/fixtures src/lib/payments src/components/referee 'src/app/(public)/referee' > /tmp/abandonment-consumers.txt || true
           tar -czf /tmp/abandonment-prepared.tgz src scripts prisma tests docs .github package.json package-lock.json tsconfig.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: abandonment-source-review
           path: |
-            /tmp/abandonment-original.tgz
             /tmp/abandonment-prepared.tgz
             /tmp/abandonment-consumers.txt
           retention-days: 3

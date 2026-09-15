@@ -49,6 +49,11 @@ export async function recordNightFixtureAbandonmentAction(formData: FormData) {
   const refereeNightId = required(formData, "refereeNightId", "Referee night");
   const fixtureId = required(formData, "fixtureId", "Fixture");
   const reason = required(formData, "reason", "Abandonment reason");
+  const feeDecision = String(formData.get("feeDecision") ?? "STANDARD").trim();
+  const feeOverrideReason = String(formData.get("feeOverrideReason") ?? "").trim();
+  if (feeDecision !== "STANDARD" && user.role !== UserRole.ADMIN) {
+    throw new Error("Only SIXFL admin can override abandoned-match fees.");
+  }
   const responsibleTeamId = String(formData.get("responsibleTeamId") ?? "").trim() || null;
   const details = String(formData.get("details") ?? "").trim() || null;
   const confirmed = String(formData.get("confirmAbandonment") ?? "") === "yes";
@@ -63,6 +68,8 @@ export async function recordNightFixtureAbandonmentAction(formData: FormData) {
     fixtureId,
     refereeNightId,
     reason,
+    feeDecision,
+    feeOverrideReason,
     responsibleTeamId,
     details,
     recordedByUserId: user.id,
@@ -91,5 +98,7 @@ export async function recordNightFixtureAbandonmentAction(formData: FormData) {
   revalidatePath("/admin/payments");
   revalidatePath("/admin/payments/team-credits");
 
-  redirect(`/referee/night/${refereeNightId}?saved=abandoned`);
+  // The saved outcome card is authoritative; do not show the legacy fee-change
+  // and delivery-success banner for an unchanged-fee decision.
+  redirect(`/referee/night/${refereeNightId}?saved=${feeDecision === "UNCHANGED" ? "abandoned-fees-unchanged" : "abandoned"}`);
 }

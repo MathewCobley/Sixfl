@@ -1,3 +1,4 @@
+import { getFeePreservedAbandonmentIds } from "@/lib/fixtures/abandonment-fee-policy";
 import { playerFeeCollectionHold } from "./player-ledger";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -34,7 +35,7 @@ export async function loadPlayerPaymentWarningTarget(feeId: string, db: Db = pri
   const collectionHold=await playerFeeCollectionHold(fee.id,db);
   if(collectionHold)throw new PaymentWarningError(collectionHold);
   if (fee.status !== "OPEN" || fee.amountPence <= 0 || fee.paidAt || fee.waivedAt || fee.cancelledAt || isCaptainCollectionActiveNote(fee.note) || isCaptainCollectionRemovedNote(fee.note)) throw new PaymentWarningError("This fee is paid, waived, cancelled, or not owed through a player payment link. No warning can be sent.");
-  if (!fee.fixture.publishedAt || fee.fixture.status === "CANCELLED" || ![fee.fixture.homeTeamId, fee.fixture.awayTeamId].includes(fee.teamId)) throw new PaymentWarningError("This fee is not attached to a current published match for this team.");
+  if (!fee.fixture.publishedAt || (fee.fixture.status === "CANCELLED" && !(await getFeePreservedAbandonmentIds([fee.fixtureId], db)).has(fee.fixtureId)) || ![fee.fixture.homeTeamId, fee.fixture.awayTeamId].includes(fee.teamId)) throw new PaymentWarningError("This fee is not attached to a current published match for this team.");
   if ((!fee.teamMember && !fee.prospect) || (fee.teamMember && fee.teamMember.teamId !== fee.teamId) || (!fee.teamMember && fee.prospect?.teamId !== fee.teamId)) throw new PaymentWarningError("Review the player's fee/contact linkage before sending a warning.");
   if (!fee.paymentToken || !fee.paymentUrl) throw new PaymentWarningError("This fee needs a valid existing payment link before it can be chased.");
   const paymentUrl = buildPlayerMatchFeePaymentUrl(fee.paymentToken);

@@ -1,3 +1,4 @@
+import { getFeePreservedAbandonmentIds } from "@/lib/fixtures/abandonment-fee-policy";
 import { randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -68,7 +69,7 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     : anchor.prospectId ? Prisma.sql`s."prospectId"=${anchor.prospectId}` : Prisma.sql`s."feeId"=${anchorFeeId}`;
   const states = await db.$queryRaw<LedgerState[]>(Prisma.sql`SELECT s.* FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND ${owner} ORDER BY s."createdAt",s."feeId"`);
   const ids = states.map(s => s.feeId);
-  const [fees, entries, plans] = await Promise.all([
+  const [savedFees, entries, plans] = await Promise.all([
     db.playerMatchFee.findMany({ where: { id: { in: ids }, teamId }, orderBy: [{ fixture: { kickoffAt: "asc" } }, { id: "asc" }],
       include: { fixture: { select: { id: true, kickoffAt: true, publishedAt: true, status: true, homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } } },
         team: { select: { name: true, logoUrl: true, teamMode: true } }, teamMember: { select: { user: { select: { id: true, name: true, email: true } } } },
@@ -76,6 +77,8 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     db.playerLedgerEntry.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: { sequence: "asc" } }),
     db.playerRepaymentPlan.findMany({ where: { teamId, OR: [{ anchorFeeId: { in: ids } }, { id: { in: states.map(s => s.planId).filter((id): id is string => Boolean(id)) } }] }, orderBy: { createdAt: "desc" } }),
   ]);
+  const preservedFixtureIds = await getFeePreservedAbandonmentIds(savedFees.filter(f => f.fixture.status === "CANCELLED").map(f => f.fixture.id), db);
+  const fees = savedFees.map(fee => ({ ...fee, fixture: { ...fee.fixture, feesPreservedAfterAbandonment: preservedFixtureIds.has(fee.fixture.id) } }));
   const contact = fees.find(f => f.teamMember?.user.email || f.prospect?.email);
   const linkedUser=userId?await db.user.findUnique({where:{id:userId},select:{email:true,name:true}}):null;
   const email = linkedUser?.email?.trim().toLowerCase() || contact?.teamMember?.user.email?.trim().toLowerCase() || contact?.prospect?.email?.trim().toLowerCase() || null;
@@ -98,13 +101,14 @@ export async function setLedgerContext(db: LedgerDb, input: {
 }) {
   await db.$executeRaw(Prisma.sql`SELECT set_config('sixfl.player_ledger_context',${JSON.stringify(input)},true)`);
 }
-type CollectiblePlayerFee = { status: string; amountPence: number; note: string | null; fixture: { publishedAt: Date | null; status: string } };
+type CollectiblePlayerFee = { status: string; amountPence: number; note: string | null; fixture: { publishedAt: Date | null; status: string; feesPreservedAfterAbandonment?: boolean } };
 /** A concession changes what is owed, not whether a genuine receipt counts.
  * Plan selection stays more restrictive; an ordinary capped fee can still be
  * paid in two parts without forgiving a remainder or charging the cap twice. */
 export function collectiblePlayerLedgerFee(fee: CollectiblePlayerFee) {
   return fee.status === "OPEN" && fee.amountPence > 0 && Boolean(fee.fixture.publishedAt)
-    && !["CANCELLED", "POSTPONED"].includes(fee.fixture.status);
+    && fee.fixture.status !== "POSTPONED"
+    && (fee.fixture.status !== "CANCELLED" || fee.fixture.feesPreservedAfterAbandonment === true);
 }
 export function basicRepaymentFee(fee: CollectiblePlayerFee) {
   if (!collectiblePlayerLedgerFee(fee)) return false;

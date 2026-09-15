@@ -1,3 +1,4 @@
+import { getFeePreservedAbandonmentIds } from "@/lib/fixtures/abandonment-fee-policy";
 // ========================================
 // File: src/lib/payments/fixture-match-fees.ts
 // ========================================
@@ -40,7 +41,7 @@ type SyncFixtureMatchFeeChargesInput = {
 
 type PaymentChargeDbClient = Pick<
   typeof prisma,
-  "fixture" | "paymentCharge" | "notificationDispatch"
+  "fixture" | "paymentCharge" | "notificationDispatch" | "$queryRaw"
 >;
 
 type PaymentChargeNotificationDbClient = Pick<
@@ -286,6 +287,17 @@ export async function syncFixtureMatchFeeCharges(
       orderBy: [{ createdAt: "asc" }],
     }),
   ]);
+
+  if (fixture && (fixture.status === FixtureStatus.CANCELLED || fixture.status === FixtureStatus.COMPLETED) &&
+      (await getFeePreservedAbandonmentIds([input.fixtureId], db)).has(input.fixtureId)) {
+    // Returning saved charges is read-only: do not void or reprice an explicit
+    // admin keep-fees decision, even when its official result is still pending.
+    return { activeCharges: existingCharges.filter((charge) => charge.status !== PaymentChargeStatus.VOID).map((charge) => ({
+      id: charge.id, teamId: charge.teamId, teamName: charge.team.name,
+      teamLogoUrl: charge.teamId === input.homeTeam.id ? input.homeTeam.logoUrl ?? null : input.awayTeam.logoUrl ?? null,
+      paymentToken: charge.paymentToken, amountPence: charge.amountPence,
+    })) };
+  }
 
   if (!fixture || shouldBlockFixturePaymentMessages(fixture)) {
     const voidedChargeIds: string[] = [];
