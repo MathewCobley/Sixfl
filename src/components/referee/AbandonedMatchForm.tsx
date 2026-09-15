@@ -1,3 +1,4 @@
+import AbandonmentFeeDecisionFields from "./AbandonmentFeeDecisionFields";
 import {
   FIXTURE_ABANDONMENT_REASONS,
   getFixtureAbandonmentReasonLabel,
@@ -12,6 +13,7 @@ export default function AbandonedMatchForm({
   awayTeam,
   abandonment,
   locked,
+  canDecideResult,
 }: {
   refereeNightId: string;
   fixtureId: string;
@@ -19,6 +21,7 @@ export default function AbandonedMatchForm({
   awayTeam: { id: string; name: string };
   abandonment: FixtureAbandonmentRow | null;
   locked: boolean;
+  canDecideResult: boolean;
 }) {
   if (abandonment) {
     const responsibleName =
@@ -47,7 +50,14 @@ export default function AbandonedMatchForm({
         {abandonment.details ? (
           <p className="mt-3 text-sm leading-6 text-white/70">{abandonment.details}</p>
         ) : null}
-        {responsibleName && innocentName ? (
+        {abandonment.feeDecision === "UNCHANGED" ? (
+          <div className="mt-4 rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm leading-6 text-white/80">
+            <strong className="text-white">Match fees left unchanged — SIXFL admin override.</strong>
+            <p>No additional abandonment charge, waiver, refund or team credit was applied. Existing payments and outstanding balances remain on the original fees.</p>
+            {responsibleName ? <p>{responsibleName} is still recorded as responsible for the incident.</p> : null}
+            {canDecideResult && abandonment.feeOverrideReason ? <p className="mt-2">Admin reason: {abandonment.feeOverrideReason}</p> : null}
+          </div>
+        ) : responsibleName && innocentName ? (
           <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm leading-6 text-white/70">
             <strong className="text-white">{responsibleName}</strong> recorded as responsible. Their charge is both teams&apos; match fees. <strong className="text-white">{innocentName}</strong> has no fee due for this match; any payment already received is handled as credit where applicable.
           </div>
@@ -78,6 +88,7 @@ export default function AbandonedMatchForm({
         <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-50/85">
           If one team&apos;s conduct caused the abandonment, SIXFL rules make that team responsible for <strong>both match fees</strong>. The other team&apos;s unpaid fee is waived; if it has already paid, the payment is converted to team credit where applicable. Both teams are emailed automatically. The match result is left for SIXFL to decide separately.
         </div>
+        {canDecideResult ? <p className="text-sm leading-6 text-white/65">This is the default fee rule. For an abandonment, you can explicitly choose to leave both teams’ fees unchanged using the admin override below.</p> : null}
 
         <label className="block text-sm text-white/75">
           <span className="font-semibold text-white">Reason for abandonment</span>
@@ -120,6 +131,7 @@ export default function AbandonedMatchForm({
           />
         </label>
 
+        <AbandonmentFeeDecisionFields canOverride={canDecideResult}>
         <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm leading-6 text-white/70">
           <input
             type="checkbox"
@@ -132,6 +144,7 @@ export default function AbandonedMatchForm({
             I confirm the referee abandoned this match. I understand this removes any entered score as the official result, applies the fee rule where a responsible team is selected, and emails both teams.
           </span>
         </label>
+        </AbandonmentFeeDecisionFields>
 
         <button
           type="submit"

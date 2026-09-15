@@ -1,3 +1,4 @@
+import { queueFeesUnchangedAbandonmentEmails } from "./abandonment-fee-notice";
 import { NotificationChannel, Prisma } from "@prisma/client";
 
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
@@ -9,6 +10,7 @@ import { getPlayerFeeCashReceivedPence } from "@/lib/payments/player-fee-coverag
 import { prisma } from "@/lib/prisma";
 
 type AbandonmentNoticeRow = {
+  feeDecision: string;
   fixtureId: string;
   reason: string;
   responsibleTeamId: string | null;
@@ -64,6 +66,7 @@ export async function resendFixtureAbandonmentEmails(input: {
 }) {
   const rows = await prisma.$queryRaw<AbandonmentNoticeRow[]>(Prisma.sql`
     SELECT
+      "feeDecision",
       "fixtureId",
       "reason",
       "responsibleTeamId",
@@ -81,6 +84,15 @@ export async function resendFixtureAbandonmentEmails(input: {
   const abandonment = rows[0];
   if (!abandonment) {
     throw new Error("This fixture is not recorded as abandoned.");
+  }
+
+  if (abandonment.feeDecision === "UNCHANGED") {
+    const result = await queueFeesUnchangedAbandonmentEmails({ ...input, resend: true });
+    if (result.dispatchIds.length) {
+      try { await processNotificationQueue(Math.max(20, result.dispatchIds.length + 10)); }
+      catch (error) { console.error("Unchanged-fee notices queued; immediate delivery pending", error); }
+    }
+    return { queued: result.dispatchIds.length, failed: result.failures.length, failures: result.failures };
   }
 
   const fixture = await prisma.fixture.findUnique({

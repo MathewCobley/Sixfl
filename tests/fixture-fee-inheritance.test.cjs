@@ -97,6 +97,9 @@ function harness({ homeFee = 4000, awayFee = 3600, placeholderIds = [] } = {}) {
   class KnownRequestError extends Error {}
   const enums = values => Object.fromEntries(values.map(v=>[v,v]));
   const mocks = {
+    // This suite creates ordinary fixtures, never abandonments. The separate
+    // abandonment suite tests the real read policy and override against PostgreSQL.
+    '@/lib/fixtures/abandonment-fee-policy': { getFeePreservedAbandonmentIds: async () => new Set() },
     '@prisma/client': {
       FixtureStatus:enums(['SCHEDULED','COMPLETED','CANCELLED','POSTPONED']),
       PaymentChargeStatus:enums(['OPEN','PAID','PARTIALLY_PAID','VOID']),

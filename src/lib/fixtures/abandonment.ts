@@ -1,3 +1,5 @@
+import { resolveAbandonmentFeeDecision, type AbandonmentFeeDecision } from "./abandonment-fee-policy";
+import { queueFeesUnchangedAbandonmentEmails } from "./abandonment-fee-notice";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   FixtureStatus,
@@ -65,6 +67,8 @@ export type FixtureAbandonmentReason =
   (typeof FIXTURE_ABANDONMENT_REASONS)[number]["value"];
 
 export type FixtureAbandonmentRow = {
+  feeDecision: AbandonmentFeeDecision;
+  feeOverrideReason: string | null;
   id: string;
   fixtureId: string;
   refereeNightId: string | null;
@@ -175,6 +179,8 @@ export async function getFixtureAbandonments(fixtureIdsInput: string[]) {
       "id",
       "fixtureId",
       "refereeNightId",
+      "feeDecision",
+      "feeOverrideReason",
       "reason",
       "responsibleTeamId",
       "innocentTeamId",
@@ -198,12 +204,17 @@ export async function recordFixtureAbandonment(input: {
   fixtureId: string;
   refereeNightId?: string | null;
   reason: string;
+  feeDecision?: string;
+  feeOverrideReason?: string | null;
   responsibleTeamId?: string | null;
   details?: string | null;
   recordedByUserId: string;
 }) {
   const reason = getReason(input.reason);
   if (!reason) throw new Error("Choose a valid abandonment reason.");
+
+  const feePolicy = await resolveAbandonmentFeeDecision(input);
+  const keepFeesUnchanged = feePolicy.decision === "UNCHANGED";
 
   const existing = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id" FROM "FixtureAbandonment"
@@ -318,11 +329,11 @@ export async function recordFixtureAbandonment(input: {
     : 0;
 
   const responsibleFinalChargePence =
-    reason.teamResponsible && responsibleTeam && innocentTeam
+    !keepFeesUnchanged && reason.teamResponsible && responsibleTeam && innocentTeam
       ? (responsibleOriginalFeePence ?? 0) + (innocentOriginalFeePence ?? 0)
       : null;
   const innocentCreditPence =
-    reason.teamResponsible && innocentTeam?.teamMode === "STANDARD"
+    !keepFeesUnchanged && reason.teamResponsible && innocentTeam?.teamMode === "STANDARD"
       ? innocentPaidPence
       : 0;
 
@@ -332,7 +343,14 @@ export async function recordFixtureAbandonment(input: {
   let innocentFeeOutcome = "No automatic fee change was made.";
 
   await prisma.$transaction(async (tx) => {
-    if (reason.teamResponsible && responsibleTeam && innocentTeam) {
+    // Serialise competing outcome submissions before any write.
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Fixture" WHERE "id" = ${fixture.id} FOR UPDATE`);
+    const alreadyRecorded = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "FixtureAbandonment" WHERE "fixtureId" = ${fixture.id}
+    `);
+    if (alreadyRecorded.length) throw new Error("This fixture is already marked as abandoned.");
+
+    if (!keepFeesUnchanged && reason.teamResponsible && responsibleTeam && innocentTeam) {
       const finalResponsibleAmount = responsibleFinalChargePence ?? 0;
       const paymentToken = responsibleCharge?.paymentToken || createPaymentToken();
 
@@ -446,6 +464,8 @@ export async function recordFixtureAbandonment(input: {
         "id",
         "fixtureId",
         "refereeNightId",
+        "feeDecision",
+        "feeOverrideReason",
         "reason",
         "responsibleTeamId",
         "innocentTeamId",
@@ -464,6 +484,8 @@ export async function recordFixtureAbandonment(input: {
         ${randomUUID()},
         ${fixture.id},
         ${input.refereeNightId ?? null},
+        ${feePolicy.decision},
+        ${feePolicy.reason},
         ${reason.value},
         ${responsibleTeam?.id ?? null},
         ${innocentTeam?.id ?? null},
@@ -486,15 +508,20 @@ export async function recordFixtureAbandonment(input: {
   if (updatedResponsibleCharge?.id && !chargeIds.includes(updatedResponsibleCharge.id)) {
     chargeIds.push(updatedResponsibleCharge.id);
   }
+  if (!keepFeesUnchanged) {
   await cancelQueuedMatchFeeNotificationDispatches(chargeIds, prisma, {
     reason: "Fixture was abandoned and the match-fee liability was recalculated by SIXFL.",
   });
+  }
 
   const reasonLabel = reason.label;
   const fixtureLabel = `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`;
   const dispatchIds: string[] = [];
 
-  if (reason.teamResponsible && responsibleTeam && innocentTeam) {
+  if (keepFeesUnchanged) {
+    const notices = await queueFeesUnchangedAbandonmentEmails({ fixtureId: fixture.id, createdByUserId: input.recordedByUserId });
+    dispatchIds.push(...notices.dispatchIds);
+  } else if (reason.teamResponsible && responsibleTeam && innocentTeam) {
     const total = responsibleFinalChargePence ?? 0;
     const outstanding = Math.max(0, total - responsiblePaidPence);
     const payUrl =
@@ -620,5 +647,6 @@ export async function recordFixtureAbandonment(input: {
     innocentCreditPence,
     innocentFeeOutcome,
     notificationsQueued: dispatchIds.length,
+    feeDecision: feePolicy.decision,
   };
 }

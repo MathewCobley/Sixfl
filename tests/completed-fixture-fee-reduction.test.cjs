@@ -196,6 +196,9 @@ test('real PostgreSQL and fixture lock: reduction, rollback, concurrency and sub
     assert.equal(current.homeMatchFeePence, 2900);
     // Exercise the real sync with updated source fees; no notification provider runs.
     const sync = loader({
+      // This completed fixture has no abandonment. Override SQL is tested with
+      // its actual migration in abandonment-fee-override.test.cjs.
+      '@/lib/fixtures/abandonment-fee-policy': { getFeePreservedAbandonmentIds: async () => new Set() },
       '@/lib/prisma': { prisma: db }, '@/lib/datetime/london': { formatDateTimeInLondon: () => '9 September' },
       '@/lib/notifications/service': { queueNotificationFromTemplate: () => { throw new Error('NO_SEND'); } },
       '@/lib/notifications/team-contacts': { upsertTeamNotificationRecipient: () => { throw new Error('NO_SEND'); } },

@@ -85,6 +85,9 @@ function harness() {
   };
   db.$transaction=async fn=>fn(db);
   const mocks={
+    // These reminder fixtures have no recorded abandonment override.
+    // The dedicated abandonment suite executes that read policy against PostgreSQL.
+    '@/lib/fixtures/abandonment-fee-policy':{getFeePreservedAbandonmentIds:async()=>new Set()},
     '@/lib/prisma':{prisma:db},
     '@/lib/requireAdmin':{requireAdmin:async()=>({user:{id:'admin'}})},
     'next/server':{NextResponse:Response},'next/cache':{revalidatePath:()=>{}},
