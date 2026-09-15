@@ -12,12 +12,39 @@ function workflowFiles() {
     .sort();
 }
 
-function pullRequestBlock(source) {
+function eventBlock(source, eventName) {
   const match = source.match(/^on:\s*\n([\s\S]*?)(?=^[A-Za-z_-]+:\s*$|^permissions:|^concurrency:|^jobs:)/m);
   if (!match) return "";
   const onBlock = match[1];
-  const pull = onBlock.match(/^  pull_request:\s*(?:\n([\s\S]*?))?(?=^  [A-Za-z_-]+:|\s*$)/m);
-  return pull ? pull[0] : "";
+  const event = onBlock.match(
+    new RegExp(`^  ${eventName}:\\s*(?:\\n([\\s\\S]*?))?(?=^  [A-Za-z_-]+:|\\s*$)`, "m"),
+  );
+  return event ? event[0] : "";
+}
+
+function pullRequestBlock(source) {
+  return eventBlock(source, "pull_request");
+}
+
+function blockIncludesBranch(block, branch) {
+  if (!block) return false;
+
+  const inline = block.match(/^\s{4}branches:\s*\[([^\]]*)\]\s*$/m);
+  if (inline) {
+    return inline[1]
+      .split(",")
+      .map((value) => value.trim().replace(/^['"]|['"]$/g, ""))
+      .includes(branch);
+  }
+
+  const multiline = block.match(/^\s{4}branches:\s*\n((?:\s{6}-[^\n]*\n?)*)/m);
+  if (!multiline) return false;
+
+  return multiline[1]
+    .split(/\r?\n/)
+    .map((value) => value.replace(/^\s{6}-\s*/, "").trim().replace(/^['"]|['"]$/g, ""))
+    .filter(Boolean)
+    .includes(branch);
 }
 
 const coreBroadPullRequestWorkflows = new Set([
@@ -30,6 +57,14 @@ const coreBroadPullRequestWorkflows = new Set([
 // Its heavyweight `rules` job is explicitly disabled for push events.
 const allowedMainPushWorkflows = new Set([
   ".github/workflows/matchday-player-limit-rules.yml",
+]);
+
+// Function bundle size is dependency-wide by design: any shared server library
+// can change a deployed function package even if that library is not owned by a
+// single feature. Other specialist workflows should never use an exact src/**
+// catch-all because it makes unrelated application changes start them.
+const allowedBroadSourceWorkflows = new Set([
+  ".github/workflows/vercel-function-bundles.yml",
 ]);
 
 const failures = [];
@@ -49,11 +84,17 @@ for (const file of files) {
       if (!/^\s{4}paths:/m.test(block)) {
         failures.push(`${file}: feature pull-request workflows must declare paths so unrelated PRs do not start them.`);
       }
+
+      const exactSrcCatchAll = /^\s{6}-\s*["']?src\/\*\*["']?\s*$/m.test(block);
+      if (exactSrcCatchAll && !allowedBroadSourceWorkflows.has(file)) {
+        failures.push(`${file}: specialist workflows must not use an exact src/** catch-all; list the feature-owned source paths instead.`);
+      }
     }
   }
 
-  const pushMain = /^\s{2}push:\s*(?:\n[\s\S]*?)?^\s{4}branches:\s*(?:\[\s*main\s*\]|\n\s{6}-\s*main\s*$)/m.test(source);
-  if (pushMain && !coreBroadPullRequestWorkflows.has(file) && !allowedMainPushWorkflows.has(file)) {
+  const pushBlock = eventBlock(source, "push");
+  const pushesMain = blockIncludesBranch(pushBlock, "main");
+  if (pushesMain && !coreBroadPullRequestWorkflows.has(file) && !allowedMainPushWorkflows.has(file)) {
     failures.push(`${file}: do not rerun feature CI on every push to main; PR verification plus production deployment is the default.`);
   }
 
