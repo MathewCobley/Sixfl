@@ -1,7 +1,11 @@
+// ========================================
+// File: src/app/(admin)/admin/kits/page.tsx
+// ========================================
+
 import Link from "next/link";
 
 import KitDesignUploader from "@/components/admin/kits/KitDesignUploader";
-import KitOrderItemEditorRow from "@/components/admin/kits/KitOrderItemEditorRow";
+import KitOrderItemEditor from "@/components/admin/kits/KitOrderItemEditor";
 import {
   TEAM_KIT_QUANTITY,
   getTeamKitSizeLabel,
@@ -68,8 +72,6 @@ function noticeMessage(sp: SearchParams) {
       return `${team}'s kit order status was updated.`;
     case "order_notes_saved":
       return `${team}'s admin notes were saved.`;
-    case "order_item_saved":
-      return `${team}'s kit details were updated.`;
     default:
       return null;
   }
@@ -83,8 +85,6 @@ function errorMessage(sp: SearchParams) {
       return "The kit design details were incomplete or invalid.";
     case "invalid_order":
       return "The kit order could not be found.";
-    case "invalid_order_item":
-      return "Those kit details were invalid. Check the name, number and sizes and try again.";
     case "save_failed":
       return "The change could not be saved. Please try again.";
     default:
@@ -236,19 +236,29 @@ export default async function AdminKitsPage({
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Active designs</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{allDesigns.filter((design) => design.isActive).length}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+            Active designs
+          </div>
+          <div className="mt-2 text-3xl font-semibold text-white">
+            {allDesigns.filter((design) => design.isActive).length}
+          </div>
         </div>
         <div className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.05] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-100/45">Awaiting review</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-100/45">
+            Awaiting review
+          </div>
           <div className="mt-2 text-3xl font-semibold text-white">{submittedOrders}</div>
         </div>
         <div className="rounded-3xl border border-violet-400/15 bg-violet-500/[0.05] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-100/45">In progress</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-100/45">
+            In progress
+          </div>
           <div className="mt-2 text-3xl font-semibold text-white">{openOrders}</div>
         </div>
         <div className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.05] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100/45">Completed</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100/45">
+            Completed
+          </div>
           <div className="mt-2 text-3xl font-semibold text-white">{completedOrders}</div>
         </div>
       </div>
@@ -271,7 +281,10 @@ export default async function AdminKitsPage({
               placeholder="Search code, colour or style"
               className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/40"
             />
-            <button type="submit" className="inline-flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white/75">
+            <button
+              type="submit"
+              className="inline-flex h-11 items-center rounded-xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white/75"
+            >
               Search
             </button>
           </form>
@@ -284,7 +297,11 @@ export default async function AdminKitsPage({
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {designs.map((design) => (
-              <form key={design.id} action={updateKitDesignAction} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+              <form
+                key={design.id}
+                action={updateKitDesignAction}
+                className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"
+              >
                 <input type="hidden" name="id" value={design.id} />
                 <div className="aspect-square bg-white p-2">
                   <img
@@ -298,7 +315,14 @@ export default async function AdminKitsPage({
                 <div className="space-y-4 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-lg font-semibold text-white">{design.code}</div>
-                    <span className={["rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]", design.isActive ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-white/10 bg-white/[0.04] text-white/45"].join(" ")}>
+                    <span
+                      className={[
+                        "rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                        design.isActive
+                          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+                          : "border-white/10 bg-white/[0.04] text-white/45",
+                      ].join(" ")}
+                    >
                       {design.isActive ? "Live" : "Hidden"}
                     </span>
                   </div>
@@ -306,41 +330,80 @@ export default async function AdminKitsPage({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1.5">
                       <span className="text-xs text-white/45">Code</span>
-                      <input name="code" defaultValue={design.code} required maxLength={40} className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm uppercase text-white outline-none focus:border-emerald-400/40" />
+                      <input
+                        name="code"
+                        defaultValue={design.code}
+                        required
+                        maxLength={40}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm uppercase text-white outline-none focus:border-emerald-400/40"
+                      />
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-xs text-white/45">Order</span>
-                      <input name="sortOrder" type="number" defaultValue={design.sortOrder} className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                      <input
+                        name="sortOrder"
+                        type="number"
+                        defaultValue={design.sortOrder}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"
+                      />
                     </label>
                   </div>
 
                   <label className="space-y-1.5">
                     <span className="text-xs text-white/45">Display name</span>
-                    <input name="name" defaultValue={design.name ?? ""} placeholder="e.g. Navy gradient" className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <input
+                      name="name"
+                      defaultValue={design.name ?? ""}
+                      placeholder="e.g. Navy gradient"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"
+                    />
                   </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1.5">
                       <span className="text-xs text-white/45">Primary colour</span>
-                      <input name="primaryColour" defaultValue={design.primaryColour ?? ""} placeholder="Blue or #0057B8" className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                      <input
+                        name="primaryColour"
+                        defaultValue={design.primaryColour ?? ""}
+                        placeholder="Blue or #0057B8"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"
+                      />
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-xs text-white/45">Secondary colour</span>
-                      <input name="secondaryColour" defaultValue={design.secondaryColour ?? ""} placeholder="White" className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                      <input
+                        name="secondaryColour"
+                        defaultValue={design.secondaryColour ?? ""}
+                        placeholder="White"
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"
+                      />
                     </label>
                   </div>
 
                   <label className="space-y-1.5">
                     <span className="text-xs text-white/45">Style</span>
-                    <input name="style" defaultValue={design.style ?? ""} placeholder="Plain, striped, gradient…" className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />
+                    <input
+                      name="style"
+                      defaultValue={design.style ?? ""}
+                      placeholder="Plain, striped, gradient…"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40"
+                    />
                   </label>
 
                   <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/70">
-                    <input type="checkbox" name="isActive" defaultChecked={design.isActive} className="h-4 w-4 rounded border-white/20 bg-black text-emerald-400" />
+                    <input
+                      type="checkbox"
+                      name="isActive"
+                      defaultChecked={design.isActive}
+                      className="h-4 w-4 rounded border-white/20 bg-black text-emerald-400"
+                    />
                     Available to captains
                   </label>
 
-                  <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300">
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300"
+                  >
                     Save design
                   </button>
                 </div>
@@ -351,11 +414,21 @@ export default async function AdminKitsPage({
 
         {pageCount > 1 ? (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-            <Link href={paginationHref({ q: value(sp.q), page: Math.max(1, currentPage - 1) })} aria-disabled={currentPage <= 1} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 aria-disabled:pointer-events-none aria-disabled:opacity-35">
+            <Link
+              href={paginationHref({ q: value(sp.q), page: Math.max(1, currentPage - 1) })}
+              aria-disabled={currentPage <= 1}
+              className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 aria-disabled:pointer-events-none aria-disabled:opacity-35"
+            >
               Previous
             </Link>
-            <span className="text-sm text-white/45">Page {currentPage} of {pageCount}</span>
-            <Link href={paginationHref({ q: value(sp.q), page: Math.min(pageCount, currentPage + 1) })} aria-disabled={currentPage >= pageCount} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 aria-disabled:pointer-events-none aria-disabled:opacity-35">
+            <span className="text-sm text-white/45">
+              Page {currentPage} of {pageCount}
+            </span>
+            <Link
+              href={paginationHref({ q: value(sp.q), page: Math.min(pageCount, currentPage + 1) })}
+              aria-disabled={currentPage >= pageCount}
+              className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 aria-disabled:pointer-events-none aria-disabled:opacity-35"
+            >
               Next
             </Link>
           </div>
@@ -365,11 +438,15 @@ export default async function AdminKitsPage({
       <section className="space-y-5">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">Team orders</h2>
-          <p className="mt-2 text-sm text-white/50">Drafts appear as soon as a captain saves. Submitted orders are shown first for review.</p>
+          <p className="mt-2 text-sm text-white/50">
+            Drafts appear as soon as a captain saves. Submitted orders are shown first for review.
+          </p>
         </div>
 
         {orders.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-10 text-center text-sm text-white/50">No team has started a kit order yet.</div>
+          <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 p-10 text-center text-sm text-white/50">
+            No team has started a kit order yet.
+          </div>
         ) : (
           <div className="space-y-5">
             {orders.map((order) => {
@@ -377,41 +454,75 @@ export default async function AdminKitsPage({
               const sockSizes = countValues(order.items.map((item) => item.sockSize));
 
               return (
-                <article key={order.id} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+                <article
+                  key={order.id}
+                  className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"
+                >
                   <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="space-y-5 p-5 sm:p-6">
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div className="flex min-w-0 items-start gap-4">
                           {order.design ? (
-                            <img src={`/api/kits/${order.design.id}/image?size=thumb&v=${order.design.updatedAt.getTime()}`} alt={order.design.name ?? order.design.code} className="h-24 w-24 shrink-0 rounded-2xl border border-white/10 bg-white object-contain p-1" />
+                            <img
+                              src={`/api/kits/${order.design.id}/image?size=thumb&v=${order.design.updatedAt.getTime()}`}
+                              alt={order.design.name ?? order.design.code}
+                              className="h-24 w-24 shrink-0 rounded-2xl border border-white/10 bg-white object-contain p-1"
+                            />
                           ) : (
-                            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-dashed border-white/10 text-xs text-white/30">No kit</div>
+                            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-dashed border-white/10 text-xs text-white/30">
+                              No kit
+                            </div>
                           )}
 
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-2xl font-semibold tracking-tight text-white">{order.teamName}</h3>
-                              <span className={["rounded-full border px-3 py-1 text-xs font-semibold", statusClasses(order.status)].join(" ")}>
+                              <h3 className="text-2xl font-semibold tracking-tight text-white">
+                                {order.teamName}
+                              </h3>
+                              <span
+                                className={[
+                                  "rounded-full border px-3 py-1 text-xs font-semibold",
+                                  statusClasses(order.status),
+                                ].join(" ")}
+                              >
                                 {getTeamKitStatusLabel(order.status)}
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-white/45">{leagueLabel(order)}</p>
-                            <p className="mt-2 text-sm text-white/60">Design: <span className="font-semibold text-white">{order.design?.code ?? "Not chosen"}</span>{order.design?.name ? ` · ${order.design.name}` : ""}</p>
-                            <p className="mt-1 text-xs text-white/35">Submitted: {formatDate(order.submittedAt)} · Last changed: {formatDate(order.updatedAt)}</p>
+                            <p className="mt-2 text-sm text-white/60">
+                              Design: <span className="font-semibold text-white">{order.design?.code ?? "Not chosen"}</span>
+                              {order.design?.name ? ` · ${order.design.name}` : ""}
+                            </p>
+                            <p className="mt-1 text-xs text-white/35">
+                              Submitted: {formatDate(order.submittedAt)} · Last changed: {formatDate(order.updatedAt)}
+                            </p>
                           </div>
                         </div>
 
-                        <Link href={`/captain/team/${order.teamId}/kit`} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white/70 transition hover:bg-white/[0.08]">
+                        <Link
+                          href={`/captain/team/${order.teamId}/kit`}
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-white/70 transition hover:bg-white/[0.08]"
+                        >
                           Open captain view
                         </Link>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
                         {kitSizes.map(([size, count]) => (
-                          <span key={`kit-${size}`} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/65">{getTeamKitSizeLabel(size as TeamKitSize)} × {count}</span>
+                          <span
+                            key={`kit-${size}`}
+                            className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/65"
+                          >
+                            {getTeamKitSizeLabel(size as TeamKitSize)} × {count}
+                          </span>
                         ))}
                         {sockSizes.map(([size, count]) => (
-                          <span key={`sock-${size}`} className="rounded-full border border-sky-400/15 bg-sky-500/[0.06] px-3 py-1 text-xs text-sky-100/75">{getTeamKitSockSizeLabel(size as TeamKitSockSize)} × {count}</span>
+                          <span
+                            key={`sock-${size}`}
+                            className="rounded-full border border-sky-400/15 bg-sky-500/[0.06] px-3 py-1 text-xs text-sky-100/75"
+                          >
+                            {getTeamKitSockSizeLabel(size as TeamKitSockSize)} × {count}
+                          </span>
                         ))}
                       </div>
 
@@ -424,22 +535,38 @@ export default async function AdminKitsPage({
                               <th className="px-3 py-3 font-semibold">Number</th>
                               <th className="px-3 py-3 font-semibold">Kit</th>
                               <th className="px-3 py-3 font-semibold">Socks</th>
-                              <th className="px-3 py-3 font-semibold">Action</th>
+                              <th className="px-3 py-3 font-semibold">Edit</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/10">
                             {order.items.map((item) => (
-                              <KitOrderItemEditorRow key={item.id} item={item} teamName={order.teamName} />
+                              <tr key={item.id} className="text-white/65">
+                                <td className="px-3 py-3 text-white/35">{item.position}</td>
+                                <td className="px-3 py-3 font-semibold text-white">
+                                  {item.backName || "Number only"}
+                                </td>
+                                <td className="px-3 py-3">{item.shirtNumber}</td>
+                                <td className="px-3 py-3">{getTeamKitSizeLabel(item.kitSize)}</td>
+                                <td className="px-3 py-3">{getTeamKitSockSizeLabel(item.sockSize)}</td>
+                                <td className="px-3 py-3">
+                                  <KitOrderItemEditor
+                                    item={{ id: item.id, position: item.position, backName: item.backName, shirtNumber: item.shirtNumber, kitSize: item.kitSize }}
+                                    orderId={order.id}
+                                    orderStatus={order.status}
+                                    teamName={order.teamName}
+                                  />
+                                </td>
+                              </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
 
-                      <p className="text-xs text-white/35">You can edit the back name, shirt number, kit size and sock size directly above. Save each row after changing it.</p>
-
                       {order.captainNotes ? (
                         <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/60">
-                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Captain notes</div>
+                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Captain notes
+                          </div>
                           {order.captainNotes}
                         </div>
                       ) : null}
@@ -462,8 +589,19 @@ export default async function AdminKitsPage({
                         <input type="hidden" name="orderId" value={order.id} />
                         <input type="hidden" name="teamName" value={order.teamName} />
                         <label className="block text-sm font-semibold text-white">Admin notes</label>
-                        <textarea name="adminNotes" rows={7} defaultValue={order.adminNotes ?? ""} placeholder="Supplier reference, changes, delivery notes…" className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40" />
-                        <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300">Save admin notes</button>
+                        <textarea
+                          name="adminNotes"
+                          rows={7}
+                          defaultValue={order.adminNotes ?? ""}
+                          placeholder="Supplier reference, changes, delivery notes…"
+                          className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                        />
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-semibold text-black transition hover:bg-emerald-300"
+                        >
+                          Save admin notes
+                        </button>
                       </form>
                     </aside>
                   </div>

@@ -79,20 +79,6 @@ removeOnce(
   ].join("\n"),
 );
 
-// The admin Kits page can also be formatted compactly while preserving the same
-// native fields. Keep the prebuild compatibility cleanup robust to that markup
-// without changing the rendered behaviour.
-removeOnce(
-  adminPagePath,
-  [
-    '',
-    '                  <label className="space-y-1.5">',
-    '                    <span className="text-xs text-white/45">Style</span>',
-    '                    <input name="style" defaultValue={design.style ?? ""} placeholder="Plain, striped, gradient…" className="h-10 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-emerald-400/40" />',
-    '                  </label>',
-  ].join("\n"),
-);
-
 removeOnce(
   adminActionsPath,
   '      style: readString(formData, "style") || null,\n',
