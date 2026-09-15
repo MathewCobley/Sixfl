@@ -1,11 +1,28 @@
 name: Cup invitations and reporting
 on:
   pull_request:
+    paths:
+      - "src/app/(admin)/admin/cups/**"
+      - "src/app/api/admin/cups/**"
+      - "src/lib/cups/**"
+      - "src/components/admin/messages/**"
+      - "src/app/(admin)/admin/messages/**"
+      - "scripts/check-cup-foundation.mjs"
+      - "scripts/check-native-cup-fixture-source.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "scripts/apply-team-message-template-scope.cjs"
+      - "tests/cup-invitations/**"
+      - "tests/native-cup-fixtures.test.cjs"
+      - "tests/email-preview-isolation.test.cjs"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260911233000_inter_league_cup_foundation/**"
+      - "prisma/migrations/20260913001000_cup_invitations/**"
+      - ".github/workflows/cup-invitations.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: cup-invitations-${{ github.ref }}
+  group: cup-invitations-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
