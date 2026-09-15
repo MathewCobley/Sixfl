@@ -4,17 +4,23 @@
 // Do not add business rules here. Re-running this adapter must be a no-op.
 const fs = require("node:fs");
 const path = require("node:path");
-const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 
 function delegate(filePath, name, implementation) {
   const absolutePath = path.join(root, filePath);
   const source = fs.readFileSync(absolutePath, "utf8");
-  const file = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
-  const node = file.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === name);
-  if (!node) throw new Error(`Missing legacy kit adapter ${name} in ${filePath}`);
-  const next = source.slice(0, node.getStart(file)) + implementation + source.slice(node.end);
-  if (next !== source) fs.writeFileSync(absolutePath, next, "utf8");
+  if (source.includes(implementation)) return;
+  // Both legacy generators emit a top-level function with a column-zero closing
+  // brace. Match only that known block, never a broad whole-file rewrite. This
+  // compatibility check also runs before dependencies have been installed.
+  const signature = `async function ${name}(teamId: string) {`;
+  const start = source.indexOf(signature);
+  const end = start < 0 ? -1 : source.indexOf("\n}\n", start);
+  if (start < 0 || end < 0 || source.indexOf(signature, start + signature.length) >= 0) {
+    throw new Error(`Missing or ambiguous legacy kit adapter ${name} in ${filePath}`);
+  }
+  const next = source.slice(0, start) + implementation + source.slice(end + 2);
+  fs.writeFileSync(absolutePath, next, "utf8");
 }
 
 delegate("src/lib/kits/extra-kit-quantity.ts", "getIncludedKitQuantity", `async function getIncludedKitQuantity(teamId: string) {
