@@ -74,7 +74,10 @@ for (const email of [null, '', 'not-an-email']) {
   test(`missing/invalid saved email ${JSON.stringify(email)} disables new sends`, async () => {
     const { html } = await renderCompose({ referee: { email } });
     assert.match(html, /Add a valid email address/);
-    assert.match(html, /<input\b[^>]*name="subject"[^>]*\sdisabled=""/);
+    // React can emit name after disabled; attribute order is not behaviour.
+    const subject = html.match(/<input\b[^>]*name="subject"[^>]*>/)?.[0];
+    assert.ok(subject, 'Subject field is present');
+    assert.match(subject, /\sdisabled=""/);
     assert.match(html, /<button\b[^>]*\sdisabled=""/);
   });
 }
