@@ -51,7 +51,7 @@ async function main() {
   // A later fixture uses fresh notices; fail on the second row to prove atomic rollback.
   const next = await prisma.fixture.create({data:{leagueId:fixture.leagueId,homeTeamId:home.id,awayTeamId:away.id,status:"COMPLETED",kickoffAt:fixture.kickoffAt,publishedAt:fixture.publishedAt,result:{create:{homeScore:1,awayScore:4}}},include:{result:true}});
   const nextDecision = randomUUID();
-  await recordResultOverturn({fixtureId:next.id,actorUserId:admin.id,requestId:nextDecision,winnerTeamId:home.id,reasonCode:"PLAYER_LIMIT",rulesBasis:"SECRET_RULE_BASIS_NOT_FOR_EMAIL",evidenceNote:"SECRET_PRIVATE_EVIDENCE_NOT_FOR_EMAIL",expectedResultUpdatedAt:next.result!.updatedAt.toISOString(),expectedHomeScore:1,expectedAwayScore:4,confirmed:true});
+  await recordResultOverturn({fixtureId:next.id,actorUserId:admin.id,requestId:nextDecision,winnerTeamId:home.id,reasonCode:"PLAYER_LIMIT",rulesBasis:"SECRET_RULE_BASIS_NOT_FOR_EMAIL",evidenceNote:"SECRET_PRIVATE_EVIDENCE_NOT_FOR_EMAIL",originalHomeScore:1,originalAwayScore:4,expectedResultUpdatedAt:next.result!.updatedAt.toISOString(),expectedHomeScore:1,expectedAwayScore:4,confirmed:true});
   await prisma.$executeRawUnsafe(`CREATE FUNCTION overturn_email_test_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."sourceId"='${nextDecision}' AND NEW.metadata->>'emailNormalized'='away@example.invalid' THEN RAISE EXCEPTION 'deliberate notice rollback test'; END IF; RETURN NEW; END $$;`);
   await prisma.$executeRawUnsafe(`CREATE TRIGGER overturn_email_test_failure_trigger BEFORE INSERT ON "NotificationDispatch" FOR EACH ROW EXECUTE FUNCTION overturn_email_test_failure()`);
   await assert.rejects(queueResultOverturnEmails({...input,fixtureId:next.id,decisionId:nextDecision}));
