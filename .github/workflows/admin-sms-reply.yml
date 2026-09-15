@@ -1,12 +1,22 @@
 name: Admin SMS reply reliability
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/messaging/**"
+      - "src/app/api/admin/messages/sms-reply/**"
+      - "src/app/(admin)/admin/messages/**"
+      - "src/app/(admin)/admin/messaging/**"
+      - "src/components/admin/messages/**"
+      - "scripts/apply-message-sender-attribution.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "tests/admin-sms-reply*.cjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/admin-sms-reply.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: sms-reply-${{ github.ref }}
+  group: sms-reply-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   sms-reply:
@@ -60,8 +70,6 @@ jobs:
           s=p.read_text(); assert 'if (existing) {' in s
           p.write_text(s.replace('if (existing) {', 'if (false && existing) {', 1))
           PY
-          # Use a sequential repeated-send test for the deliberate failure.
-          # The unmodified suite separately tests six truly concurrent retries.
           set +e
           timeout 60s node --test --test-name-pattern='lost-response retry after sent' tests/admin-sms-reply.test.cjs > test-results/negative-control.log 2>&1
           exit_code=$?
@@ -86,10 +94,6 @@ jobs:
       - name: Production build of the fully prepared sources
         run: |
           set -euo pipefail
-          # Full prebuild ran above and its outputs were tested. Do not run that
-          # legacy rewriting chain twice: the unrelated captain-payment patch
-          # is not idempotent after the complete chain. This still runs the real
-          # build command (prisma generate && next build), without another hook.
           npm run build --ignore-scripts 2>&1 | tee test-results/production-build.log
       - name: Capture committed and prepared owning sources for final review
         if: always()
