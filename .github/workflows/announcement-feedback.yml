@@ -1,10 +1,20 @@
 name: Announcement queue feedback
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/communications/**"
+      - "src/**/*announcement*"
+      - "src/**/*Announcement*"
+      - "tests/announcement-*.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/announcement-feedback.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: announcement-feedback-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   announcements:
     runs-on: ubuntu-latest
@@ -40,8 +50,6 @@ jobs:
           const u = new URL(process.env.DATABASE_URL);
           if (u.hostname !== '127.0.0.1' || u.pathname !== '/sixfl_announcement_test') throw Error('Local test database required');
           const db = new PrismaClient();
-          // PlayerPoolProfile is migration-owned, not a Prisma model. Provide the
-          // column read by the real audience SQL; never alter production schema.
           db.$executeRawUnsafe('CREATE TABLE IF NOT EXISTS "PlayerPoolProfile" ("emailNormalized" TEXT)')
             .catch(error => { console.error(error); process.exitCode = 1; })
             .finally(() => db.$disconnect());
