@@ -70,6 +70,7 @@ jobs:
           npx prisma db push --skip-generate
           npx prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
           ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;
+          ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "freeKitOfferEnabled" BOOLEAN NOT NULL DEFAULT true;
           ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "isFixturePlaceholder" BOOLEAN NOT NULL DEFAULT false;
           ALTER TABLE "TeamMember" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
           CREATE TABLE IF NOT EXISTS "LeagueSeasonTeam" (
