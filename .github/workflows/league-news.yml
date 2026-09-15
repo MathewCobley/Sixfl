@@ -1,8 +1,25 @@
 name: League News publication
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/league-news/**"
+      - "src/components/news/**"
+      - "src/components/admin/matchweek-reports/**"
+      - "src/app/(admin)/admin/matchweek-reports/**"
+      - "src/app/api/admin/matchweek-reports/**"
+      - "src/app/(public)/leagues/**/news/**"
+      - "src/app/(public)/teams/**/news/**"
+      - "tests/league-news*.cjs"
+      - "tests/openai-matchweek-reports.test.cjs"
+      - "tests/admin-matchweek-reports.test.cjs"
+      - "tests/matchweek-report-proxy.test.cjs"
+      - "tests/report-omissions.test.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/20260910224500_openai_matchweek_drafts/**"
+      - "prisma/migrations/20260911053000_league_news_publication/**"
+      - ".github/workflows/league-news.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
