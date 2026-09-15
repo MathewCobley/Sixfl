@@ -1,0 +1,62 @@
+name: Kit item edit safety
+
+on:
+  pull_request:
+    paths:
+      - 'src/app/(admin)/admin/kits/**'
+      - 'src/components/admin/kits/**'
+      - 'src/lib/kits/**'
+      - 'scripts/*kit*.cjs'
+      - 'tests/admin-kit-item-edit.test.cjs'
+      - '.github/workflows/kit-item-edit-safety.yml'
+
+concurrency:
+  group: kit-item-edit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  kit-item-edit:
+    name: Preserve kit orders while editing a row
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kit_test
+          POSTGRES_PASSWORD: kit_test
+          POSTGRES_DB: sixfl_kit_editor_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://kit_test:kit_test@127.0.0.1:5432/sixfl_kit_editor_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Prepare the complete production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Test real row updates and rollback against disposable PostgreSQL
+        run: node --test tests/admin-kit-item-edit.test.cjs
+      - name: Preserve prepared kit source for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepared-kit-editor-source
+          path: |
+            src/app/(admin)/admin/kits/page.tsx
+            src/app/(admin)/admin/kits/item-actions.ts
+            src/components/admin/kits/KitOrderItemEditor.tsx
+            src/lib/kits/constants.ts
+          retention-days: 7

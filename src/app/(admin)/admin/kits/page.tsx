@@ -5,6 +5,7 @@
 import Link from "next/link";
 
 import KitDesignUploader from "@/components/admin/kits/KitDesignUploader";
+import KitOrderItemEditor from "@/components/admin/kits/KitOrderItemEditor";
 import {
   TEAM_KIT_QUANTITY,
   getTeamKitSizeLabel,
@@ -534,6 +535,7 @@ export default async function AdminKitsPage({
                               <th className="px-3 py-3 font-semibold">Number</th>
                               <th className="px-3 py-3 font-semibold">Kit</th>
                               <th className="px-3 py-3 font-semibold">Socks</th>
+                              <th className="px-3 py-3 font-semibold">Edit</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/10">
@@ -546,6 +548,14 @@ export default async function AdminKitsPage({
                                 <td className="px-3 py-3">{item.shirtNumber}</td>
                                 <td className="px-3 py-3">{getTeamKitSizeLabel(item.kitSize)}</td>
                                 <td className="px-3 py-3">{getTeamKitSockSizeLabel(item.sockSize)}</td>
+                                <td className="px-3 py-3">
+                                  <KitOrderItemEditor
+                                    item={{ id: item.id, position: item.position, backName: item.backName, shirtNumber: item.shirtNumber, kitSize: item.kitSize }}
+                                    orderId={order.id}
+                                    orderStatus={order.status}
+                                    teamName={order.teamName}
+                                  />
+                                </td>
                               </tr>
                             ))}
                           </tbody>
