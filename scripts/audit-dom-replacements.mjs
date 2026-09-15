@@ -85,6 +85,11 @@ async function loadManifest() {
 function containsRequiredMarker(content, expected) {
   if (content.includes(expected)) return true;
 
+  // Replacement contracts sometimes record a compact JSX ownership marker such
+  // as <main ...>{children}</main>. Formatting or adding owned React content
+  // inside that same element must not invalidate the contract. For this narrow
+  // marker shape, still require the same opening tag, {children}, and matching
+  // closing tag to exist in that order. All other markers remain exact matches.
   const jsxWrapper = expected.match(
     /^(<([A-Za-z][\w.]*)\b[^>]*>)(\{children\})(<\/\2>)$/,
   );
