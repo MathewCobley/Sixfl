@@ -1,10 +1,22 @@
 name: Fixture reminder context
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/lib/payments/fixture-match-fees.ts"
+      - "src/app/(admin)/admin/fixtures/**"
+      - "src/app/api/admin/fixtures/**"
+      - "src/app/api/admin/night-board/update-match/**"
+      - "tests/fixture-reminder-context.test.cjs"
+      - "tests/fixture-fee-inheritance.test.cjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/fixture-reminder-context.yml"
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: fixture-reminder-context-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   fixture-reminder-context:
     runs-on: ubuntu-latest
