@@ -27,7 +27,7 @@ type FixtureMatchFeeTeam = {
 };
 
 type SyncFixtureMatchFeeChargesInput = {
-  db?: PaymentChargeDbClient;
+  db?: PaymentChargeDbClient & Pick<typeof prisma, "$queryRaw">;
   fixtureId: string;
   leagueId: string;
   leagueName: string;
@@ -41,7 +41,7 @@ type SyncFixtureMatchFeeChargesInput = {
 
 type PaymentChargeDbClient = Pick<
   typeof prisma,
-  "fixture" | "paymentCharge" | "notificationDispatch" | "$queryRaw"
+  "fixture" | "paymentCharge" | "notificationDispatch"
 >;
 
 type PaymentChargeNotificationDbClient = Pick<
