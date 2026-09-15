@@ -1,0 +1,44 @@
+name: Admin free kit offer control
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/admin/teams/FreeKitOffer*'
+      - 'src/app/**/free-kit*/**'
+      - 'src/app/**/free-kit-actions.ts'
+      - 'src/lib/kits/**'
+      - 'tests/kits/free-kit-offer*'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/free-kit-offer-control.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: free-kit-offer-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  free-kit-offer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Inspect entitlement consumers before preparation
+        run: |
+          git grep -n -E 'wantsFreeKit|freeKitOfferExpiredAt|freeKit=' -- src scripts > /tmp/free-kit-consumers.txt || true
+          cat /tmp/free-kit-consumers.txt
+      - run: npm run prebuild
+      - name: Inspect prepared entitlement consumers
+        run: |
+          grep -Rn -E 'wantsFreeKit|freeKitOfferExpiredAt|freeKit=' src > /tmp/prepared-kit-consumers.txt || true
+          cat /tmp/prepared-kit-consumers.txt
+          find src/lib/kits -maxdepth 1 -type f -print
+      - name: Verify the prepared free-kit controls
+        run: node --test tests/kits/free-kit-offer.test.cjs
