@@ -57,6 +57,10 @@ jobs:
           node scripts/check-fixture-formal-conduct-notice.mjs
       - name: Type-check prepared application
         run: npx tsc --noEmit
+      - name: Install isolated browser tooling
+        run: npm install --no-save --package-lock=false playwright && npx playwright install --with-deps chromium
+      - name: Exercise the actual prepared admin and referee form
+        run: node tests/abandonment-fee-override-ui.mjs
       - name: Inspect final shared sources
         if: always()
         run: |
