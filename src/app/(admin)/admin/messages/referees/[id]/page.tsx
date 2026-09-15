@@ -6,8 +6,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NotificationRecipientSourceType, UserRole } from "@prisma/client";
 
-import AdminMessageThread from "@/components/admin/messages/AdminMessageThread";
+import AdminMessageThreadReplyRouter from "@/components/admin/messages/AdminMessageThreadReplyRouter";
 import LinkedRoleLinks from "@/components/admin/people/LinkedRoleLinks";
+import { getAdminSmsReplyTarget } from "@/lib/messaging/admin-sms-reply";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -116,9 +117,14 @@ function serialiseThread(thread: Awaited<ReturnType<typeof getRefereeThreads>>[n
       receivedAt: message.receivedAt?.toISOString() ?? null,
       readAt: message.readAt?.toISOString() ?? null,
       createdAt: message.createdAt.toISOString(),
+      createdByUser: message.createdByUser,
       dispatch: message.dispatch
         ? {
             id: message.dispatch.id,
+            status: message.dispatch.status,
+            failureReason: message.dispatch.failureReason,
+            scheduledFor: message.dispatch.scheduledFor.toISOString(),
+            sentAt: message.dispatch.sentAt?.toISOString() ?? null,
             template: message.dispatch.template,
             metadata: message.dispatch.metadata,
           }
@@ -148,9 +154,14 @@ async function getRefereeThreads(refereeId: string) {
       messages: {
         orderBy: [{ createdAt: "asc" }],
         include: {
+          createdByUser: { select: { id: true, name: true, email: true, role: true } },
           dispatch: {
             select: {
               id: true,
+              status: true,
+              failureReason: true,
+              scheduledFor: true,
+              sentAt: true,
               metadata: true,
               template: {
                 select: {
@@ -168,7 +179,7 @@ async function getRefereeThreads(refereeId: string) {
 }
 
 export default async function CentralRefereeCommsPage({ params, searchParams }: PageProps) {
-  await requireAdmin();
+  const { user: replyActor } = await requireAdmin();
 
   const { id } = await params;
   const sp = (await searchParams) ?? {};
@@ -210,7 +221,16 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
   const displayName = referee.name?.trim() || referee.email || "Referee";
   const selectedThread =
     messageThreads.find((thread) => thread.id === sp.thread) ?? messageThreads[0] ?? null;
-  const selectedThreadForClient = serialiseThread(selectedThread);
+  // Use the same server-resolved SMS identity and authenticated actor as the
+  // main inbox. Never fall back to another contact when this target is absent.
+  const smsReplyTarget = selectedThread ? await getAdminSmsReplyTarget(selectedThread) : null;
+  const selectedThreadForClient = selectedThread
+    ? {
+        ...serialiseThread(selectedThread)!,
+        smsReplyPhone: smsReplyTarget?.phone ?? null,
+        smsReplyActorId: replyActor?.id,
+      }
+    : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -227,7 +247,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
               Referee comms: {displayName}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-              This page uses the same message-thread timeline as the main Communications inbox. New replies should be sent from the thread panel, not from a separate referee-only send form.
+              Reply by email or SMS using the shared Communications controls below. Both stay in the same conversation timeline.
             </p>
           </div>
 
@@ -257,7 +277,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">History</div>
-            <h2 className="mt-2 text-xl font-semibold text-white">Proper comms timeline</h2>
+            <h2 className="mt-2 text-xl font-semibold text-white">Conversation timeline</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">
               This is the same message-thread view used by the main Communications inbox.
             </p>
@@ -302,7 +322,7 @@ export default async function CentralRefereeCommsPage({ params, searchParams }: 
             )}
           </div>
 
-          <AdminMessageThread selectedFilter="all" thread={selectedThreadForClient as never} />
+          <AdminMessageThreadReplyRouter selectedFilter="all" thread={selectedThreadForClient} />
         </div>
       </section>
     </div>
