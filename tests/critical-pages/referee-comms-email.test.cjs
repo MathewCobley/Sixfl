@@ -125,10 +125,11 @@ for (const channel of ['EMAIL', 'SMS']) {
     assert.match(html, /Reply by email/);
     assert.match(form, /Replying to referee@example.invalid/);
     assert.match(form, /name="threadId" value="test-referee-thread"/);
-    assert.doesNotMatch(form, /<textarea[^>]*disabled|<button[^>]*disabled/);
+    // Check the boolean HTML attribute, not a Tailwind disabled: class.
+    assert.doesNotMatch(form, /<(?:textarea|button)\b[^>]*\sdisabled=""/);
     assert.deepEqual(smsProps, { threadId: 'test-referee-thread', actorId: actor.id, phone: '+447700900123', canReply: true });
     assert.equal(resendProps.threadId, passedThread.id);
-    assert.ok(html.indexOf('Reply by email') < html.indexOf('Test SMS in the same conversation'));
+    assert.ok(html.indexOf('Reply by email') < html.indexOf('Reply by SMS'));
   });
 }
 
@@ -150,15 +151,15 @@ test('real delivery status and sender attribution survive the referee page seria
 for (const status of ['ARCHIVED', 'CLOSED']) {
   test(`${status} conversations cannot submit either reply`, async () => {
     const { html, smsProps } = await renderPage({ thread: { status } });
-    assert.match(emailForm(html), /<textarea[^>]*disabled/);
-    assert.match(emailForm(html), /<button[^>]*disabled/);
+    assert.match(emailForm(html), /<textarea\b[^>]*\sdisabled=""/);
+    assert.match(emailForm(html), /<button\b[^>]*\sdisabled=""/);
     assert.equal(smsProps.canReply, false);
   });
 }
 
 test('missing email disables email replies and never uses the inbound reply-address as a recipient', async () => {
   const { html, smsProps } = await renderPage({ thread: { contactEmail: null, emailNormalized: null, recipient: null } });
-  assert.match(emailForm(html), /<textarea[^>]*disabled/);
+  assert.match(emailForm(html), /<textarea\b[^>]*\sdisabled=""/);
   assert.doesNotMatch(emailForm(html), /Replying to thread-test@/);
   assert.equal(smsProps.canReply, true);
 });
@@ -172,7 +173,7 @@ test('unavailable server SMS target is not replaced with the raw contact number;
   const { html, smsProps } = await renderPage({ noSmsTarget: true });
   assert.equal(smsProps.phone, null);
   assert.equal(smsProps.canReply, false);
-  assert.doesNotMatch(emailForm(html), /<textarea[^>]*disabled/);
+  assert.doesNotMatch(emailForm(html), /<textarea\b[^>]*\sdisabled=""/);
 });
 
 test('a supplied unrelated thread ID cannot escape the referee-scoped query', async () => {
