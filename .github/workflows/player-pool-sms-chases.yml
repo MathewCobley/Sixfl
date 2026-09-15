@@ -1,8 +1,16 @@
 name: PlayerPool SMS chase history
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths:
+      - "src/**/*player-pool*"
+      - "src/**/*PlayerPool*"
+      - "src/lib/messaging/**"
+      - "tests/player-pool-sms-chases.test.ts"
+      - "scripts/check-player-pool-profile-reminders.mjs"
+      - "scripts/check-critical-feature-contracts.mjs"
+      - "prisma/schema.prisma"
+      - ".github/workflows/player-pool-sms-chases.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
