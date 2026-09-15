@@ -19,7 +19,7 @@ async function main(){
   async function make(id?:string){
     return prisma.fixture.create({data:{id,leagueId:league.id,homeTeamId:a.id,awayTeamId:b.id,kickoffAt,publishedAt:new Date(kickoffAt.getTime()-86400000),status:"COMPLETED",result:{create:{homeScore:4,awayScore:1,enteredAt,enteredByUserId:admin.id}}},include:{result:true}});
   }
-  const f=await make();const request={fixtureId:f.id,actorUserId:admin.id,requestId:randomUUID(),winnerTeamId:b.id,reasonCode:"PLAYER_LIMIT",evidenceNote:"Test evidence: ten played; no approval; response opportunity recorded.",rulesBasis:"Test rules in force at match time",expectedResultUpdatedAt:f.result!.updatedAt.toISOString(),expectedHomeScore:4,expectedAwayScore:1,confirmed:true};
+  const f=await make();const request={fixtureId:f.id,actorUserId:admin.id,requestId:randomUUID(),winnerTeamId:b.id,reasonCode:"PLAYER_LIMIT",evidenceNote:"Test evidence: ten played; no approval; response opportunity recorded.",rulesBasis:"Test rules in force at match time",originalHomeScore:4,originalAwayScore:1,expectedResultUpdatedAt:f.result!.updatedAt.toISOString(),expectedHomeScore:4,expectedAwayScore:1,confirmed:true};
   const before=await prisma.fixture.findMany({where:{id:f.id},include:{homeTeam:true,awayTeam:true,result:{select:PREDICTOR_RESULT_SELECT}}});
   const prediction=calculateFixtureWinChance({homeTeamId:a.id,awayTeamId:b.id,fixtures:before});
   const cashBefore=await prisma.paymentTransaction.count();const messagesBefore=await prisma.notificationDispatch.count();
