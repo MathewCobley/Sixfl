@@ -1,3 +1,4 @@
+import MatchDetailsPlayerFields from "@/components/captain/MatchDetailsPlayerFields";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
@@ -617,7 +618,7 @@ export default async function CaptainResultsPage({
     });
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -742,6 +743,9 @@ export default async function CaptainResultsPage({
                     <p className="mt-2 text-sm text-white/65">
                       Your opponent: {row.opponent}
                     </p>
+                    <a href={`#edit-match-${row.fixture.result!.id}`} className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-emerald-400/30 px-4 py-2 text-sm font-semibold text-emerald-100 xl:hidden">
+                      Add scorers & match details
+                    </a>
                     <OverturnedResultNotice overturn={row.fixture.result?.overturn} homeName={row.fixture.homeTeam.name} awayName={row.fixture.awayTeam.name}/>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -768,8 +772,8 @@ export default async function CaptainResultsPage({
                 </div>
               </div>
 
-              <div className="grid gap-0 xl:grid-cols-[0.9fr_1.1fr]">
-                <div className="space-y-4 border-b border-white/10 p-6 xl:border-b-0 xl:border-r">
+              <div className="grid min-w-0 grid-cols-1 gap-0 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <div className="min-w-0 space-y-4 border-b border-white/10 p-4 sm:p-6 xl:border-b-0 xl:border-r">
                   <div className="rounded-2xl border border-white/10 bg-black/15 p-5">
                     <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
                       Current match details
@@ -881,7 +885,7 @@ export default async function CaptainResultsPage({
                   </div>
                 </div>
 
-                <form action={saveTeamMatchDetails} className="p-6">
+                <form id={`edit-match-${row.fixture.result!.id}`} action={saveTeamMatchDetails} className="min-w-0 scroll-mt-6 p-4 sm:p-6">
                   <input type="hidden" name="teamid" value={team.id} />
                   <input type="hidden" name="resultId" value={row.fixture.result!.id} />
 
@@ -899,96 +903,22 @@ export default async function CaptainResultsPage({
                     </span>
                   </div>
 
-                  <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/15">
-                    <div className="min-w-[640px]">
-                      <div className="grid grid-cols-[minmax(220px,1fr)_72px_72px_72px_88px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
-                        <span>Player</span>
-                        <span className="text-center">Played</span>
-                        <span className="text-right">Goals</span>
-                        <span className="text-right">Assists</span>
-                        <span className="text-right">Rating</span>
-                      </div>
-
-                      {row.matchPlayers.length > 0 ? (
-                        <div className="divide-y divide-white/10">
-                          {row.matchPlayers.map((player) => {
-                            const contribution = getContributionForPlayer(
-                              row.contributions,
-                              player,
-                            );
-                            const performance = performanceByMemberId.get(player.id);
-                            const defaultPlayed = performance
-                              ? performance.played
-                              : player.isSelectedForFixture ||
-                                Boolean(contribution) ||
-                                selectedPomMemberId === player.id;
-
-                            return (
-                              <div
-                                key={player.id}
-                                className="grid grid-cols-[minmax(220px,1fr)_72px_72px_72px_88px] items-center gap-3 px-4 py-3"
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-medium text-white">
-                                    {player.name}
-                                  </span>
-                                  <span className="block truncate text-xs text-white/45">
-                                    {player.role.replaceAll("_", " ").toLowerCase()}
-                                    {player.email ? ` · ${player.email}` : ""}
-                                  </span>
-                                </span>
-                                <label className="flex justify-center">
-                                  <input
-                                    type="checkbox"
-                                    name={`played_${player.id}`}
-                                    defaultChecked={defaultPlayed}
-                                    className="h-5 w-5 accent-emerald-400"
-                                    aria-label={`Mark ${player.name} as played`}
-                                  />
-                                </label>
-                                <input
-                                  type="number"
-                                  name={`scorerGoals_${player.id}`}
-                                  defaultValue={contribution?.goals ?? 0}
-                                  min={0}
-                                  max={row.playedGoalsFor}
-                                  inputMode="numeric"
-                                  className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
-                                  aria-label={`Goals for ${player.name}`}
-                                />
-                                <input
-                                  type="number"
-                                  name={`assists_${player.id}`}
-                                  defaultValue={contribution?.assists ?? 0}
-                                  min={0}
-                                  max={row.playedGoalsFor}
-                                  inputMode="numeric"
-                                  className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
-                                  aria-label={`Assists for ${player.name}`}
-                                />
-                                <input
-                                  type="number"
-                                  name={`rating_${player.id}`}
-                                  defaultValue={performance?.rating ?? ""}
-                                  min={1}
-                                  max={10}
-                                  step={0.5}
-                                  inputMode="decimal"
-                                  placeholder="—"
-                                  className="h-11 w-full rounded-xl border border-sky-400/15 bg-[#0d1428] px-3 text-right text-sm font-semibold text-white outline-none transition placeholder:text-white/25 focus:border-sky-400/60 focus:ring-2 focus:ring-sky-400/20"
-                                  aria-label={`Rating for ${player.name}`}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="p-4 text-sm text-white/60">
-                          No squad players are available for this team yet.
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <MatchDetailsPlayerFields
+                    goalsFor={row.playedGoalsFor}
+                    players={row.matchPlayers.map((player) => {
+                      const contribution = getContributionForPlayer(row.contributions, player);
+                      const performance = performanceByMemberId.get(player.id);
+                      return {
+                        ...player,
+                        played: performance
+                          ? performance.played
+                          : player.isSelectedForFixture || Boolean(contribution) || selectedPomMemberId === player.id,
+                        goals: contribution?.goals ?? 0,
+                        assists: contribution?.assists ?? 0,
+                        rating: performance?.rating ?? null,
+                      };
+                    })}
+                  />
 
                   <div className="mt-5">
                     <FormListboxField
