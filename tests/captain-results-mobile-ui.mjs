@@ -66,6 +66,10 @@ const url = `http://127.0.0.1:${server.address().port}`;
 const artifacts = 'artifacts/captain-results-mobile'; fs.mkdirSync(artifacts,{recursive:true});
 async function contained(page, locator, minHeight = 43) {
   for (const el of await locator.all()) {
+    // Playwright can scroll an overflow-hidden ancestor sideways to reach a
+    // clipped field. Reject that layout before its actionability auto-scroll.
+    const rowWidth = await el.evaluate(node => node.closest('[data-match-player-fields]')?.getBoundingClientRect().width ?? 0);
+    assert.ok(rowWidth <= page.viewportSize().width + 1, `Player controls require horizontal scrolling: ${rowWidth}px`);
     // Wait for actual actionability, including the existing listbox's leave
     // transition and viewport resize, before making a geometry snapshot.
     await el.click({trial:true,timeout:5000});
@@ -122,13 +126,14 @@ try {
           await page.screenshot({path:`${artifacts}/${engine.name()}-${width}.png`});
           if(width===390) {
             const mutation=await page.addStyleTag({content:'[data-match-player-fields]{min-width:640px !important}'});
-            await assert.rejects(contained(page,form.locator('[data-match-player="player-0"] input[type="number"]')));
+            await assert.rejects(contained(page,form.locator('[data-match-player="player-0"] input[type="number"]')), /Player controls require horizontal scrolling/);
             await mutation.evaluate(node=>node.remove());
           }
           console.log(`${engine.name()} ${width}px: fields, POM, one save payload and resize preserved`);
         } catch(error) {
           await page.screenshot({path:`${artifacts}/${engine.name()}-${width}-failure.png`});
           fs.writeFileSync(`${artifacts}/${engine.name()}-${width}-failure.html`,await page.content());
+          fs.writeFileSync(`${artifacts}/${engine.name()}-${width}-failure.txt`,String(error.stack||error));
           throw error;
         } finally { await page.close(); }
       }
