@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+require("./apply-fixture-kickoff-override-persistence.cjs");
+
 const root = process.cwd();
 const publishActionsPath = path.join(
   root,
@@ -61,7 +63,7 @@ fs.writeFileSync(publishActionsPath, actions, "utf8");
 let page = fs.readFileSync(fixturesPagePath, "utf8");
 if (!page.includes('publishError?.startsWith("kickoff_window:")')) {
   const anchor = `  if (publish === \"error\" && publishError === \"reply_not_configured\") {\n    return {\n      tone: \"error\",\n      message: \`Reply-by-email is not configured yet. Add EMAIL_REPLY_DOMAIN in the deployed environment before publishing fixtures for \${scopeLabel}.\`,\n    };\n  }\n\n`;
-  const replacement = `${anchor}  if (publish === \"error\" && publishError?.startsWith(\"kickoff_window:\")) {\n    const detail = publishError.slice(\"kickoff_window:\".length).trim();\n    return {\n      tone: \"error\",\n      message: detail || \`A fixture is outside a team's allowed kick-off window for \${scopeLabel}. Change the fixture time or use the kick-off rules override before publishing.\`,\n    };\n  }\n\n`;
+  const replacement = `${anchor}  if (publish === \"error\" && publishError?.startsWith(\"kickoff_window:\")) {\n    const detail = publishError.slice(\"kickoff_window:\".length).trim();\n    return {\n      tone: \"error\",\n      message: detail || \`A fixture is outside a team's allowed kick-off window for \${scopeLabel}. Change the fixture time or use the saved kick-off rules override before publishing.\`,\n    };\n  }\n\n`;
   page = replaceRequired(
     page,
     anchor,
@@ -83,7 +85,7 @@ for (const marker of [
 }
 for (const marker of [
   'publishError?.startsWith("kickoff_window:")',
-  "use the kick-off rules override before publishing",
+  "saved kick-off rules override before publishing",
 ]) {
   if (!finalPage.includes(marker)) {
     throw new Error(`Fixture publish page marker missing: ${marker}`);
