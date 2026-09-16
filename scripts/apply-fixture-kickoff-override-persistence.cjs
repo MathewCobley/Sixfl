@@ -151,8 +151,8 @@ function replaceRequired(source, anchor, replacement, description) {
   write(relative, source);
 }
 
-// Individual publish endpoint: honour the same saved override before and inside
-// the serializable transaction.
+// Individual publish endpoint: honour the same saved override where the current
+// source has a preflight guard, and always inside the publish transaction.
 {
   const relative = "src/app/api/admin/fixtures/publish-one/route.ts";
   let source = read(relative);
@@ -190,7 +190,6 @@ const contracts = [
   ["src/components/admin/fixtures/FixtureEditForm.tsx", "defaultChecked={fixture.kickoffRulesOverride}"],
   ["src/app/(admin)/admin/fixtures/generate/single-fixture-action.ts", "kickoffRulesOverride: overrideLatestKickoff"],
   ["src/app/(admin)/admin/fixtures/publish-actions.ts", "allowOverride: fixture.kickoffRulesOverride"],
-  ["src/app/api/admin/fixtures/publish-one/route.ts", "fixtureInfo.kickoffRulesOverride ? []"],
   ["src/app/api/admin/fixtures/publish-one/route.ts", "fixture.kickoffRulesOverride ? []"],
 ];
 for (const [relative, marker] of contracts) {
