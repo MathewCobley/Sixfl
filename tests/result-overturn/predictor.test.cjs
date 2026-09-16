@@ -60,6 +60,23 @@ test('captain scorer editing uses the original played goals, never invented awar
  assert.match(source,/const goalsExpected = isHome \? playedResult.homeScore : playedResult.awayScore/);
  assert.match(source,/include:\s*\{\s*overturn: \{ select: RESULT_OVERTURN_SUMMARY_SELECT \}/);
  assert.match(source,/getPredictorResult\(fixture.result!\)/);
- assert.match(source,/max=\{row.playedGoalsFor\}/);assert.doesNotMatch(source,/max=\{row.goalsFor\}/);
+ // The responsive inputs now live in their owning component. Keep the original
+ // on-pitch-score invariant across that boundary, and check both rendered limits.
+ assert.match(source,/<MatchDetailsPlayerFields\s+goalsFor=\{row.playedGoalsFor\}/);
+ assert.doesNotMatch(source,/(?:max|goalsFor)=\{row.goalsFor\}/);
+ const React=require('react');
+ const {renderToStaticMarkup}=require('react-dom/server');
+ const Fields=load('src/components/captain/MatchDetailsPlayerFields.tsx', {
+   './MatchDetailsPlayerFields.module.css': {__esModule:true,default:{}},
+ }).default;
+ for(const goalsFor of [0,1,4]) {
+   const html=renderToStaticMarkup(React.createElement(Fields,{goalsFor,players:[{
+     id:'test-player',name:'Test Player',email:null,role:'PLAYER',played:true,goals:0,assists:0,rating:null,
+   }]}));
+   for(const name of ['scorerGoals_test-player','assists_test-player']) {
+     const input=html.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`))?.[0];
+     assert.ok(input,name);assert.match(input,new RegExp(`max="${goalsFor}"`),name);
+   }
+ }
  assert.match(source,/outcome: getOutcome\(goalsFor, goalsAgainst\)/,'competition outcome still uses the official award');
 });

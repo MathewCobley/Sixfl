@@ -1,0 +1,53 @@
+name: Captain results mobile
+on:
+  pull_request:
+    paths:
+      - 'src/app/captain/team/**/results/**'
+      - 'src/app/captain/team/**/layout.tsx'
+      - 'src/components/captain/MatchDetailsPlayerFields*'
+      - 'src/components/ui/FormListboxField.tsx'
+      - 'src/lib/playerMatchPerformances.ts'
+      - 'tests/captain-results-mobile*'
+      - '.github/workflows/captain-results-mobile.yml'
+      - 'scripts/**'
+      - 'package*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: captain-results-mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Test native form and unchanged server validations
+        run: node --test tests/captain-results-mobile.test.cjs
+      - run: npm run prebuild
+      - name: Test production-prepared form and server validations
+        run: node --test tests/captain-results-mobile.test.cjs
+      - name: Verify existing contracts and types
+        run: node scripts/check-critical-feature-contracts.mjs && npx prisma generate && npx tsc --noEmit
+      - name: Install isolated browser tooling without changing locked application packages
+        run: |
+          npm install --prefix /tmp/sixfl-results-tools --no-package-lock --ignore-scripts playwright
+          ln -s /tmp/sixfl-results-tools/node_modules/playwright node_modules/playwright
+          /tmp/sixfl-results-tools/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Test actual prepared page and real listbox at phone, tablet and desktop widths
+        run: node tests/captain-results-mobile-ui.mjs
+      - name: Inspect shared scorer UI and prepared save feedback
+        if: always()
+        run: |
+          git grep -n -E 'MatchDetailsPlayerFields|saveTeamMatchDetails|scorerGoals_|savedResultId' -- src/app/captain src/components/captain || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captain-results-mobile-browser
+          path: artifacts/captain-results-mobile
+          retention-days: 7
