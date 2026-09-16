@@ -1,0 +1,69 @@
+name: Public SEO metadata and venue locations
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/seo/**'
+      - 'src/app/(public)/layout.tsx'
+      - 'src/app/(public)/venues/**'
+      - 'src/app/sitemap.ts'
+      - 'src/middleware.ts'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/critical-pages/public-seo.test.cjs'
+      - '.github/workflows/public-seo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-seo-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-seo:
+    name: Preserve public metadata and venue identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check native public SEO and rendered venues
+        run: node --test tests/critical-pages/public-seo.test.cjs
+      - name: Apply the complete production preparation chain
+        run: npm run prebuild
+      - name: Check prepared public SEO and rendered venues
+        run: node --test tests/critical-pages/public-seo.test.cjs
+      - name: Prove the locality regression fails the tests
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          import { spawnSync } from 'node:child_process';
+          const path = 'src/lib/seo/venue-locality.ts';
+          const original = fs.readFileSync(path, 'utf8');
+          const broken = original.replace('return match[1];', 'return "York";');
+          assert.notEqual(broken, original, 'Mutation must actually change the resolver');
+          try {
+            fs.writeFileSync(path, broken);
+            const result = spawnSync(process.execPath, ['--test', 'tests/critical-pages/public-seo.test.cjs'], { encoding: 'utf8' });
+            assert.equal(result.status, 1, 'Incorrect York locality must fail the regression tests');
+            console.log('Verified: incorrect York locality is rejected. Restoring correct source.');
+          } finally {
+            fs.writeFileSync(path, original);
+          }
+          NODE
+      - name: Preserve existing critical features
+        run: node scripts/check-critical-feature-contracts.mjs
+      - name: Typecheck the prepared application
+        run: npx prisma generate && npx tsc --noEmit
+      - name: Inventory preferred URLs and remaining metadata work
+        run: |
+          git grep -n -E 'publicCanonicalUrl|metadataBase|getLocationFromVenue|getVenueLocality' -- src scripts || true
+          git grep -n -E 'canonical|generateMetadata' -- 'src/app/(public)/leagues' || true

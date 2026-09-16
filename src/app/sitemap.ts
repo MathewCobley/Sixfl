@@ -7,15 +7,13 @@ import type { MetadataRoute } from "next";
 
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
 import { prisma } from "@/lib/prisma";
+import { publicCanonicalUrl } from "@/lib/seo/public-url";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://www.sixfl.co.uk";
-
 function absoluteUrl(path: string) {
-  return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  return publicCanonicalUrl(path.startsWith("/") ? path : `/${path}`);
 }
 
 function isRetiredHeartlandsLeague(slug: string) {
@@ -23,7 +21,6 @@ function isRetiredHeartlandsLeague(slug: string) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
   const currentLeagueIds = await getCurrentLeagueIds();
 
   const leagues = currentLeagueIds.length
@@ -43,40 +40,41 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })
     : [];
 
+  // No trustworthy edit timestamp is stored for these static pages. Omitting
+  // lastModified is more accurate than marking them changed on every crawl.
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: absoluteUrl("/"),
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
     },
     {
+      url: absoluteUrl("/venues"),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
       url: absoluteUrl("/harrogate-6-a-side-football"),
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.92,
     },
     {
       url: absoluteUrl("/northallerton-6-a-side-football"),
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.92,
     },
     {
       url: absoluteUrl("/wetherby-6-a-side-football"),
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.92,
     },
     {
       url: absoluteUrl("/register-interest"),
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.85,
     },
     {
       url: absoluteUrl("/bring-sixfl-to-your-area"),
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.78,
     },
