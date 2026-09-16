@@ -1,11 +1,12 @@
 import Link from "next/link";
 import AdminSelect from "@/components/admin/AdminSelect";
 import CupInvitationComposer from "@/components/cups/CupInvitationComposer";
+import CupResponseEditor from "@/components/cups/CupResponseEditor";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { prisma } from "@/lib/prisma";
 import { getCupInvitationReport } from "@/lib/cups/invitations";
 import { cupDate, filterCupRows, responseLabel } from "@/lib/cups/invitation-policy";
-import { previewCupMailAction,sendCupMailAction } from "../invitation-actions";
+import { previewCupMailAction,sendCupMailAction,updateCupResponseAction } from "../invitation-actions";
 export default async function CupInvitationsPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{q?:string;league?:string;response?:string}>}) {
   const access=await requireAdmin(),{id}=await params,filters=await searchParams;
   const {cup,rows,counts}=await getCupInvitationReport(id,access.user?.id||"");
@@ -30,6 +31,7 @@ export default async function CupInvitationsPage({params,searchParams}:{params:P
         <div><p className="font-semibold text-emerald-100">{responseLabel(row.response)}</p><p className="mt-1 text-xs text-white/55">{row.entered?"Confirmed entrant":row.withdrawn?"Withdrawn entrant":row.eligible?"Entry not yet confirmed":"Not currently eligible"}</p></div>
         <div className="text-xs leading-5 text-white/60"><p>Invited: {cupDate(row.invitation?.createdAt??null)}</p><p>Responded: {cupDate(row.invitation?.respondedAt??null)}{row.invitation?.respondedByName?` · ${row.invitation.respondedByName}`:""}</p><p>Last reminder: {cupDate(row.invitation?.lastReminderAt??null)}</p></div>
       </div>
+      {row.invitation&&["PENDING","YES","NO"].includes(row.response)&&!row.entered&&!row.withdrawn?<CupResponseEditor cupId={id} teamId={row.id} invitationId={row.invitation.id} responseVersion={row.invitation.responseVersion} settingsVersion={row.invitation.settingsVersion} response={row.response as "PENDING"|"YES"|"NO"} action={updateCupResponseAction}/>:row.entered?<p className="text-xs text-white/45">Response editing is locked while this team is a confirmed cup entrant.</p>:null}
       {row.response==="YES"&&!row.entered?<Link href={`/admin/cups/${id}/entrants`} className="inline-block rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-200">Review / confirm entry</Link>:null}
       {!row.contacts.length?<p className="text-sm text-amber-200">No current email contact. Add captain/team contact details before inviting.</p>:null}
       <details><summary className="cursor-pointer text-sm text-white/70">Email delivery and contact history ({row.messages.length})</summary><div className="mt-3 space-y-2">

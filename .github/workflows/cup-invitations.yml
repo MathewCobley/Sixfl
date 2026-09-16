@@ -5,6 +5,7 @@ on:
       - "src/app/(admin)/admin/cups/**"
       - "src/app/api/admin/cups/**"
       - "src/lib/cups/**"
+      - "src/components/cups/**"
       - "src/components/admin/messages/**"
       - "src/app/(admin)/admin/messages/**"
       - "scripts/check-cup-foundation.mjs"
@@ -73,12 +74,23 @@ jobs:
           psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f prisma/migrations/20260913001000_cup_invitations/migration.sql
       - name: Real database lifecycle, templates, privacy, duplication and rollback
         run: npx tsx tests/cup-invitations/database.ts
+      - name: Actual admin response action with PostgreSQL, stale edits and audit rollback
+        run: CUP_ADMIN_RESPONSE_DATABASE=1 node --test tests/cup-invitations/admin-response.test.cjs
       - name: Full prepared TypeScript and production build
         run: npx tsc --noEmit && npx next build
       - name: Install isolated browser
         run: npm install --prefix /tmp/cup-browser --no-package-lock playwright@1.55.0 && /tmp/cup-browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Actual mobile and desktop cup controls
-        run: CUP_PLAYWRIGHT=/tmp/cup-browser/node_modules/playwright node tests/cup-invitations/browser.cjs
+        run: |
+          CUP_PLAYWRIGHT=/tmp/cup-browser/node_modules/playwright node tests/cup-invitations/browser.cjs
+          CUP_PLAYWRIGHT=/tmp/cup-browser/node_modules/playwright node tests/cup-invitations/admin-response-browser.cjs
+      - name: Preserve final prepared response sources for review
+        if: always()
+        run: |
+          mkdir -p artifacts/cup-invitations/prepared
+          cp 'src/app/(admin)/admin/cups/[id]/invitation-actions.ts' artifacts/cup-invitations/prepared/
+          cp 'src/app/(admin)/admin/cups/[id]/invitations/page.tsx' artifacts/cup-invitations/prepared/
+          cp src/components/cups/CupResponseEditor.tsx artifacts/cup-invitations/prepared/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
