@@ -174,7 +174,7 @@ function ratingIsValid(value: number) {
     Number.isFinite(value) &&
     value >= 1 &&
     value <= 10 &&
-    Math.round(value * 2) === value * 2
+    Math.round(value * 10) / 10 === value
   );
 }
 
@@ -183,7 +183,7 @@ function getFriendlyErrorMessage(error: unknown) {
     return "Something went wrong while saving.";
   }
   if (error.message.includes("rating")) {
-    return "Ratings must be between 1 and 10. Half marks such as 7.5 are allowed.";
+    return "Ratings must be between 1 and 10, with no more than one decimal place (for example, 9.2).";
   }
   if (error.message.includes("whole numbers")) {
     return "Goals and assists must be whole numbers such as 0, 1, 2, or 3.";
