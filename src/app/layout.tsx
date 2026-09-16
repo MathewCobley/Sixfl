@@ -8,15 +8,32 @@ import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
 import { Suspense, type ReactNode } from "react";
 import BridgeErrorBoundary from "@/components/BridgeErrorBoundary";
+import PwaServiceWorker from "@/components/PwaServiceWorker";
 import RouteScopedBridges from "@/components/RouteScopedBridges";
 import Providers from "./providers";
 
 export const metadata = {
   title: "SIXFL",
   description: "Six-a-side football league platform",
+  applicationName: "SIXFL",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "SIXFL",
+    statusBarStyle: "black-translucent" as const,
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: "/icon.png",
+    apple: "/apple-icon.png",
   },
+};
+
+export const viewport = {
+  themeColor: "#0b0f14",
+  viewportFit: "cover" as const,
 };
 
 const safeClosestPatch = String.raw`
@@ -99,6 +116,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#0b0f14] text-white">
         <script dangerouslySetInnerHTML={{ __html: safeClosestPatch }} />
+        <PwaServiceWorker />
         <Providers>
           <BridgeErrorBoundary>
             <Suspense fallback={null}>
