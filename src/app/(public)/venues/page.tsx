@@ -2,8 +2,17 @@
 // File: src/app/venues/page.tsx
 // ========================================
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { publicCanonicalUrl } from "@/lib/seo/public-url";
+import { getVenueLocality } from "@/lib/seo/venue-locality";
+
+export const metadata: Metadata = {
+  title: "6-a-side Football Venues in Yorkshire | SIXFL",
+  description: "Explore SIXFL football venues, pitch facilities, addresses and directions. Find a local 6-a-side league and register your team.",
+  alternates: { canonical: publicCanonicalUrl("/venues") },
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -167,20 +176,7 @@ function getLocationFromVenue(venue: {
   address: string | null;
   postcode: string | null;
 }) {
-  const combined = [venue.name, venue.address, venue.postcode]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (combined.includes("northallerton")) return "Northallerton";
-  if (combined.includes("harrogate")) return "Harrogate";
-  if (combined.includes("ripon")) return "Ripon";
-  if (combined.includes("knaresborough")) return "Knaresborough";
-  if (combined.includes("boston spa") || combined.includes("wetherby")) return "Wetherby";
-  if (combined.includes("york")) return "York";
-  if (combined.includes("leeds")) return "Leeds";
-
-  return "SIXFL venue";
+  return getVenueLocality(venue);
 }
 
 function getLeagueLabel(location: string) {
@@ -272,7 +268,7 @@ export default async function VenuesPage() {
             </div>
 
             <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl">
-              Venues
+              6-a-side football venues
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
