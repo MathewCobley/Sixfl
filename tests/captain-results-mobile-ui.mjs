@@ -64,13 +64,19 @@ const server = createServer((req,res) => {
 server.listen(0,'127.0.0.1'); await once(server,'listening');
 const url = `http://127.0.0.1:${server.address().port}`;
 const artifacts = 'artifacts/captain-results-mobile'; fs.mkdirSync(artifacts,{recursive:true});
-async function contained(page, locator) {
+async function contained(page, locator, minHeight = 43) {
   for (const el of await locator.all()) {
-    await el.scrollIntoViewIfNeeded();
+    // Wait for actual actionability, including the existing listbox's leave
+    // transition and viewport resize, before making a geometry snapshot.
+    await el.click({trial:true,timeout:5000});
     const box = await el.boundingBox();
     assert.ok(box && box.x >= -1 && box.x+box.width <= page.viewportSize().width+1, `Off-screen field ${JSON.stringify(box)}`);
-    assert.ok(box.height >= 43, 'Touch control too short');
-    assert.equal(await el.evaluate(node => { const r=node.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return node===hit||node.contains(hit); }),true,'Control is covered or clipped');
+    assert.ok(box.height >= minHeight, `Control too short: ${box.height}`);
+    const hit = await el.evaluate(node => {
+      const r=node.getBoundingClientRect();const top=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+      return {matches:node===top||node.contains(top),target:node.outerHTML,top:top?.outerHTML?.slice(0,400)};
+    });
+    assert.equal(hit.matches,true,`Control is covered or clipped: ${JSON.stringify(hit)}`);
   }
 }
 try {
@@ -81,43 +87,50 @@ try {
         const page = await browser.newPage({viewport:{width,height:844}}), errors=[];
         page.on('pageerror',e=>errors.push(e.message));
         await page.route('**/*', route => route.request().url().startsWith(url) ? route.continue() : route.abort());
-        await page.goto(url); await page.waitForSelector('[data-match-player-fields]');
-        const form=page.locator('#edit-match-result-a');
-        assert.equal(await form.locator('[data-match-player]').count(),12);
-        if(width<1280) await page.getByRole('link',{name:'Add scorers & match details'}).click();
-        await contained(page,form.locator('[data-match-player="player-0"] input[type="number"]'));
-        await contained(page,form.locator('[data-match-player="player-1"] input[type="number"]'));
-        await form.getByRole('spinbutton',{name:'Goals for Test Player 0',exact:true}).fill('2');
-        await form.getByRole('spinbutton',{name:'Assists for Test Player 0',exact:true}).fill('1');
-        await form.getByRole('spinbutton',{name:'Rating for Test Player 0',exact:true}).fill('8.5');
-        const pom=form.locator('input[name="playerOfMatchTeamMemberId"]').locator('..');
-        await pom.getByRole('button').click();
-        await pom.getByRole('option',{name:'Test Player 2',exact:true}).click();
-        assert.equal(await form.locator('input[name="playerOfMatchTeamMemberId"]').inputValue(),'player-2');
-        await page.setViewportSize({width:width===390?1360:390,height:844});
-        assert.equal(await form.locator('input[name="scorerGoals_player-0"]').inputValue(),'2');
-        await page.setViewportSize({width,height:844});
-        const save=form.getByRole('button',{name:'Save match details',exact:true});
-        await contained(page,save);
-        await save.click(); await page.waitForFunction(()=>window.__submissions.length===1);
-        const submission=await page.evaluate(()=>window.__submissions[0]);
-        assert.equal(submission.actionName,'saveTeamMatchDetails');
-        const fields=Object.fromEntries(submission.fields);
-        assert.equal(fields['scorerGoals_player-0'],'2');assert.equal(fields['assists_player-0'],'1');assert.equal(fields['rating_player-0'],'8.5');
-        assert.equal(fields.playerOfMatchTeamMemberId,'player-2');assert.equal(fields.teamid,'team-a');assert.equal(fields.resultId,'result-a');
-        assert.equal(submission.fields.filter(([key])=>key==='scorerGoals_player-0').length,1);
-        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'Horizontal page overflow');
-        assert.deepEqual(errors,[]);
-        await form.locator('[data-match-player="player-0"]').scrollIntoViewIfNeeded();
-        await page.screenshot({path:`${artifacts}/${engine.name()}-${width}.png`});
-        if(width===390) {
-          // Restoring the original fixed minimum must fail the visibility check.
-          const mutation=await page.addStyleTag({content:'[data-match-player-fields]{min-width:640px !important}'});
-          await assert.rejects(contained(page,form.locator('[data-match-player="player-0"] input[type="number"]')));
-          await mutation.evaluate(node=>node.remove());
-        }
-        await page.close();
-        console.log(`${engine.name()} ${width}px: fields, POM, one save payload and resize preserved`);
+        try {
+          await page.goto(url); await page.waitForSelector('[data-match-player-fields]');
+          const form=page.locator('#edit-match-result-a');
+          assert.equal(await form.locator('[data-match-player]').count(),12);
+          if(width<1280) await page.getByRole('link',{name:'Add scorers & match details'}).click();
+          await contained(page,form.locator('[data-match-player="player-0"] input[type="number"]'));
+          await contained(page,form.locator('[data-match-player="player-1"] input[type="number"]'));
+          await form.getByRole('spinbutton',{name:'Goals for Test Player 0',exact:true}).fill('2');
+          await form.getByRole('spinbutton',{name:'Assists for Test Player 0',exact:true}).fill('1');
+          await form.getByRole('spinbutton',{name:'Rating for Test Player 0',exact:true}).fill('8.5');
+          const pom=form.locator('input[name="playerOfMatchTeamMemberId"]').locator('..');
+          await pom.getByRole('button').click();
+          await pom.getByRole('option',{name:'Test Player 2',exact:true}).click();
+          await pom.getByRole('listbox').waitFor({state:'hidden'});
+          assert.equal(await form.locator('input[name="playerOfMatchTeamMemberId"]').inputValue(),'player-2');
+          await page.setViewportSize({width:width===390?1360:390,height:844});
+          assert.equal(await form.locator('input[name="scorerGoals_player-0"]').inputValue(),'2');
+          await page.setViewportSize({width,height:844});
+          const save=form.getByRole('button',{name:'Save match details',exact:true});
+          // The retained desktop button is compact; mobile requires a full
+          // 44px touch target. Numeric entry controls require 44px at all widths.
+          await contained(page,save,width<=640?43:32);
+          await save.click(); await page.waitForFunction(()=>window.__submissions.length===1);
+          const submission=await page.evaluate(()=>window.__submissions[0]);
+          assert.equal(submission.actionName,'saveTeamMatchDetails');
+          const fields=Object.fromEntries(submission.fields);
+          assert.equal(fields['scorerGoals_player-0'],'2');assert.equal(fields['assists_player-0'],'1');assert.equal(fields['rating_player-0'],'8.5');
+          assert.equal(fields.playerOfMatchTeamMemberId,'player-2');assert.equal(fields.teamid,'team-a');assert.equal(fields.resultId,'result-a');
+          assert.equal(submission.fields.filter(([key])=>key==='scorerGoals_player-0').length,1);
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'Horizontal page overflow');
+          assert.deepEqual(errors,[]);
+          await form.locator('[data-match-player="player-0"]').scrollIntoViewIfNeeded();
+          await page.screenshot({path:`${artifacts}/${engine.name()}-${width}.png`});
+          if(width===390) {
+            const mutation=await page.addStyleTag({content:'[data-match-player-fields]{min-width:640px !important}'});
+            await assert.rejects(contained(page,form.locator('[data-match-player="player-0"] input[type="number"]')));
+            await mutation.evaluate(node=>node.remove());
+          }
+          console.log(`${engine.name()} ${width}px: fields, POM, one save payload and resize preserved`);
+        } catch(error) {
+          await page.screenshot({path:`${artifacts}/${engine.name()}-${width}-failure.png`});
+          fs.writeFileSync(`${artifacts}/${engine.name()}-${width}-failure.html`,await page.content());
+          throw error;
+        } finally { await page.close(); }
       }
     } finally { await browser.close(); }
   }
