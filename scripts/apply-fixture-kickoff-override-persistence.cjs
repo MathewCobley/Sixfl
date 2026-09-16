@@ -18,12 +18,22 @@ function replaceRequired(source, anchor, replacement, description) {
   const relative = "prisma/schema.prisma";
   let source = read(relative);
   if (!source.includes("kickoffRulesOverride Boolean @default(false)")) {
-    source = replaceRequired(
-      source,
-      "  publishedAt   DateTime?\n  matchFeePence Int?",
-      "  publishedAt   DateTime?\n  kickoffRulesOverride Boolean @default(false)\n  matchFeePence Int?",
-      "Fixture publishedAt field",
+    const fixtureStart = source.indexOf("model Fixture {");
+    const fixtureEnd = fixtureStart >= 0 ? source.indexOf("\n}", fixtureStart) : -1;
+    if (fixtureStart < 0 || fixtureEnd < 0) {
+      throw new Error("Kick-off override persistence could not find Fixture model.");
+    }
+    const fixtureBlock = source.slice(fixtureStart, fixtureEnd);
+    const publishedMatch = fixtureBlock.match(/^(\s*)publishedAt\s+DateTime\?\s*$/m);
+    if (!publishedMatch) {
+      throw new Error("Kick-off override persistence could not find Fixture publishedAt field.");
+    }
+    const indent = publishedMatch[1];
+    const updatedFixtureBlock = fixtureBlock.replace(
+      publishedMatch[0],
+      `${publishedMatch[0]}\n${indent}kickoffRulesOverride Boolean @default(false)`,
     );
+    source = source.slice(0, fixtureStart) + updatedFixtureBlock + source.slice(fixtureEnd);
   }
   write(relative, source);
 }
