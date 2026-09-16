@@ -1,0 +1,2 @@
+ALTER TABLE "Fixture"
+ADD COLUMN IF NOT EXISTS "kickoffRulesOverride" BOOLEAN NOT NULL DEFAULT false;
