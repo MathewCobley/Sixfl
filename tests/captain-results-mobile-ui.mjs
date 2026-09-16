@@ -100,7 +100,14 @@ try {
           await contained(page,form.locator('[data-match-player="player-1"] input[type="number"]'));
           await form.getByRole('spinbutton',{name:'Goals for Test Player 0',exact:true}).fill('2');
           await form.getByRole('spinbutton',{name:'Assists for Test Player 0',exact:true}).fill('1');
-          await form.getByRole('spinbutton',{name:'Rating for Test Player 0',exact:true}).fill('8.5');
+          const rating = form.getByRole('spinbutton',{name:'Rating for Test Player 0',exact:true});
+          assert.equal(await rating.getAttribute('step'),'0.1');
+          for (const [value, valid] of [['0',false],['10.1',false],['9.25',false],['',true],['1',true],['10',true],['9',true],['9.5',true],['9.2',true]]) {
+            await rating.fill(value);
+            assert.equal(await rating.evaluate(node=>node.checkValidity()),valid,`Rating ${value} validity`);
+          }
+          // The final rating remains exactly 9.2, not a rounded half-point.
+          assert.equal(await form.evaluate(node=>node.checkValidity()),true);
           const pom=form.locator('input[name="playerOfMatchTeamMemberId"]').locator('..');
           await pom.getByRole('button').click();
           await pom.getByRole('option',{name:'Test Player 2',exact:true}).click();
@@ -108,6 +115,7 @@ try {
           assert.equal(await form.locator('input[name="playerOfMatchTeamMemberId"]').inputValue(),'player-2');
           await page.setViewportSize({width:width===390?1360:390,height:844});
           assert.equal(await form.locator('input[name="scorerGoals_player-0"]').inputValue(),'2');
+          assert.equal(await rating.inputValue(),'9.2');
           await page.setViewportSize({width,height:844});
           const save=form.getByRole('button',{name:'Save match details',exact:true});
           // The retained desktop button is compact; mobile requires a full
@@ -117,9 +125,10 @@ try {
           const submission=await page.evaluate(()=>window.__submissions[0]);
           assert.equal(submission.actionName,'saveTeamMatchDetails');
           const fields=Object.fromEntries(submission.fields);
-          assert.equal(fields['scorerGoals_player-0'],'2');assert.equal(fields['assists_player-0'],'1');assert.equal(fields['rating_player-0'],'8.5');
+          assert.equal(fields['scorerGoals_player-0'],'2');assert.equal(fields['assists_player-0'],'1');assert.equal(fields['rating_player-0'],'9.2');
           assert.equal(fields.playerOfMatchTeamMemberId,'player-2');assert.equal(fields.teamid,'team-a');assert.equal(fields.resultId,'result-a');
           assert.equal(submission.fields.filter(([key])=>key==='scorerGoals_player-0').length,1);
+          assert.equal(submission.fields.filter(([key])=>key==='rating_player-0').length,1);
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'Horizontal page overflow');
           assert.deepEqual(errors,[]);
           await form.locator('[data-match-player="player-0"]').scrollIntoViewIfNeeded();
@@ -128,8 +137,13 @@ try {
             const mutation=await page.addStyleTag({content:'[data-match-player-fields]{min-width:640px !important}'});
             await assert.rejects(contained(page,form.locator('[data-match-player="player-0"] input[type="number"]')), /Player controls require horizontal scrolling/);
             await mutation.evaluate(node=>node.remove());
+            await rating.fill('9.2');
+            await rating.evaluate(node=>node.step='0.5');
+            assert.equal(await rating.evaluate(node=>node.checkValidity()),false,'Restoring the old half-point rule must reject 9.2');
+            await rating.evaluate(node=>node.step='0.1');
+            assert.equal(await rating.evaluate(node=>node.checkValidity()),true);
           }
-          console.log(`${engine.name()} ${width}px: fields, POM, one save payload and resize preserved`);
+          console.log(`${engine.name()} ${width}px: 9.2 accepted, invalid ratings blocked, fields, POM, one save payload and resize preserved`);
         } catch(error) {
           await page.screenshot({path:`${artifacts}/${engine.name()}-${width}-failure.png`});
           fs.writeFileSync(`${artifacts}/${engine.name()}-${width}-failure.html`,await page.content());
