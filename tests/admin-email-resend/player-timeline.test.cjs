@@ -31,7 +31,7 @@ function harness() {
     team: { name: 'Test Team', logoUrl: null, league: null },
     fixture: { id: 'fixture', publishedAt: new Date(), status: 'COMPLETED', homeTeam: { name: 'Team A' }, awayTeam: { name: 'Team B' } } };
   const original = { id: 'original', channel: 'EMAIL', status: 'SENT', sentAt: new Date(0), sourceType: 'PLAYER_MATCH_FEE_REQUEST', sourceId: fee.id,
-    recipientId: recipient.id, template: { key: 'player-match-fee-request-email', kind: 'TRANSACTIONAL', isActive: true, name: 'Payment request' },
+    recipientId: recipient.id, template: { key: 'player-match-fee-request-email', channel: 'EMAIL', kind: 'TRANSACTIONAL', isActive: true, name: 'Payment request' },
     variables: { amount: '£5.00', paymentUrl: fee.paymentUrl, firstName: 'Test', fixtureLabel: 'Test match' },
     recipient, bodyText: 'Original body', bodyHtml: '<p>Original email</p>', subject: 'Payment request', createdAt: new Date(0), scheduledFor: new Date(0) };
   const message = { id: 'message', notificationDispatchId: original.id, toEmail: recipient.email, sentAt: new Date(0), createdAt: new Date(0),
@@ -61,7 +61,9 @@ function harness() {
     './service': { queueNotificationFromTemplate: async (input, transaction) => {
       assert.equal(transaction, db, 'queue persistence must use the locked transaction');
       if (!original.template.isActive) throw new Error('Template disabled');
-      const next = { ...input, id: 'new-' + (queued.length + 1), status: 'QUEUED', recipient, template: original.template,
+      // The real template service derives channel from NotificationTemplate.
+      // Its output is a dispatch, not just a copy of the enqueue arguments.
+      const next = { ...input, channel: original.template.channel, id: 'new-' + (queued.length + 1), status: 'QUEUED', recipient, template: original.template,
         createdAt: new Date(), scheduledFor: new Date(), sentAt: null, bodyText: 'Rendered from template' };
       queued.push(next); return next;
     } },
@@ -77,6 +79,7 @@ test('a sent automated payment email queues separately using the saved fee and e
   assert.equal(result.reused, false); assert.equal(result.status, 'QUEUED');
   assert.equal(h.queued.length, 1); const q = h.queued[0];
   assert.equal(q.sourceType, h.original.sourceType); assert.equal(q.sourceId, 'fee');
+  assert.equal(q.channel, 'EMAIL');
   assert.equal(q.templateKey, 'player-match-fee-request-email'); assert.equal(q.createdByUserId, 'admin');
   assert.equal(q.variables.paymentUrl, h.fee.paymentUrl); assert.equal(q.metadata.originalDispatchId, 'original');
   assert.equal(q.metadata.playerPaymentTimelineResend, true); assert.equal(q.paymentSummary.amount, '£5.00');
@@ -84,7 +87,7 @@ test('a sent automated payment email queues separately using the saved fee and e
   assert.ok(h.queries.some(q => q.strings?.join('').includes('pg_advisory_xact_lock')));
 });
 
-test('queued-only dispatch history is supported and double submissions reuse one queue receipt', async () => {
+test('sent dispatch-only history is supported and double submissions reuse one queue receipt', async () => {
   const h = harness();
   const results = await Promise.all([h.input, { ...h.input, actorUserId: 'other-admin', referenceType: 'dispatch', referenceId: 'original' }].map(x => h.service.queuePlayerPaymentEmailResend(x)));
   assert.equal(h.queued.length, 1); assert.equal(results[0].dispatchId, results[1].dispatchId);
@@ -100,6 +103,7 @@ test('paid, waived, cancelled, zero, held, repaid, unpublished and stale demands
     h => { h.fee.paymentUrl = 'https://example.invalid/changed'; }, h => { h.fee.paymentToken = null; },
     h => { h.state.ledger.deletedAt = new Date(); }, h => { h.original.status = 'QUEUED'; },
     h => { h.original.template.kind = 'MARKETING'; }, h => { h.original.sourceType = 'LOGIN'; },
+    h => { h.original.template.channel = 'SMS'; }, h => { h.original.template.isActive = false; },
   ];
   for (const change of changes) {
     const h = harness(); change(h); await assert.rejects(h.service.queuePlayerPaymentEmailResend(h.input)); assert.equal(h.queued.length, 0);
@@ -124,7 +128,9 @@ test('wrong player/team, changed email, suppression and ambiguous prospect ident
 test('the provider guard blocks payment or recipient changes after queueing, without affecting old dispatches', async () => {
   for (const change of [h => { h.fee.status = 'PAID'; }, h => { h.state.hold = 'Collection paused'; },
     h => { h.state.ledger.version++; }, h => { h.recipient.isSuppressed = true; },
-    h => { h.fee.paymentUrl = 'https://example.invalid/new-link'; }]) {
+    h => { h.fee.paymentUrl = 'https://example.invalid/new-link'; }, h => { h.fee.amountPence = 600; },
+    h => { h.member.user.email = 'changed@example.invalid'; }, h => { h.recipient.email = 'changed@example.invalid'; },
+    h => { h.queued[0].channel = 'SMS'; }, h => { delete h.queued[0].metadata.teamMemberId; }]) {
     const h = harness(); await h.service.queuePlayerPaymentEmailResend(h.input);
     assert.equal(await h.service.getPlayerPaymentResendDeliveryBlock(h.queued[0]), null);
     change(h); assert.ok(await h.service.getPlayerPaymentResendDeliveryBlock(h.queued[0]));
@@ -153,7 +159,10 @@ test('the native page has a resend above the preview and includes queued direct-
   }).default;
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ id: 'team', membershipId: 'member' }), searchParams: Promise.resolve({}) }));
   assert.match(html, /Resend payment email/); assert.match(html, /name="referenceId" value="message"/);
-  assert.match(html, /name="confirmed" required/); assert.match(html, /QUEUED|Queued/);
+  // React may reorder attributes; verify the actual checkbox, not serialization order.
+  const confirmation = html.match(/<input\b[^>]*\bname="confirmed"[^>]*>/)?.[0];
+  assert.ok(confirmation); assert.match(confirmation, /type="checkbox"/); assert.match(confirmation, /\brequired(?:="")?(?:\s|\/?>)/);
+  assert.match(html, /QUEUED|Queued/);
   assert.equal((html.match(/Resend payment email/g) || []).length, 1);
   assert.ok(html.indexOf('Resend payment email') < html.indexOf('Saved preview'));
   assert.ok(h.queries.some(q => q.where?.teamId === 'team' && q.where?.OR?.some(x => x.teamMemberId === 'member')));
