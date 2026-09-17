@@ -178,7 +178,7 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       const paths=['src/lib/sixfl-tv/footage.ts','src/app/api/admin/sixfl-tv/footage/[fixtureId]/route.ts','src/app/api/admin/sixfl-tv/footage/shared/route.ts','src/components/admin/sixfl-tv/FootageUploader.tsx'];
       for(const file of paths)assert.doesNotMatch(fs.readFileSync(file,'utf8'),/queueNotification|queueSixflTvFixtureUploaded|sendEmail\(|spawn\(|exec\(|sixflTvUrl\s*=/);
       const old=fs.readFileSync('src/app/(admin)/admin/sixfl-tv/page.tsx','utf8');assert.match(old,/highlightsUrl/);assert.match(old,/fullMatchUrl/);assert.match(old,/queueSixflTvFixtureUploadedEmailsOnce/);
-      const ui=fs.readFileSync(paths[2],'utf8');assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);assert.match(ui,/multiple=\{kind === "CLIP"\}/);
+      const ui=fs.readFileSync('src/components/admin/sixfl-tv/FootageUploader.tsx','utf8');assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);assert.match(ui,/multiple=\{kind === "CLIP"\}/);
     });
   } finally {
     failPut=false;holdPut=null;await db.$disconnect();
