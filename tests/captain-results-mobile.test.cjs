@@ -81,8 +81,17 @@ if (require.main === module) {
     assert.match(html, /value="7.5"/);
     assert.doesNotMatch(html, /min-w-\[640px\]/);
     assert.equal(h.writes.length, 0);
+    const ratingInputs = html.match(/<input[^>]*name="rating_[^>]*>/g);
+    assert.equal(ratingInputs.length, 12);
+    for (const input of ratingInputs) {
+      assert.match(input, /min="1"/);
+      assert.match(input, /max="10"/);
+      assert.match(input, /step="0.1"/);
+      assert.doesNotMatch(input, /required=/);
+    }
+    assert.match(html, /up to one decimal place, such as 9.2/);
   });
-  test('the unchanged action accepts scorer, assist, rating and Player of the Match payloads', async () => {
+  test('the existing action accepts scorer, assist, rating and Player of the Match payloads', async () => {
     const h = harness(), form = findForm(await h.page());
     const body = new FormData();
     for (const [key, value] of Object.entries({ teamid: 'team-a', resultId: 'result-a', scorerGoals_player0: 'unused',
@@ -100,7 +109,7 @@ if (require.main === module) {
       if (scenario === 'unauthorised') h.setAuthorised(false);
       if (scenario === 'goals') body.set('scorerGoals_player-0', '4');
       if (scenario === 'assists') body.set('assists_player-0', '4');
-      if (scenario === 'rating') body.set('rating_player-0', '7.2');
+      if (scenario === 'rating') body.set('rating_player-0', '7.25');
       if (scenario === 'players') for (let i = 0; i < 10; i++) body.set(`played_player-${i}`, 'on');
       await assert.rejects(form.props.action(body), e => e.message === 'Not authorised' || e.url?.includes('error='));
       assert.equal(h.writes.length, 0, scenario);
@@ -111,6 +120,54 @@ if (require.main === module) {
     assert.match(renderToStaticMarkup(await h.page()), /No squad players are available/);
     assert.match(renderToStaticMarkup(await h.page()), /disabled=""/);
     assert.match(renderToStaticMarkup(await h.page({ q: 'no-such-team-or-player' })), /No results matched/);
+  });
+  test('every tenth from 1 to 10 reaches the saved rating payload exactly, including 9.2', async () => {
+    const h = harness(), form = findForm(await h.page());
+    for (let tenths = 10; tenths <= 100; tenths++) {
+      h.writes.length = 0;
+      const body = new FormData(), rating = tenths / 10;
+      body.set('teamid', 'team-a'); body.set('resultId', 'result-a');
+      body.set('rating_player-2', String(rating));
+      await assert.rejects(form.props.action(body), e => e.url?.includes('saved=1'), String(rating));
+      assert.deepEqual(h.writes[1].rows, [{ teamMemberId: 'player-2', rating }]);
+      assert.equal(h.data.fixture.result.homeScore, 3);
+      assert.equal(h.data.fixture.result.awayScore, 1);
+    }
+  });
+  test('two-decimal, non-numeric and out-of-range ratings fail before any write', async () => {
+    const h = harness(), form = findForm(await h.page());
+    for (const rating of ['9.25', '1.01', '9.99', '0', '0.9', '-1', '10.1', '11', 'NaN', 'Infinity', '-Infinity', 'not a number']) {
+      const body = new FormData();
+      body.set('teamid', 'team-a'); body.set('resultId', 'result-a'); body.set('rating_player-2', rating);
+      await assert.rejects(form.props.action(body), e => e.url?.includes('error=') && decodeURIComponent(e.url).includes('one decimal place'), rating);
+      assert.equal(h.writes.length, 0, rating);
+    }
+  });
+  test('ratings remain optional and decimal goals and assists still fail', async () => {
+    const h = harness(), form = findForm(await h.page()), body = new FormData();
+    body.set('teamid', 'team-a'); body.set('resultId', 'result-a');
+    body.set('played_player-2', 'on'); body.set('rating_player-2', '');
+    await assert.rejects(form.props.action(body), e => e.url?.includes('saved=1'));
+    assert.deepEqual(h.writes[1].rows, [{ teamMemberId: 'player-2', rating: null }]);
+    h.writes.length = 0;
+    for (const field of ['scorerGoals_player-2', 'assists_player-2']) {
+      body.set(field, '1.2');
+      await assert.rejects(form.props.action(body), e => e.url?.includes('error=') && decodeURIComponent(e.url).includes('whole numbers'));
+      assert.equal(h.writes.length, 0);
+      body.delete(field);
+    }
+  });
+  test('a saved 9.2 is rendered unchanged when match details are opened again', async () => {
+    const h = harness(), form = findForm(await h.page()), body = new FormData();
+    body.set('teamid', 'team-a'); body.set('resultId', 'result-a'); body.set('rating_player-2', '9.2');
+    await assert.rejects(form.props.action(body), e => e.url?.includes('saved=1'));
+    const saved = h.writes[1].rows[0];
+    h.data.performances = [{ ...saved, matchResultId: 'result-a', played: true }];
+    const html = renderToStaticMarkup(await h.page());
+    const input = html.match(/<input[^>]*name="rating_player-2"[^>]*>/)?.[0];
+    assert.ok(input); assert.match(input, /value="9.2"/);
+    assert.match(html, /9.2\/10/);
+    assert.equal(h.writes.length, 2, 'rendering saved details must not write again');
   });
 }
 module.exports = { fixtureData, harness };

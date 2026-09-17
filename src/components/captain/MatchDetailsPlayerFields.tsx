@@ -19,6 +19,7 @@ export default function MatchDetailsPlayerFields({ players, goalsFor }: {
 }) {
   return (
     <div className={styles.container} data-match-player-fields>
+      <p className="px-4 py-3 text-xs text-white/60">Ratings are optional: enter 1–10 with up to one decimal place, such as 9.2, or leave blank.</p>
       <div className={styles.heading} aria-hidden="true">
         <span>Player</span><span>Played</span><span>Goals</span><span>Assists</span><span>Rating</span>
       </div>
@@ -51,7 +52,7 @@ export default function MatchDetailsPlayerFields({ players, goalsFor }: {
           <label className={styles.field}>
             <span className={styles.mobileLabel}>Rating</span>
             <input type="number" name={`rating_${player.id}`} defaultValue={player.rating ?? ""}
-              min={1} max={10} step={0.5} inputMode="decimal" placeholder="—"
+              min={1} max={10} step={0.1} inputMode="decimal" placeholder="—"
               aria-label={`Rating for ${player.name}`} />
           </label>
         </div>
