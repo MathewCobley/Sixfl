@@ -5,12 +5,12 @@ import { queueNotificationFromTemplate } from "./service";
 import { PLAYER_PAYMENT_RESEND_TEMPLATES } from "./player-payment-resend-policy";
 
 export class PlayerPaymentResendError extends Error {}
-type Db = Prisma.TransactionClient;
+type Db = Pick<typeof prisma, "teamMember" | "playerMatchFee" | "notificationRecipient" | "$queryRaw">;
 type Context = { teamId: string; membershipId: string; feeId: string; recipientId: string; expectedEmail: string };
 const email = (value: string | null | undefined) => value?.trim().toLowerCase() || "";
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const blocked = (message: string): never => { throw new PlayerPaymentResendError(message); };
+function blocked(message: string): never { throw new PlayerPaymentResendError(message); }
 
 /** Read-only safety check, reused immediately before provider delivery. An old
  * payment demand is never replayed against a changed balance, player or link. */
@@ -78,18 +78,19 @@ export async function queuePlayerPaymentEmailResend(input: {
   if (!dispatchId) blocked("The original email has no payment notification record.");
   const original = await prisma.notificationDispatch.findUnique({ where: { id: dispatchId }, include: { template: true } });
   if (!original || original.channel !== "EMAIL" || original.status !== "SENT" || !original.sentAt || !original.sourceId ||
-      !original.sourceType || !Object.hasOwn(PLAYER_PAYMENT_RESEND_TEMPLATES, original.sourceType) ||
-      original.template?.key !== PLAYER_PAYMENT_RESEND_TEMPLATES[original.sourceType] || original.template.kind !== "TRANSACTIONAL") {
+      !original.sourceType || !Object.hasOwn(PLAYER_PAYMENT_RESEND_TEMPLATES, original.sourceType) || !original.template ||
+      original.template.key !== PLAYER_PAYMENT_RESEND_TEMPLATES[original.sourceType] || original.template.kind !== "TRANSACTIONAL" || original.template.channel !== "EMAIL") {
     blocked("This is not a supported sent player payment email. The original message has not been changed.");
   }
+  const sourceType = original.sourceType;
+  const templateKey = original.template.key;
   const originalVariables = record(original.variables);
   const context: Context = { teamId: input.teamId, membershipId: input.membershipId,
     feeId: original.sourceId, recipientId: original.recipientId, expectedEmail: email(input.expectedEmail) };
   return prisma.$transaction(async (db) => {
-    // Transaction-scoped lock serialises retries from multiple admins, tabs and
-    // app instances. Keep the original source type so normal payment cancellation
-    // and provider safeguards continue to recognise the new dispatch.
-    await db.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`player-payment-resend:${context.feeId}`},0))`);
+    // The text cast avoids exposing PostgreSQL's void return type to Prisma.
+    // Transaction-scoped locking serialises retries across admins and instances.
+    await db.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`player-payment-resend:${context.feeId}`},0))::text`);
     const current = await readPaymentContext(context, db);
     if (originalVariables.amount !== money(current.amountPence) || originalVariables.paymentUrl !== current.fee.paymentUrl) {
       blocked("The amount or payment link has changed since this email. Use the current player payment request instead of resending the old one.");
@@ -105,15 +106,18 @@ export async function queuePlayerPaymentEmailResend(input: {
     const variables: Record<string, string> = {};
     for (const [key, value] of Object.entries(originalVariables)) if (typeof value === "string") variables[key] = value;
     const league = current.fee.team.league;
+    // Preserve the original source type/id so existing delivery and payment
+    // cancellation safeguards recognise this as a payment request.
     const dispatch = await queueNotificationFromTemplate({
-      templateKey: original.template.key, recipientId: original.recipientId, variables,
-      sourceType: original.sourceType, sourceId: context.feeId, createdByUserId: input.actorUserId,
+      templateKey, recipientId: original.recipientId, variables,
+      sourceType, sourceId: context.feeId, createdByUserId: input.actorUserId,
       metadata: { origin: "player_payment_timeline_resend", originLabel: "Resent player payment email",
         playerPaymentTimelineResend: true, originalDispatchId: original.id,
         ...(input.referenceType === "message" ? { originalMessageId: input.referenceId } : {}),
         teamId: context.teamId, teamMemberId: context.membershipId, fixtureId: current.fee.fixture.id,
         playerMatchFeeId: context.feeId, resendRecipientEmail: context.expectedEmail,
         resendAmountPence: current.amountPence, resendLedgerVersion: current.ledgerVersion,
+        resendFeeAmountPence: current.fee.amountPence,
         paymentUrl: current.fee.paymentUrl, actorRole: "ADMIN" },
       emailBranding: { teamName: current.fee.team.name, teamLogoUrl: current.fee.team.logoUrl,
         leagueName: league ? `${league.name}${league.season ? ` · ${league.season}` : ""}` : "" },
@@ -140,7 +144,9 @@ export async function getPlayerPaymentResendDeliveryBlock(dispatch: {
     const current = await readPaymentContext({ teamId: meta.teamId, membershipId: meta.teamMemberId,
       feeId: dispatch.sourceId, recipientId: dispatch.recipientId, expectedEmail: meta.resendRecipientEmail });
     if (current.amountPence !== meta.resendAmountPence || current.fee.paymentUrl !== meta.paymentUrl ||
-        current.ledgerVersion !== meta.resendLedgerVersion) return "Payment details changed after the resend was queued. Outdated payment email cancelled.";
+        current.fee.amountPence !== meta.resendFeeAmountPence || current.ledgerVersion !== meta.resendLedgerVersion) {
+      return "Payment details changed after the resend was queued. Outdated payment email cancelled.";
+    }
     return null;
   } catch (error) {
     if (error instanceof PlayerPaymentResendError) return error.message;
