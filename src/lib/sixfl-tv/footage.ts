@@ -174,6 +174,12 @@ export async function removeFootage(fixtureId: string, assetId: string, confirme
   await prisma.$transaction(async tx => {
     const asset = await footageAsset(fixtureId, assetId, tx, true);
     if (asset.busyUntil && asset.busyUntil > new Date()) throw new FootageError("An upload is still saving. Pause it and wait up to two minutes before removing it.", 409);
+    const active = await tx.$queryRaw<{ id: string }[]>`
+      SELECT j."id" FROM "SixflTvRenderInput" i
+      JOIN "SixflTvRenderJob" j ON j."id"=i."jobId"
+      WHERE i."assetId"=${assetId} AND j."state" IN ('QUEUED','PROCESSING')
+      LIMIT 1`;
+    if (active[0]) throw new FootageError("This source is being used by an active SIXFL TV render. Wait for the preview to finish before removing it.", 409);
     await tx.$executeRaw`UPDATE "SixflTvFootageAsset" SET "state"='DELETING',"updatedAt"=NOW() WHERE "id"=${assetId}`;
   });
   // Bounded batches allow large removals to be retried without a long web request.
