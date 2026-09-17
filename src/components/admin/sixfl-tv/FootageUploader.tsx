@@ -43,6 +43,7 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
   const [state, setState] = useState(initial);
   const [selection, setSelection] = useState<Selection[]>([]);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(""), [percent, setPercent] = useState(0);
   const [preview, setPreview] = useState<Asset | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Asset | null>(null);
@@ -65,15 +66,18 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
         return { file, kind, asset };
       });
       if (kind === "CLIP" && added.length > 50) throw new Error("Choose no more than 50 clips at once.");
-      setSelection(added); setError(""); setMessage(`${added.length} file${added.length === 1 ? "" : "s"} selected. Click Upload selected files to start.`);
+      // Selecting a full match must not silently discard already selected clips.
+      setSelection(current => [...current.filter(item => item.kind !== kind), ...added]);
+      setError(""); setMessage("Selection updated. Click Upload selected files to start.");
     } catch (e) { setError(e instanceof Error ? e.message : "Choose an MP4 file."); }
   }
   async function upload() {
     if (running.current || !selection.length) return;
-    running.current = true; pause.current = false; setBusy(true); setError("");
+    running.current = true; pause.current = false; setBusy(true); setUploading(true); setError("");
     try {
       for (let fileIndex = 0; fileIndex < selection.length; fileIndex++) {
         if (pause.current) break;
+        setPercent(0);
         const item = selection[fileIndex], file = item.file;
         const begun = item.asset ? { asset: item.asset } : await json<{ asset: Asset }>(endpoint, {
           action: "begin", kind: item.kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified,
@@ -101,7 +105,7 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
       setMessage(pause.current ? "Paused after the current part. Reselect the same file below to resume; completed parts are retained." : "Footage saved privately against this match. Nothing has been published or emailed.");
       if (!pause.current) setSelection([]);
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed."); }
-    finally { running.current = false; setBusy(false); await refresh().catch(() => undefined); }
+    finally { running.current = false; setBusy(false); setUploading(false); await refresh().catch(() => undefined); }
   }
   async function move(asset: Asset, direction: -1 | 1) {
     if (running.current) return;
@@ -168,7 +172,7 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
       <p className="mt-2 break-words text-sm text-white/60">{selection.map(s => s.file.name).join(" · ")}</p>
       <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={() => void upload()}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
     </div> : null}
-    {busy ? <div className="space-y-2"><progress aria-label="Current file upload progress" value={percent} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => { pause.current = true; setMessage("Pausing after the current part is safely saved…"); }}>Pause after current part</button></div> : null}
+    {uploading ? <div className="space-y-2"><progress aria-label="Current file upload progress" value={percent} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => { pause.current = true; setMessage("Pausing after the current part is safely saved…"); }}>Pause after current part</button></div> : null}
     {message ? <p role="status" className="break-words rounded-xl border border-white/10 p-3 text-sm text-white/80">{message}</p> : null}
     {error ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p> : null}
     {removeTarget ? <div role="alertdialog" aria-label="Confirm source file removal" className="space-y-3 rounded-2xl border border-red-400/30 p-5">
