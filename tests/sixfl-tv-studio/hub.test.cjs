@@ -22,6 +22,8 @@ test("main SIXFL TV page is the media hub", () => {
   assert.match(page, /href="\/admin\/sixfl-tv\/goal-of-month"/);
   assert.match(page, /href="\/admin\/sixfl-tv\/goal-of-week\?legacy=1"/);
   assert.match(page, /href="\/api\/admin\/sixfl-tv\/youtube\/start"/);
+  assert.match(page, /Upload \/ manage footage/);
+  assert.match(page, /\/admin\/sixfl-tv\/footage\/\$\{fixture\.id\}/);
 });
 
 test("SIXFL TV navigation exposes the core tools on every media page", () => {
