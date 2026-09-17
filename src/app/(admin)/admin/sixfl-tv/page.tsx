@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";
 import { getYoutubeConnectionStatus } from "@/lib/sixfl-tv/youtube";
 import {
   buildSixflTvVideoValue,
@@ -118,7 +119,7 @@ async function saveSixflTvFixtureAction(formData: FormData) {
 export default async function AdminSixflTvPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string; error?: string; youtube?: string; youtubeError?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; youtube?: string; youtubeError?: string; goalSaved?: string; goalError?: string }>;
 }) {
   await requireAdmin();
 
@@ -189,6 +190,8 @@ export default async function AdminSixflTvPage({
           ) : null}
         </div>
       </section>
+
+      <GoalOfWeekAdminPanel searchParams={sp} />
 
       {sp.youtube === "connected" ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
