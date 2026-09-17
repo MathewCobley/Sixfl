@@ -115,6 +115,21 @@ export class FootageUploadQueue {
     for (const entry of this.entries) this.pause(entry.view.id);
     this.controller?.abort();
   }
+  private async autoRenderIfBatchComplete(fixtureId: string | null, signal: AbortSignal) {
+    if (fixtureId === null) return null;
+    if (this.entries.some(item => item.view.fixtureId === fixtureId && uploadPending(item.view))) return null;
+    const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
+    try {
+      await this.transport.json(endpoint, signal, { action: "render" });
+      return "Upload complete. Private SIXFL TV previews were queued automatically.";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Automatic video generation could not start.";
+      if (/final result/i.test(message)) return "Upload complete. Add the final result before generating the SIXFL TV previews.";
+      if (/disputed/i.test(message)) return "Upload complete. Video generation is waiting for the disputed result to be resolved.";
+      if (/rendering is already in progress/i.test(message)) return "Upload complete. A preview is already rendering; refresh it afterwards if you added more footage.";
+      return `Upload complete. Automatic preview generation did not start: ${message}`;
+    }
+  }
   private async pump() {
     if (this.running) return;
     this.running = true;
@@ -134,6 +149,8 @@ export class FootageUploadQueue {
               ? "Shared SIXFL TV branding saved privately. Nothing has been published or emailed."
               : "Footage saved privately against this match. Nothing has been published or emailed.";
             entry.file = null;
+            const renderMessage = await this.autoRenderIfBatchComplete(entry.view.fixtureId, controller.signal);
+            if (renderMessage) entry.view.message = renderMessage;
           }
         } catch (error) {
           entry.view.status = entry.pause || controller.signal.aborted ? "PAUSED" : "FAILED";
