@@ -40,9 +40,11 @@ test('fixture graphics generate deterministic YouTube and video-card PNG shapes'
   const fixture={leagueName:'Northallerton Wednesday · Autumn 2026',kickoffLabel:'Thu, 17 Sep 2026',firstTeam:{name:'Town Hall 6s',logoUrl:null,score:4},secondTeam:{name:'Ballerz FC',logoUrl:null,score:2},scorers:['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']};
   const thumb=await graphics.createSixflTvThumbnail({fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
   const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
-  const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata();
+  const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk'});
+  const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata();
   assert.equal(tm.format,'png');assert.equal(tm.width,1280);assert.equal(tm.height,720);
   assert.equal(cm.format,'png');assert.equal(cm.width,1920);assert.equal(cm.height,1080);
+  assert.equal(gm.format,'png');assert.equal(gm.width,1920);assert.equal(gm.height,1080);
 });
 
 test('studio queues saved sources in editing order and requires confirmed result', async t=>{
@@ -67,7 +69,7 @@ test('studio queues saved sources in editing order and requires confirmed result
     const first=await studio.requestRenders('match-a','admin');assert.equal(first.renders.length,2);
     const second=await studio.requestRenders('match-a','admin');assert.deepEqual(second.renders.map(x=>x.id).sort(),first.renders.map(x=>x.id).sort());
     const jobs=await db.$queryRaw`SELECT "id","kind","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind"`;assert.equal(jobs.length,2);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===3),'Renderer version must invalidate old finished previews after editing changes');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===4),'Renderer version must invalidate old finished previews after editing changes');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
@@ -90,7 +92,7 @@ test('studio source keeps publishing explicit, private and isolated from custome
   const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
   assert.match(ui,/Approve & upload privately to YouTube/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
-  assert.match(worker,/swipeVideo/);assert.match(worker,/generatedIntro/);assert.match(worker,/RESULT_SECONDS/);
+  assert.match(worker,/swipeVideo/);assert.match(worker,/generatedIntro/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
