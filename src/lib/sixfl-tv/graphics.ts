@@ -143,3 +143,22 @@ export async function createSixflTvVideoCard(input: {
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
+
+
+export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
+  const destination = new URL("/goal-of-the-month", input.siteUrl);
+  const displayUrl = `${destination.host.replace(/^www\./, "")}${destination.pathname}`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${stadiumBackground(1920, 1080)}
+    <text x="960" y="135" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="900" letter-spacing="11" fill="#6ee7b7">SIXFL TV</text>
+    <text x="960" y="300" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="92" font-weight="900" fill="#ffffff">GOAL OF THE MONTH</text>
+    <text x="960" y="390" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="800" fill="#d1fae5">Think one of these deserves it?</text>
+    <rect x="470" y="485" width="980" height="190" rx="34" fill="#020805" fill-opacity="0.72" stroke="#34d399" stroke-width="5"/>
+    <text x="960" y="565" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="900" fill="#ffffff">NOMINATE &amp; VOTE</text>
+    <text x="960" y="630" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#6ee7b7">${xml(displayUrl)}</text>
+    <text x="960" y="775" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#ffffff">Nominate until the 5th · Vote 6th–12th</text>
+    <text x="960" y="835" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="600" fill="#d1d5db">Player chosen · Monthly winner announced from the 13th</text>
+    <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}

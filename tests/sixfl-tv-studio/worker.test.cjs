@@ -18,10 +18,14 @@ async function loadWorker(db, objects, uploadHook) {
     intro: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#10b981' } }).png().toBuffer(),
     title: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#2563eb' } }).png().toBuffer(),
     result: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#dc2626' } }).png().toBuffer(),
+    goal: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#c026d3' } }).png().toBuffer(),
   };
   const mocks = {
     '@prisma/client': { PrismaClient: class { constructor() { return db; } } },
-    '../src/lib/sixfl-tv/graphics': { createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title },
+    '../src/lib/sixfl-tv/graphics': {
+      createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title,
+      createSixflTvGoalOfMonthCard: async () => cards.goal,
+    },
     '../src/lib/sixfl-tv/videos': {},
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
@@ -155,11 +159,12 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   await fs.writeFile(result, Buffer.concat(parts.map(p => { assert.equal(sha(objects.get(p.objectKey)), p.sha256); return objects.get(p.objectKey); })));
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920); assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
-  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 10.0);
+  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 15.0);
   const introFrame = await w.run('ffmpeg', ['-ss', '0.8', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const titleFrame = await w.run('ffmpeg', ['-ss', '2.5', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const resultFrame = await w.run('ffmpeg', ['-ss', '6.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  assert.equal(new Set([introFrame,titleFrame,resultFrame]).size,3,'Generated intro, match title and full-time result cards must all survive assembly');
+  const goalFrame = await w.run('ffmpeg', ['-ss', '13.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  assert.equal(new Set([introFrame,titleFrame,resultFrame,goalFrame]).size,4,'Generated intro, match title, full-time score and Goal of the Month end card must all survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });
