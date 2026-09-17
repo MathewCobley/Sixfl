@@ -6,6 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
+const SIXFL_TV_RENDER_VERSION = 2;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -138,7 +139,7 @@ export async function requestRenders(fixtureId: string, actor: string) {
   const created: Array<ReturnType<typeof renderDto>> = [];
   for (const spec of specs) {
     const ordered = [...(intro ? [intro] : []), ...spec.content, ...(outro ? [outro] : [])];
-    const metadata = { fixture: graphic, label: spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH", contentAssetIds: spec.content.map(asset => asset.id) };
+    const metadata = { renderVersion: SIXFL_TV_RENDER_VERSION, fixture: graphic, label: spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH", contentAssetIds: spec.content.map(asset => asset.id) };
     const fingerprint = sha(JSON.stringify({ kind: spec.kind, assets: ordered.map(asset => asset.id), metadata }));
     const row = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424421)::text`;
