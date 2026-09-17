@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
@@ -11,11 +12,28 @@ import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
 const POLL_MS = 5000;
+const renderSignals = new AsyncLocalStorage<AbortSignal>();
+const shutdown = new AbortController();
+const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
+const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
+function operationSignal(ms: number) {
+  return AbortSignal.any([shutdown.signal, AbortSignal.timeout(ms), ...(renderSignals.getStore() ? [renderSignals.getStore()!] : [])]);
+}
+function checkAbort() { shutdown.signal.throwIfAborted(); renderSignals.getStore()?.throwIfAborted(); }
+async function ownLease(tx: Prisma.TransactionClient, job: Job) {
+  checkAbort();
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvRenderJob" WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW() FOR UPDATE`;
+  if (!rows[0]) throw new Error("Render ownership expired; this attempt cannot change the job.");
+}
+async function failJob(job: Job, message: string) {
+  // An interrupted old process must never mark a replacement attempt failed.
+  return db.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='FAILED',"error"=${message},"leaseToken"=NULL,"busyUntil"=NULL,"updatedAt"=NOW() WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING'`;
+}
 
 type Job = { id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; metadataJson: Prisma.JsonValue; leaseToken: string | null };
 type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; partCount: number; sizeBytes: bigint; state: string };
-type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean };
-type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean };
+type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
+type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type PublishJob = {
   id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; renderJobId: string; thumbnailObjectKey: string;
   title: string; description: string; privacyStatus: "private"; resumableUrl: string | null; uploadedBytes: bigint;
@@ -35,14 +53,36 @@ function required(name: string) {
   return value;
 }
 
-async function run(bin: string, args: string[], capture = false) {
+async function run(bin: string, args: string[], capture = false, timeoutMs = bin === "ffprobe" ? 60000 : MAX_RENDER_MS) {
+  const signal = operationSignal(timeoutMs);
+  signal.throwIfAborted();
+  // Media inputs must stay local. Bound decoder, filter and encoder threads.
+  const command = bin === "ffmpeg"
+    ? ["-nostdin", "-protocol_whitelist", "file,pipe", "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1", ...args.slice(0, -1), "-threads", "2", args.at(-1)!]
+    : bin === "ffprobe" ? ["-protocol_whitelist", "file,pipe", ...args] : args;
   return new Promise<string>((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ["ignore", capture ? "pipe" : "ignore", "pipe"] });
-    let stdout = "", stderr = "";
+    const child = spawn(bin, command, { stdio: ["ignore", capture ? "pipe" : "ignore", "pipe"] });
+    let stdout = "", stderr = "", failure: Error | undefined;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const abort = () => {
+      failure = new Error("Video operation was cancelled or exceeded its time limit.");
+      child.kill("SIGTERM");
+      killTimer = setTimeout(() => child.kill("SIGKILL"), 1000);
+      killTimer.unref();
+    };
+    signal.addEventListener("abort", abort, { once: true });
     child.stdout?.on("data", chunk => { stdout = (stdout + String(chunk)).slice(-65536); });
     child.stderr?.on("data", chunk => { stderr = (stderr + String(chunk)).slice(-65536); });
-    child.on("error", reject);
-    child.on("exit", code => code === 0 ? resolve(stdout.trim()) : reject(new Error(`${bin} exited ${code}: ${stderr.slice(-4000)}`)));
+    child.on("error", error => { failure = error; });
+    // Wait for the process and pipes to close before deleting its temporary files.
+    child.on("close", code => {
+      signal.removeEventListener("abort", abort);
+      if (killTimer) clearTimeout(killTimer);
+      if (failure || signal.aborted) reject(failure || new Error("Video operation cancelled."));
+      else if (code !== 0) reject(new Error(`${bin} exited ${code}: ${stderr.slice(-4000)}`));
+      else resolve(stdout.trim());
+    });
+    if (signal.aborted) abort();
   });
 }
 async function durationSeconds(file: string) {
@@ -52,7 +92,7 @@ async function durationSeconds(file: string) {
   return seconds;
 }
 async function hasAudio(file: string) {
-  const value = await run("ffprobe", ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index", "-of", "csv=p=0", file], true).catch(() => "");
+  const value = await run("ffprobe", ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index", "-of", "csv=p=0", file], true);
   return Boolean(value.trim());
 }
 
@@ -74,19 +114,43 @@ async function loadInputs(jobId: string) {
     WHERE i."jobId"=${jobId} ORDER BY i."position",i."assetId"`;
 }
 
+async function verifiedPart(part: SourcePart) {
+  checkAbort();
+  if (!Number.isInteger(part.sizeBytes) || part.sizeBytes < 1 || part.sizeBytes > PART_BYTES || !/^[0-9a-f]{64}$/.test(part.sha256)) throw new Error("Invalid source manifest.");
+  const response = await fetchRailwayObject({ key: part.objectKey, signal: operationSignal(60000) });
+  if (!response.ok || !response.body) throw new Error(`Source storage returned ${response.status}.`);
+  const reader = response.body.getReader(), chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      checkAbort();
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > part.sizeBytes) throw new Error("Source part exceeds its recorded size.");
+      chunks.push(Buffer.from(value));
+    }
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  const bytes = Buffer.concat(chunks, size);
+  if (size !== part.sizeBytes || createHash("sha256").update(bytes).digest("hex") !== part.sha256) throw new Error("Source part integrity check failed.");
+  return bytes;
+}
 async function reconstructAsset(input: Input, target: string) {
   if (input.state !== "READY") throw new Error(`Source ${input.filename} is no longer ready.`);
-  const parts = await db.$queryRaw<SourcePart[]>`SELECT "partNumber","objectKey","sizeBytes","stored" FROM "SixflTvFootagePart" WHERE "assetId"=${input.assetId} ORDER BY "partNumber"`;
+  const parts = await db.$queryRaw<SourcePart[]>`SELECT "partNumber","objectKey","sizeBytes","stored","sha256" FROM "SixflTvFootagePart" WHERE "assetId"=${input.assetId} ORDER BY "partNumber"`;
   if (parts.length !== input.partCount || parts.some((part, index) => part.partNumber !== index || !part.stored)) throw new Error(`Source ${input.filename} is incomplete.`);
   const handle = await open(target, "w");
   try {
     let written = 0;
     for (const part of parts) {
-      const response = await fetchRailwayObject({ key: part.objectKey, signal: AbortSignal.timeout(60000) });
-      if (!response.ok) throw new Error(`Source storage returned ${response.status}.`);
-      const bytes = Buffer.from(await response.arrayBuffer());
-      if (bytes.length !== part.sizeBytes) throw new Error(`Source ${input.filename} part length changed.`);
-      await handle.write(bytes);
+      const bytes = await verifiedPart(part);
+      let offset = 0;
+      while (offset < bytes.length) {
+        checkAbort();
+        const result = await handle.write(bytes, offset, bytes.length - offset);
+        if (!result.bytesWritten) throw new Error("Source file write made no progress.");
+        offset += result.bytesWritten;
+      }
       written += bytes.length;
     }
     if (BigInt(written) !== input.sizeBytes) throw new Error(`Source ${input.filename} byte count changed.`);
@@ -113,33 +177,85 @@ async function normaliseVideo(source: string, target: string) {
   }
 }
 
-async function storeOutput(job: Job, file: string) {
-  const handle = await open(file, "r");
+type OutputProof = { sizeBytes: number; partCount: number; parts: RenderPart[] };
+async function storeOutput(job: Job, file: string): Promise<OutputProof> {
+  const handle = await open(file, "r"), parts: RenderPart[] = [];
   let position = 0, partNumber = 0;
   try {
-    for (;;) {
-      const buffer = Buffer.allocUnsafe(PART_BYTES);
-      const result = await handle.read(buffer, 0, PART_BYTES, position);
-      if (!result.bytesRead) break;
-      const bytes = buffer.subarray(0, result.bytesRead), digest = createHash("sha256").update(bytes).digest("hex");
+    const fileSize = (await handle.stat()).size;
+    if (!fileSize || fileSize > MAX_OUTPUT_BYTES) throw new Error("Rendered output exceeds the supported file size.");
+    while (position < fileSize) {
+      checkAbort();
+      const bytes = Buffer.allocUnsafe(Math.min(PART_BYTES, fileSize - position));
+      let filled = 0;
+      while (filled < bytes.length) {
+        const result = await handle.read(bytes, filled, bytes.length - filled, position + filled);
+        if (!result.bytesRead) throw new Error("Rendered output ended unexpectedly.");
+        filled += result.bytesRead;
+      }
+      const digest = createHash("sha256").update(bytes).digest("hex");
       const key = `sixfl-tv-render/v1/${job.id}/${partNumber}-${digest}`;
-      await db.$executeRaw`INSERT INTO "SixflTvRenderPart" ("jobId","partNumber","objectKey","sha256","sizeBytes") VALUES (${job.id},${partNumber},${key},${digest},${bytes.length}) ON CONFLICT ("jobId","partNumber") DO NOTHING`;
-      await uploadRailwayObject({ key, body: bytes, contentType: "application/octet-stream", signal: AbortSignal.timeout(60000) });
-      await db.$executeRaw`UPDATE "SixflTvRenderPart" SET "stored"=true WHERE "jobId"=${job.id} AND "partNumber"=${partNumber} AND "sha256"=${digest}`;
-      position += result.bytesRead; partNumber++;
+      await db.$transaction(async tx => {
+        await ownLease(tx, job);
+        await tx.$executeRaw`INSERT INTO "SixflTvRenderPart" ("jobId","partNumber","objectKey","sha256","sizeBytes") VALUES (${job.id},${partNumber},${key},${digest},${bytes.length}) ON CONFLICT ("jobId","partNumber") DO NOTHING`;
+        const rows = await tx.$queryRaw<RenderPart[]>`SELECT "partNumber","objectKey","sha256","sizeBytes","stored" FROM "SixflTvRenderPart" WHERE "jobId"=${job.id} AND "partNumber"=${partNumber}`;
+        const saved = rows[0];
+        // Never mix bytes from two attempts. A different retry needs a fresh job.
+        if (!saved || saved.sha256 !== digest || saved.objectKey !== key || saved.sizeBytes !== bytes.length) throw new Error("An interrupted render differs from this attempt. Generate a new preview; your sources are unchanged.");
+      });
+      await uploadRailwayObject({ key, body: bytes, contentType: "application/octet-stream", signal: operationSignal(60000) });
+      await db.$transaction(async tx => {
+        await ownLease(tx, job);
+        const changed = await tx.$executeRaw`UPDATE "SixflTvRenderPart" SET "stored"=true WHERE "jobId"=${job.id} AND "partNumber"=${partNumber} AND "sha256"=${digest} AND "objectKey"=${key}`;
+        if (changed !== 1) throw new Error("Render manifest changed during upload.");
+      });
+      parts.push({ partNumber, objectKey: key, sha256: digest, sizeBytes: bytes.length, stored: true });
+      position += bytes.length; partNumber++;
     }
   } finally { await handle.close(); }
-  if (!partNumber) throw new Error("Renderer produced an empty file.");
-  return { sizeBytes: position, partCount: partNumber };
+  return { sizeBytes: position, partCount: partNumber, parts };
+}
+async function finishOutput(job: Job, proof: OutputProof, durationMs: number) {
+  await db.$transaction(async tx => {
+    await ownLease(tx, job);
+    const rows = await tx.$queryRaw<RenderPart[]>`SELECT "partNumber","objectKey","sha256","sizeBytes","stored" FROM "SixflTvRenderPart" WHERE "jobId"=${job.id} ORDER BY "partNumber"`;
+    if (!proof.partCount || rows.length !== proof.partCount || rows.some((part, index) => {
+      const expected = proof.parts[index];
+      return !expected || !part.stored || part.partNumber !== index || part.sizeBytes !== expected.sizeBytes || part.sha256 !== expected.sha256 || part.objectKey !== expected.objectKey;
+    }) || rows.reduce((sum, part) => sum + part.sizeBytes, 0) !== proof.sizeBytes) throw new Error("Render verification failed; no finished preview was published.");
+    const changed = await tx.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='READY',"outputSizeBytes"=${proof.sizeBytes},"partCount"=${proof.partCount},"durationMs"=${durationMs},"completedAt"=NOW(),"busyUntil"=NULL,"leaseToken"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
+    if (changed !== 1) throw new Error("Render ownership expired before completion.");
+  });
+}
+async function processJob(job: Job) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("Render time limit reached.")), MAX_RENDER_MS);
+  timer.unref();
+  let refreshing = false;
+  const heartbeat = setInterval(async () => {
+    if (refreshing || controller.signal.aborted) return;
+    refreshing = true;
+    try {
+      const changed = await db.$executeRaw`UPDATE "SixflTvRenderJob" SET "busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
+      if (changed !== 1) controller.abort(new Error("Render ownership expired."));
+    } catch { controller.abort(new Error("Render ownership could not be renewed.")); }
+    finally { refreshing = false; }
+  }, 30000);
+  heartbeat.unref();
+  try { await renderSignals.run(controller.signal, async () => {
+    await db.$transaction(tx => ownLease(tx, job));
+    await renderJob(job);
+  }); }
+  finally { clearTimeout(timer); clearInterval(heartbeat); }
 }
 
-async function processJob(job: Job) {
+async function renderJob(job: Job) {
   const metadata = job.metadataJson as unknown as Metadata;
   if (!metadata?.fixture?.firstTeam?.name || !metadata?.fixture?.secondTeam?.name) throw new Error("Render metadata is incomplete.");
   const inputs = await loadInputs(job.id);
+  if (inputs.reduce((sum, input) => sum + input.sizeBytes, 0n) > 12n * 1024n ** 3n) throw new Error("Selected source footage exceeds the 12 GiB processing limit.");
   if (!inputs.some(input => input.role === "CONTENT")) throw new Error("No content source is attached to this render job.");
   const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-tv-${job.id}-`));
-  const heartbeat = setInterval(() => void db.$executeRaw`UPDATE "SixflTvRenderJob" SET "busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken}`.catch(() => undefined), 60000);
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
     const titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png");
@@ -168,9 +284,8 @@ async function processJob(job: Job) {
     await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
     const durationMs = Math.round((await durationSeconds(output)) * 1000);
     const stored = await storeOutput(job, output);
-    await db.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='READY',"outputSizeBytes"=${stored.sizeBytes},"partCount"=${stored.partCount},"durationMs"=${durationMs},"completedAt"=NOW(),"busyUntil"=NULL,"leaseToken"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken}`;
+    await finishOutput(job, stored, durationMs);
   } finally {
-    clearInterval(heartbeat);
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
@@ -211,7 +326,7 @@ async function renderPartsForPublish(job: PublishJob) {
     SELECT "outputSizeBytes","partCount","state" FROM "SixflTvRenderJob" WHERE "id"=${job.renderJobId} AND "fixtureId"=${job.fixtureId} AND "kind"=${job.kind}`;
   const render = renders[0];
   if (!render || render.state !== "READY" || render.outputSizeBytes == null || render.partCount == null) throw new Error("Approved rendered video is no longer ready.");
-  const parts = await db.$queryRaw<RenderPart[]>`SELECT "partNumber","objectKey","sizeBytes","stored" FROM "SixflTvRenderPart" WHERE "jobId"=${job.renderJobId} ORDER BY "partNumber"`;
+  const parts = await db.$queryRaw<RenderPart[]>`SELECT "partNumber","objectKey","sizeBytes","stored","sha256" FROM "SixflTvRenderPart" WHERE "jobId"=${job.renderJobId} ORDER BY "partNumber"`;
   if (parts.length !== render.partCount || parts.some((part, index) => part.partNumber !== index || !part.stored)) throw new Error("Approved rendered video storage is incomplete.");
   return { total: Number(render.outputSizeBytes), parts };
 }
@@ -339,13 +454,13 @@ async function processPublish(job: PublishJob) {
 
 async function main() {
   console.log("SIXFL TV worker ready");
-  for (;;) {
+  while (!shutdown.signal.aborted) {
     const job = await claimJob().catch(error => { console.error("Render claim failed", safeError(error)); return null; });
     if (job) {
       try { await processJob(job); console.log(`Rendered ${job.kind} ${job.id}`); }
       catch (error) {
         const message = safeError(error); console.error(`Render ${job.id} failed`, message);
-        await db.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='FAILED',"error"=${message},"leaseToken"=NULL,"busyUntil"=NULL,"updatedAt"=NOW() WHERE "id"=${job.id}`.catch(() => undefined);
+        await failJob(job, message).catch(() => undefined);
       }
       continue;
     }
@@ -362,6 +477,15 @@ async function main() {
   }
 }
 
-process.on("SIGTERM", () => void db.$disconnect().finally(() => process.exit(0)));
-process.on("SIGINT", () => void db.$disconnect().finally(() => process.exit(0)));
-void main().catch(async error => { console.error("SIXFL TV worker stopped", safeError(error)); await db.$disconnect(); process.exit(1); });
+// Importing the worker for isolated executable tests must never start its polling loop.
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals };
+if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
+  const stop = () => {
+    if (shutdown.signal.aborted) return;
+    shutdown.abort(new Error("Worker is stopping."));
+    setTimeout(() => process.exit(0), 10000).unref();
+  };
+  process.once("SIGTERM", stop); process.once("SIGINT", stop);
+  void main().catch(error => { console.error("SIXFL TV worker stopped", safeError(error)); process.exitCode = 1; })
+    .finally(() => db.$disconnect());
+}

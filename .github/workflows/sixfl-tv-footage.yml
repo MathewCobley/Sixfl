@@ -52,6 +52,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci && npx prisma generate
+      - name: Prepare FFmpeg for executable renderer tests
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
       - name: Native private footage contracts with isolated PostgreSQL
         run: node --test tests/sixfl-tv-footage/*.test.cjs
       - name: Native SIXFL TV studio contracts with isolated PostgreSQL
@@ -66,6 +72,8 @@ jobs:
         run: npx tsc --noEmit && npx next build
       - name: Build isolated FFmpeg worker image
         run: docker build -f Dockerfile.sixfl-tv-worker -t sixfl-tv-worker:ci .
+      - name: Exercise actual FFmpeg runtime image without production access
+        run: docker run --rm --entrypoint node sixfl-tv-worker:ci --test tests/sixfl-tv-studio/worker.test.cjs
       - name: Install isolated browser tooling
         run: |
           npm install --prefix /tmp/sixfl-footage-tools --no-package-lock --ignore-scripts playwright
