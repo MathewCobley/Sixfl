@@ -162,7 +162,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
 
   return <div className="space-y-6 pb-20">
     <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm leading-6 text-emerald-100">
-      <strong>Background footage uploads.</strong> Start uploading, then use the SIXFL admin navigation to work on other pages. The upload queue stays in the bottom corner. Keep this browser tab open and your computer awake; refreshing or closing it interrupts transfer. Uploading does not generate or publish a video, send player emails or replace existing links.
+      <strong>Background footage uploads.</strong> Start uploading, then use the SIXFL admin navigation to work on other pages. The upload queue stays in the bottom corner. Keep this browser tab open and your computer awake; refreshing or closing it interrupts transfer. When the whole match upload batch finishes and a confirmed result already exists, private SIXFL TV previews are queued automatically. Nothing is published to YouTube, emailed to players or used to replace existing links without the separate approval step.
     </div>
     {!state.configured ? <p role="alert" className="text-red-200">Private storage is not configured. Uploads are disabled; your existing video links still work.</p> : null}
     <div className="grid gap-4 lg:grid-cols-2">
