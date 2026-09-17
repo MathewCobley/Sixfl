@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { uploadRailwayObject, deleteRailwayObject } from "@/lib/storage/railway-s3";
 import { FOOTAGE_PART_BYTES, FOOTAGE_STORAGE_LIMIT_BYTES, FootageError, footageSpec, expectedFootagePartBytes, looksLikeMp4, type FootageKind } from "./footage-policy";
 
+// These readers need only raw queries, not model delegates. The production
+// client extends notification models; both it and its transactions support this.
+type FootageReader = Pick<Prisma.TransactionClient, "$queryRaw">;
 export type FootageAsset = {
   id: string; fixtureId: string | null; kind: FootageKind; filename: string;
   sizeBytes: bigint; lastModified: bigint; partCount: number; position: number;
@@ -64,7 +67,7 @@ function dto(asset: FootageAsset) {
     lastModified: Number(asset.lastModified), partCount: asset.partCount, position: asset.position,
     state: asset.state, shared: asset.fixtureId === null };
 }
-export async function footageAsset(fixtureId: string, assetId: string, tx: Prisma.TransactionClient = prisma, lock = false) {
+export async function footageAsset(fixtureId: string, assetId: string, tx: FootageReader = prisma, lock = false) {
   const rows = await tx.$queryRaw<FootageAsset[]>(Prisma.sql`
     SELECT * FROM "SixflTvFootageAsset" WHERE "id"=${assetId}
       AND ("fixtureId"=${fixtureId} OR ("fixtureId" IS NULL AND "kind" IN ('INTRO','OUTRO')))
@@ -72,7 +75,7 @@ export async function footageAsset(fixtureId: string, assetId: string, tx: Prism
   if (!rows[0] || rows[0].state === "DELETED") throw new FootageError("Footage not found.", 404);
   return rows[0];
 }
-export async function footageParts(assetId: string, tx: Prisma.TransactionClient = prisma) {
+export async function footageParts(assetId: string, tx: FootageReader = prisma) {
   return tx.$queryRaw<FootagePart[]>`SELECT * FROM "SixflTvFootagePart" WHERE "assetId"=${assetId} ORDER BY "partNumber"`;
 }
 export async function footageState(fixtureId: string) {
