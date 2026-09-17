@@ -67,10 +67,13 @@ function dto(asset: FootageAsset) {
     lastModified: Number(asset.lastModified), partCount: asset.partCount, position: asset.position,
     state: asset.state, shared: asset.fixtureId === null };
 }
-export async function footageAsset(fixtureId: string, assetId: string, tx: FootageReader = prisma, lock = false) {
+export async function footageAsset(fixtureId: string | null, assetId: string, tx: FootageReader = prisma, lock = false) {
+  const scope = fixtureId === null
+    ? Prisma.sql`"fixtureId" IS NULL AND "kind" IN ('INTRO','OUTRO')`
+    : Prisma.sql`("fixtureId"=${fixtureId} OR ("fixtureId" IS NULL AND "kind" IN ('INTRO','OUTRO')))`;
   const rows = await tx.$queryRaw<FootageAsset[]>(Prisma.sql`
     SELECT * FROM "SixflTvFootageAsset" WHERE "id"=${assetId}
-      AND ("fixtureId"=${fixtureId} OR ("fixtureId" IS NULL AND "kind" IN ('INTRO','OUTRO')))
+      AND ${scope}
       ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`);
   if (!rows[0] || rows[0].state === "DELETED") throw new FootageError("Footage not found.", 404);
   return rows[0];
@@ -78,26 +81,30 @@ export async function footageAsset(fixtureId: string, assetId: string, tx: Foota
 export async function footageParts(assetId: string, tx: FootageReader = prisma) {
   return tx.$queryRaw<FootagePart[]>`SELECT * FROM "SixflTvFootagePart" WHERE "assetId"=${assetId} ORDER BY "partNumber"`;
 }
-export async function footageState(fixtureId: string) {
-  const assets = await prisma.$queryRaw<FootageAsset[]>`
+export async function footageState(fixtureId: string | null) {
+  const scope = fixtureId === null
+    ? Prisma.sql`"fixtureId" IS NULL AND "kind" IN ('INTRO','OUTRO')`
+    : Prisma.sql`("fixtureId"=${fixtureId} OR "fixtureId" IS NULL)`;
+  const assets = await prisma.$queryRaw<FootageAsset[]>(Prisma.sql`
     SELECT * FROM "SixflTvFootageAsset" WHERE "state" <> 'DELETED'
-      AND ("fixtureId"=${fixtureId} OR "fixtureId" IS NULL) ORDER BY "position", "createdAt", "id"`;
+      AND ${scope} ORDER BY "position", "createdAt", "id"`);
   const usage = await prisma.$queryRaw<{ reserved: bigint; uploaded: bigint }[]>`
     SELECT (SELECT COALESCE(SUM("sizeBytes"),0) FROM "SixflTvFootageAsset" WHERE "state" <> 'DELETED') AS reserved,
       (SELECT COALESCE(SUM(p."sizeBytes"),0) FROM "SixflTvFootagePart" p JOIN "SixflTvFootageAsset" a ON a."id"=p."assetId" WHERE a."state" <> 'DELETED' AND p."stored") AS uploaded`;
   return { assets: assets.map(dto), configured: footageStorageConfigured(), partBytes: FOOTAGE_PART_BYTES,
     reservedBytes: Number(usage[0]?.reserved || 0), uploadedBytes: Number(usage[0]?.uploaded || 0), limitBytes: FOOTAGE_STORAGE_LIMIT_BYTES };
 }
-export async function resumeFootage(fixtureId: string, assetId: string) {
+export async function resumeFootage(fixtureId: string | null, assetId: string) {
   const asset = await footageAsset(fixtureId, assetId);
   if (!["UPLOADING", "READY"].includes(asset.state)) throw new FootageError("This file is being removed.", 409);
   const parts = await footageParts(assetId);
   return { asset: dto(asset), parts: parts.filter(p => p.stored).map(p => ({ partNumber: p.partNumber, sha256: p.sha256, sizeBytes: p.sizeBytes })) };
 }
-export async function beginFootage(fixtureId: string, actor: string, data: Record<string, unknown>) {
+export async function beginFootage(fixtureId: string | null, actor: string, data: Record<string, unknown>) {
   if (!footageStorageConfigured()) throw new FootageError("Private video storage is not configured yet.", 503);
-  await footageFixture(fixtureId);
+  if (fixtureId) await footageFixture(fixtureId);
   const spec = footageSpec(data), global = spec.kind === "INTRO" || spec.kind === "OUTRO";
+  if (fixtureId === null && !global) throw new FootageError("The shared SIXFL TV library accepts only the intro and outro.", 400);
   const scope = global ? null : fixtureId;
   return prisma.$transaction(async tx => {
     // Serialise reservations so parallel tabs cannot exceed the pilot limit.
@@ -120,7 +127,7 @@ export async function beginFootage(fixtureId: string, actor: string, data: Recor
     return { asset: dto(rows[0]), reused: false };
   });
 }
-export async function putFootagePart(fixtureId: string, assetId: string, partNumber: number, bytes: Uint8Array) {
+export async function putFootagePart(fixtureId: string | null, assetId: string, partNumber: number, bytes: Uint8Array) {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const lease = randomUUID();
   const reservation = await prisma.$transaction(async tx => {
@@ -149,7 +156,7 @@ export async function putFootagePart(fixtureId: string, assetId: string, partNum
   });
   return { sha256, stored: true };
 }
-export async function finishFootage(fixtureId: string, assetId: string) {
+export async function finishFootage(fixtureId: string | null, assetId: string) {
   return prisma.$transaction(async tx => {
     const asset = await footageAsset(fixtureId, assetId, tx, true);
     if (asset.state === "READY") return;
@@ -169,7 +176,7 @@ export async function reorderFootage(fixtureId: string, requested: unknown, expe
     for (let i = 0; i < requested.length; i++) await tx.$executeRaw`UPDATE "SixflTvFootageAsset" SET "position"=${i},"updatedAt"=NOW() WHERE "id"=${requested[i]} AND "fixtureId"=${fixtureId}`;
   });
 }
-export async function removeFootage(fixtureId: string, assetId: string, confirmed: unknown) {
+export async function removeFootage(fixtureId: string | null, assetId: string, confirmed: unknown) {
   if (confirmed !== true) throw new FootageError("Confirm before deleting source footage.");
   await prisma.$transaction(async tx => {
     const asset = await footageAsset(fixtureId, assetId, tx, true);
