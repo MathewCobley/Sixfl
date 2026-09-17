@@ -342,8 +342,8 @@ export async function processNotificationQueue(limit = 25) {
   };
 
   for (const dispatch of dueDispatches) {
-    let claimed = false;
     let acceptedByProvider = false;
+    let claimed = false;
     try {
       claimed = await markNotificationDispatchProcessing(dispatch.id);
       if (!claimed) {
@@ -352,7 +352,7 @@ export async function processNotificationQueue(limit = 25) {
         continue;
       }
       if (dispatch.channel !== "EMAIL" && (dispatch.sourceType === "CUP_INTEREST_INVITATION" || dispatch.sourceType === "CUP_INTEREST_REMINDER")) {
-        const reason = "Cup invitations are email only.";
+        const reason = "Cup invitations and reminders are email-only; SMS suppressed.";
         await markNotificationDispatchCancelled(dispatch.id, reason);
         result.skipped += 1;
         result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: reason });
@@ -437,6 +437,15 @@ export async function processNotificationQueue(limit = 25) {
           result.skipped += 1;
           result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: cupBlock });
           continue;
+        }
+        if (metadata?.playerPaymentTimelineResend === true) {
+          const resendBlock = await (await import("./player-payment-resend")).getPlayerPaymentResendDeliveryBlock(dispatch);
+          if (resendBlock) {
+            await markNotificationDispatchCancelled(dispatch.id, resendBlock);
+            result.skipped += 1;
+            result.items.push({ dispatchId: dispatch.id, status: "skipped", channel: dispatch.channel, message: resendBlock });
+            continue;
+          }
         }
         const sendResult = await sendEmailWithResend({
           to: dispatch.recipient.email,
