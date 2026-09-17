@@ -14,10 +14,14 @@ async function loadWorker(db, objects, uploadHook) {
   const code = ts.transpileModule(await fs.readFile(file, 'utf8'), {
     fileName: file, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
   }).outputText;
-  const card = await sharp({ create: { width: 320, height: 180, channels: 3, background: '#14251b' } }).png().toBuffer();
+  const cards = {
+    intro: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#10b981' } }).png().toBuffer(),
+    title: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#2563eb' } }).png().toBuffer(),
+    result: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#dc2626' } }).png().toBuffer(),
+  };
   const mocks = {
     '@prisma/client': { PrismaClient: class { constructor() { return db; } } },
-    '../src/lib/sixfl-tv/graphics': { createSixflTvVideoCard: async () => card },
+    '../src/lib/sixfl-tv/graphics': { createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title },
     '../src/lib/sixfl-tv/videos': {},
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
@@ -127,6 +131,19 @@ test('lease replacement during upload cannot acknowledge, finish or fail the new
   assert.equal(await w.failJob(job, 'old worker failure'), 0); assert.equal(db.jobs.get(job.id).state, 'PROCESSING');
 });
 
+test('swipe transition is animated, full-HD and decodable', { timeout: 90000 }, async t => {
+  const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t), target = path.join(dir, 'swipe.mp4');
+  await w.swipeVideo(dir, target);
+  const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', target], true));
+  assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920);
+  assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
+  assert.ok(meta.streams.some(s => s.codec_type === 'audio'));
+  assert.ok(Number(meta.format.duration) >= 0.35 && Number(meta.format.duration) <= 0.5);
+  const hashes = await w.run('ffmpeg', ['-i', target, '-vf', "select='eq(n,0)+eq(n,5)+eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true);
+  const md5s = hashes.split('\n').filter(line => /^[0-9]/.test(line)).map(line => line.split(',').at(-1).trim());
+  assert.ok(new Set(md5s).size >= 2, 'Swipe frames must visibly change across the transition');
+});
+
 test('actual FFmpeg assembly reconstructs saved manifests and produces a decodable private MP4', { timeout: 90000 }, async t => {
   const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t), job = addJob(db);
   const source = path.join(dir, 'input.mp4');
@@ -138,7 +155,11 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   await fs.writeFile(result, Buffer.concat(parts.map(p => { assert.equal(sha(objects.get(p.objectKey)), p.sha256); return objects.get(p.objectKey); })));
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920); assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
-  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 7.3);
+  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 10.0);
+  const introFrame = await w.run('ffmpeg', ['-ss', '0.8', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const titleFrame = await w.run('ffmpeg', ['-ss', '2.5', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const resultFrame = await w.run('ffmpeg', ['-ss', '6.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  assert.equal(new Set([introFrame,titleFrame,resultFrame]).size,3,'Generated intro, match title and full-time result cards must all survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });
