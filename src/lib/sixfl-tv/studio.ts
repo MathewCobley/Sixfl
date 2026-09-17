@@ -19,6 +19,11 @@ type ThumbnailRow = {
   fixtureId: string; kind: SixflTvRenderKind; headline: string; strapline: string; showScore: boolean;
   objectKey: string; sha256: string; sizeBytes: number; updatedAt: Date;
 };
+type PublishRow = {
+  id: string; kind: SixflTvRenderKind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+  title: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null;
+  error: string | null; createdAt: Date; completedAt: Date | null;
+};
 type Contribution = { name?: unknown; goals?: unknown };
 
 function siteUrl() {
@@ -35,6 +40,11 @@ function renderDto(row: RenderJobRow) {
 function thumbnailDto(row: ThumbnailRow) {
   return { kind: row.kind, headline: row.headline, strapline: row.strapline, showScore: row.showScore, sizeBytes: row.sizeBytes,
     updatedAt: row.updatedAt.toISOString() };
+}
+function publishDto(row: PublishRow) {
+  return { id: row.id, kind: row.kind, state: row.state, title: row.title, privacyStatus: row.privacyStatus,
+    youtubeVideoId: row.youtubeVideoId, youtubeUrl: row.youtubeUrl, error: row.error,
+    createdAt: row.createdAt.toISOString(), completedAt: row.completedAt?.toISOString() || null };
 }
 function contributionNames(value: unknown) {
   if (!Array.isArray(value)) return [] as string[];
@@ -68,7 +78,15 @@ export async function studioFixture(fixtureId: string) {
 export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGraphicFixture> {
   const fixture = await studioFixture(fixtureId);
   const result = fixture.result;
-  const scorers = result?.overturn ? [] : (result?.teamMetadata || []).flatMap(meta => contributionNames(meta.scorers));
+  const scorers: string[] = [];
+  if (result && !result.overturn) {
+    for (const meta of result.teamMetadata) {
+      const names = contributionNames(meta.scorers);
+      if (!names.length) continue;
+      const teamName = meta.teamId === fixture.homeTeam.id ? fixture.homeTeam.name : meta.teamId === fixture.awayTeam.id ? fixture.awayTeam.name : "Team";
+      scorers.push(`${teamName}: ${names.join(", ")}`);
+    }
+  }
   return {
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
@@ -83,14 +101,15 @@ async function latestRows<T>(sql: Prisma.Sql) { return prisma.$queryRaw<T[]>(sql
 
 export async function studioState(fixtureId: string) {
   await studioFixture(fixtureId);
-  const [jobs, thumbs, connection] = await Promise.all([
+  const [jobs, thumbs, connection, publishes] = await Promise.all([
     latestRows<RenderJobRow>(Prisma.sql`SELECT DISTINCT ON ("kind") * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
     latestRows<ThumbnailRow>(Prisma.sql`SELECT * FROM "SixflTvThumbnail" WHERE "fixtureId"=${fixtureId} ORDER BY "kind"`),
     prisma.$queryRaw<{ channelId: string | null; channelTitle: string | null; connectedAt: Date }[]>`SELECT "channelId","channelTitle","connectedAt" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`,
+    latestRows<PublishRow>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
   ]);
   const youtubeConfigured = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "SIXFL_TV_TOKEN_KEY"].every(name => Boolean(process.env[name]?.trim()));
   return {
-    renders: jobs.map(renderDto), thumbnails: thumbs.map(thumbnailDto),
+    renders: jobs.map(renderDto), thumbnails: thumbs.map(thumbnailDto), publishes: publishes.map(publishDto),
     youtube: { configured: youtubeConfigured, connected: Boolean(connection[0]), channelId: connection[0]?.channelId || null, channelTitle: connection[0]?.channelTitle || null },
   };
 }
