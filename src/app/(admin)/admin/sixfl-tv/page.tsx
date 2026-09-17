@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import FootageUploader from "@/components/admin/sixfl-tv/FootageUploader";
+import { footageState } from "@/lib/sixfl-tv/footage";
 import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";
 import { getYoutubeConnectionStatus } from "@/lib/sixfl-tv/youtube";
 import {
@@ -124,9 +126,10 @@ export default async function AdminSixflTvPage({
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
-  const [fixtures, youtube] = await Promise.all([
+  const [fixtures, youtube, sharedFootage] = await Promise.all([
     getSixflTvFixtures(),
     getYoutubeConnectionStatus(),
+    footageState(null),
   ]);
   const totalLinks = fixtures.reduce(
     (sum, fixture) => sum + getSixflTvVideos(fixture.sixflTvUrl).length,
@@ -189,6 +192,15 @@ export default async function AdminSixflTvPage({
             </Link>
           ) : null}
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.05] p-5 sm:p-6">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Shared SIXFL TV branding</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Intro and outro — upload once</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">These files are shared by every match. Manage them here rather than inside an individual fixture.</p>
+        </div>
+        <FootageUploader initial={sharedFootage} sharedOnly />
       </section>
 
       <GoalOfWeekAdminPanel searchParams={sp} />
