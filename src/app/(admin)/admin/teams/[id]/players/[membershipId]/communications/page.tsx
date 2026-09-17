@@ -1,3 +1,5 @@
+import PlayerPaymentEmailResend from "@/components/admin/communications/PlayerPaymentEmailResend";
+import { canResendPlayerPaymentEmail } from "@/lib/notifications/player-payment-resend-policy";
 import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-cta";
 // ========================================
 // File: src/app/(admin)/admin/teams/[id]/players/[membershipId]/communications/page.tsx
@@ -227,12 +229,18 @@ export default async function AdminPlayerCommunicationsPage({
     ? `${member.team.league.name}${member.team.league.season ? ` — ${member.team.league.season}` : ""}`
     : null;
 
-  const playerMatchFees = sourceProspectId
-    ? await prisma.playerMatchFee.findMany({
-        where: { prospectId: sourceProspectId },
-        select: { id: true },
-      })
-    : [];
+  // Include directly linked fees as well as prospect history, so a new resend
+  // appears here while queued, before the provider writes its inbox entry.
+  const playerMatchFees = await prisma.playerMatchFee.findMany({
+    where: {
+      teamId: member.team.id,
+      OR: [
+        { teamMemberId: member.id },
+        ...(sourceProspectId ? [{ prospectId: sourceProspectId }] : []),
+      ],
+    },
+    select: { id: true },
+  });
   const playerMatchFeeIds = playerMatchFees.map((fee) => fee.id);
 
   const communicationSourceFilters = [
@@ -649,6 +657,16 @@ export default async function AdminPlayerCommunicationsPage({
                       {item.contactName}{item.contactValue ? ` · ${item.contactValue}` : ""}
                     </div>
                   </div>
+
+                  {canResendPlayerPaymentEmail(item) && item.contactValue && (item.messageEntryId || item.id.startsWith("dispatch-")) ? (
+                    <PlayerPaymentEmailResend
+                      teamId={member.team.id}
+                      membershipId={member.id}
+                      referenceType={item.messageEntryId ? "message" : "dispatch"}
+                      referenceId={item.messageEntryId || item.id.slice("dispatch-".length)}
+                      recipientEmail={item.contactValue}
+                    />
+                  ) : null}
 
                   {item.channel === NotificationChannel.EMAIL && item.bodyHtml ? (
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
