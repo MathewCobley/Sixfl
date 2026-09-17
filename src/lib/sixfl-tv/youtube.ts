@@ -73,6 +73,7 @@ export async function completeYoutubeAuthorisation(code: string, state: string, 
   const token = await tokenRequest(new URLSearchParams({ code, client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, grant_type: "authorization_code" }));
   if (!token.refresh_token) throw new StudioError("Google did not return a refresh token. Remove the app from your Google account permissions and connect it again.", 409);
   const channel = await channelFor(token.access_token!);
+  if (!channel.id) throw new StudioError("Google authorised the account, but no YouTube channel was found for it.", 409);
   await prisma.$executeRaw`
     INSERT INTO "SixflTvYoutubeConnection" ("id","refreshTokenCiphertext","channelId","channelTitle","scope","connectedByActor")
     VALUES ('primary',${encrypt(token.refresh_token)},${channel.id},${channel.title},${token.scope || `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE}`},${actor})
@@ -86,7 +87,10 @@ export async function youtubeAccessToken() {
   const token = await tokenRequest(new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: decryptYoutubeRefreshToken(rows[0].refreshTokenCiphertext), grant_type: "refresh_token" }));
   return token.access_token!;
 }
-function clean(value: unknown, max: number) { return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max); }
+function cleanTitle(value: unknown, max: number) { return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max); }
+function cleanDescription(value: unknown, max: number) {
+  return String(value ?? "").replace(/\r/g, "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ").split("\n").map(line => line.replace(/[ \t]+/g, " ").trimEnd()).join("\n").trim().slice(0, max);
+}
 export async function queueYoutubePublish(fixtureId: string, kind: SixflTvRenderKind, actor: string, data: Record<string, unknown>) {
   if (kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
   const fixture = await studioFixture(fixtureId);
@@ -96,17 +100,23 @@ export async function queueYoutubePublish(fixtureId: string, kind: SixflTvRender
   if (!render[0]) throw new StudioError(`Generate and review the ${kind === "HIGHLIGHTS" ? "highlights" : "full-match"} preview first.`, 409);
   const thumb = await prisma.$queryRaw<{ objectKey: string }[]>`SELECT "objectKey" FROM "SixflTvThumbnail" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind}`;
   if (!thumb[0]) throw new StudioError(`Save the ${kind === "HIGHLIGHTS" ? "highlights" : "full-match"} thumbnail first.`, 409);
-  const titleDefault = `${fixture.homeTeam.name} v ${fixture.awayTeam.name} | ${kind === "HIGHLIGHTS" ? "Highlights" : "Full Match"} | SIXFL TV`;
-  const descriptionDefault = `${fixture.league.name}\n${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Europe/London" }).format(fixture.kickoffAt)}\n\nSIXFL TV · sixfl.co.uk`;
-  const title = clean(data.title || titleDefault, 100), description = clean(data.description || descriptionDefault, 5000);
-  if (!title) throw new StudioError("Add a YouTube title.");
   const active = await prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state" IN ('QUEUED','PROCESSING') LIMIT 1`;
   if (active[0]) throw new StudioError("This video is already being uploaded to YouTube.", 409);
+  const failed = await prisma.$queryRaw<{ id: string; renderJobId: string }[]>`
+    SELECT "id","renderJobId" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state"='FAILED' ORDER BY "createdAt" DESC LIMIT 1`;
+  if (failed[0]?.renderJobId === render[0].id) {
+    await prisma.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='QUEUED',"thumbnailObjectKey"=${thumb[0].objectKey},"requestedByActor"=${actor},"error"=NULL,"busyUntil"=NULL,"updatedAt"=NOW() WHERE "id"=${failed[0].id}`;
+    return { id: failed[0].id, kind, state: "QUEUED", privacyStatus: "private", resumed: true };
+  }
+  const titleDefault = `${fixture.homeTeam.name} v ${fixture.awayTeam.name} | ${kind === "HIGHLIGHTS" ? "Highlights" : "Full Match"} | SIXFL TV`;
+  const descriptionDefault = `${fixture.league.name}\n${new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Europe/London" }).format(fixture.kickoffAt)}\n\nSIXFL TV · sixfl.co.uk`;
+  const title = cleanTitle(data.title || titleDefault, 100), description = cleanDescription(data.description || descriptionDefault, 5000);
+  if (!title) throw new StudioError("Add a YouTube title.");
   const id = randomUUID();
   await prisma.$executeRaw`
     INSERT INTO "SixflTvYoutubePublish" ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor")
     VALUES (${id},${fixtureId},${kind},${render[0].id},${thumb[0].objectKey},${title},${description},'private',${actor})`;
-  return { id, kind, state: "QUEUED", privacyStatus: "private" };
+  return { id, kind, state: "QUEUED", privacyStatus: "private", resumed: false };
 }
 export async function youtubePublishState(fixtureId: string) {
   const rows = await prisma.$queryRaw<PublishRow[]>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`);
