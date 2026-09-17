@@ -69,13 +69,14 @@ async function getSixflTvFixtures() {
 async function checkYoutubeConnectionAction() {
   "use server";
   await requireAdmin();
+  let checked: Awaited<ReturnType<typeof checkYoutubeConnection>>;
   try {
-    const checked = await checkYoutubeConnection();
-    const channel = encodeURIComponent(checked.channelTitle || checked.channelId);
-    redirect(`/admin/sixfl-tv?youtubeCheck=ok&youtubeChannel=${channel}`);
+    checked = await checkYoutubeConnection();
   } catch {
     redirect("/admin/sixfl-tv?youtubeError=The%20saved%20YouTube%20connection%20could%20not%20be%20verified.%20Reconnect%20the%20channel%20and%20try%20again.");
   }
+  const channel = encodeURIComponent(checked.channelTitle || checked.channelId);
+  redirect(`/admin/sixfl-tv?youtubeCheck=ok&youtubeChannel=${channel}`);
 }
 
 async function saveSixflTvFixtureAction(formData: FormData) {
