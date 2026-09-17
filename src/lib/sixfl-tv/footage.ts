@@ -98,7 +98,8 @@ export async function beginFootage(fixtureId: string, actor: string, data: Recor
   const scope = global ? null : fixtureId;
   return prisma.$transaction(async tx => {
     // Serialise reservations so parallel tabs cannot exceed the pilot limit.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424420)`;
+    // PostgreSQL's void return must be cast before Prisma deserialises it.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424420)::text`;
     const existing = await tx.$queryRaw<FootageAsset[]>`
       SELECT * FROM "SixflTvFootageAsset" WHERE "fixtureId" IS NOT DISTINCT FROM ${scope}::text
         AND "kind"=${spec.kind} AND "filename"=${spec.filename} AND "sizeBytes"=${spec.sizeBytes}
@@ -158,7 +159,7 @@ export async function finishFootage(fixtureId: string, assetId: string) {
 export async function reorderFootage(fixtureId: string, requested: unknown, expected: unknown) {
   if (!Array.isArray(requested) || !Array.isArray(expected) || requested.length > 50 || requested.some(x => typeof x !== "string")) throw new FootageError("Invalid clip order.");
   await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424420)`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424420)::text`;
     const clips = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvFootageAsset" WHERE "fixtureId"=${fixtureId} AND "kind"='CLIP' AND "state" IN ('UPLOADING','READY') ORDER BY "position","createdAt","id" FOR UPDATE`;
     const current = clips.map(c => c.id);
     if (JSON.stringify(current) !== JSON.stringify(expected) || requested.length !== current.length || new Set(requested).size !== current.length || requested.some(id => !current.includes(id))) throw new FootageError("The clip list changed in another session. Reload before reordering.", 409);
