@@ -19,7 +19,7 @@ export function footageRange(header: string | null, size: number) {
 }
 
 /** Admin auth belongs to the route. No public URLs or storage credentials escape. */
-export async function streamFootage(request: Request, fixtureId: string, assetId: string) {
+export async function streamFootage(request: Request, fixtureId: string | null, assetId: string) {
   const asset = await footageAsset(fixtureId, assetId);
   if (asset.state !== "READY") throw new FootageError("This footage has not finished uploading.", 409);
   const size = Number(asset.sizeBytes);

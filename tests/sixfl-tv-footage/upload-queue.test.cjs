@@ -16,7 +16,7 @@ const file = (name = 'clip.mp4', size = 24, fill = 1) => new File([Buffer.alloc(
 const waitFor = async predicate => { for(let i=0;i<500;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('Condition timed out'); };
 function storage() {
   const assets = new Map(), parts = new Map(), calls = [];
-  let gate = null, failure = null;
+  let gate = null, failure = null, renderFailure = null;
   const transport = {
     async json(url, signal, body) {
       signal.throwIfAborted(); const parsed = new URL(url, 'https://example.invalid'), fixtureId = parsed.pathname.split('/').at(-1);
@@ -28,6 +28,10 @@ function storage() {
         return { asset };
       }
       if (body.action === 'finish') { assets.get(body.assetId).state='READY'; return { ok: true }; }
+      if (body.action === 'render') {
+        if (renderFailure) throw Error(renderFailure);
+        return { renders: [{ state: 'QUEUED' }] };
+      }
       throw Error('Unexpected action');
     },
     async put(url, bytes, signal, progress) {
@@ -40,7 +44,7 @@ function storage() {
     },
     async digest(bytes) { return sha(bytes); },
   };
-  return { assets,parts,calls,transport,hold:fn=>gate=fn,fail:fn=>failure=fn };
+  return { assets,parts,calls,transport,hold:fn=>gate=fn,fail:fn=>failure=fn,failRender:message=>renderFailure=message };
 }
 test('unmounting a page subscriber does not stop transfers; second fixture stays correctly assigned', async()=>{
   const s=storage(),q=new FootageUploadQueue(s.transport);let release; s.hold(()=>new Promise(r=>release=r));
@@ -50,6 +54,7 @@ test('unmounting a page subscriber does not stop transfers; second fixture stays
   assert.equal(s.calls.filter(c=>c.action==='begin').length,1,'Only one transfer runs at a time');
   s.hold(null);release();await waitFor(()=>q.getSnapshot().tasks.every(t=>t.status==='COMPLETE'));
   assert.deepEqual(s.calls.filter(c=>c.action==='begin').map(c=>c.fixtureId),['match-a','match-b']);
+  assert.deepEqual(s.calls.filter(c=>c.action==='render').map(c=>c.fixtureId),['match-a','match-b'],'Each completed fixture batch queues one private render');
   assert.equal(s.calls.filter(c=>c.type==='put').length,2);assert.equal(q.getSnapshot(),q.getSnapshot(),'Stable external-store snapshot');
 });
 test('pause finishes current part; in-tab resume reuses file and verifies saved bytes',async()=>{
@@ -66,6 +71,7 @@ test('completed files are not repeated when a later file fails; retry resumes on
   await waitFor(()=>q.getSnapshot().tasks.some(t=>t.status==='FAILED'));
   assert.equal(q.getSnapshot().tasks[0].status,'COMPLETE');s.fail(null);q.resume(q.getSnapshot().tasks[1].id);
   await waitFor(()=>q.getSnapshot().tasks.every(t=>t.status==='COMPLETE'));
+  assert.equal(s.calls.filter(c=>c.action==='render').length,1,'No partial render is queued while another file for the fixture is pending');
   assert.equal(s.calls.filter(c=>c.type==='put'&&c.id==='asset-0').length,1);
   assert.equal(s.calls.filter(c=>c.type==='put'&&c.id==='asset-1'&&c.number===0).length,1);
 });
@@ -89,4 +95,22 @@ test('invalid batches do not partially enqueue or start network requests',()=>{
   const s=storage(),q=new FootageUploadQueue(s.transport);
   assert.throws(()=>q.enqueue('match-a','A v B',[{file:file(),kind:'CLIP'},{file:file('bad.txt'),kind:'CLIP'}]));
   assert.equal(q.getSnapshot().tasks.length,0);assert.equal(s.calls.length,0);
+});
+
+test('shared branding uses the global upload endpoint without inventing a fixture',async()=>{
+  const s=storage(),q=new FootageUploadQueue(s.transport);
+  assert.equal(q.enqueue(null,'Shared SIXFL TV branding',[{file:file('intro.mp4'),kind:'INTRO'}]),1);
+  await waitFor(()=>q.getSnapshot().tasks[0].status==='COMPLETE');
+  assert.equal(q.getSnapshot().tasks[0].fixtureId,null);
+  assert.equal(s.calls.find(c=>c.action==='begin').fixtureId,'shared');
+  assert.equal(s.calls.filter(c=>c.action==='render').length,0,'Shared branding must not render a fixture');
+});
+
+test('automatic render refusal never changes a completed private upload into a failed upload',async()=>{
+  const s=storage(),q=new FootageUploadQueue(s.transport);s.failRender('Enter the final result before generating SIXFL TV previews.');
+  q.enqueue('match-a','A v B',[{file:file('waiting-result.mp4'),kind:'FULL_MATCH'}]);
+  await waitFor(()=>q.getSnapshot().tasks[0].status==='COMPLETE');
+  assert.equal([...s.assets.values()][0].state,'READY');
+  assert.equal(s.calls.filter(c=>c.action==='render').length,1);
+  assert.match(q.getSnapshot().tasks[0].message,/Add the final result/);
 });

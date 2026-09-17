@@ -53,6 +53,12 @@ assertCentralGoalOfWeek();
 patch(
   "src/app/(admin)/admin/sixfl-tv/page.tsx",
   (source) => {
+    if (
+      source.includes('href="/admin/sixfl-tv/goal-of-month"') &&
+      source.includes('href="/admin/sixfl-tv/goal-of-week?legacy=1"')
+    ) {
+      return source;
+    }
     if (source.includes('href="/admin/sixfl-tv/goal-of-week"')) return source;
 
     const anchor = `          <Link\n            href="/admin/night-board"\n            className="inline-flex rounded-2xl border border-white/10 bg-black/25 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-black/35"\n          >\n            Back to Night Board\n          </Link>`;

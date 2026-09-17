@@ -5,7 +5,7 @@ import { FOOTAGE_PART_BYTES, footageId, footageSpec, type FootageKind } from "@/
 export type UploadAsset = { id: string; filename: string; sizeBytes: number; partCount: number };
 export type UploadSelection = { file: File; kind: FootageKind; asset?: UploadAsset };
 export type UploadTask = {
-  id: string; fixtureId: string; fixtureLabel: string; filename: string; kind: FootageKind;
+  id: string; fixtureId: string | null; fixtureLabel: string; filename: string; kind: FootageKind;
   sizeBytes: number; uploadedBytes: number; status: "QUEUED" | "UPLOADING" | "PAUSED" | "FAILED" | "COMPLETE";
   message: string; error: string; assetId?: string;
 };
@@ -71,8 +71,8 @@ export class FootageUploadQueue {
     this.snapshot = { tasks: this.entries.map(entry => ({ ...entry.view })), revision: this.snapshot.revision + (changedOnServer ? 1 : 0) };
     this.listeners.forEach(listener => listener());
   }
-  enqueue(fixtureId: string, fixtureLabel: string, selections: UploadSelection[]) {
-    footageId(fixtureId);
+  enqueue(fixtureId: string | null, fixtureLabel: string, selections: UploadSelection[]) {
+    if (fixtureId !== null) footageId(fixtureId);
     // Validate the whole batch before changing the queue.
     for (const { file, kind, asset } of selections) {
       footageSpec({ kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified });
@@ -115,6 +115,21 @@ export class FootageUploadQueue {
     for (const entry of this.entries) this.pause(entry.view.id);
     this.controller?.abort();
   }
+  private async autoRenderIfBatchComplete(fixtureId: string | null, signal: AbortSignal) {
+    if (fixtureId === null) return null;
+    if (this.entries.some(item => item.view.fixtureId === fixtureId && uploadPending(item.view))) return null;
+    const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
+    try {
+      await this.transport.json(endpoint, signal, { action: "render" });
+      return "Upload complete. Private SIXFL TV previews were queued automatically.";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Automatic video generation could not start.";
+      if (/final result/i.test(message)) return "Upload complete. Add the final result before generating the SIXFL TV previews.";
+      if (/disputed/i.test(message)) return "Upload complete. Video generation is waiting for the disputed result to be resolved.";
+      if (/rendering is already in progress/i.test(message)) return "Upload complete. A preview is already rendering; refresh it afterwards if you added more footage.";
+      return `Upload complete. Automatic preview generation did not start: ${message}`;
+    }
+  }
   private async pump() {
     if (this.running) return;
     this.running = true;
@@ -130,8 +145,12 @@ export class FootageUploadQueue {
             entry.view.status = "PAUSED"; entry.view.message = "Paused. Resume without selecting the file again.";
           } else {
             entry.view.status = "COMPLETE"; entry.view.uploadedBytes = entry.view.sizeBytes;
-            entry.view.message = "Footage saved privately against this match. Nothing has been published or emailed.";
+            entry.view.message = entry.view.fixtureId === null
+              ? "Shared SIXFL TV branding saved privately. Nothing has been published or emailed."
+              : "Footage saved privately against this match. Nothing has been published or emailed.";
             entry.file = null;
+            const renderMessage = await this.autoRenderIfBatchComplete(entry.view.fixtureId, controller.signal);
+            if (renderMessage) entry.view.message = renderMessage;
           }
         } catch (error) {
           entry.view.status = entry.pause || controller.signal.aborted ? "PAUSED" : "FAILED";
@@ -146,7 +165,9 @@ export class FootageUploadQueue {
   private async transfer(entry: Entry, signal: AbortSignal) {
     const file = entry.file;
     if (!file) throw new Error("Select the source file again.");
-    const endpoint = `/api/admin/sixfl-tv/footage/${encodeURIComponent(entry.view.fixtureId)}`;
+    const endpoint = entry.view.fixtureId === null
+      ? "/api/admin/sixfl-tv/footage/shared"
+      : `/api/admin/sixfl-tv/footage/${encodeURIComponent(entry.view.fixtureId)}`;
     const asset = entry.asset || (await this.transport.json<{ asset: UploadAsset }>(endpoint, signal, { action: "begin", kind: entry.view.kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified })).asset;
     if (!asset || asset.sizeBytes !== file.size || asset.partCount !== Math.ceil(file.size / FOOTAGE_PART_BYTES)) throw new Error("Saved upload does not match the selected file.");
     entry.asset = asset; entry.view.assetId = asset.id; this.emit(true);

@@ -23,6 +23,17 @@ function patchAdminPage() {
   const filePath = "src/app/(admin)/admin/sixfl-tv/page.tsx";
   let source = read(filePath);
 
+  // The current SIXFL TV hub owns the Goal of the Week panel natively. Keep
+  // this compatibility script for older source shapes, but never move the
+  // native panel back above the hub or depend on an obsolete exact page shape.
+  if (
+    source.includes('import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";') &&
+    source.includes("<GoalOfWeekAdminPanel searchParams={sp} />")
+  ) {
+    write(filePath, source);
+    return;
+  }
+
   const adminPanelImport =
     'import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";';
   if (!source.includes(adminPanelImport)) {

@@ -137,9 +137,11 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       await assert.rejects(core.reorderFootage('match-a',[a.id,b.id],[a.id,b.id]),/changed/);
       await assert.rejects(core.reorderFootage('match-b',[a.id,b.id],[]),/changed/);
     });
-    await t.test('shared intro appears on both fixture pages, without changing their records',async()=>{
-      const intro=(await core.beginFootage('match-a','admin',spec('INTRO',24,'intro.mp4'))).asset;
+    await t.test('shared intro is globally manageable and appears on fixture pages',async()=>{
+      const intro=(await core.beginFootage(null,'admin',spec('INTRO',24,'intro.mp4'))).asset;
+      assert.ok((await core.footageState(null)).assets.some(x=>x.id===intro.id&&x.shared));
       assert.ok((await core.footageState('match-b')).assets.some(x=>x.id===intro.id&&x.shared));
+      await assert.rejects(core.beginFootage(null,'admin',spec('CLIP',24,'not-shared.mp4')),/shared SIXFL TV library/);
       const dto=JSON.stringify(await core.footageState('match-a'));assert.doesNotMatch(dto,/leaseToken|objectKey|secretAccessKey/);
     });
     await t.test('in-flight uploads block deletion and failed storage keeps a cleanup manifest',async()=>{
@@ -173,10 +175,10 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       assert.ok((await core.footageState('match-a')).reservedBytes<=policy.FOOTAGE_STORAGE_LIMIT_BYTES);
     });
     await t.test('new upload routes never publish, render, email or overwrite existing link fields',()=>{
-      const paths=['src/lib/sixfl-tv/footage.ts','src/app/api/admin/sixfl-tv/footage/[fixtureId]/route.ts','src/components/admin/sixfl-tv/FootageUploader.tsx'];
+      const paths=['src/lib/sixfl-tv/footage.ts','src/app/api/admin/sixfl-tv/footage/[fixtureId]/route.ts','src/app/api/admin/sixfl-tv/footage/shared/route.ts','src/components/admin/sixfl-tv/FootageUploader.tsx'];
       for(const file of paths)assert.doesNotMatch(fs.readFileSync(file,'utf8'),/queueNotification|queueSixflTvFixtureUploaded|sendEmail\(|spawn\(|exec\(|sixflTvUrl\s*=/);
       const old=fs.readFileSync('src/app/(admin)/admin/sixfl-tv/page.tsx','utf8');assert.match(old,/highlightsUrl/);assert.match(old,/fullMatchUrl/);assert.match(old,/queueSixflTvFixtureUploadedEmailsOnce/);
-      const ui=fs.readFileSync(paths[2],'utf8');assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);assert.match(ui,/multiple=\{kind === "CLIP"\}/);
+      const ui=fs.readFileSync('src/components/admin/sixfl-tv/FootageUploader.tsx','utf8');assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);assert.match(ui,/multiple=\{kind === "CLIP"\}/);
     });
   } finally {
     failPut=false;holdPut=null;await db.$disconnect();

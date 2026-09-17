@@ -6,6 +6,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import FootageUploader from "@/components/admin/sixfl-tv/FootageUploader";
+import { footageState } from "@/lib/sixfl-tv/footage";
+import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";
+import { checkYoutubeConnection, getYoutubeConnectionStatus } from "@/lib/sixfl-tv/youtube";
 import {
   buildSixflTvVideoValue,
   getSixflTvVideos,
@@ -60,6 +64,19 @@ async function getSixflTvFixtures() {
     ORDER BY f."kickoffAt" DESC
     LIMIT 200
   `);
+}
+
+async function checkYoutubeConnectionAction() {
+  "use server";
+  await requireAdmin();
+  let checked: Awaited<ReturnType<typeof checkYoutubeConnection>>;
+  try {
+    checked = await checkYoutubeConnection();
+  } catch {
+    redirect("/admin/sixfl-tv?youtubeError=The%20saved%20YouTube%20connection%20could%20not%20be%20verified.%20Reconnect%20the%20channel%20and%20try%20again.");
+  }
+  const channel = encodeURIComponent(checked.channelTitle || checked.channelId);
+  redirect(`/admin/sixfl-tv?youtubeCheck=ok&youtubeChannel=${channel}`);
 }
 
 async function saveSixflTvFixtureAction(formData: FormData) {
@@ -117,12 +134,16 @@ async function saveSixflTvFixtureAction(formData: FormData) {
 export default async function AdminSixflTvPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string; error?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; youtube?: string; youtubeError?: string; youtubeCheck?: string; youtubeChannel?: string; goalSaved?: string; goalError?: string }>;
 }) {
   await requireAdmin();
 
   const sp = (await searchParams) ?? {};
-  const fixtures = await getSixflTvFixtures();
+  const [fixtures, youtube, sharedFootage] = await Promise.all([
+    getSixflTvFixtures(),
+    getYoutubeConnectionStatus(),
+    footageState(null),
+  ]);
   const totalLinks = fixtures.reduce(
     (sum, fixture) => sum + getSixflTvVideos(fixture.sixflTvUrl).length,
     0,
@@ -134,19 +155,95 @@ export default async function AdminSixflTvPage({
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-100/70">
           SIXFL TV
         </p>
-        <h1 className="mt-2 text-3xl font-black text-white">Recorded fixture dashboard</h1>
+        <h1 className="mt-2 text-3xl font-black text-white">SIXFL TV control centre</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-fuchsia-50/75">
-          Add match highlights, a full match, or both. Either field can be left blank, so a match can be published as full-match-only when no highlights are available. Extra clips are optional.
+          Manage match footage, published video links, YouTube, and SIXFL goal awards from one place.
         </p>
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Link
-            href="/admin/night-board"
-            className="inline-flex rounded-2xl border border-white/10 bg-black/25 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-black/35"
-          >
-            Back to Night Board
-          </Link>
-        </div>
       </div>
+
+      <section aria-label="SIXFL TV tools" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <a href="#matches" className="rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/[0.06] p-5 transition hover:bg-fuchsia-500/[0.1]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/70">Matches</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">Published videos</h2>
+          <p className="mt-2 text-sm leading-6 text-white/55">Manage saved highlights, full-match links and extra clips.</p>
+        </a>
+        <Link href="/admin/sixfl-tv/footage" className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5 transition hover:bg-emerald-500/[0.1]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Footage</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">Upload & process matches</h2>
+          <p className="mt-2 text-sm leading-6 text-white/55">Upload source footage, generate previews, thumbnails and approved YouTube videos.</p>
+        </Link>
+        <Link href="/admin/sixfl-tv/goal-of-month" className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.06] p-5 transition hover:bg-amber-500/[0.1]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200/70">Goal awards</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">Goal of the Month</h2>
+          <p className="mt-2 text-sm leading-6 text-white/55">Review nominations, scorers and the current monthly competition.</p>
+        </Link>
+        <Link href="/admin/sixfl-tv/goal-of-week?legacy=1" className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">Archive</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">Goal of the Week</h2>
+          <p className="mt-2 text-sm leading-6 text-white/55">Open the historical weekly winner and nomination records.</p>
+        </Link>
+      </section>
+
+      <section className="rounded-3xl border border-red-400/20 bg-red-500/[0.05] p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-200/70">YouTube</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              {youtube.connected ? "SIXFL YouTube connected" : youtube.configured ? "Connect SIXFL YouTube" : "YouTube setup incomplete"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              {youtube.connected
+                ? <>Connected{youtube.channelTitle ? <> to <strong className="text-white/85">{youtube.channelTitle}</strong></> : ""}. This connection is shared by every SIXFL TV match.</>
+                : youtube.configured
+                  ? "Authorise the SIXFL YouTube channel once. Individual matches then use this shared connection and still require separate upload approval."
+                  : "The Google OAuth credentials are not fully configured on the SIXFL server yet."}
+            </p>
+          </div>
+          {youtube.configured ? (
+            <div className="flex flex-wrap gap-2">
+              {youtube.connected ? (
+                <form action={checkYoutubeConnectionAction}>
+                  <button type="submit" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08]">
+                    Check connection
+                  </button>
+                </form>
+              ) : null}
+              <Link href="/api/admin/sixfl-tv/youtube/start" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">
+                {youtube.connected ? "Reconnect YouTube" : "Connect YouTube"}
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.05] p-5 sm:p-6">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/70">Shared SIXFL TV branding</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Intro and outro — upload once</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">These files are shared by every match. Manage them here rather than inside an individual fixture.</p>
+        </div>
+        <FootageUploader initial={sharedFootage} sharedOnly />
+      </section>
+
+      <GoalOfWeekAdminPanel searchParams={sp} />
+
+      {sp.youtube === "connected" ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+          SIXFL YouTube connected successfully.
+        </div>
+      ) : null}
+
+      {sp.youtubeCheck === "ok" ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+          YouTube connection verified{sp.youtubeChannel ? ` for ${sp.youtubeChannel}` : ""}. No video was uploaded.
+        </div>
+      ) : null}
+
+      {sp.youtubeError ? (
+        <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+          {sp.youtubeError}
+        </div>
+      ) : null}
 
       {sp.saved ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
@@ -160,7 +257,7 @@ export default async function AdminSixflTvPage({
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
+      <section id="matches" className="scroll-mt-6 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
         <div className="border-b border-white/10 px-6 py-5">
           <h2 className="text-xl font-semibold text-white">SIXFL TV fixtures</h2>
           <p className="mt-2 text-sm text-white/55">
@@ -266,6 +363,12 @@ export default async function AdminSixflTvPage({
                       </p>
 
                       <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/admin/sixfl-tv/footage/${fixture.id}`}
+                          className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Upload / manage footage
+                        </Link>
                         <button
                           type="submit"
                           name="action"
