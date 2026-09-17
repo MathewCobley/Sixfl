@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 2;
+const SIXFL_TV_RENDER_VERSION = 3;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -132,8 +132,11 @@ export async function requestRenders(fixtureId: string, actor: string) {
   const fullMatch = readyAsset(assets.filter(asset => asset.fixtureId === fixtureId), "FULL_MATCH");
   const graphic = await studioGraphicFixture(fixtureId);
   const specs: Array<{ kind: SixflTvRenderKind; content: FootageAsset[] }> = [];
-  if (readyHighlights) specs.push({ kind: "HIGHLIGHTS", content: [readyHighlights] });
-  else if (clips.length) specs.push({ kind: "HIGHLIGHTS", content: clips });
+  // Individual clips are the editable highlights source and must win when present,
+  // so the renderer can preserve their saved order and insert transitions between them.
+  // A ready-made highlights file is only the fallback when no clips have been uploaded.
+  if (clips.length) specs.push({ kind: "HIGHLIGHTS", content: clips });
+  else if (readyHighlights) specs.push({ kind: "HIGHLIGHTS", content: [readyHighlights] });
   if (fullMatch) specs.push({ kind: "FULL_MATCH", content: [fullMatch] });
   if (!specs.length) throw new StudioError("Upload at least one completed highlight clip, ready-made highlights video, or full match first.", 409);
   const created: Array<ReturnType<typeof renderDto>> = [];
