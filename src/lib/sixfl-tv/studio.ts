@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 3;
+const SIXFL_TV_RENDER_VERSION = 4;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
