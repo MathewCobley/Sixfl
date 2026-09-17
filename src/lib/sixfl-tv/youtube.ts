@@ -98,6 +98,13 @@ export async function getYoutubeConnectionStatus() {
   };
 }
 
+export async function checkYoutubeConnection() {
+  const accessToken = await youtubeAccessToken();
+  const channel = await channelFor(accessToken);
+  if (!channel.id) throw new StudioError("The authorised Google account no longer exposes a YouTube channel.", 409);
+  return { channelId: channel.id, channelTitle: channel.title };
+}
+
 export async function youtubeAccessToken() {
   const rows = await prisma.$queryRaw<Connection[]>`SELECT "refreshTokenCiphertext","channelId","channelTitle","scope" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
   if (!rows[0]) throw new StudioError("Connect the SIXFL YouTube channel first.", 409);
