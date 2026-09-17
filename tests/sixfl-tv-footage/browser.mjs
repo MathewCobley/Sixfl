@@ -62,17 +62,18 @@ try{
         assert.equal(await page.getByLabel('Choose highlight clips',{exact:true}).getAttribute('multiple'),'');
         assert.equal(await page.getByLabel('Choose full match',{exact:true}).getAttribute('multiple'),null);
         await page.getByLabel('Choose highlight clips',{exact:true}).setInputFiles([file('goal-a.mp4'),file('goal-b.mp4')]);
-        assert.equal(calls.length,0,'Choosing files must not start paid storage traffic');
+        await page.getByLabel('Choose full match',{exact:true}).setInputFiles(file('full.mp4'));
+        await page.getByText('Selected: 3 files',{exact:false}).waitFor();
+        assert.equal(calls.length,0,'Choosing clips AND full match must preserve both without starting storage traffic');
         await page.getByRole('button',{name:'Upload selected files',exact:true}).click();
         await page.getByRole('status').filter({hasText:'Footage saved privately'}).waitFor();
         assert.equal(assets.filter(a=>a.kind==='CLIP'&&a.state==='READY').length,2);
+        assert.equal(assets.filter(a=>a.kind==='FULL_MATCH'&&a.state==='READY').length,1);
+        assert.equal(calls.filter(c=>c.action==='begin').length,3);
         await page.getByRole('button',{name:'Move goal-b.mp4 up',exact:true}).click();
         await page.getByRole('status').filter({hasText:'Clip order saved'}).waitFor();
         assert.equal(assets.filter(a=>a.kind==='CLIP')[0].filename,'goal-b.mp4');
-        await page.getByLabel('Choose full match',{exact:true}).setInputFiles(file('full.mp4'));
-        await page.getByRole('button',{name:'Upload selected files',exact:true}).click();
-        await page.getByRole('status').filter({hasText:'Footage saved privately'}).waitFor();
-        assert.equal(assets.filter(a=>a.kind==='FULL_MATCH'&&a.state==='READY').length,1);
+        assert.equal(await page.getByRole('button',{name:'Pause after current part',exact:true}).count(),0,'Reordering is not an upload');
         // Interrupt the second part; reload and reselect exactly the same source.
         const resume=file('resume.mp4',partBytes+73);
         await page.getByLabel('Choose highlight clips',{exact:true}).setInputFiles(resume);
@@ -92,7 +93,7 @@ try{
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal overflow');
         assert.deepEqual(errors,[]);
         await page.screenshot({path:`${artifacts}/${engine.name()}-${width}.png`,fullPage:true});
-        console.log(`${engine.name()} ${width}px: multiple clips, separate full match, explicit start, saved order, interrupted/reloaded resume, no duplicate part and no unconfirmed deletion`);
+        console.log(`${engine.name()} ${width}px: multiple clips and separate full match selected together, explicit start, saved order, interrupted/reloaded resume, no duplicate part and no unconfirmed deletion`);
       }catch(error){await page.screenshot({path:`${artifacts}/${engine.name()}-${width}-failure.png`,fullPage:true});throw error;}finally{await page.close();}
     }}finally{await browser.close();}
   }
