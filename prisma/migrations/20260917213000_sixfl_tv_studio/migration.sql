@@ -82,6 +82,9 @@ CREATE TABLE "SixflTvYoutubePublish" (
   "privacyStatus" TEXT NOT NULL DEFAULT 'private' CHECK ("privacyStatus" IN ('private','unlisted','public')),
   "state" TEXT NOT NULL DEFAULT 'QUEUED' CHECK ("state" IN ('QUEUED','PROCESSING','READY','FAILED')),
   "requestedByActor" TEXT NOT NULL,
+  "resumableUrl" TEXT,
+  "uploadedBytes" BIGINT NOT NULL DEFAULT 0 CHECK ("uploadedBytes" >= 0),
+  "busyUntil" TIMESTAMPTZ,
   "youtubeVideoId" TEXT,
   "youtubeUrl" TEXT,
   "error" TEXT,
@@ -90,5 +93,6 @@ CREATE TABLE "SixflTvYoutubePublish" (
   "completedAt" TIMESTAMPTZ
 );
 CREATE INDEX "SixflTvYoutubePublish_fixture_kind_created" ON "SixflTvYoutubePublish" ("fixtureId","kind","createdAt" DESC);
+CREATE INDEX "SixflTvYoutubePublish_state_created" ON "SixflTvYoutubePublish" ("state","createdAt");
 CREATE UNIQUE INDEX "SixflTvYoutubePublish_one_active_kind" ON "SixflTvYoutubePublish" ("fixtureId","kind")
   WHERE "state" IN ('QUEUED','PROCESSING');
