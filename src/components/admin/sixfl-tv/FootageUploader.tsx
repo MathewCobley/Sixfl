@@ -39,7 +39,7 @@ function putPart(url: string, bytes: ArrayBuffer, progress: (loaded: number) => 
     xhr.send(bytes);
   });
 }
-export default function FootageUploader({ fixtureId, initial }: { fixtureId: string; initial: State }) {
+export default function FootageUploader({ fixtureId, initial, sharedOnly = false }: { fixtureId?: string; initial: State; sharedOnly?: boolean }) {
   const [state, setState] = useState(initial);
   const [selection, setSelection] = useState<Selection[]>([]);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
@@ -48,7 +48,9 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
   const [preview, setPreview] = useState<Asset | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Asset | null>(null);
   const running = useRef(false), pause = useRef(false);
-  const endpoint = `/api/admin/sixfl-tv/footage/${encodeURIComponent(fixtureId)}`;
+  const endpoint = sharedOnly
+    ? "/api/admin/sixfl-tv/footage/shared"
+    : `/api/admin/sixfl-tv/footage/${encodeURIComponent(fixtureId || "")}`;
   const mediaUrl = (asset: Asset) => `${endpoint}/${encodeURIComponent(asset.id)}`;
   async function refresh() { setState(await json<State>(endpoint)); }
   useEffect(() => {
@@ -157,9 +159,36 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
           onChange={event => { choose(event.currentTarget.files, asset.kind, asset); event.currentTarget.value = ""; }} /></label> : null}
     </div>);
   }
+  if (sharedOnly) {
+    return <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-2">
+        {picker("INTRO", "Upload the reusable SIXFL TV intro once. It is available to every match.")}
+        {picker("OUTRO", "Upload the reusable SIXFL TV outro once. It is available to every match.")}
+      </div>
+      {!state.configured ? <p role="alert" className="text-red-200">Private storage is not configured. Shared branding uploads are disabled.</p> : null}
+      {selection.length ? <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5">
+        <p className="font-semibold text-white">Selected: {selection.length} file{selection.length === 1 ? "" : "s"} · {sizeLabel(selection.reduce((sum, s) => sum + s.file.size, 0))}</p>
+        <p className="mt-2 break-words text-sm text-white/60">{selection.map(s => s.file.name).join(" · ")}</p>
+        <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={() => void upload()}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
+      </div> : null}
+      {uploading ? <div className="space-y-2"><progress aria-label="Current file upload progress" value={percent} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => { pause.current = true; setMessage("Pausing after the current part is safely saved…"); }}>Pause after current part</button></div> : null}
+      {message ? <p role="status" className="break-words rounded-xl border border-white/10 p-3 text-sm text-white/80">{message}</p> : null}
+      {error ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p> : null}
+      {removeTarget ? <div role="alertdialog" aria-label="Confirm source file removal" className="space-y-3 rounded-2xl border border-red-400/30 p-5">
+        <p className="break-words text-white">Delete <strong>{removeTarget.filename}</strong> from the shared SIXFL TV branding library? Keep your own backup first.</p>
+        <button type="button" className={button} onClick={() => void remove(removeTarget)}>Confirm delete source</button>{" "}<button type="button" className={button} onClick={() => setRemoveTarget(null)}>Keep file</button>
+      </div> : null}
+      {preview ? <section className="rounded-2xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="break-words font-semibold text-white">Source preview: {preview.filename}</h2><button type="button" className={button} onClick={() => setPreview(null)}>Close preview</button></div><video key={preview.id} controls preload="metadata" playsInline src={mediaUrl(preview)} className="aspect-video w-full rounded-xl bg-black" /></section> : null}
+      <section className="space-y-3"><h3 className="text-lg font-semibold text-white">Saved shared branding</h3>{rows(state.assets.filter(a => a.shared))}{!state.assets.some(a => a.shared) ? <p className="text-sm text-white/50">No shared intro or outro uploaded yet.</p> : null}</section>
+      <div className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60">
+        <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.
+      </div>
+    </div>;
+  }
+
   return <div className="space-y-6">
     <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm leading-6 text-amber-100">
-      <strong>Footage upload library.</strong> These are private source files, not published videos. Automatic video assembly, thumbnail editing and direct YouTube publishing are not connected yet. Uploading does not send player emails or replace existing video links.
+      <strong>Footage upload library.</strong> These are private source files for this fixture. Uploading does not publish anything or email players. After upload, generate and review a finished SIXFL TV preview before any separate YouTube approval.
     </div>
     {!state.configured ? <p role="alert" className="text-red-200">Private storage is not configured. Uploads are disabled; your existing video links still work.</p> : null}
     <div className="grid gap-4 lg:grid-cols-2">
@@ -182,7 +211,6 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
     {preview ? <section className="rounded-2xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="break-words font-semibold text-white">Source preview: {preview.filename}</h2><button type="button" className={button} onClick={() => setPreview(null)}>Close preview</button></div><video key={preview.id} controls preload="metadata" playsInline src={mediaUrl(preview)} className="aspect-video w-full rounded-xl bg-black" /><p className="mt-2 text-sm text-white/50">Original footage only. If this MP4 codec is not supported by your browser, download the source to check it.</p></section> : null}
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Clips — saved editing order</h2>{rows(state.assets.filter(a => a.kind === "CLIP"))}{!state.assets.some(a => a.kind === "CLIP") ? <p className="text-sm text-white/50">No clips uploaded for this match yet.</p> : null}</section>
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Full match and ready-made highlights</h2>{rows(state.assets.filter(a => a.kind === "FULL_MATCH" || a.kind === "HIGHLIGHTS"))}</section>
-    <details className="rounded-2xl border border-white/10 p-4"><summary className="cursor-pointer font-semibold text-white/80">Shared intro and outro — upload once</summary><div className="mt-4 grid gap-4 lg:grid-cols-2">{picker("INTRO", "Shared branding library, available from every match.")}{picker("OUTRO", "Shared branding library, available from every match.")}</div><div className="mt-4 space-y-3">{rows(state.assets.filter(a => a.shared))}</div></details>
     <div className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60">
       <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.<br />This limit covers the new footage library, not your entire Railway account. Storage and transfers are billed by Railway. Nothing is deleted automatically. Keep this page open while uploading; reselect the same file to resume after interruption.
     </div>
