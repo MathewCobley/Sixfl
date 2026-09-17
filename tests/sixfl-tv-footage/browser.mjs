@@ -58,8 +58,10 @@ try{
     const browser=await engine.launch({headless:true});
     try{for(const width of [390,1360]){
       assets=[];parts=new Map();calls=[];failed=false;
-      const page=await browser.newPage({viewport:{width,height:950}}),errors=[];
-      page.on('pageerror',e=>errors.push(e.message));
+      const page=await browser.newPage({viewport:{width,height:950}}),errors=[],networkErrors=[],consoleErrors=[];
+      page.on('pageerror',e=>errors.push(e.stack || e.message));
+      page.on('requestfailed',request=>networkErrors.push({url:request.url(),error:request.failure()}));
+      page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
       page.on('dialog',dialog=>dialog.accept()); // Deliberate reload tests acknowledge the upload warning.
       await page.route('**/*',r=>r.request().url().startsWith(base)?r.continue():r.abort());
       try{
@@ -117,7 +119,13 @@ try{
         assert.deepEqual(errors,[]);
         await page.screenshot({path:`${artifacts}/${engine.name()}-${width}.png`,fullPage:true});
         console.log(`${engine.name()} ${width}px: combined selection, explicit start, order, interrupted/reloaded resume, background page unmount, second fixture queue, no duplicate part and no unconfirmed deletion`);
-      }catch(error){await page.screenshot({path:`${artifacts}/${engine.name()}-${width}-failure.png`,fullPage:true});throw error;}finally{await page.close();}
+      }catch(error){
+        const prefix=`${artifacts}/${engine.name()}-${width}-failure`;
+        fs.writeFileSync(prefix+'.json',JSON.stringify({message:error.message,stack:error.stack,url:page.url(),errors,networkErrors,consoleErrors,calls,assets},null,2));
+        fs.writeFileSync(prefix+'.html',await page.content().catch(()=>''));
+        await page.screenshot({path:prefix+'.png',fullPage:true}).catch(()=>undefined);
+        console.error('UPLOAD_BROWSER_FAILURE',error.stack);throw error;
+      }finally{await page.close();}
     }}finally{await browser.close();}
   }
 }finally{server.close();}
