@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createSixflTvGoalOfMonthCard, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 
@@ -19,7 +19,8 @@ const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
 const GENERATED_INTRO_SECONDS = 1.8;
 const TITLE_SECONDS = 3;
-const RESULT_SECONDS = 5;
+const RESULT_SECONDS = 6;
+const GOAL_OF_MONTH_END_SECONDS = 5;
 const SWIPE_FRAMES = 12;
 const SWIPE_FPS = 30;
 function operationSignal(ms: number) {
@@ -286,10 +287,11 @@ async function renderJob(job: Job) {
   const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-tv-${job.id}-`));
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
-    const introPng = path.join(dir, "intro.png"), titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png");
+    const introPng = path.join(dir, "intro.png"), titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
     await writeFile(introPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: "SIXFL TV", siteUrl: siteUrl() }));
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(resultPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "FULL_TIME", label: metadata.label, siteUrl: siteUrl() }));
+    await writeFile(goalOfMonthPng, await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl() }));
     const segments: string[] = [];
     const intro = inputs.filter(input => input.role === "INTRO"), content = inputs.filter(input => input.role === "CONTENT"), outro = inputs.filter(input => input.role === "OUTRO");
     let segmentIndex = 0;
@@ -315,7 +317,9 @@ async function renderJob(job: Job) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
     }
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} generatedIntro=${intro.length ? 0 : 1} content=${content.length} swipeTransitions=${Math.max(0, content.length - 1)} resultCard=1 outro=${outro.length} renderVersion=${metadata.renderVersion ?? 1}`);
+    const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+    await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} generatedIntro=${intro.length ? 0 : 1} content=${content.length} swipeTransitions=${Math.max(0, content.length - 1)} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} outro=${outro.length} goalOfMonthEndCard=1 renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
