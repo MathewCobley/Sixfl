@@ -154,16 +154,16 @@ async function saveGoalOfWeekAction(formData: FormData) {
   await requireAdmin();
 
   const videoUrl = canonicalYouTubeUrl(String(formData.get("videoUrl") ?? ""));
-  if (!videoUrl) redirect("/admin/sixfl-tv?goalError=video");
+  if (!videoUrl) redirect("/admin/sixfl-tv/goal-of-week?goalError=video");
 
   const teamId = String(formData.get("teamId") ?? "").trim();
   const team = teamId
     ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } })
     : null;
-  if (!team) redirect("/admin/sixfl-tv?goalError=team");
+  if (!team) redirect("/admin/sixfl-tv/goal-of-week?goalError=team");
 
   const weekOf = parseWeekOf(formData.get("weekOf"));
-  if (!weekOf) redirect("/admin/sixfl-tv?goalError=date");
+  if (!weekOf) redirect("/admin/sixfl-tv/goal-of-week?goalError=date");
 
   const playerName = cleanOptionalText(formData.get("playerName"), 100);
   const opponentName = cleanOptionalText(formData.get("opponentName"), 120);
@@ -212,13 +212,13 @@ async function saveGoalOfWeekAction(formData: FormData) {
     });
   } catch (error) {
     console.error("Failed to save Goal of the Week", error);
-    redirect("/admin/sixfl-tv?goalError=save");
+    redirect("/admin/sixfl-tv/goal-of-week?goalError=save");
   }
 
   revalidatePath("/");
-  revalidatePath("/admin/sixfl-tv");
+  revalidatePath("/admin/sixfl-tv/goal-of-week");
   revalidatePath("/api/public/goal-of-week");
-  redirect("/admin/sixfl-tv?goalSaved=created");
+  redirect("/admin/sixfl-tv/goal-of-week?goalSaved=created");
 }
 
 async function featureGoalOfWeekAction(formData: FormData) {
@@ -226,12 +226,12 @@ async function featureGoalOfWeekAction(formData: FormData) {
   await requireAdmin();
 
   const goalId = String(formData.get("goalId") ?? "").trim();
-  if (!goalId) redirect("/admin/sixfl-tv?goalError=missing");
+  if (!goalId) redirect("/admin/sixfl-tv/goal-of-week?goalError=missing");
 
   const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id" FROM "GoalOfWeek" WHERE "id" = ${goalId} LIMIT 1
   `);
-  if (!rows[0]) redirect("/admin/sixfl-tv?goalError=missing");
+  if (!rows[0]) redirect("/admin/sixfl-tv/goal-of-week?goalError=missing");
 
   try {
     await prisma.$transaction([
@@ -251,13 +251,13 @@ async function featureGoalOfWeekAction(formData: FormData) {
     ]);
   } catch (error) {
     console.error("Failed to feature Goal of the Week", error);
-    redirect("/admin/sixfl-tv?goalError=save");
+    redirect("/admin/sixfl-tv/goal-of-week?goalError=save");
   }
 
   revalidatePath("/");
-  revalidatePath("/admin/sixfl-tv");
+  revalidatePath("/admin/sixfl-tv/goal-of-week");
   revalidatePath("/api/public/goal-of-week");
-  redirect("/admin/sixfl-tv?goalSaved=featured");
+  redirect("/admin/sixfl-tv/goal-of-week?goalSaved=featured");
 }
 
 async function unfeatureGoalOfWeekAction(formData: FormData) {
@@ -265,7 +265,7 @@ async function unfeatureGoalOfWeekAction(formData: FormData) {
   await requireAdmin();
 
   const goalId = String(formData.get("goalId") ?? "").trim();
-  if (!goalId) redirect("/admin/sixfl-tv?goalError=missing");
+  if (!goalId) redirect("/admin/sixfl-tv/goal-of-week?goalError=missing");
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "GoalOfWeek"
@@ -274,9 +274,9 @@ async function unfeatureGoalOfWeekAction(formData: FormData) {
   `);
 
   revalidatePath("/");
-  revalidatePath("/admin/sixfl-tv");
+  revalidatePath("/admin/sixfl-tv/goal-of-week");
   revalidatePath("/api/public/goal-of-week");
-  redirect("/admin/sixfl-tv?goalSaved=hidden");
+  redirect("/admin/sixfl-tv/goal-of-week?goalSaved=hidden");
 }
 
 async function deleteGoalOfWeekAction(formData: FormData) {
@@ -284,16 +284,16 @@ async function deleteGoalOfWeekAction(formData: FormData) {
   await requireAdmin();
 
   const goalId = String(formData.get("goalId") ?? "").trim();
-  if (!goalId) redirect("/admin/sixfl-tv?goalError=missing");
+  if (!goalId) redirect("/admin/sixfl-tv/goal-of-week?goalError=missing");
 
   await prisma.$executeRaw(Prisma.sql`
     DELETE FROM "GoalOfWeek" WHERE "id" = ${goalId}
   `);
 
   revalidatePath("/");
-  revalidatePath("/admin/sixfl-tv");
+  revalidatePath("/admin/sixfl-tv/goal-of-week");
   revalidatePath("/api/public/goal-of-week");
-  redirect("/admin/sixfl-tv?goalSaved=deleted");
+  redirect("/admin/sixfl-tv/goal-of-week?goalSaved=deleted");
 }
 
 function savedMessage(code: string | undefined) {
