@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { checkFootageOrigin, readFootageJson } from "@/lib/sixfl-tv/footage";
 import { FootageError, footageId } from "@/lib/sixfl-tv/footage-policy";
 import { requestRenders, saveThumbnail, StudioError, studioState, type SixflTvRenderKind } from "@/lib/sixfl-tv/studio";
+import { queueYoutubePublish } from "@/lib/sixfl-tv/youtube";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,11 @@ export async function POST(request: Request, context: Context) {
     if (data.action === "thumbnail") {
       const kind = String(data.kind || "") as SixflTvRenderKind;
       return NextResponse.json(await saveThumbnail(fixtureId, kind, actor, data), { headers });
+    }
+    if (data.action === "publish") {
+      if (data.confirmed !== true) throw new StudioError("Confirm that you have reviewed this video and thumbnail before uploading it to YouTube.", 409);
+      const kind = String(data.kind || "") as SixflTvRenderKind;
+      return NextResponse.json(await queueYoutubePublish(fixtureId, kind, actor, data), { status: 202, headers });
     }
     throw new StudioError("Unknown SIXFL TV studio action.");
   } catch (error) { return failure(error); }
