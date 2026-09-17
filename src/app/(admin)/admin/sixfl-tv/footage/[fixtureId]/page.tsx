@@ -26,7 +26,7 @@ export default async function MatchFootagePage({ params }: { params: Promise<{ f
       <p className="mt-3 text-sm text-white/75">{fixture.result ? `Saved result: ${fixture.homeTeam.name} ${fixture.result.homeScore} – ${fixture.result.awayScore} ${fixture.awayTeam.name}${fixture.result.isDisputed ? " (disputed — generation is blocked until resolved)" : ""}` : "Result not entered yet. You can upload footage now; branded generation waits for the final result."}</p>
       <p className="mt-2 text-xs text-white/45">Fixture reference: {fixture.id}. Source uploads, private renders, thumbnail saves and YouTube approval are separate steps.</p>
     </header>
-    <section className="space-y-4"><div><h2 className="text-xl font-bold text-white">Source footage</h2><p className="mt-1 text-sm text-white/55">Upload once, preview it, and set the editing order. These files remain private.</p></div><FootageUploader key={fixtureId} fixtureId={fixtureId} initial={state} /></section>
+    <section className="space-y-4"><div><h2 className="text-xl font-bold text-white">Source footage</h2><p className="mt-1 text-sm text-white/55">Upload once, preview it, and set the editing order. These files remain private.</p></div><FootageUploader key={fixtureId} fixtureId={fixtureId} fixtureLabel={`${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`} initial={state} /></section>
     <section className="space-y-4 border-t border-white/10 pt-8"><StudioControls fixtureId={fixtureId} initial={studio} /></section>
   </div>;
 }

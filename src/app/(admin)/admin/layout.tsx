@@ -40,6 +40,7 @@ import TeamCompetitionPickerBridge from "@/components/admin/teams/TeamCompetitio
 import TeamReplaceFixturesButtonBridge from "@/components/admin/teams/TeamReplaceFixturesButtonBridge";
 import TeamStandardMatchFeeBridge from "@/components/admin/teams/TeamStandardMatchFeeBridge";
 import AppHeader from "@/components/layout/AppHeader";
+import FootageUploadProvider from "@/components/admin/sixfl-tv/FootageUploadProvider";
 
 export default async function AdminLayout({
   children,
@@ -138,7 +139,7 @@ export default async function AdminLayout({
             <Suspense fallback={null}>
               <LeadDiallerLaunchButton />
             </Suspense>
-            <main className="w-full min-w-0 flex-1">{children}</main>
+            <main className="w-full min-w-0 flex-1"><FootageUploadProvider key={user?.id || email}>{children}</FootageUploadProvider></main>
           </div>
         </div>
       </div>

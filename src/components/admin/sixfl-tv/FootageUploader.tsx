@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { FOOTAGE_PART_BYTES, FOOTAGE_LIMITS, footageSpec, type FootageKind } from "@/lib/sixfl-tv/footage-policy";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FOOTAGE_LIMITS, footageSpec, type FootageKind } from "@/lib/sixfl-tv/footage-policy";
 import type { footageState } from "@/lib/sixfl-tv/footage";
+import { useFootageUploads } from "./FootageUploadProvider";
+import { uploadPending, type UploadSelection } from "./footage-upload-queue";
 type State = Awaited<ReturnType<typeof footageState>>;
 type Asset = State["assets"][number];
-type Selection = { file: File; kind: FootageKind; asset?: Asset };
 const labels: Record<FootageKind, string> = { CLIP: "Highlight clips", HIGHLIGHTS: "Ready-made highlights", FULL_MATCH: "Full match", INTRO: "SIXFL TV intro", OUTRO: "SIXFL TV outro" };
 const button = "inline-flex min-h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 function sizeLabel(bytes: number) {
   return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GiB` : `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-}
-async function digest(bytes: ArrayBuffer) {
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
 }
 async function json<T>(url: string, body?: Record<string, unknown>): Promise<T> {
   const response = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" } : { cache: "no-store" });
@@ -22,43 +19,37 @@ async function json<T>(url: string, body?: Record<string, unknown>): Promise<T> 
   if (!response.ok) throw new Error(value.error || "The footage request failed.");
   return value as T;
 }
-function putPart(url: string, bytes: ArrayBuffer, progress: (loaded: number) => void) {
-  return new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url); xhr.timeout = 180000;
-    xhr.setRequestHeader("Content-Type", "application/octet-stream");
-    xhr.upload.onprogress = event => progress(event.loaded);
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300 && xhr.getResponseHeader("content-type")?.includes("application/json")) { resolve(); return; }
-      let message = "Upload interrupted. Sign in if needed and reselect the same file to resume.";
-      try { message = JSON.parse(xhr.responseText).error || message; } catch { /* Login HTML is not upload success. */ }
-      reject(new Error(message));
-    };
-    xhr.onerror = () => reject(new Error("Connection lost. Completed parts are saved; reselect the same file to resume."));
-    xhr.ontimeout = () => reject(new Error("Upload timed out. Completed parts are saved; reselect the same file to resume."));
-    xhr.send(bytes);
-  });
-}
-export default function FootageUploader({ fixtureId, initial }: { fixtureId: string; initial: State }) {
+export default function FootageUploader({ fixtureId, fixtureLabel = "Match footage", initial }: { fixtureId: string; fixtureLabel?: string; initial: State }) {
+  const { queue, snapshot } = useFootageUploads();
   const [state, setState] = useState(initial);
-  const [selection, setSelection] = useState<Selection[]>([]);
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(""), [percent, setPercent] = useState(0);
+  const [selection, setSelection] = useState<UploadSelection[]>([]);
+  const [localBusy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [preview, setPreview] = useState<Asset | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Asset | null>(null);
-  const running = useRef(false), pause = useRef(false);
+  const running = useRef(false);
   const endpoint = `/api/admin/sixfl-tv/footage/${encodeURIComponent(fixtureId)}`;
   const mediaUrl = (asset: Asset) => `${endpoint}/${encodeURIComponent(asset.id)}`;
-  async function refresh() { setState(await json<State>(endpoint)); }
+  const refresh = useCallback(async () => { setState(await json<State>(endpoint)); }, [endpoint]);
+  const tasks = snapshot.tasks.filter(task => task.fixtureId === fixtureId);
+  const active = tasks.find(task => task.status === "UPLOADING");
+  const latest = active || tasks.at(-1);
+  const busy = localBusy || tasks.some(task => task.status === "UPLOADING" || task.status === "QUEUED");
+  // Shared intro/outro and clip order must not change while this tab retains queued inputs.
+  const mutationBusy = localBusy || snapshot.tasks.some(uploadPending);
   useEffect(() => {
-    if (!busy) return;
+    let mounted = true;
+    void json<State>(endpoint).then(value => { if (mounted) setState(value); }).catch(() => undefined);
+    return () => { mounted = false; };
+  }, [endpoint, snapshot.revision]);
+  useEffect(() => {
+    if (!localBusy) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [busy]);
+  }, [localBusy]);
   function choose(files: FileList | null, kind: FootageKind, asset?: Asset) {
-    if (!files || running.current) return;
+    if (!files || running.current || busy) return;
     try {
       const added = Array.from(files).map(file => {
         footageSpec({ kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified });
@@ -71,44 +62,16 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
       setError(""); setMessage("Selection updated. Click Upload selected files to start.");
     } catch (e) { setError(e instanceof Error ? e.message : "Choose an MP4 file."); }
   }
-  async function upload() {
-    if (running.current || !selection.length) return;
-    running.current = true; pause.current = false; setBusy(true); setUploading(true); setError("");
+  function upload() {
+    if (busy || running.current || !selection.length) return;
     try {
-      for (let fileIndex = 0; fileIndex < selection.length; fileIndex++) {
-        if (pause.current) break;
-        setPercent(0);
-        const item = selection[fileIndex], file = item.file;
-        const begun = item.asset ? { asset: item.asset } : await json<{ asset: Asset }>(endpoint, {
-          action: "begin", kind: item.kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified,
-        });
-        const asset = begun.asset;
-        const resume = await json<{ parts: Array<{ partNumber: number; sha256: string }> }>(`${endpoint}?assetId=${encodeURIComponent(asset.id)}`);
-        const saved = new Map(resume.parts.map(p => [p.partNumber, p.sha256]));
-        await refresh();
-        for (let part = 0; part < asset.partCount; part++) {
-          if (pause.current) break;
-          const base = part * FOOTAGE_PART_BYTES;
-          setMessage(`${fileIndex + 1}/${selection.length}: ${file.name} — ${saved.has(part) ? "checking saved part" : "uploading part"} ${part + 1}/${asset.partCount}`);
-          const bytes = await file.slice(base, Math.min(base + FOOTAGE_PART_BYTES, file.size)).arrayBuffer();
-          if (saved.has(part)) {
-            if (await digest(bytes) !== saved.get(part)) throw new Error("This file differs from the saved upload. Remove the incomplete upload before using a different version.");
-          } else {
-            await putPart(`${endpoint}?assetId=${encodeURIComponent(asset.id)}&part=${part}`, bytes, loaded => setPercent(Math.min(100, Math.round((base + loaded) / file.size * 100))));
-          }
-          setPercent(Math.round(Math.min(base + bytes.byteLength, file.size) / file.size * 100));
-        }
-        if (pause.current) break;
-        await json(endpoint, { action: "finish", assetId: asset.id });
-        await refresh();
-      }
-      setMessage(pause.current ? "Paused after the current part. Reselect the same file below to resume; completed parts are retained." : "Footage saved privately against this match. Nothing has been published or emailed.");
-      if (!pause.current) setSelection([]);
-    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed."); }
-    finally { running.current = false; setBusy(false); setUploading(false); await refresh().catch(() => undefined); }
+      const added = queue.enqueue(fixtureId, fixtureLabel, selection);
+      setError(""); setMessage(added ? "" : "These files are already in the background queue. Use Resume upload for paused files.");
+      if (added) setSelection([]);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not queue the upload."); }
   }
   async function move(asset: Asset, direction: -1 | 1) {
-    if (running.current) return;
+    if (running.current || mutationBusy) return;
     const ids = state.assets.filter(a => a.kind === "CLIP" && ["READY", "UPLOADING"].includes(a.state)).map(a => a.id);
     const index = ids.indexOf(asset.id), next = index + direction;
     if (index < 0 || next < 0 || next >= ids.length) return;
@@ -119,7 +82,7 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
     finally { running.current = false; setBusy(false); }
   }
   async function remove(asset: Asset) {
-    if (running.current) return;
+    if (running.current || mutationBusy) return;
     running.current = true; setBusy(true); setError(""); setRemoveTarget(null);
     if (preview?.id === asset.id) setPreview(null);
     try {
@@ -148,8 +111,8 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
           <p className="mt-1 text-sm text-white/60">{labels[asset.kind]} · {sizeLabel(asset.sizeBytes)} · {asset.state === "READY" ? "Uploaded — private source" : asset.state === "DELETING" ? "Removal incomplete" : "Upload incomplete"}</p></div>
         <div className="flex flex-wrap gap-2">
           {asset.state === "READY" ? <><button type="button" className={button} onClick={() => setPreview(asset)}>Preview source</button><a className={button} href={`${mediaUrl(asset)}?download=1`}>Download source</a></> : null}
-          {asset.kind === "CLIP" && asset.state !== "DELETING" ? <><button type="button" aria-label={`Move ${asset.filename} up`} disabled={busy || index === 0} onClick={() => void move(asset, -1)} className={button}>↑</button><button type="button" aria-label={`Move ${asset.filename} down`} disabled={busy || index === assets.length - 1} onClick={() => void move(asset, 1)} className={button}>↓</button></> : null}
-          <button type="button" className={button} disabled={busy} onClick={() => setRemoveTarget(asset)}>{asset.state === "DELETING" ? "Continue removal" : "Remove"}</button>
+          {asset.kind === "CLIP" && asset.state !== "DELETING" ? <><button type="button" aria-label={`Move ${asset.filename} up`} disabled={mutationBusy || index === 0} onClick={() => void move(asset, -1)} className={button}>↑</button><button type="button" aria-label={`Move ${asset.filename} down`} disabled={mutationBusy || index === assets.length - 1} onClick={() => void move(asset, 1)} className={button}>↓</button></> : null}
+          <button type="button" className={button} disabled={mutationBusy} onClick={() => setRemoveTarget(asset)}>{asset.state === "DELETING" ? "Continue removal" : "Remove"}</button>
         </div>
       </div>
       {asset.state === "UPLOADING" ? <label className="block text-sm text-white/70">Resume: choose the same MP4 file
@@ -157,9 +120,12 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
           onChange={event => { choose(event.currentTarget.files, asset.kind, asset); event.currentTarget.value = ""; }} /></label> : null}
     </div>);
   }
-  return <div className="space-y-6">
-    <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm leading-6 text-amber-100">
-      <strong>Footage upload library.</strong> These are private source files, not published videos. Automatic video assembly, thumbnail editing and direct YouTube publishing are not connected yet. Uploading does not send player emails or replace existing video links.
+  const progress = active ? Math.min(100, Math.round(active.uploadedBytes / active.sizeBytes * 100)) : 0;
+  const visibleMessage = message || latest?.message;
+  const visibleError = error || latest?.error;
+  return <div className="space-y-6 pb-20">
+    <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm leading-6 text-emerald-100">
+      <strong>Background footage uploads.</strong> Start uploading, then use the SIXFL admin navigation to work on other pages. The upload queue stays in the bottom corner. Keep this browser tab open and your computer awake; refreshing or closing it interrupts transfer. Uploading does not generate or publish a video, send player emails or replace existing links.
     </div>
     {!state.configured ? <p role="alert" className="text-red-200">Private storage is not configured. Uploads are disabled; your existing video links still work.</p> : null}
     <div className="grid gap-4 lg:grid-cols-2">
@@ -170,21 +136,22 @@ export default function FootageUploader({ fixtureId, initial }: { fixtureId: str
     {selection.length ? <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5">
       <p className="font-semibold text-white">Selected: {selection.length} file{selection.length === 1 ? "" : "s"} · {sizeLabel(selection.reduce((sum, s) => sum + s.file.size, 0))}</p>
       <p className="mt-2 break-words text-sm text-white/60">{selection.map(s => s.file.name).join(" · ")}</p>
-      <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={() => void upload()}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
+      <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={upload}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
     </div> : null}
-    {uploading ? <div className="space-y-2"><progress aria-label="Current file upload progress" value={percent} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => { pause.current = true; setMessage("Pausing after the current part is safely saved…"); }}>Pause after current part</button></div> : null}
-    {message ? <p role="status" className="break-words rounded-xl border border-white/10 p-3 text-sm text-white/80">{message}</p> : null}
-    {error ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p> : null}
+    {active ? <div className="space-y-2"><progress aria-label="Current file upload progress" value={progress} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => queue.pause(active.id)}>Pause after current part</button></div> : null}
+    {tasks.filter(task => task.status === "PAUSED" || task.status === "FAILED").map(task => <div key={task.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 p-3"><span className="break-words text-sm text-white/70">{task.filename}</span><button type="button" className={button} onClick={() => { setMessage(""); setError(""); queue.resume(task.id); }}>Resume upload</button><button type="button" className={button} onClick={() => queue.forget(task.id)}>Remove from queue</button><span className="text-xs text-white/45">Saved parts are kept.</span></div>)}
+    {visibleMessage ? <p role="status" className="break-words rounded-xl border border-white/10 p-3 text-sm text-white/80">{visibleMessage}</p> : null}
+    {visibleError ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{visibleError}</p> : null}
     {removeTarget ? <div role="alertdialog" aria-label="Confirm source file removal" className="space-y-3 rounded-2xl border border-red-400/30 p-5">
       <p className="break-words text-white">Delete <strong>{removeTarget.filename}</strong> from private SIXFL storage?{removeTarget.shared ? " This intro/outro is shared across all match upload pages." : ""} Keep your own backup first.</p>
-      <button type="button" className={button} onClick={() => void remove(removeTarget)}>Confirm delete source</button>{" "}<button type="button" className={button} onClick={() => setRemoveTarget(null)}>Keep file</button>
+      <button type="button" className={button} disabled={mutationBusy} onClick={() => void remove(removeTarget)}>Confirm delete source</button>{" "}<button type="button" className={button} onClick={() => setRemoveTarget(null)}>Keep file</button>
     </div> : null}
     {preview ? <section className="rounded-2xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="break-words font-semibold text-white">Source preview: {preview.filename}</h2><button type="button" className={button} onClick={() => setPreview(null)}>Close preview</button></div><video key={preview.id} controls preload="metadata" playsInline src={mediaUrl(preview)} className="aspect-video w-full rounded-xl bg-black" /><p className="mt-2 text-sm text-white/50">Original footage only. If this MP4 codec is not supported by your browser, download the source to check it.</p></section> : null}
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Clips — saved editing order</h2>{rows(state.assets.filter(a => a.kind === "CLIP"))}{!state.assets.some(a => a.kind === "CLIP") ? <p className="text-sm text-white/50">No clips uploaded for this match yet.</p> : null}</section>
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Full match and ready-made highlights</h2>{rows(state.assets.filter(a => a.kind === "FULL_MATCH" || a.kind === "HIGHLIGHTS"))}</section>
     <details className="rounded-2xl border border-white/10 p-4"><summary className="cursor-pointer font-semibold text-white/80">Shared intro and outro — upload once</summary><div className="mt-4 grid gap-4 lg:grid-cols-2">{picker("INTRO", "Shared branding library, available from every match.")}{picker("OUTRO", "Shared branding library, available from every match.")}</div><div className="mt-4 space-y-3">{rows(state.assets.filter(a => a.shared))}</div></details>
     <div className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60">
-      <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.<br />This limit covers the new footage library, not your entire Railway account. Storage and transfers are billed by Railway. Nothing is deleted automatically. Keep this page open while uploading; reselect the same file to resume after interruption.
+      <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.<br />This limit covers the new footage library, not your entire Railway account. Storage and transfers are billed by Railway. Nothing is deleted automatically. Uploads continue across admin pages in this tab. After a reload or interruption, reselect the same file to resume saved parts.
     </div>
   </div>;
 }

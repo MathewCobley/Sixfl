@@ -1,0 +1,19 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+test('upload queue is owned by persistent authenticated admin layout, not a fixture page', () => {
+  const layout = fs.readFileSync('src/app/(admin)/admin/layout.tsx', 'utf8');
+  const page = fs.readFileSync('src/app/(admin)/admin/sixfl-tv/footage/[fixtureId]/page.tsx', 'utf8');
+  const provider = fs.readFileSync('src/components/admin/sixfl-tv/FootageUploadProvider.tsx', 'utf8');
+  const uploader = fs.readFileSync('src/components/admin/sixfl-tv/FootageUploader.tsx', 'utf8');
+  const queue = fs.readFileSync('src/components/admin/sixfl-tv/footage-upload-queue.ts', 'utf8');
+  assert.match(layout, /<FootageUploadProvider key=\{user\?\.id \|\| email\}>\{children\}<\/FootageUploadProvider>/);
+  assert.doesNotMatch(page, /<FootageUploadProvider/);
+  assert.match(page, /fixtureLabel=/);
+  assert.match(provider, /useState\(\(\) => new FootageUploadQueue\(\)\)/);
+  assert.match(provider, /queue\.stop\(\)/);
+  assert.match(uploader, /queue\.enqueue\(/);
+  assert.doesNotMatch(uploader, /new XMLHttpRequest|async function upload\(/);
+  for (const source of [provider, uploader, queue]) assert.doesNotMatch(source, /MutationObserver|document\.querySelector|queueNotification|sendEmail\(|spawn\(/);
+  assert.doesNotMatch(uploader, /not connected yet|Keep this page open while uploading/);
+});

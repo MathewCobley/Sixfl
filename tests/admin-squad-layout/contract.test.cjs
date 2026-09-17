@@ -17,6 +17,9 @@ function load(path, mocks = {}) {
     if (['react', 'react/jsx-runtime'].includes(key)) return require(key);
     if (key === 'next/navigation') return { useRouter: () => ({ refresh: noop }) };
     if (key === 'next/link') return ({ children, ...props }) => React.createElement('a', props, children);
+    // Context providers are transparent to this shell test, not leaf widgets to omit.
+    // The real provider and navigation/transfers are exercised by the footage browser suite.
+    if (key === '@/components/admin/sixfl-tv/FootageUploadProvider') return ({ children }) => React.createElement(React.Fragment, null, children);
     if (key.startsWith('@/components/')) return noop;
     throw new Error(`Unmocked dependency: ${key}`);
   }, mod, mod.exports);
