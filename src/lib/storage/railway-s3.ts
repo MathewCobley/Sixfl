@@ -141,6 +141,7 @@ export async function uploadRailwayObject(input: {
   key: string;
   body: Uint8Array;
   contentType: string;
+  signal?: AbortSignal;
 }) {
   const payloadHash = sha256Hex(input.body);
   const request = createSignedRequest({
@@ -156,12 +157,13 @@ export async function uploadRailwayObject(input: {
     method: "PUT",
     headers: request.headers,
     body: input.body as unknown as BodyInit,
+    signal: input.signal,
   });
 
   await assertStorageResponse(response, "Video upload");
 }
 
-export async function deleteRailwayObject(key: string) {
+export async function deleteRailwayObject(key: string, signal?: AbortSignal) {
   const request = createSignedRequest({
     method: "DELETE",
     key,
@@ -171,6 +173,7 @@ export async function deleteRailwayObject(key: string) {
   const response = await fetch(request.url, {
     method: "DELETE",
     headers: request.headers,
+    signal,
   });
 
   if (response.status === 404) return;
@@ -180,6 +183,7 @@ export async function deleteRailwayObject(key: string) {
 export async function fetchRailwayObject(input: {
   key: string;
   range?: string | null;
+  signal?: AbortSignal;
 }) {
   const request = createSignedRequest({
     method: "GET",
@@ -192,5 +196,6 @@ export async function fetchRailwayObject(input: {
     method: "GET",
     headers: request.headers,
     cache: "no-store",
+    signal: input.signal,
   });
 }
