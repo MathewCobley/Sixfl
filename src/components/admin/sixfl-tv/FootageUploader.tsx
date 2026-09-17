@@ -19,7 +19,7 @@ async function json<T>(url: string, body?: Record<string, unknown>): Promise<T> 
   if (!response.ok) throw new Error(value.error || "The footage request failed.");
   return value as T;
 }
-export default function FootageUploader({ fixtureId, fixtureLabel = "Match footage", initial }: { fixtureId: string; fixtureLabel?: string; initial: State }) {
+export default function FootageUploader({ fixtureId, fixtureLabel = "Match footage", initial, sharedOnly = false }: { fixtureId?: string; fixtureLabel?: string; initial: State; sharedOnly?: boolean }) {
   const { queue, snapshot } = useFootageUploads();
   const [state, setState] = useState(initial);
   const [selection, setSelection] = useState<UploadSelection[]>([]);
@@ -28,10 +28,14 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
   const [preview, setPreview] = useState<Asset | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Asset | null>(null);
   const running = useRef(false);
-  const endpoint = `/api/admin/sixfl-tv/footage/${encodeURIComponent(fixtureId)}`;
+  const uploadScope = sharedOnly ? null : fixtureId || null;
+  const displayLabel = sharedOnly ? "Shared SIXFL TV branding" : fixtureLabel;
+  const endpoint = sharedOnly
+    ? "/api/admin/sixfl-tv/footage/shared"
+    : `/api/admin/sixfl-tv/footage/${encodeURIComponent(fixtureId || "")}`;
   const mediaUrl = (asset: Asset) => `${endpoint}/${encodeURIComponent(asset.id)}`;
   const refresh = useCallback(async () => { setState(await json<State>(endpoint)); }, [endpoint]);
-  const tasks = snapshot.tasks.filter(task => task.fixtureId === fixtureId);
+  const tasks = snapshot.tasks.filter(task => task.fixtureId === uploadScope);
   const active = tasks.find(task => task.status === "UPLOADING");
   const latest = active || tasks.at(-1);
   const busy = localBusy || tasks.some(task => task.status === "UPLOADING" || task.status === "QUEUED");
@@ -65,7 +69,8 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
   function upload() {
     if (busy || running.current || !selection.length) return;
     try {
-      const added = queue.enqueue(fixtureId, fixtureLabel, selection);
+      if (!sharedOnly && !fixtureId) throw new Error("Choose a fixture before uploading match footage.");
+      const added = queue.enqueue(uploadScope, displayLabel, selection);
       setError(""); setMessage(added ? "" : "These files are already in the background queue. Use Resume upload for paused files.");
       if (added) setSelection([]);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not queue the upload."); }
@@ -123,6 +128,38 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
   const progress = active ? Math.min(100, Math.round(active.uploadedBytes / active.sizeBytes * 100)) : 0;
   const visibleMessage = message || latest?.message;
   const visibleError = error || latest?.error;
+
+  if (sharedOnly) {
+    return <div className="space-y-5 pb-20">
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm leading-6 text-emerald-100">
+        <strong>Shared SIXFL TV branding.</strong> Upload the intro and outro once here. They are then available to every match render. Uploads continue in the background while you use other admin pages; keep this browser tab open.
+      </div>
+      {!state.configured ? <p role="alert" className="text-red-200">Private storage is not configured. Shared branding uploads are disabled.</p> : null}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {picker("INTRO", "Reusable SIXFL TV intro, available from every match.")}
+        {picker("OUTRO", "Reusable SIXFL TV outro, available from every match.")}
+      </div>
+      {selection.length ? <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5">
+        <p className="font-semibold text-white">Selected: {selection.length} file{selection.length === 1 ? "" : "s"} · {sizeLabel(selection.reduce((sum, s) => sum + s.file.size, 0))}</p>
+        <p className="mt-2 break-words text-sm text-white/60">{selection.map(s => s.file.name).join(" · ")}</p>
+        <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={upload}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
+      </div> : null}
+      {active ? <div className="space-y-2"><progress aria-label="Current shared branding upload progress" value={progress} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => queue.pause(active.id)}>Pause after current part</button></div> : null}
+      {tasks.filter(task => task.status === "PAUSED" || task.status === "FAILED").map(task => <div key={task.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 p-3"><span className="break-words text-sm text-white/70">{task.filename}</span><button type="button" className={button} onClick={() => { setMessage(""); setError(""); queue.resume(task.id); }}>Resume upload</button><button type="button" className={button} onClick={() => queue.forget(task.id)}>Remove from queue</button><span className="text-xs text-white/45">Saved parts are kept.</span></div>)}
+      {visibleMessage ? <p role="status" className="break-words rounded-xl border border-white/10 p-3 text-sm text-white/80">{visibleMessage}</p> : null}
+      {visibleError ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{visibleError}</p> : null}
+      {removeTarget ? <div role="alertdialog" aria-label="Confirm source file removal" className="space-y-3 rounded-2xl border border-red-400/30 p-5">
+        <p className="break-words text-white">Delete <strong>{removeTarget.filename}</strong> from the shared SIXFL TV branding library? Keep your own backup first.</p>
+        <button type="button" className={button} disabled={mutationBusy} onClick={() => void remove(removeTarget)}>Confirm delete source</button>{" "}<button type="button" className={button} onClick={() => setRemoveTarget(null)}>Keep file</button>
+      </div> : null}
+      {preview ? <section className="rounded-2xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="break-words font-semibold text-white">Source preview: {preview.filename}</h2><button type="button" className={button} onClick={() => setPreview(null)}>Close preview</button></div><video key={preview.id} controls preload="metadata" playsInline src={mediaUrl(preview)} className="aspect-video w-full rounded-xl bg-black" /></section> : null}
+      <section className="space-y-3"><h3 className="text-lg font-semibold text-white">Saved shared branding</h3>{rows(state.assets.filter(a => a.shared))}{!state.assets.some(a => a.shared) ? <p className="text-sm text-white/50">No shared intro or outro uploaded yet.</p> : null}</section>
+      <div className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60">
+        <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.
+      </div>
+    </div>;
+  }
+
   return <div className="space-y-6 pb-20">
     <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm leading-6 text-emerald-100">
       <strong>Background footage uploads.</strong> Start uploading, then use the SIXFL admin navigation to work on other pages. The upload queue stays in the bottom corner. Keep this browser tab open and your computer awake; refreshing or closing it interrupts transfer. Uploading does not generate or publish a video, send player emails or replace existing links.
@@ -149,7 +186,6 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
     {preview ? <section className="rounded-2xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="break-words font-semibold text-white">Source preview: {preview.filename}</h2><button type="button" className={button} onClick={() => setPreview(null)}>Close preview</button></div><video key={preview.id} controls preload="metadata" playsInline src={mediaUrl(preview)} className="aspect-video w-full rounded-xl bg-black" /><p className="mt-2 text-sm text-white/50">Original footage only. If this MP4 codec is not supported by your browser, download the source to check it.</p></section> : null}
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Clips — saved editing order</h2>{rows(state.assets.filter(a => a.kind === "CLIP"))}{!state.assets.some(a => a.kind === "CLIP") ? <p className="text-sm text-white/50">No clips uploaded for this match yet.</p> : null}</section>
     <section className="space-y-3"><h2 className="text-xl font-semibold text-white">Full match and ready-made highlights</h2>{rows(state.assets.filter(a => a.kind === "FULL_MATCH" || a.kind === "HIGHLIGHTS"))}</section>
-    <details className="rounded-2xl border border-white/10 p-4"><summary className="cursor-pointer font-semibold text-white/80">Shared intro and outro — upload once</summary><div className="mt-4 grid gap-4 lg:grid-cols-2">{picker("INTRO", "Shared branding library, available from every match.")}{picker("OUTRO", "Shared branding library, available from every match.")}</div><div className="mt-4 space-y-3">{rows(state.assets.filter(a => a.shared))}</div></details>
     <div className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60">
       <strong className="text-white/85">Private SIXFL cloud storage</strong><br />Uploaded parts: {sizeLabel(state.uploadedBytes)} · Reserved including incomplete files: {sizeLabel(state.reservedBytes)} / {sizeLabel(state.limitBytes)}.<br />This limit covers the new footage library, not your entire Railway account. Storage and transfers are billed by Railway. Nothing is deleted automatically. Uploads continue across admin pages in this tab. After a reload or interruption, reselect the same file to resume saved parts.
     </div>
