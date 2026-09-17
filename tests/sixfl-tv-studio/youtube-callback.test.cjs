@@ -64,7 +64,7 @@ test("denied Google callback also returns to the public SIXFL page", async () =>
     const route = load();
     const response = await route.GET(new Request("http://localhost:8080/api/admin/sixfl-tv/youtube/callback?error=access_denied"));
     assert.equal(response.status, 302);
-    assert.match(response.url, /^https:\/\/www\.sixfl\.co\.uk\/admin\/sixfl-tv\?youtubeError=/);
+    assert.match(response.url, /^https:\/\/www\.sixfl\.co\.uk\/admin\/sixfl-tv\/settings\?youtubeError=/);
     assert.doesNotMatch(response.url, /localhost|railway\.internal/);
   } finally {
     if (prior === undefined) delete process.env.YOUTUBE_REDIRECT_URI;
