@@ -5,7 +5,7 @@ import { FOOTAGE_PART_BYTES, footageId, footageSpec, type FootageKind } from "@/
 export type UploadAsset = { id: string; filename: string; sizeBytes: number; partCount: number };
 export type UploadSelection = { file: File; kind: FootageKind; asset?: UploadAsset };
 export type UploadTask = {
-  id: string; fixtureId: string; fixtureLabel: string; filename: string; kind: FootageKind;
+  id: string; fixtureId: string | null; fixtureLabel: string; filename: string; kind: FootageKind;
   sizeBytes: number; uploadedBytes: number; status: "QUEUED" | "UPLOADING" | "PAUSED" | "FAILED" | "COMPLETE";
   message: string; error: string; assetId?: string;
 };
@@ -71,8 +71,8 @@ export class FootageUploadQueue {
     this.snapshot = { tasks: this.entries.map(entry => ({ ...entry.view })), revision: this.snapshot.revision + (changedOnServer ? 1 : 0) };
     this.listeners.forEach(listener => listener());
   }
-  enqueue(fixtureId: string, fixtureLabel: string, selections: UploadSelection[]) {
-    footageId(fixtureId);
+  enqueue(fixtureId: string | null, fixtureLabel: string, selections: UploadSelection[]) {
+    if (fixtureId !== null) footageId(fixtureId);
     // Validate the whole batch before changing the queue.
     for (const { file, kind, asset } of selections) {
       footageSpec({ kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified });
@@ -146,7 +146,9 @@ export class FootageUploadQueue {
   private async transfer(entry: Entry, signal: AbortSignal) {
     const file = entry.file;
     if (!file) throw new Error("Select the source file again.");
-    const endpoint = `/api/admin/sixfl-tv/footage/${encodeURIComponent(entry.view.fixtureId)}`;
+    const endpoint = entry.view.fixtureId === null
+      ? "/api/admin/sixfl-tv/footage/shared"
+      : `/api/admin/sixfl-tv/footage/${encodeURIComponent(entry.view.fixtureId)}`;
     const asset = entry.asset || (await this.transport.json<{ asset: UploadAsset }>(endpoint, signal, { action: "begin", kind: entry.view.kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified })).asset;
     if (!asset || asset.sizeBytes !== file.size || asset.partCount !== Math.ceil(file.size / FOOTAGE_PART_BYTES)) throw new Error("Saved upload does not match the selected file.");
     entry.asset = asset; entry.view.assetId = asset.id; this.emit(true);
