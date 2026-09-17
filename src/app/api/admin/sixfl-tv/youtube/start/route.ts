@@ -11,11 +11,13 @@ export const revalidate = 0;
 export async function GET(request: Request) {
   await requireAdmin();
   try {
-    const fixtureId = footageId(new URL(request.url).searchParams.get("fixtureId"));
-    await studioFixture(fixtureId);
+    const rawFixtureId = new URL(request.url).searchParams.get("fixtureId");
+    const fixtureId = rawFixtureId ? footageId(rawFixtureId) : null;
+    if (fixtureId) await studioFixture(fixtureId);
     return NextResponse.redirect(youtubeAuthorisationUrl(fixtureId), 302);
   } catch (error) {
     const message = error instanceof StudioError ? error.message : "YouTube connection could not be started.";
-    return NextResponse.redirect(new URL(`/admin/sixfl-tv/footage?youtubeError=${encodeURIComponent(message)}`, request.url), 302);
+    const site = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://www.sixfl.co.uk").replace(/\/+$/, "");
+    return NextResponse.redirect(new URL(`/admin/sixfl-tv?youtubeError=${encodeURIComponent(message)}`, `${site}/`), 302);
   }
 }
