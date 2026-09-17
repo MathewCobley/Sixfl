@@ -1,0 +1,74 @@
+name: SIXFL TV private footage
+on:
+  pull_request:
+    paths:
+      - "src/lib/sixfl-tv/**"
+      - "src/lib/storage/**"
+      - "src/components/admin/sixfl-tv/**"
+      - "src/app/(admin)/admin/sixfl-tv/**"
+      - "src/app/api/admin/sixfl-tv/**"
+      - "prisma/migrations/20260917170000_sixfl_tv_footage_uploads/**"
+      - "tests/sixfl-tv-footage/**"
+      - ".github/workflows/sixfl-tv-footage.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sixfl-tv-footage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_footage_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
+      TEST_FOOTAGE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_footage_test
+      NEXTAUTH_SECRET: isolated-footage-ci-only
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      RESEND_API_KEY: re_ci_not_real
+      STRIPE_SECRET_KEY: sk_test_ci_not_real
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npx prisma generate
+      - name: Native private footage contracts with isolated PostgreSQL
+        run: node --test tests/sixfl-tv-footage/*.test.cjs
+      - name: Complete production source preparation
+        run: npm run prebuild && npx prisma generate
+      - name: Prepared private footage contracts with isolated PostgreSQL
+        run: node --test tests/sixfl-tv-footage/*.test.cjs
+      - name: Full TypeScript and production build
+        run: npx tsc --noEmit && npx next build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix /tmp/sixfl-footage-tools --no-package-lock --ignore-scripts playwright
+          ln -s /tmp/sixfl-footage-tools/node_modules/playwright node_modules/playwright
+          /tmp/sixfl-footage-tools/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Exercise uploader on phone and desktop
+        run: node tests/sixfl-tv-footage/browser.mjs
+      - name: Inventory shared upload storage and existing publish routes
+        if: always()
+        run: git grep -n -E 'FootageUploader|SixflTvFootageAsset|putFootagePart|footageState|uploadRailwayObject|queueSixflTvFixtureUploadedEmailsOnce' -- src scripts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sixfl-tv-footage-browser
+          path: artifacts/sixfl-tv-footage
+          retention-days: 7
