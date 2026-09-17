@@ -16,8 +16,11 @@ function required(name: string) {
 }
 function config() {
   const site = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://sixfl.co.uk").replace(/\/+$/, "");
+  // Pin this independently in production: Google requires the exact registered URI
+  // in both the authorisation request and the subsequent code/token exchange.
+  const redirectUri = process.env.YOUTUBE_REDIRECT_URI?.trim() || `${site}/api/admin/sixfl-tv/youtube/callback`;
   return { clientId: required("YOUTUBE_CLIENT_ID"), clientSecret: required("YOUTUBE_CLIENT_SECRET"), tokenKey: required("SIXFL_TV_TOKEN_KEY"),
-    redirectUri: `${site}/api/admin/sixfl-tv/youtube/callback`, stateKey: process.env.NEXTAUTH_SECRET?.trim() || required("SIXFL_TV_TOKEN_KEY") };
+    redirectUri, stateKey: process.env.NEXTAUTH_SECRET?.trim() || required("SIXFL_TV_TOKEN_KEY") };
 }
 function key(value: string) { return createHash("sha256").update(value).digest(); }
 function encode(value: Buffer | string) { return Buffer.from(value).toString("base64url"); }
