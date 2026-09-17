@@ -35,6 +35,9 @@ jobs:
       - name: Check native referee new emails and email/SMS replies
         run: node --test tests/critical-pages/referee-comms-email.test.cjs tests/critical-pages/referee-new-email.test.cjs
 
+      - name: Check native shared resend disclosure and safeguards
+        run: node --test tests/admin-email-resend/disclosure.test.cjs tests/admin-email-resend/source.test.cjs
+
       - name: Apply the complete production source-preparation chain
         run: npm run prebuild
 
@@ -46,6 +49,12 @@ jobs:
 
       - name: Check prepared referee new emails and email/SMS replies
         run: SIXFL_PREPARED_SOURCE=1 node --test tests/critical-pages/referee-comms-email.test.cjs tests/critical-pages/referee-new-email.test.cjs
+
+      - name: Check prepared shared resend disclosure and safeguards
+        run: node --test tests/admin-email-resend/disclosure.test.cjs tests/admin-email-resend/source.test.cjs
+
+      - name: Audit shared resend component, send action and preparation paths
+        run: git grep -n -E 'AdminEmailResendPanel|Resend a sent email|Resend an email|resendAdminEmailAction|queueStoredAdminEmailResend' -- src scripts
 
       - name: Audit shared reply entry points and send actions
         shell: bash
