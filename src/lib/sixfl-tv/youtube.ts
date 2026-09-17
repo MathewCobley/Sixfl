@@ -7,6 +7,7 @@ const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const YOUTUBE_READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
 
 type Connection = { refreshTokenCiphertext: string; channelId: string | null; channelTitle: string | null; scope: string };
+type ConnectionSummary = { channelId: string | null; channelTitle: string | null; connectedAt: Date };
 type PublishRow = { id: string; kind: SixflTvRenderKind; state: string; title: string; privacyStatus: string; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: Date; completedAt: Date | null };
 
 function required(name: string) {
@@ -38,7 +39,7 @@ export function decryptYoutubeRefreshToken(value: string) {
   return Buffer.concat([decipher.update(decode(parts[3])), decipher.final()]).toString("utf8");
 }
 function signState(payload: string) { return encode(createHmac("sha256", config().stateKey).update(payload).digest()); }
-export function createYoutubeState(fixtureId: string) {
+export function createYoutubeState(fixtureId: string | null = null) {
   const payload = encode(JSON.stringify({ fixtureId, exp: Date.now() + 10 * 60 * 1000, nonce: randomUUID() }));
   return `${payload}.${signState(payload)}`;
 }
@@ -48,10 +49,11 @@ export function verifyYoutubeState(value: string) {
   const expected = decode(signState(payload)), actual = decode(signature);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new StudioError("YouTube authorisation could not be verified.", 400);
   const parsed = JSON.parse(decode(payload).toString("utf8")) as { fixtureId?: unknown; exp?: unknown };
-  if (typeof parsed.fixtureId !== "string" || !parsed.fixtureId || typeof parsed.exp !== "number" || parsed.exp < Date.now()) throw new StudioError("YouTube authorisation expired. Start again.", 400);
-  return parsed.fixtureId;
+  const validFixture = parsed.fixtureId === null || (typeof parsed.fixtureId === "string" && Boolean(parsed.fixtureId));
+  if (!validFixture || typeof parsed.exp !== "number" || parsed.exp < Date.now()) throw new StudioError("YouTube authorisation expired. Start again.", 400);
+  return parsed.fixtureId as string | null;
 }
-export function youtubeAuthorisationUrl(fixtureId: string) {
+export function youtubeAuthorisationUrl(fixtureId: string | null = null) {
   const cfg = config(), url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", cfg.clientId); url.searchParams.set("redirect_uri", cfg.redirectUri); url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE}`); url.searchParams.set("access_type", "offline"); url.searchParams.set("prompt", "consent");
@@ -71,7 +73,8 @@ async function channelFor(accessToken: string) {
   return { id: data.items?.[0]?.id || null, title: data.items?.[0]?.snippet?.title || null };
 }
 export async function completeYoutubeAuthorisation(code: string, state: string, actor: string) {
-  const fixtureId = verifyYoutubeState(state); await studioFixture(fixtureId);
+  const fixtureId = verifyYoutubeState(state);
+  if (fixtureId) await studioFixture(fixtureId);
   const cfg = config();
   const token = await tokenRequest(new URLSearchParams({ code, client_id: cfg.clientId, client_secret: cfg.clientSecret, redirect_uri: cfg.redirectUri, grant_type: "authorization_code" }));
   if (!token.refresh_token) throw new StudioError("Google did not return a refresh token. Remove the app from your Google account permissions and connect it again.", 409);
@@ -83,6 +86,18 @@ export async function completeYoutubeAuthorisation(code: string, state: string, 
     ON CONFLICT ("id") DO UPDATE SET "refreshTokenCiphertext"=EXCLUDED."refreshTokenCiphertext","channelId"=EXCLUDED."channelId","channelTitle"=EXCLUDED."channelTitle","scope"=EXCLUDED."scope","connectedByActor"=EXCLUDED."connectedByActor","connectedAt"=NOW(),"updatedAt"=NOW()`;
   return fixtureId;
 }
+export async function getYoutubeConnectionStatus() {
+  const configured = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "SIXFL_TV_TOKEN_KEY"].every(name => Boolean(process.env[name]?.trim()));
+  const rows = await prisma.$queryRaw<ConnectionSummary[]>`SELECT "channelId","channelTitle","connectedAt" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
+  return {
+    configured,
+    connected: Boolean(rows[0]),
+    channelId: rows[0]?.channelId || null,
+    channelTitle: rows[0]?.channelTitle || null,
+    connectedAt: rows[0]?.connectedAt?.toISOString() || null,
+  };
+}
+
 export async function youtubeAccessToken() {
   const rows = await prisma.$queryRaw<Connection[]>`SELECT "refreshTokenCiphertext","channelId","channelTitle","scope" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
   if (!rows[0]) throw new StudioError("Connect the SIXFL YouTube channel first.", 409);
