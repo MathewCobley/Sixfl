@@ -165,7 +165,10 @@ await check("processor blocks old malformed queued emails without repairing or r
   const historical = JSON.stringify(queue[2]); const oldBody = queue[0].bodyHtml;
   globalThis.__squadInviteTest.queue = queue;
   const processor = await load("src/lib/notifications/processor.ts", {
+    // The new resend module imports this export, but invite-only delivery must
+    // never call it. Keep the real delivery guards and fail on an unexpected send.
     "./service": `const s=globalThis.__squadInviteTest;
+      export async function queueNotificationFromTemplate(){throw new Error('Unexpected payment resend during invite-only delivery.');}
       export async function getDueNotificationDispatches(){return s.queue.filter(x=>x.status==='QUEUED');}
       export async function markNotificationDispatchProcessing(id){s.queue.find(x=>x.id===id).status='PROCESSING';return true;}
       export async function markNotificationDispatchCancelled(id,reason){Object.assign(s.queue.find(x=>x.id===id),{status:'CANCELLED',failureReason:reason});}
