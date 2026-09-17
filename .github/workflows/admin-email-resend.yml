@@ -4,9 +4,11 @@ on:
     paths:
       - "src/app/(admin)/admin/messages/**"
       - "src/app/(admin)/admin/communications/**"
+      - "src/app/(admin)/admin/teams/**/players/**/communications/**"
       - "src/components/admin/communications/**"
       - "src/lib/notifications/**"
       - "src/lib/email/**"
+      - "src/lib/payments/player-ledger.ts"
       - "tests/admin-email-resend/**"
       - ".github/workflows/admin-email-resend.yml"
   workflow_dispatch:
@@ -19,8 +21,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sixfl_resend_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/invalid?connect_timeout=1
+      TEST_RESEND_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sixfl_resend_test
       NEXTAUTH_SECRET: admin-email-resend-ci-secret
       NEXTAUTH_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
@@ -33,7 +50,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci && npx prisma generate
       - name: Native resend safety contracts
         run: node --test tests/admin-email-resend/*.test.cjs
       - run: npm run prebuild && npx prisma generate
@@ -41,3 +58,20 @@ jobs:
         run: node --test tests/admin-email-resend/*.test.cjs
       - name: Full TypeScript and production build
         run: npx tsc --noEmit && npx next build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix /tmp/sixfl-resend-tools --no-package-lock --ignore-scripts playwright
+          ln -s /tmp/sixfl-resend-tools/node_modules/playwright node_modules/playwright
+          /tmp/sixfl-resend-tools/node_modules/.bin/playwright install --with-deps chromium webkit
+      - name: Verify confirmation and resend feedback on phone and desktop
+        run: node tests/admin-email-resend/player-timeline-ui.mjs
+      - name: Inspect final shared resend and delivery paths
+        if: always()
+        run: |
+          git grep -n -E 'PlayerPaymentEmailResend|queuePlayerPaymentEmailResend|playerPaymentTimelineResend|getPlayerPaymentResendDeliveryBlock|queueStoredAdminEmailResend' -- src scripts || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-payment-resend-browser
+          path: artifacts/player-payment-resend
+          retention-days: 7
