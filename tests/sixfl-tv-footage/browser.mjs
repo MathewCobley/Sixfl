@@ -10,7 +10,10 @@ import tailwind from '@tailwindcss/postcss';
 import { chromium, webkit } from 'playwright';
 const out='/tmp/sixfl-footage-browser', artifacts='artifacts/sixfl-tv-footage';
 fs.mkdirSync(out,{recursive:true});fs.mkdirSync(artifacts,{recursive:true});
-await build({stdin:{contents:`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import Uploader from './src/components/admin/sixfl-tv/FootageUploader';import Provider from './src/components/admin/sixfl-tv/FootageUploadProvider';function Pages(){const[page,setPage]=useState('match-a');return <><nav><button onClick={()=>setPage('other')}>Other admin page</button><button onClick={()=>setPage('match-a')}>Match A</button><button onClick={()=>setPage('match-b')}>Match B</button></nav>{page==='other'?<h1>Other admin workspace</h1>:<Uploader key={page} fixtureId={page} fixtureLabel={page==='match-a'?'A v B':'C v D'} initial={window.__INITIAL__}/>}</>;}createRoot(document.getElementById('root')).render(<Provider><Pages/></Provider>);`,loader:'tsx',resolveDir:process.cwd()},bundle:true,outfile:path.join(out,'app.js'),platform:'browser',format:'iife',jsx:'automatic'});
+// Next's compiler replaces these client constants. This standalone component
+// harness uses esbuild, so provide the same empty-base-path browser environment.
+// Keep the actual Link/provider/uploader components and all runtime assertions.
+await build({stdin:{contents:`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import Uploader from './src/components/admin/sixfl-tv/FootageUploader';import Provider from './src/components/admin/sixfl-tv/FootageUploadProvider';function Pages(){const[page,setPage]=useState('match-a');return <><nav><button onClick={()=>setPage('other')}>Other admin page</button><button onClick={()=>setPage('match-a')}>Match A</button><button onClick={()=>setPage('match-b')}>Match B</button></nav>{page==='other'?<h1>Other admin workspace</h1>:<Uploader key={page} fixtureId={page} fixtureLabel={page==='match-a'?'A v B':'C v D'} initial={window.__INITIAL__}/>}</>;}createRoot(document.getElementById('root')).render(<Provider><Pages/></Provider>);`,loader:'tsx',resolveDir:process.cwd()},bundle:true,outfile:path.join(out,'app.js'),platform:'browser',format:'iife',jsx:'automatic',define:{'process.env':'{}','process.env.NODE_ENV':'"development"','process.browser':'true'}});
 const css=await postcss([tailwind()]).process('@import "tailwindcss";',{from:path.resolve('footage-browser.css')});fs.writeFileSync(path.join(out,'app.css'),css.css);
 const partBytes=8*1024*1024;
 let assets=[],parts=new Map(),calls=[],failed=false;
@@ -104,6 +107,9 @@ try{
         await page.getByRole('button',{name:'Other admin page',exact:true}).click();
         assert.equal(await page.getByLabel('Choose highlight clips',{exact:true}).count(),0);
         await page.getByRole('complementary',{name:'Background footage uploads'}).waitFor();
+        await page.getByRole('button',{name:/^Uploads/}).click();
+        assert.equal(await page.getByRole('link',{name:'A v B',exact:true}).first().getAttribute('href'),'/admin/sixfl-tv/footage/match-a');
+        await page.getByRole('button',{name:/^Uploads/}).click();
         await page.getByRole('button',{name:'Match B',exact:true}).click();
         await page.getByLabel('Choose full match',{exact:true}).setInputFiles(file('another-match.mp4'));
         await page.getByRole('button',{name:'Upload selected files',exact:true}).click();
