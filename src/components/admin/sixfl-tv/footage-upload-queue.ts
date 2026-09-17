@@ -130,7 +130,9 @@ export class FootageUploadQueue {
             entry.view.status = "PAUSED"; entry.view.message = "Paused. Resume without selecting the file again.";
           } else {
             entry.view.status = "COMPLETE"; entry.view.uploadedBytes = entry.view.sizeBytes;
-            entry.view.message = "Footage saved privately against this match. Nothing has been published or emailed.";
+            entry.view.message = entry.view.fixtureId === null
+              ? "Shared SIXFL TV branding saved privately. Nothing has been published or emailed."
+              : "Footage saved privately against this match. Nothing has been published or emailed.";
             entry.file = null;
           }
         } catch (error) {
