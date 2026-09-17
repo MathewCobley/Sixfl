@@ -20,6 +20,15 @@ function replaceRequired(source, before, after, filePath) {
 }
 
 function patchAdminPage() {
+  const dedicatedPath = "src/app/(admin)/admin/sixfl-tv/goal-of-week/page.tsx";
+  const dedicated = read(dedicatedPath);
+  if (
+    dedicated.includes('import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";') &&
+    dedicated.includes("<GoalOfWeekAdminPanel searchParams={query} />")
+  ) {
+    return;
+  }
+
   const filePath = "src/app/(admin)/admin/sixfl-tv/page.tsx";
   let source = read(filePath);
 
@@ -167,7 +176,7 @@ function patchAdminPanel() {
       '    });',
       '  } catch (error) {',
       '    console.error("Failed to save Goal of the Week", error);',
-      '    redirect("/admin/sixfl-tv?goalError=save#goal-of-week-admin");',
+      '    redirect("/admin/sixfl-tv/goal-of-week?goalError=save#goal-of-week-admin");',
       '  }',
     ].join("\n");
 
@@ -178,8 +187,8 @@ function patchAdminPanel() {
 
   source = replaceRequired(
     source,
-    '  revalidatePath("/api/public/goal-of-week");\n  redirect("/admin/sixfl-tv?goalSaved=created");',
-    '  revalidatePath("/api/public/goal-of-week");\n  revalidatePath("/goal-of-the-week");\n  redirect(`/admin/sixfl-tv?goalSaved=${updatedExisting ? "updated" : "created"}#goal-of-week-admin`);',
+    '  revalidatePath("/api/public/goal-of-week");\n  redirect("/admin/sixfl-tv/goal-of-week?goalSaved=created");',
+    '  revalidatePath("/api/public/goal-of-week");\n  revalidatePath("/goal-of-the-week");\n  redirect(`/admin/sixfl-tv/goal-of-week?goalSaved=${updatedExisting ? "updated" : "created"}#goal-of-week-admin`);',
     filePath,
   );
 
