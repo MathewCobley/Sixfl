@@ -8,7 +8,11 @@ on:
       - "src/app/(admin)/admin/sixfl-tv/**"
       - "src/app/api/admin/sixfl-tv/**"
       - "prisma/migrations/20260917170000_sixfl_tv_footage_uploads/**"
+      - "prisma/migrations/20260917213000_sixfl_tv_studio/**"
       - "tests/sixfl-tv-footage/**"
+      - "tests/sixfl-tv-studio/**"
+      - "scripts/sixfl-tv-worker.ts"
+      - "Dockerfile.sixfl-tv-worker"
       - ".github/workflows/sixfl-tv-footage.yml"
   workflow_dispatch:
 permissions:
@@ -19,7 +23,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -48,14 +52,28 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci && npx prisma generate
+      - name: Prepare FFmpeg for executable renderer tests
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
       - name: Native private footage contracts with isolated PostgreSQL
         run: node --test tests/sixfl-tv-footage/*.test.cjs
+      - name: Native SIXFL TV studio contracts with isolated PostgreSQL
+        run: node --test tests/sixfl-tv-studio/*.test.cjs
       - name: Complete production source preparation
         run: npm run prebuild && npx prisma generate
       - name: Prepared private footage contracts with isolated PostgreSQL
         run: node --test tests/sixfl-tv-footage/*.test.cjs
+      - name: Prepared SIXFL TV studio contracts with isolated PostgreSQL
+        run: node --test tests/sixfl-tv-studio/*.test.cjs
       - name: Full TypeScript and production build
         run: npx tsc --noEmit && npx next build
+      - name: Build isolated FFmpeg worker image
+        run: docker build -f Dockerfile.sixfl-tv-worker -t sixfl-tv-worker:ci .
+      - name: Exercise actual FFmpeg runtime image without production access
+        run: docker run --rm --entrypoint node sixfl-tv-worker:ci --test tests/sixfl-tv-studio/worker.test.cjs
       - name: Install isolated browser tooling
         run: |
           npm install --prefix /tmp/sixfl-footage-tools --no-package-lock --ignore-scripts playwright
@@ -63,9 +81,9 @@ jobs:
           /tmp/sixfl-footage-tools/node_modules/.bin/playwright install --with-deps chromium webkit
       - name: Exercise uploader on phone and desktop
         run: node tests/sixfl-tv-footage/browser.mjs
-      - name: Inventory shared upload storage and existing publish routes
+      - name: Inventory shared upload storage and publish boundaries
         if: always()
-        run: git grep -n -E 'FootageUploader|SixflTvFootageAsset|putFootagePart|footageState|uploadRailwayObject|queueSixflTvFixtureUploadedEmailsOnce' -- src scripts
+        run: git grep -n -E 'FootageUploader|StudioControls|SixflTvFootageAsset|SixflTvRenderJob|putFootagePart|footageState|uploadRailwayObject|queueSixflTvFixtureUploadedEmailsOnce|videos.insert|thumbnails/set' -- src scripts prisma tests
       - uses: actions/upload-artifact@v4
         if: always()
         with:
