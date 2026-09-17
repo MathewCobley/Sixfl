@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
+import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
@@ -16,6 +17,11 @@ const renderSignals = new AsyncLocalStorage<AbortSignal>();
 const shutdown = new AbortController();
 const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
+const GENERATED_INTRO_SECONDS = 1.8;
+const TITLE_SECONDS = 3;
+const RESULT_SECONDS = 5;
+const SWIPE_FRAMES = 12;
+const SWIPE_FPS = 30;
 function operationSignal(ms: number) {
   return AbortSignal.any([shutdown.signal, AbortSignal.timeout(ms), ...(renderSignals.getStore() ? [renderSignals.getStore()!] : [])]);
 }
@@ -39,7 +45,7 @@ type PublishJob = {
   title: string; description: string; privacyStatus: "private"; resumableUrl: string | null; uploadedBytes: bigint;
   youtubeVideoId: string | null; youtubeUrl: string | null;
 };
-type Metadata = { fixture: SixflTvGraphicFixture; label: string; contentAssetIds: string[] };
+type Metadata = { fixture: SixflTvGraphicFixture; label: string; contentAssetIds: string[]; renderVersion?: number };
 
 function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function safeError(error: unknown) {
@@ -163,6 +169,28 @@ async function cardVideo(png: string, target: string, seconds = 3) {
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
+async function swipeVideo(dir: string, target: string) {
+  const frameDir = path.join(dir, "swipe-frames");
+  await mkdir(frameDir, { recursive: true });
+  for (let frame = 0; frame < SWIPE_FRAMES; frame++) {
+    checkAbort();
+    const progress = frame / Math.max(1, SWIPE_FRAMES - 1);
+    const x = Math.round(-900 + progress * 3720);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+      <rect width="1920" height="1080" fill="#020805"/>
+      <polygon points="${x},0 ${x + 760},0 ${x + 260},1080 ${x - 500},1080" fill="#10b981"/>
+      <polygon points="${x + 210},0 ${x + 430},0 ${x - 70},1080 ${x - 290},1080" fill="#ffffff" opacity="0.92"/>
+      <polygon points="${x + 520},0 ${x + 680},0 ${x + 180},1080 ${x + 20},1080" fill="#064e3b" opacity="0.85"/>
+    </svg>`;
+    const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 6 }).toBuffer();
+    await writeFile(path.join(frameDir, `frame-${String(frame).padStart(3, "0")}.png`), png);
+  }
+  await run("ffmpeg", ["-y", "-framerate", String(SWIPE_FPS), "-i", path.join(frameDir, "frame-%03d.png"),
+    "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(SWIPE_FRAMES / SWIPE_FPS), "-shortest",
+    "-vf", "scale=1920:1080,fps=30,format=yuv420p", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+    "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+}
+
 async function normaliseVideo(source: string, target: string) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
   const fadeOutStart = Math.max(0, seconds - 0.18).toFixed(3);
@@ -258,7 +286,8 @@ async function renderJob(job: Job) {
   const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-tv-${job.id}-`));
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
-    const titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png");
+    const introPng = path.join(dir, "intro.png"), titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png");
+    await writeFile(introPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: "SIXFL TV", siteUrl: siteUrl() }));
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(resultPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "FULL_TIME", label: metadata.label, siteUrl: siteUrl() }));
     const segments: string[] = [];
@@ -268,16 +297,25 @@ async function renderJob(job: Job) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
     }
-    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, 3); segments.push(title);
-    for (const input of content) {
+    if (!intro.length) {
+      const generatedIntro = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      await cardVideo(introPng, generatedIntro, GENERATED_INTRO_SECONDS); segments.push(generatedIntro);
+    }
+    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
+    const swipe = content.length > 1 ? path.join(dir, "normalised", "swipe.mp4") : null;
+    if (swipe) await swipeVideo(dir, swipe);
+    for (let index = 0; index < content.length; index++) {
+      if (index > 0 && swipe) segments.push(swipe);
+      const input = content[index];
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
     }
-    const result = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(resultPng, result, 4); segments.push(result);
+    const result = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(resultPng, result, RESULT_SECONDS); segments.push(result);
     for (const input of outro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
     }
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} generatedIntro=${intro.length ? 0 : 1} content=${content.length} swipeTransitions=${Math.max(0, content.length - 1)} resultCard=1 outro=${outro.length} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
@@ -478,7 +516,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
