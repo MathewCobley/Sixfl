@@ -18,6 +18,6 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof StudioError ? error.message : "YouTube connection could not be started.";
     const site = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://www.sixfl.co.uk").replace(/\/+$/, "");
-    return NextResponse.redirect(new URL(`/admin/sixfl-tv?youtubeError=${encodeURIComponent(message)}`, `${site}/`), 302);
+    return NextResponse.redirect(new URL(`/admin/sixfl-tv/settings?youtubeError=${encodeURIComponent(message)}`, `${site}/`), 302);
   }
 }
