@@ -9,7 +9,7 @@ import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notificati
 import FootageUploader from "@/components/admin/sixfl-tv/FootageUploader";
 import { footageState } from "@/lib/sixfl-tv/footage";
 import GoalOfWeekAdminPanel from "@/components/admin/sixfl-tv/GoalOfWeekAdminPanel";
-import { getYoutubeConnectionStatus } from "@/lib/sixfl-tv/youtube";
+import { checkYoutubeConnection, getYoutubeConnectionStatus } from "@/lib/sixfl-tv/youtube";
 import {
   buildSixflTvVideoValue,
   getSixflTvVideos,
@@ -64,6 +64,18 @@ async function getSixflTvFixtures() {
     ORDER BY f."kickoffAt" DESC
     LIMIT 200
   `);
+}
+
+async function checkYoutubeConnectionAction() {
+  "use server";
+  await requireAdmin();
+  try {
+    const checked = await checkYoutubeConnection();
+    const channel = encodeURIComponent(checked.channelTitle || checked.channelId);
+    redirect(`/admin/sixfl-tv?youtubeCheck=ok&youtubeChannel=${channel}`);
+  } catch {
+    redirect("/admin/sixfl-tv?youtubeError=The%20saved%20YouTube%20connection%20could%20not%20be%20verified.%20Reconnect%20the%20channel%20and%20try%20again.");
+  }
 }
 
 async function saveSixflTvFixtureAction(formData: FormData) {
@@ -121,7 +133,7 @@ async function saveSixflTvFixtureAction(formData: FormData) {
 export default async function AdminSixflTvPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string; error?: string; youtube?: string; youtubeError?: string; goalSaved?: string; goalError?: string }>;
+  searchParams?: Promise<{ saved?: string; error?: string; youtube?: string; youtubeError?: string; youtubeCheck?: string; youtubeChannel?: string; goalSaved?: string; goalError?: string }>;
 }) {
   await requireAdmin();
 
@@ -187,9 +199,18 @@ export default async function AdminSixflTvPage({
             </p>
           </div>
           {youtube.configured ? (
-            <Link href="/api/admin/sixfl-tv/youtube/start" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">
-              {youtube.connected ? "Reconnect YouTube" : "Connect YouTube"}
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              {youtube.connected ? (
+                <form action={checkYoutubeConnectionAction}>
+                  <button type="submit" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08]">
+                    Check connection
+                  </button>
+                </form>
+              ) : null}
+              <Link href="/api/admin/sixfl-tv/youtube/start" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/15">
+                {youtube.connected ? "Reconnect YouTube" : "Connect YouTube"}
+              </Link>
+            </div>
           ) : null}
         </div>
       </section>
@@ -208,6 +229,12 @@ export default async function AdminSixflTvPage({
       {sp.youtube === "connected" ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
           SIXFL YouTube connected successfully.
+        </div>
+      ) : null}
+
+      {sp.youtubeCheck === "ok" ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+          YouTube connection verified{sp.youtubeChannel ? ` for ${sp.youtubeChannel}` : ""}. No video was uploaded.
         </div>
       ) : null}
 
