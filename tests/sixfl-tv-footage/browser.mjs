@@ -21,6 +21,14 @@ const state=(fixtureId='match-a')=>({assets:assets.filter(a=>a.state!=='DELETED'
 const server=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://127.0.0.1');
   const send=(value,status=200)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));};
+  if(url.pathname.startsWith('/api/admin/sixfl-tv/studio/')){
+    const fixtureId=url.pathname.split('/').at(-1);
+    assert.ok(['match-a','match-b'].includes(fixtureId));
+    const chunks=[];for await(const c of req)chunks.push(c);const data=JSON.parse(Buffer.concat(chunks));
+    calls.push({ ...data, fixtureId, endpoint:'studio' });
+    if(req.method==='POST'&&data.action==='render')return send({renders:[{state:'QUEUED'}]},202);
+    return send({error:'Unexpected studio action'},400);
+  }
   if(url.pathname.startsWith('/api/')){
     const fixtureId=url.pathname.split('/').at(-1);
     assert.ok(['match-a','match-b'].includes(fixtureId));
@@ -76,10 +84,11 @@ try{
         await page.getByText('Selected: 3 files',{exact:false}).waitFor();
         assert.equal(calls.length,0,'Choosing clips AND full match must preserve both without starting storage traffic');
         await page.getByRole('button',{name:'Upload selected files',exact:true}).click();
-        await page.getByRole('status').filter({hasText:'Footage saved privately'}).waitFor();
+        await page.getByRole('status').filter({hasText:'Private SIXFL TV previews were queued automatically'}).waitFor();
         assert.equal(assets.filter(a=>a.kind==='CLIP'&&a.state==='READY').length,2);
         assert.equal(assets.filter(a=>a.kind==='FULL_MATCH'&&a.state==='READY').length,1);
         assert.equal(calls.filter(c=>c.action==='begin').length,3);
+        assert.equal(calls.filter(c=>c.action==='render'&&c.fixtureId==='match-a').length,1,'The completed three-file batch queues one private render');
         await page.getByRole('button',{name:'Move goal-b.mp4 up',exact:true}).click();
         await page.getByRole('status').filter({hasText:'Clip order saved'}).waitFor();
         assert.equal(assets.filter(a=>a.kind==='CLIP')[0].filename,'goal-b.mp4');
@@ -92,7 +101,7 @@ try{
         await page.reload();
         await page.getByLabel('Resume resume.mp4',{exact:true}).setInputFiles(resume);
         await page.getByRole('button',{name:'Upload selected files',exact:true}).click();
-        await page.getByRole('status').filter({hasText:'Footage saved privately'}).waitFor();
+        await page.getByRole('status').filter({hasText:'Private SIXFL TV previews were queued automatically'}).waitFor();
         const resumed=assets.find(a=>a.filename==='resume.mp4');assert.equal(resumed.state,'READY');
         assert.equal(calls.filter(c=>c.method==='PUT'&&c.id===resumed.id&&c.partNumber===0).length,1,'Saved first part is verified locally, not uploaded again');
         assert.equal(calls.filter(c=>c.method==='PUT'&&c.id===resumed.id&&c.partNumber===1).length,2);
@@ -117,6 +126,7 @@ try{
         await page.getByRole('button',{name:/Uploads.*complete/}).waitFor();
         const bg=assets.find(a=>a.filename==='background.mp4'),other=assets.find(a=>a.filename==='another-match.mp4');
         assert.equal(bg.state,'READY');assert.equal(bg.fixtureId,'match-a');assert.equal(other.state,'READY');assert.equal(other.fixtureId,'match-b');
+        assert.ok(calls.some(c=>c.action==='render'&&c.fixtureId==='match-a'));assert.ok(calls.some(c=>c.action==='render'&&c.fixtureId==='match-b'));
         assert.deepEqual(calls.filter(c=>c.method==='PUT'&&c.id===bg.id).map(c=>c.partNumber),[0,1]);
         await page.getByRole('button',{name:'Match A',exact:true}).click();
         await page.getByRole('button',{name:'Move background.mp4 up',exact:true}).waitFor();
