@@ -51,8 +51,9 @@ function assertCentralGoalOfWeek() {
 assertCentralGoalOfWeek();
 
 patch(
-  "src/app/(admin)/admin/sixfl-tv/page.tsx",
+  "src/app/(admin)/admin/sixfl-tv/layout.tsx",
   (source) => {
+    if (source.includes('href="/admin/sixfl-tv/goal-of-week"')) return source;
     if (
       source.includes('href="/admin/sixfl-tv/goal-of-month"') &&
       source.includes('href="/admin/sixfl-tv/goal-of-week?legacy=1"')
