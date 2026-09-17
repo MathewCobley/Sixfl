@@ -90,3 +90,11 @@ test('invalid batches do not partially enqueue or start network requests',()=>{
   assert.throws(()=>q.enqueue('match-a','A v B',[{file:file(),kind:'CLIP'},{file:file('bad.txt'),kind:'CLIP'}]));
   assert.equal(q.getSnapshot().tasks.length,0);assert.equal(s.calls.length,0);
 });
+
+test('shared branding uses the global upload endpoint without inventing a fixture',async()=>{
+  const s=storage(),q=new FootageUploadQueue(s.transport);
+  assert.equal(q.enqueue(null,'Shared SIXFL TV branding',[{file:file('intro.mp4'),kind:'INTRO'}]),1);
+  await waitFor(()=>q.getSnapshot().tasks[0].status==='COMPLETE');
+  assert.equal(q.getSnapshot().tasks[0].fixtureId,null);
+  assert.equal(s.calls.find(c=>c.action==='begin').fixtureId,'shared');
+});
