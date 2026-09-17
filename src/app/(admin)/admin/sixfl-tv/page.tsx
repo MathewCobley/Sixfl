@@ -320,6 +320,12 @@ export default async function AdminSixflTvPage({
                       </p>
 
                       <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/admin/sixfl-tv/footage/${fixture.id}`}
+                          className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Upload / manage footage
+                        </Link>
                         <button
                           type="submit"
                           name="action"
