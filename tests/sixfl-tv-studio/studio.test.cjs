@@ -62,14 +62,14 @@ test('studio queues saved sources in editing order and requires confirmed result
     await db.$executeRawUnsafe('CREATE TABLE "Fixture" ("id" TEXT PRIMARY KEY)');for(const id of['match-a','no-result','disputed'])await db.$executeRaw`INSERT INTO "Fixture" ("id") VALUES (${id})`;
     await applySql(db,'prisma/migrations/20260917170000_sixfl_tv_footage_uploads/migration.sql');await applySql(db,'prisma/migrations/20260917213000_sixfl_tv_studio/migration.sql');
     const add=async(id,fixtureId,kind,position)=>db.$executeRaw`INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","sizeBytes","lastModified","partCount","position","createdByActor","state","completedAt") VALUES (${id},${fixtureId},${kind},${id+'.mp4'},24,1,1,${position},'admin','READY',NOW())`;
-    await add('intro',null,'INTRO',0);await add('clip-a','match-a','CLIP',0);await add('clip-b','match-a','CLIP',1);await add('full','match-a','FULL_MATCH',0);await add('outro',null,'OUTRO',0);
+    await add('intro',null,'INTRO',0);await add('clip-a','match-a','CLIP',0);await add('clip-b','match-a','CLIP',1);await add('ready-highlights','match-a','HIGHLIGHTS',0);await add('full','match-a','FULL_MATCH',0);await add('outro',null,'OUTRO',0);
     await assert.rejects(studio.requestRenders('no-result','admin'),/final result/);await assert.rejects(studio.requestRenders('disputed','admin'),/disputed/);
     const first=await studio.requestRenders('match-a','admin');assert.equal(first.renders.length,2);
     const second=await studio.requestRenders('match-a','admin');assert.deepEqual(second.renders.map(x=>x.id).sort(),first.renders.map(x=>x.id).sort());
     const jobs=await db.$queryRaw`SELECT "id","kind","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind"`;assert.equal(jobs.length,2);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===2),'Renderer version must invalidate old finished previews after editing changes');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===3),'Renderer version must invalidate old finished previews after editing changes');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
-    assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro']);assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
+    assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
     const saved=await studio.saveThumbnail('match-a','HIGHLIGHTS','admin',{headline:'NORTHALLERTON HIGHLIGHTS',strapline:'Week 4',showScore:true});assert.equal(saved.kind,'HIGHLIGHTS');assert.ok(saved.sizeBytes>1000);
     const thumbResponse=await studio.thumbnailResponse(new Request('https://sixfl.co.uk/test'),'match-a','HIGHLIGHTS');assert.equal(thumbResponse.status,200);assert.match(thumbResponse.headers.get('content-type'),/png/);
