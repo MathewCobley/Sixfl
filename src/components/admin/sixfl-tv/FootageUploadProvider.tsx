@@ -37,7 +37,7 @@ function UploadProgress() {
     {expanded ? <div id="sixfl-upload-queue" className="mt-3 max-h-[50vh] space-y-3 overflow-y-auto" aria-live="polite">
       <p className="text-xs leading-5 text-white/65">You can switch between SIXFL admin pages. Keep this browser tab open and your computer awake. Refreshing, signing out or closing the tab interrupts transfer; saved parts can be resumed.</p>
       {tasks.map(task => <div key={task.id} className="rounded-xl border border-white/10 p-3">
-        <Link href={`/admin/sixfl-tv/footage/${encodeURIComponent(task.fixtureId)}`} className="text-xs font-semibold text-emerald-300 underline underline-offset-4">{task.fixtureLabel}</Link>
+        <Link href={task.fixtureId === null ? "/admin/sixfl-tv" : `/admin/sixfl-tv/footage/${encodeURIComponent(task.fixtureId)}`} className="text-xs font-semibold text-emerald-300 underline underline-offset-4">{task.fixtureLabel}</Link>
         <p className="mt-1 break-words text-sm">{task.filename}</p>
         <p className="mt-1 text-xs text-white/65">{task.status === "COMPLETE" ? "Uploaded — private source" : task.status === "UPLOADING" ? `${Math.round(task.uploadedBytes / task.sizeBytes * 100)}% uploaded` : task.status.toLowerCase()}</p>
         {task.error ? <p className="mt-2 break-words text-xs text-red-200">{task.error}</p> : null}
