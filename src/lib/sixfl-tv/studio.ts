@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 7;
+const SIXFL_TV_RENDER_VERSION = 8;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -113,6 +113,17 @@ export async function studioFixture(fixtureId: string) {
     selections: { select: { selectionStatus: true, isCaptain: true, isGoalkeeper: true, createdAt: true,
       teamMember: { select: { teamId: true, user: { select: { name: true } } } },
     } },
+    playerMatchFees: {
+      where: { status: { not: "CANCELLED" } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        teamId: true,
+        status: true,
+        createdAt: true,
+        teamMember: { select: { user: { select: { name: true } } } },
+        prospect: { select: { firstName: true, lastName: true } },
+      },
+    },
     result: { select: { id: true, homeScore: true, awayScore: true, isDisputed: true,
       overturn: { select: { id: true, rulesBasis: true } },
       teamMetadata: { select: { teamId: true, scorers: true, goalsRecorded: true } },
@@ -156,14 +167,33 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
       scorers.push(`${teamName}: ${names.join(", ")}`);
     }
   }
-  const lineup = (teamId: string) => fixture.selections
-    .filter(selection => selection.teamMember.teamId === teamId && selection.selectionStatus !== "NOT_SELECTED" && Boolean(selection.teamMember.user.name?.trim()))
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-    .map(selection => {
-      const name = safeText(selection.teamMember.user.name, 60);
-      const suffix = [selection.isCaptain ? "C" : "", selection.isGoalkeeper ? "GK" : ""].filter(Boolean);
-      return suffix.length ? `${name} (${suffix.join(", ")})` : name;
-    });
+  const lineup = (teamId: string) => {
+    const selected = fixture.selections
+      .filter(selection => selection.teamMember.teamId === teamId && selection.selectionStatus === "SELECTED" && Boolean(selection.teamMember.user.name?.trim()))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(selection => {
+        const name = safeText(selection.teamMember.user.name, 60);
+        const suffix = [selection.isCaptain ? "C" : "", selection.isGoalkeeper ? "GK" : ""].filter(Boolean);
+        return suffix.length ? `${name} (${suffix.join(", ")})` : name;
+      });
+    if (selected.length) return selected;
+
+    // Older fixtures may pre-date saved FixtureSelection rows. Active player match-fee
+    // records are a safer fallback than the whole registered squad because fees are
+    // created when a player is selected and cancelled when that player is removed.
+    const seen = new Set<string>();
+    const fallback: string[] = [];
+    for (const fee of fixture.playerMatchFees) {
+      if (fee.teamId !== teamId) continue;
+      const memberName = fee.teamMember?.user.name?.trim() || "";
+      const prospectName = [fee.prospect?.firstName, fee.prospect?.lastName].filter(Boolean).join(" ").trim();
+      const name = safeText(memberName || prospectName, 60);
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      fallback.push(name);
+    }
+    return fallback;
+  };
   return {
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
