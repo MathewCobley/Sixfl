@@ -175,7 +175,7 @@ test('studio queues saved sources in editing order and requires confirmed result
     const publishRow=(await db.$queryRaw`SELECT "title","description","privacyStatus" FROM "SixflTvYoutubePublish" WHERE "id"=${queued.id}`)[0];
     assert.equal(publishRow.privacyStatus,'public');
     assert.match(publishRow.title,/Town Hall 6s 4–2 Ballerz FC/);assert.match(publishRow.title,/Match Highlights/);assert.match(publishRow.title,/17 Sep 2026/);
-    assert.match(publishRow.description,/League: Northallerton Wednesday · Autumn 2026/);assert.match(publishRow.description,/Match date: Thursday 17 September 2026/);assert.match(publishRow.description,/https:\/\/sixfl\.co\.uk\/goal-of-the-month/);
+    assert.match(publishRow.description,/League: Northallerton Wednesday · Autumn 2026/);assert.match(publishRow.description,/Match date: Thursday, 17 September 2026/);assert.match(publishRow.description,/https:\/\/sixfl\.co\.uk\/goal-of-the-month/);
     await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='FAILED',"error"='synthetic' WHERE "id"=${queued.id}`;
     const retried=await youtube.queueYoutubePublish('match-a','HIGHLIGHTS','admin',{});assert.equal(retried.id,queued.id);assert.equal(retried.resumed,true);
     const stateToken=youtube.createYoutubeState('match-a');assert.equal(youtube.verifyYoutubeState(stateToken),'match-a');assert.throws(()=>youtube.verifyYoutubeState(stateToken+'x'));
