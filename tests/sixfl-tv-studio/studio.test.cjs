@@ -52,11 +52,12 @@ test('fixture graphics generate deterministic YouTube and video-card PNG shapes'
   const fontRegular=fs.readFileSync('public/fonts/Inter-Regular.ttf');
   const fontBold=fs.readFileSync('public/fonts/Inter-Bold.ttf');
   const originalFetch=global.fetch;
+  let fontFetches=0;
   global.fetch=async input=>{
     const url=String(input instanceof Request?input.url:input);
     if(url.endsWith('/Sixfl-tv.png')||url.endsWith('/logos/sixfl-ai-predictor.png'))return new Response(new Uint8Array(brand),{status:200,headers:{'content-type':'image/png'}});
-    if(url.endsWith('/fonts/Inter-Regular.ttf'))return new Response(new Uint8Array(fontRegular),{status:200,headers:{'content-type':'font/ttf'}});
-    if(url.endsWith('/fonts/Inter-Bold.ttf'))return new Response(new Uint8Array(fontBold),{status:200,headers:{'content-type':'font/ttf'}});
+    if(url.endsWith('/fonts/Inter-Regular.ttf')){fontFetches++;return new Response(new Uint8Array(fontRegular),{status:200,headers:{'content-type':'font/ttf'}});}
+    if(url.endsWith('/fonts/Inter-Bold.ttf')){fontFetches++;return new Response(new Uint8Array(fontBold),{status:200,headers:{'content-type':'font/ttf'}});}
     throw new Error('Unexpected graphics fetch '+url);
   };
   try{
@@ -64,6 +65,7 @@ test('fixture graphics generate deterministic YouTube and video-card PNG shapes'
     const fixture={leagueName:'Northallerton Wednesday · Autumn 2026',kickoffLabel:'Thu, 17 Sep 2026',kickoffIso:'2026-09-17T18:30:00.000Z',firstTeam:{name:'Town Hall 6s',logoUrl:null,score:4},secondTeam:{name:'Ballerz FC',logoUrl:null,score:2},scorers:['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']};
     const thumb=await graphics.createSixflTvThumbnail({kind:'HIGHLIGHTS',fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
     const fullThumb=await graphics.createSixflTvThumbnail({kind:'FULL_MATCH',fixture,headline:'FULL MATCH',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
+    assert.equal(fontFetches,0,'Web thumbnail previews must not depend on embedded font fetches that can rasterise as blank text on Vercel');
     const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
     const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk',fixture});
     const scoreBug=await graphics.createSixflTvScoreBug({fixture,siteUrl:'https://sixfl.co.uk'});
