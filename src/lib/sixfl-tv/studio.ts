@@ -15,6 +15,7 @@ type RenderJobRow = {
   id: string; fixtureId: string; kind: SixflTvRenderKind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
   sourceFingerprint: string; createdAt: Date; updatedAt: Date; startedAt: Date | null; completedAt: Date | null;
   error: string | null; outputSizeBytes: bigint | null; partCount: number | null; durationMs: number | null;
+  metadataJson: unknown;
 };
 type ThumbnailRow = {
   fixtureId: string; kind: SixflTvRenderKind; headline: string; strapline: string; showScore: boolean;
@@ -45,9 +46,37 @@ function sha(value: string | Uint8Array) { return createHash("sha256").update(va
 function safeText(value: unknown, max: number) {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
+function renderProgress(row: RenderJobRow) {
+  const metadata =
+    row.metadataJson && typeof row.metadataJson === "object" && !Array.isArray(row.metadataJson)
+      ? row.metadataJson as Record<string, unknown>
+      : {};
+  const savedPercent = Number(metadata.progressPercent);
+  const savedLabel = typeof metadata.progressLabel === "string" ? safeText(metadata.progressLabel, 80) : "";
+
+  if (row.state === "READY") return { progressPercent: 100, progressLabel: "Ready" };
+  if (row.state === "QUEUED") {
+    return {
+      progressPercent: Number.isFinite(savedPercent) ? Math.max(0, Math.min(5, Math.round(savedPercent))) : 0,
+      progressLabel: savedLabel || "Waiting for video worker",
+    };
+  }
+  if (row.state === "PROCESSING") {
+    return {
+      progressPercent: Number.isFinite(savedPercent) ? Math.max(1, Math.min(99, Math.round(savedPercent))) : 5,
+      progressLabel: savedLabel || "Rendering video",
+    };
+  }
+  return {
+    progressPercent: Number.isFinite(savedPercent) ? Math.max(0, Math.min(99, Math.round(savedPercent))) : 0,
+    progressLabel: savedLabel || "Render stopped",
+  };
+}
 function renderDto(row: RenderJobRow) {
+  const progress = renderProgress(row);
   return { id: row.id, kind: row.kind, state: row.state, createdAt: row.createdAt.toISOString(), completedAt: row.completedAt?.toISOString() || null,
-    error: row.error, sizeBytes: row.outputSizeBytes == null ? null : Number(row.outputSizeBytes), durationMs: row.durationMs };
+    error: row.error, sizeBytes: row.outputSizeBytes == null ? null : Number(row.outputSizeBytes), durationMs: row.durationMs,
+    ...progress };
 }
 function thumbnailDto(row: ThumbnailRow) {
   return { kind: row.kind, headline: row.headline, strapline: row.strapline, showScore: row.showScore, sizeBytes: row.sizeBytes,
@@ -271,7 +300,14 @@ export async function requestRenders(fixtureId: string, actor: string) {
   const created: Array<ReturnType<typeof renderDto>> = [];
   for (const spec of specs) {
     const ordered = [...(intro ? [intro] : []), ...spec.content, ...(outro ? [outro] : [])];
-    const metadata = { renderVersion: SIXFL_TV_RENDER_VERSION, fixture: graphic, label: spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH", contentAssetIds: spec.content.map(asset => asset.id) };
+    const metadata = {
+      renderVersion: SIXFL_TV_RENDER_VERSION,
+      fixture: graphic,
+      label: spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH",
+      contentAssetIds: spec.content.map(asset => asset.id),
+      progressPercent: 0,
+      progressLabel: "Waiting for video worker",
+    };
     const fingerprint = sha(JSON.stringify({ kind: spec.kind, assets: ordered.map(asset => asset.id), metadata }));
     const row = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424421)::text`;
