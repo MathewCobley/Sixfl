@@ -5,9 +5,12 @@
 -- selected because these legacy charges have fixtureId NULL, amount 500p and
 -- the Veo Priority title/id signature.
 --
--- Any genuine cash/card/bank payment already received is returned as team credit
--- before the charge is voided. Existing TEAM_CREDIT transactions are excluded so
--- credit can never be duplicated.
+-- Any genuine cash/card/bank payment already received is returned as team credit.
+-- Existing TEAM_CREDIT transactions are excluded so credit can never be duplicated.
+-- The old request-to-charge link is cleared before VOID so the retired Veo database
+-- trigger cannot create a second cancellation credit now or after a later receipt edit.
+
+BEGIN;
 
 WITH legacy_veo_charges AS (
   SELECT
@@ -62,7 +65,47 @@ FROM legacy_veo_charges legacy
 JOIN "Team" team ON team.id = legacy."teamId"
 WHERE legacy."cashPaidPence" > 0
   AND team."teamMode"::text = 'STANDARD'
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  "teamId" = EXCLUDED."teamId",
+  "chargeId" = EXCLUDED."chargeId",
+  "entryType" = EXCLUDED."entryType",
+  "amountPence" = EXCLUDED."amountPence",
+  description = EXCLUDED.description;
+
+-- Break the historical charge link first. The old cancellation-credit trigger
+-- only recognises a Veo charge through VeoFixtureRequest. Once unlinked it can no
+-- longer create or recreate a second credit row for the retired fee.
+UPDATE "VeoFixtureRequest"
+SET
+  "chargeId" = NULL,
+  "agreedPence" = 0,
+  status = CASE
+    WHEN status IN ('REQUESTED', 'ACCEPTED') THEN 'UNAVAILABLE'
+    ELSE status
+  END,
+  revision = revision + 1
+WHERE "chargeId" IN (
+    SELECT id
+    FROM "PaymentCharge"
+    WHERE "fixtureId" IS NULL
+      AND "amountPence" = 500
+      AND title LIKE 'Veo Priority — %'
+      AND (id LIKE 'veo_%' OR id LIKE 'veo_backfill_%')
+  )
+  OR COALESCE("agreedPence", 0) <> 0
+  OR status IN ('REQUESTED', 'ACCEPTED');
+
+-- Replace any earlier cancellation-credit row for the same retired charge with
+-- the single canonical tcred_veo_retire_* entry created above.
+DELETE FROM "TeamCreditLedgerEntry"
+WHERE id IN (
+  SELECT 'tcred_veo_cancel_' || pc.id
+  FROM "PaymentCharge" pc
+  WHERE pc."fixtureId" IS NULL
+    AND pc."amountPence" = 500
+    AND pc.title LIKE 'Veo Priority — %'
+    AND (pc.id LIKE 'veo_%' OR pc.id LIKE 'veo_backfill_%')
+);
 
 UPDATE "PaymentCharge"
 SET
@@ -74,17 +117,6 @@ WHERE "fixtureId" IS NULL
   AND (id LIKE 'veo_%' OR id LIKE 'veo_backfill_%')
   AND status::text <> 'VOID';
 
-UPDATE "VeoFixtureRequest"
-SET
-  "agreedPence" = 0,
-  status = CASE
-    WHEN status::text IN ('REQUESTED', 'ACCEPTED') THEN 'UNAVAILABLE'::"VeoFixtureRequestStatus"
-    ELSE status
-  END,
-  revision = revision + 1
-WHERE COALESCE("agreedPence", 0) <> 0
-   OR status::text IN ('REQUESTED', 'ACCEPTED');
-
 UPDATE "VeoTeamPriority"
 SET enabled = FALSE, "updatedAt" = CURRENT_TIMESTAMP
 WHERE enabled = TRUE;
@@ -92,3 +124,5 @@ WHERE enabled = TRUE;
 UPDATE "VeoPriorityRequest"
 SET status = 'DECLINED', "reviewedAt" = COALESCE("reviewedAt", CURRENT_TIMESTAMP)
 WHERE status = 'PENDING';
+
+COMMIT;
