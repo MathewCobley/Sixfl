@@ -30,8 +30,11 @@ function loader(mocks = {}) {
 }
 let db, sql, awards, calendar;
 const migration = 'prisma/migrations/20260907153000_goal_of_month/migration.sql';
+const clipMigration = 'prisma/migrations/20260918182000_goal_of_month_saved_clips/migration.sql';
+const candidateClipMigration = 'prisma/migrations/20260918182500_goal_of_month_clip_candidates/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
+const clipInput = (userId = 'u1', clipAssetId = 'clip-1', fixtureId = 'fixture') => ({ userId, clipAssetId, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
 test.before(() => {
   const url = process.env.GOAL_MONTH_TEST_DATABASE_URL;
@@ -45,6 +48,14 @@ test.before(() => {
     CREATE TABLE "League" (id TEXT PRIMARY KEY,name TEXT);
     CREATE TABLE "Fixture" (id TEXT PRIMARY KEY,"homeTeamId" TEXT,"awayTeamId" TEXT,"leagueId" TEXT,"publishedAt" TIMESTAMP,"sixflTvRecorded" BOOLEAN,"sixflTvUrl" TEXT,status TEXT,"kickoffAt" TIMESTAMP);
     CREATE TABLE "MatchResult" ("fixtureId" TEXT PRIMARY KEY,"homeScore" INTEGER,"awayScore" INTEGER);
+    CREATE TABLE "SixflTvFootageAsset" (
+      "id" TEXT PRIMARY KEY,
+      "fixtureId" TEXT,
+      "kind" TEXT,
+      "filename" TEXT,
+      "state" TEXT,
+      "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE "GoalOfWeek" (id TEXT PRIMARY KEY,"weekOf" TIMESTAMP);
     CREATE TABLE "GoalOfWeekCandidate" (id TEXT PRIMARY KEY,marker TEXT);
     CREATE TABLE "GoalOfWeekNomination" (id TEXT PRIMARY KEY,marker TEXT);
@@ -54,19 +65,26 @@ test.before(() => {
     INSERT INTO "GoalOfWeekNomination" VALUES ('weekly-nomination','unchanged');
     INSERT INTO "GoalOfWeekVote" VALUES ('weekly-vote','unchanged');`);
   sql(read(migration));
+  sql(read(clipMigration));
+  sql(read(candidateClipMigration));
   sql(`UPDATE "GoalAwardTransition" SET "firstMonth"='2026-09',"weeklyNominationsCloseAt"='2026-09-13T23:00:00',"weeklyVotingClosesAt"='2026-09-15T17:00:00' WHERE id='monthly'`);
   db = new PrismaClient({ datasources: { db: { url } } });
   const load = loader({ '@/lib/prisma': { prisma: db } });
   awards = load('src/lib/goal-of-month/community.ts'); calendar = load('src/lib/goal-of-month/calendar.ts');
 });
 test.beforeEach(() => {
-  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","MatchResult","Fixture","Team","League","User" CASCADE;
+  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","SixflTvFootageAsset","MatchResult","Fixture","Team","League","User" CASCADE;
     INSERT INTO "User" VALUES ('u1'),('u2'),('u3'),('u4');
     INSERT INTO "Team" VALUES ('home','Home FC',NULL),('away','Away FC',NULL);
     INSERT INTO "League" VALUES ('league','Test League');
     INSERT INTO "Fixture" VALUES ('fixture','home','away','league',NOW(),TRUE,'https://youtu.be/dQw4w9WgXcQ','COMPLETED','2026-09-03T19:00:00'),
       ('previous','home','away','league',NOW(),TRUE,'https://youtu.be/dQw4w9WgXcQ','COMPLETED','2026-08-30T19:00:00');
-    INSERT INTO "MatchResult" VALUES ('fixture',6,4),('previous',2,1);`);
+    INSERT INTO "MatchResult" VALUES ('fixture',6,4),('previous',2,1);
+    INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","state","createdAt","clipNumber")
+      VALUES
+        ('clip-1','fixture','CLIP','clip-1.mp4','READY','2026-09-03T20:00:00',1),
+        ('clip-2','fixture','CLIP','clip-2.mp4','READY','2026-09-03T20:00:01',2),
+        ('clip-3','fixture','CLIP','clip-3.mp4','READY','2026-09-03T20:00:02',3);`);
 });
 test.after(async () => { await db?.$disconnect(); });
 
@@ -104,21 +122,47 @@ test('one goal produces one nominee card regardless of repeated and concurrent n
   assert.deepEqual(payload.videoUrls, ['https://youtu.be/dQw4w9WgXcQ']);
   assert.equal(payload.goalNumber, 1); assert.equal(payload.teamName, 'Home FC');
 });
+test('saved SIXFL TV clips become exact nominees with stable clip playback and thumbnails', async () => {
+  await Promise.all([
+    awards.nominateMonthlyGoal(clipInput('u1'), now),
+    awards.nominateMonthlyGoal(clipInput('u2'), now),
+  ]);
+  const goals = await awards.getMonthlyCandidates('2026-09');
+  const clipGoal = goals.find(goal => goal.clipAssetId === 'clip-1');
+  assert.ok(clipGoal);
+  assert.equal(clipGoal.clipNumber, 1);
+  assert.equal(clipGoal.goalNumber, null);
+  assert.equal(clipGoal.nominationCount, 2);
+  const payload = awards.monthlyCandidatePayload(clipGoal);
+  assert.equal(payload.clipNumber, 1);
+  assert.equal(payload.clipAssetId, 'clip-1');
+  assert.equal(payload.clipUrl, `/api/goal-of-month/clips/${clipGoal.id}`);
+  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/clips/${clipGoal.id}/thumbnail`);
+  const fixture = (await awards.getMonthlyFixtures('2026-09'))[0];
+  assert.deepEqual(fixture.clips.map(clip => clip.clipNumber), [1,2,3]);
+});
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
   const results = await Promise.allSettled([1,2,3,4].map(number => awards.nominateMonthlyGoal(input('u1', number), now)));
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 3);
   assert.equal(sql('SELECT COUNT(*) FROM "GoalOfMonthNomination"'), '3');
 });
-test('match date rather than upload date controls eligibility, with recorded completed fixtures only', async () => {
+test('match date controls eligibility and saved clips no longer depend on a YouTube publication', async () => {
   await assert.rejects(awards.nominateMonthlyGoal(input('u1', 1, 'previous'), now), /closed/);
   await assert.rejects(awards.nominateMonthlyGoal(input('u1', 11), now), /goal number/);
-  await assert.rejects(awards.nominateMonthlyGoal({ ...input(), scoringTeamId: 'another' }, now), /scoring team/);
-  for (const assignment of ["status='SCHEDULED'", '"sixflTvRecorded"=FALSE', '"publishedAt"=NULL']) {
+  await assert.rejects(awards.nominateMonthlyGoal({ ...clipInput(), scoringTeamId: 'another' }, now), /scoring team/);
+
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"='' WHERE id='fixture'`);
+  const clipNomination = await awards.nominateMonthlyGoal(clipInput(), now);
+  assert.ok(clipNomination.candidateId);
+
+  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate" CASCADE`);
+  for (const assignment of ["status='SCHEDULED'", '"publishedAt"=NULL']) {
+    sql(`UPDATE "Fixture" SET status='COMPLETED',"publishedAt"=NOW() WHERE id='fixture'`);
     sql(`UPDATE "Fixture" SET ${assignment} WHERE id='fixture'`);
-    await assert.rejects(awards.nominateMonthlyGoal(input(), now), /completed/);
-    sql(`UPDATE "Fixture" SET status='COMPLETED',"sixflTvRecorded"=TRUE,"publishedAt"=NOW() WHERE id='fixture'`);
+    await assert.rejects(awards.nominateMonthlyGoal(clipInput(), now), /completed|published|available/);
   }
-  await assert.rejects(awards.nominateMonthlyGoal(input(), new Date('2026-10-06T12:00:00Z')), /closed/);
+  sql(`UPDATE "Fixture" SET status='COMPLETED',"publishedAt"=NOW() WHERE id='fixture'`);
+  await assert.rejects(awards.nominateMonthlyGoal(clipInput(), new Date('2026-10-06T12:00:00Z')), /closed/);
 });
 test('scoring-team conflicts and removed candidates cannot be duplicated or resurrected', async () => {
   await awards.nominateMonthlyGoal(input(), now);
@@ -157,9 +201,9 @@ test('unsafe video URLs cannot become links or embeds', () => {
 test('nominee cards render footage, goal identity and nomination count without autoplay', () => {
   const React = require('react'); const { renderToStaticMarkup } = require('react-dom/server');
   const Card = loader()('src/components/goal-of-month/GoalNomineeCard.tsx').default;
-  const html = renderToStaticMarkup(React.createElement(Card, { goal: { id: 'goal', fixtureId:'fixture',teamId:'home',monthKey:'2026-09',goalNumber:2,scorerName:'Test scorer',teamName:'Home FC',opponentName:'Away FC',teamLogoUrl:null,leagueName:'Test League',kickoffAt:'2026-09-03T19:00:00Z',nominationCount:3,voteCount:0,videoUrls:['https://youtu.be/dQw4w9WgXcQ'] } }));
-  assert.match(html, /Watch footage/); assert.match(html, /Goal 2/); assert.match(html, /3 nominations/);
-  assert.equal(html.includes('<iframe'), false); assert.equal(html.includes('autoplay'), false);
+  const html = renderToStaticMarkup(React.createElement(Card, { goal: { id: 'goal', fixtureId:'fixture',teamId:'home',monthKey:'2026-09',goalNumber:null,clipAssetId:'clip-2',clipNumber:2,clipUrl:'/api/goal-of-month/clips/goal',thumbnailUrl:'/api/goal-of-month/clips/goal/thumbnail',scorerName:'Test scorer',teamName:'Home FC',opponentName:'Away FC',teamLogoUrl:null,leagueName:'Test League',kickoffAt:'2026-09-03T19:00:00Z',nominationCount:3,voteCount:0,videoUrls:[] } }));
+  assert.match(html, /Clip 2/); assert.match(html, /3 nominations/);
+  assert.match(html, /<video/); assert.match(html, /thumbnail/); assert.equal(html.includes('<iframe'), false); assert.equal(html.includes('autoplay'), false);
 });
 test('native competition and dashboard reuse one clip component and one monthly API', () => {
   const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
