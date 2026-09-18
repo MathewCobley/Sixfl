@@ -10,6 +10,7 @@ import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixfl
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
+import { sixflTvClipPosterKey } from "../src/lib/sixfl-tv/clip-poster";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -42,7 +43,19 @@ async function failJob(job: Job, message: string) {
 }
 
 type Job = { id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; metadataJson: Prisma.JsonValue; leaseToken: string | null };
-type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; partCount: number; sizeBytes: bigint; state: string };
+type Input = {
+  assetId: string;
+  role: "INTRO" | "CONTENT" | "OUTRO";
+  position: number;
+  filename: string;
+  partCount: number;
+  sizeBytes: bigint;
+  state: string;
+  kind: "CLIP" | "HIGHLIGHTS" | "FULL_MATCH" | "INTRO" | "OUTRO";
+  clipNumber: number | null;
+  posterObjectKey: string | null;
+  posterSizeBytes: number | null;
+};
 type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type PublishJob = {
@@ -169,7 +182,8 @@ async function claimJob() {
 
 async function loadInputs(jobId: string) {
   return db.$queryRaw<Input[]>`
-    SELECT i."assetId",i."role",i."position",a."filename",a."partCount",a."sizeBytes",a."state"
+    SELECT i."assetId",i."role",i."position",a."filename",a."partCount",a."sizeBytes",a."state",
+      a."kind",a."clipNumber",a."posterObjectKey",a."posterSizeBytes"
     FROM "SixflTvRenderInput" i JOIN "SixflTvFootageAsset" a ON a."id"=i."assetId"
     WHERE i."jobId"=${jobId} ORDER BY i."position",i."assetId"`;
 }
@@ -245,6 +259,48 @@ async function sourcePosterCandidate(source: string, dir: string, label: string)
     console.warn(`Could not choose a thumbnail frame from ${label}: ${safeError(error)}`);
     return null;
   }
+}
+
+async function ensureClipPoster(input: Input, source: string, dir: string) {
+  if (input.kind !== "CLIP" || !input.clipNumber || input.posterObjectKey) return;
+  try {
+    const seconds = await durationSeconds(source);
+    const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), seconds * 0.5));
+    const target = path.join(dir, `clip-poster-${input.assetId}.jpg`);
+    await run("ffmpeg", [
+      "-y", "-ss", at.toFixed(3), "-i", source, "-frames:v", "1",
+      "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
+      "-q:v", "2", target,
+    ], false, 120000);
+    const bytes = await readFile(target);
+    const objectKey = sixflTvClipPosterKey(input.assetId);
+    await uploadRailwayObject({
+      key: objectKey,
+      body: bytes,
+      contentType: "image/jpeg",
+      signal: operationSignal(30000),
+    });
+    await db.$executeRaw`
+      UPDATE "SixflTvFootageAsset"
+      SET "posterObjectKey"=${objectKey},"posterSizeBytes"=${bytes.length},"updatedAt"=NOW()
+      WHERE "id"=${input.assetId} AND "kind"='CLIP' AND "state"='READY' AND "posterObjectKey" IS NULL
+    `;
+    input.posterObjectKey = objectKey;
+    input.posterSizeBytes = bytes.length;
+  } catch (error) {
+    console.warn(`Could not save Clip ${input.clipNumber} nomination thumbnail frame: ${safeError(error)}`);
+  }
+}
+
+async function clipNumberOverlay(baseOverlay: string, target: string, clipNumber: number) {
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="106" height="30" viewBox="0 0 106 30">
+    <rect width="106" height="30" rx="15" fill="#020805" fill-opacity="0.78" stroke="#2dd4bf" stroke-opacity="0.42"/>
+    <text x="53" y="20" text-anchor="middle" font-family="DejaVu Sans,sans-serif" font-size="14" font-weight="700" fill="#d1fae5">Clip ${clipNumber}</text>
+  </svg>`);
+  await sharp(await readFile(baseOverlay))
+    .composite([{ input: svg, left: 54, top: 190 }])
+    .png({ compressionLevel: 6 })
+    .toFile(target);
 }
 
 async function thumbnailBackgroundExists(fixtureId: string) {
@@ -457,6 +513,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
         12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
+      await ensureClipPoster(input, source, dir);
       if (posterLabel) {
         const candidate = await sourcePosterCandidate(source, dir, posterLabel);
         if (candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
@@ -484,11 +541,16 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       if (index > 0 && swipe) segments.push(swipe);
       const input = content[index];
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      let contentOverlay = footageOverlayPng;
+      if (job.kind === "HIGHLIGHTS" && input.kind === "CLIP" && input.clipNumber) {
+        contentOverlay = path.join(dir, "normalised", `score-bug-clip-${input.clipNumber}.png`);
+        await clipNumberOverlay(footageOverlayPng, contentOverlay, input.clipNumber);
+      }
       await normaliseInput(
         input,
         source,
         normal,
-        footageOverlayPng,
+        contentOverlay,
         job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
         collectPosterFor(index) ? `${job.kind.toLowerCase()}-${index + 1}` : undefined,
       );
@@ -529,7 +591,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} slowSwipeSeconds=${(SWIPE_FRAMES / SWIPE_FPS).toFixed(1)} resultCard=0 goalOfMonthAfterFootage=1 relevantTopHalf=${leagueTopBytes && showTopHalf ? 1 : 0} relevantBottomHalf=${leagueBottomBytes && showBottomHalf ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+match-highlights" : "FT+full-match"} thumbnailFrame=${bestPoster ? bestPoster.source : existingPoster ? "existing" : "fallback"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} slowSwipeSeconds=${(SWIPE_FRAMES / SWIPE_FPS).toFixed(1)} resultCard=0 goalOfMonthAfterFootage=1 relevantTopHalf=${leagueTopBytes && showTopHalf ? 1 : 0} relevantBottomHalf=${leagueBottomBytes && showBottomHalf ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+match-highlights+clip-number" : "FT+full-match"} thumbnailFrame=${bestPoster ? bestPoster.source : existingPoster ? "existing" : "fallback"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
