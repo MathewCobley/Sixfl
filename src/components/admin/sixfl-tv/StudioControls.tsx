@@ -27,7 +27,22 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
   const [saving, setSaving] = useState(false), [error, setError] = useState("");
-  const version = current?.updatedAt ? encodeURIComponent(current.updatedAt) : "new";
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const previewSrc = useMemo(() => {
+    const params = new URLSearchParams({
+      preview: "1",
+      headline,
+      strapline,
+      showScore: showScore ? "true" : "false",
+    });
+    return `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?${params.toString()}`;
+  }, [fixtureId, kind, headline, strapline, showScore]);
+  const [debouncedPreviewSrc, setDebouncedPreviewSrc] = useState(previewSrc);
+  useEffect(() => {
+    setPreviewFailed(false);
+    const timer = window.setTimeout(() => setDebouncedPreviewSrc(previewSrc), 250);
+    return () => window.clearTimeout(timer);
+  }, [previewSrc]);
   async function save() {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -39,7 +54,11 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
   }
   return <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} thumbnail</h3>{current ? <span className="text-xs text-emerald-200">Saved</span> : <span className="text-xs text-white/45">Not saved yet</span>}</div>
-    {current ? <img key={version} src={`/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?v=${version}`} alt={`${kindLabel(kind)} thumbnail preview`} className="mt-4 aspect-video w-full rounded-xl border border-white/10 object-cover" /> : null}
+    <div className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Live preview</span><span className="text-xs text-white/40">Updates as you type</span></div>
+      {previewFailed ? <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-white/10 bg-black/40 px-6 text-center text-sm text-white/50">Thumbnail preview is temporarily unavailable. Your saved thumbnail is unaffected.</div> : <img key={debouncedPreviewSrc} src={debouncedPreviewSrc} alt={`${kindLabel(kind)} live thumbnail preview`} className="aspect-video w-full rounded-xl border border-white/10 bg-black object-cover" onLoad={() => setPreviewFailed(false)} onError={() => setPreviewFailed(true)} />}
+      {current ? <p className="mt-2 text-xs text-white/40">The preview above shows your current fields. Your saved thumbnail stays unchanged until you press Save thumbnail.</p> : <p className="mt-2 text-xs text-white/40">This is a preview only. Nothing is saved or sent to YouTube until you press Save thumbnail and later approve the video.</p>}
+    </div>
     <div className="mt-4 grid gap-3">
       <label className="text-sm text-white/70">Headline<input value={headline} maxLength={80} onChange={e => setHeadline(e.target.value)} className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <label className="text-sm text-white/70">Strapline<input value={strapline} maxLength={120} onChange={e => setStrapline(e.target.value)} placeholder="League or match wording" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
@@ -105,7 +124,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
   const publishByKind = new Map(state.publishes.map(publish => [publish.kind, publish]));
   return <div className="space-y-6">
     <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use the ready-made highlights file when present, otherwise the saved clip order. The full match uses the separate full-match upload. Shared intro/outro, saved badges, result and recorded scorers are added by the renderer.</p></div><button type="button" className={button} disabled={busy || state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING")} onClick={() => void generate()}>{state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING") ? "Rendering…" : "Generate / refresh previews"}</button></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer.</p></div><button type="button" className={button} disabled={busy || state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING")} onClick={() => void generate()}>{state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING") ? "Rendering…" : "Generate / refresh previews"}</button></div>
       {message ? <p role="status" className="mt-4 text-sm text-emerald-100">{message}</p> : null}{error ? <p role="alert" className="mt-4 text-sm text-red-200">{error}</p> : null}
     </section>
     <div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {

@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 5;
+const SIXFL_TV_RENDER_VERSION = 7;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -26,6 +26,17 @@ type PublishRow = {
   error: string | null; createdAt: Date; completedAt: Date | null;
 };
 type Contribution = { name?: unknown; goals?: unknown };
+type PriorFormFixture = {
+  homeTeamId: string;
+  awayTeamId: string;
+  kickoffAt: Date;
+  result: { homeScore: number; awayScore: number } | null;
+};
+type StoredPredictorScoreRow = {
+  predictedHomeScore: number | null;
+  predictedAwayScore: number | null;
+  headline: string | null;
+};
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://sixfl.co.uk").replace(/\/+$/, "");
@@ -61,12 +72,47 @@ function contributionNames(value: unknown) {
   return names;
 }
 
+function recentFormFor(teamId: string, fixtures: PriorFormFixture[]) {
+  return fixtures
+    .filter(fixture => fixture.result && (fixture.homeTeamId === teamId || fixture.awayTeamId === teamId))
+    .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime())
+    .slice(-5)
+    .map(fixture => {
+      const result = fixture.result!;
+      const teamScore = fixture.homeTeamId === teamId ? result.homeScore : result.awayScore;
+      const opponentScore = fixture.homeTeamId === teamId ? result.awayScore : result.homeScore;
+      return teamScore > opponentScore ? "W" as const : teamScore < opponentScore ? "L" as const : "D" as const;
+    });
+}
+async function storedPredictorScore(fixtureId: string) {
+  try {
+    const rows = await prisma.$queryRaw<StoredPredictorScoreRow[]>`
+      SELECT "predictedHomeScore","predictedAwayScore","headline"
+      FROM "FixtureAiPrediction"
+      WHERE "fixtureId"=${fixtureId}
+      LIMIT 1`;
+    const row = rows[0];
+    if (!row || !Number.isInteger(row.predictedHomeScore) || !Number.isInteger(row.predictedAwayScore)) return null;
+    return {
+      firstTeamScore: Number(row.predictedHomeScore),
+      secondTeamScore: Number(row.predictedAwayScore),
+      headline: row.headline ? safeText(row.headline, 80) : null,
+    };
+  } catch {
+    // Predictor history is optional for video generation; never manufacture a score.
+    return null;
+  }
+}
+
 export async function studioFixture(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: {
     id: true, kickoffAt: true, status: true,
-    league: { select: { name: true, season: true } },
+    league: { select: { id: true, name: true, season: true } },
     homeTeam: { select: { id: true, name: true, logoUrl: true } },
     awayTeam: { select: { id: true, name: true, logoUrl: true } },
+    selections: { select: { selectionStatus: true, isCaptain: true, isGoalkeeper: true, createdAt: true,
+      teamMember: { select: { teamId: true, user: { select: { name: true } } } },
+    } },
     result: { select: { id: true, homeScore: true, awayScore: true, isDisputed: true,
       overturn: { select: { id: true, rulesBasis: true } },
       teamMetadata: { select: { teamId: true, scorers: true, goalsRecorded: true } },
@@ -78,6 +124,28 @@ export async function studioFixture(fixtureId: string) {
 
 export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGraphicFixture> {
   const fixture = await studioFixture(fixtureId);
+  const [priorFixtures, predictor] = await Promise.all([
+    prisma.fixture.findMany({
+      where: {
+        leagueId: fixture.league.id,
+        kickoffAt: { lt: fixture.kickoffAt },
+        result: { isNot: null },
+        OR: [
+          { homeTeamId: { in: [fixture.homeTeam.id, fixture.awayTeam.id] } },
+          { awayTeamId: { in: [fixture.homeTeam.id, fixture.awayTeam.id] } },
+        ],
+      },
+      orderBy: { kickoffAt: "desc" },
+      take: 20,
+      select: {
+        homeTeamId: true,
+        awayTeamId: true,
+        kickoffAt: true,
+        result: { select: { homeScore: true, awayScore: true } },
+      },
+    }) as Promise<PriorFormFixture[]>,
+    storedPredictorScore(fixtureId),
+  ]);
   const result = fixture.result;
   const scorers: string[] = [];
   if (result && !result.overturn) {
@@ -88,12 +156,25 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
       scorers.push(`${teamName}: ${names.join(", ")}`);
     }
   }
+  const lineup = (teamId: string) => fixture.selections
+    .filter(selection => selection.teamMember.teamId === teamId && selection.selectionStatus !== "NOT_SELECTED" && Boolean(selection.teamMember.user.name?.trim()))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map(selection => {
+      const name = safeText(selection.teamMember.user.name, 60);
+      const suffix = [selection.isCaptain ? "C" : "", selection.isGoalkeeper ? "GK" : ""].filter(Boolean);
+      return suffix.length ? `${name} (${suffix.join(", ")})` : name;
+    });
   return {
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
     firstTeam: { name: fixture.homeTeam.name, logoUrl: fixture.homeTeam.logoUrl, score: result?.homeScore ?? null },
     secondTeam: { name: fixture.awayTeam.name, logoUrl: fixture.awayTeam.logoUrl, score: result?.awayScore ?? null },
     scorers,
+    firstTeamLineup: lineup(fixture.homeTeam.id),
+    secondTeamLineup: lineup(fixture.awayTeam.id),
+    firstTeamForm: recentFormFor(fixture.homeTeam.id, priorFixtures),
+    secondTeamForm: recentFormFor(fixture.awayTeam.id, priorFixtures),
+    predictor,
     decisionNote: result?.overturn ? "Official competition decision — scorer list suppressed" : null,
   };
 }
@@ -166,6 +247,26 @@ export async function requestRenders(fixtureId: string, actor: string) {
     created.push(renderDto(row));
   }
   return { renders: created, missing: { highlights: !readyHighlights && !clips.length, fullMatch: !fullMatch } };
+}
+
+export async function thumbnailPreviewResponse(fixtureId: string, kind: SixflTvRenderKind, data: Record<string, unknown>) {
+  if (kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown thumbnail type.");
+  const fixture = await studioFixture(fixtureId);
+  if (!fixture.result || fixture.result.isDisputed) throw new StudioError("A confirmed final result is required before previewing the thumbnail.", 409);
+  const headline = safeText(data.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"), 80);
+  const strapline = safeText(data.strapline || fixture.league.name, 120);
+  if (!headline) throw new StudioError("Add a thumbnail headline.");
+  const showScore = data.showScore !== false && data.showScore !== "false" && data.showScore !== "0";
+  const graphic = await studioGraphicFixture(fixtureId);
+  const bytes = await createSixflTvThumbnail({ fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
+  return new Response(new Uint8Array(bytes), { headers: {
+    "Content-Type": "image/png",
+    "Content-Length": String(bytes.length),
+    "Cache-Control": "private, no-store, max-age=0",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Disposition": "inline; filename=\"sixfl-tv-thumbnail-preview.png\"",
+  } });
 }
 
 export async function saveThumbnail(fixtureId: string, kind: SixflTvRenderKind, actor: string, data: Record<string, unknown>) {
