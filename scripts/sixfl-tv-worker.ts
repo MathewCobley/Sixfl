@@ -561,14 +561,31 @@ function decryptRefreshToken(value: string) {
   decipher.setAuthTag(b64(parts[2]));
   return Buffer.concat([decipher.update(b64(parts[3])), decipher.final()]).toString("utf8");
 }
-async function youtubeAccessToken() {
-  const rows = await db.$queryRaw<{ refreshTokenCiphertext: string }[]>`SELECT "refreshTokenCiphertext" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
+type YoutubeAuth = { accessToken: string; scope: string };
+const YOUTUBE_DELETE_SCOPES = new Set([
+  "https://www.googleapis.com/auth/youtube.force-ssl",
+  "https://www.googleapis.com/auth/youtube",
+  "https://www.googleapis.com/auth/youtubepartner",
+]);
+function canDeleteYoutubeVideos(scope: string) {
+  return scope.split(/\s+/).some(value => YOUTUBE_DELETE_SCOPES.has(value));
+}
+async function youtubeAccessToken(): Promise<YoutubeAuth> {
+  const rows = await db.$queryRaw<{ refreshTokenCiphertext: string; scope: string }[]>`SELECT "refreshTokenCiphertext","scope" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
   if (!rows[0]) throw new Error("SIXFL YouTube is not connected.");
   const body = new URLSearchParams({ client_id: required("YOUTUBE_CLIENT_ID"), client_secret: required("YOUTUBE_CLIENT_SECRET"), refresh_token: decryptRefreshToken(rows[0].refreshTokenCiphertext), grant_type: "refresh_token" });
   const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body, cache: "no-store", signal: AbortSignal.timeout(20000) });
   const data = await response.json().catch(() => ({})) as { access_token?: string; error_description?: string; error?: string };
   if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || "Google access token refresh failed.");
-  return data.access_token;
+  return { accessToken: data.access_token, scope: rows[0].scope || "" };
+}
+async function deleteYoutubeVideo(videoId: string, accessToken: string) {
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+  url.searchParams.set("id", videoId);
+  const response = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(30000) });
+  if (response.ok || response.status === 404) return;
+  const detail = await response.json().catch(() => ({})) as { error?: { message?: string } };
+  throw new Error(detail.error?.message || `YouTube replacement cleanup failed (${response.status}).`);
 }
 
 async function claimPublishJob() {
@@ -769,14 +786,44 @@ async function saveYoutubeFixtureLink(job: PublishJob, youtubeUrl: string) {
   });
 }
 
+async function cleanupOlderYoutubeCopies(job: PublishJob, keepVideoId: string, auth: YoutubeAuth) {
+  if (!canDeleteYoutubeVideos(auth.scope)) {
+    console.warn("YouTube replacement cleanup is waiting for the channel to be reconnected with video-management permission.");
+    return 0;
+  }
+  const older = await db.$queryRaw<Array<{ id: string; youtubeVideoId: string }>>(Prisma.sql`
+    SELECT "id","youtubeVideoId"
+    FROM "SixflTvYoutubePublish"
+    WHERE "fixtureId"=${job.fixtureId}
+      AND "kind"=${job.kind}
+      AND "id"<>${job.id}
+      AND "state"='READY'
+      AND "youtubeVideoId" IS NOT NULL
+      AND "youtubeVideoId"<>${keepVideoId}
+    ORDER BY "completedAt" DESC NULLS LAST, "createdAt" DESC
+  `);
+  let deleted = 0;
+  for (const old of older) {
+    await deleteYoutubeVideo(old.youtubeVideoId, auth.accessToken);
+    await db.$executeRaw`
+      UPDATE "SixflTvYoutubePublish"
+      SET "state"='FAILED',"error"='Superseded by a newer SIXFL TV publish and removed from YouTube.',"busyUntil"=NULL,"updatedAt"=NOW()
+      WHERE "id"=${old.id} AND "state"='READY'`;
+    deleted += 1;
+    console.log(`Deleted superseded YouTube video ${old.youtubeVideoId} for ${job.kind} fixture ${job.fixtureId}.`);
+  }
+  return deleted;
+}
+
 async function processPublish(job: PublishJob) {
-  const accessToken = await youtubeAccessToken();
-  const videoId = await uploadRenderToYoutube(job, accessToken);
+  const auth = await youtubeAccessToken();
+  const videoId = await uploadRenderToYoutube(job, auth.accessToken);
   const youtubeUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
   await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "youtubeVideoId"=${videoId},"youtubeUrl"=${youtubeUrl},"busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id}`;
-  await setYoutubeThumbnail(job, videoId, accessToken);
+  await setYoutubeThumbnail(job, videoId, auth.accessToken);
   await saveYoutubeFixtureLink(job, youtubeUrl);
   await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='READY',"youtubeVideoId"=${videoId},"youtubeUrl"=${youtubeUrl},"uploadedBytes"=(SELECT "outputSizeBytes" FROM "SixflTvRenderJob" WHERE "id"=${job.renderJobId}),"completedAt"=NOW(),"busyUntil"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id}`;
+  await cleanupOlderYoutubeCopies(job, videoId, auth).catch(error => console.error("YouTube replacement cleanup failed", safeError(error)));
 }
 
 type AutoPublishCandidate = {
