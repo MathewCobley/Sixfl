@@ -6,9 +6,8 @@ const time=(d:Date)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',h
 export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:string;date:string}) {
  let preview:Awaited<ReturnType<typeof previewFixtureVeoNight>>|null=null,error='';
  try{preview=await previewFixtureVeoNight(leagueId,date);}catch(e){error=e instanceof Error?e.message:'Unable to load camera schedule.';}
- const bookings=await prisma.$queryRaw<{fixtureId:string;leagueId:string;homeName:string;awayName:string;kickoffAt:Date;pitch:string;state:string;status:string;url:string|null;paying:number}[]>`
- SELECT b."fixtureId",b."leagueId",h.name AS "homeName",a.name AS "awayName",b."kickoffAt",b.pitch,b.state,f.status::text,f."sixflTvUrl" AS url,
- (SELECT COUNT(*)::integer FROM "VeoFixtureRequest" r WHERE r."fixtureId"=b."fixtureId" AND r."agreedPence"=500) AS paying
+ const bookings=await prisma.$queryRaw<{fixtureId:string;leagueId:string;homeName:string;awayName:string;kickoffAt:Date;pitch:string;state:string;status:string;url:string|null}[]>`
+ SELECT b."fixtureId",b."leagueId",h.name AS "homeName",a.name AS "awayName",b."kickoffAt",b.pitch,b.state,f.status::text,f."sixflTvUrl" AS url
  FROM "VeoMatchBooking" b JOIN "Fixture" f ON f.id=b."fixtureId" JOIN "Team" h ON h.id=b."homeTeamId" JOIN "Team" a ON a.id=b."awayTeamId"
  WHERE (b."leagueId"=${leagueId} OR b."cameraKey"=${preview?.cameraKey??''})
  AND to_char(b."kickoffAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London','YYYY-MM-DD')=${date} ORDER BY b."kickoffAt",b."fixtureId"`;
@@ -33,8 +32,8 @@ export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:str
    })}</div>
    <FinaliseChoicesForm leagueId={leagueId} date={date} fingerprint={preview.fingerprint} count={preview.choices.length}/>
   </>}
-  <div className="space-y-3"><h3 className="font-semibold">Accepted bookings and recordings</h3>{bookings.map(b=><div key={b.fixtureId} className="space-y-3 rounded-xl border border-white/15 p-4"><h4 className="font-semibold">{time(b.kickoffAt)} · {b.homeName} vs {b.awayName}</h4><p className="text-sm text-white/70">Pitch {b.pitch} · {b.state==='PLANNED'?'Filming confirmed — no new Priority fee':b.state==='READY'?'Recording ready':'Closed'}{b.paying>0?` · ${b.paying} historic £5 agreement${b.paying===1?'':'s'}`:''}</p>{b.url&&<a href={b.url} target="_blank" rel="noopener noreferrer" className="text-sm text-fuchsia-100 underline">Watch recording</a>}{['PLANNED','READY'].includes(b.state)&&<RecordingOutcomeForm leagueId={b.leagueId} fixtureId={b.fixtureId} ready={b.state==='READY'} completed={b.status==='COMPLETED'}/>}</div>)}{!bookings.length&&<p className="text-sm text-white/60">No accepted filming bookings on this date.</p>}</div>
+  <div className="space-y-3"><h3 className="font-semibold">Accepted bookings and recordings</h3>{bookings.map(b=><div key={b.fixtureId} className="space-y-3 rounded-xl border border-white/15 p-4"><h4 className="font-semibold">{time(b.kickoffAt)} · {b.homeName} vs {b.awayName}</h4><p className="text-sm text-white/70">Pitch {b.pitch} · {b.state==='PLANNED'?'Filming confirmed':b.state==='READY'?'Recording ready':'Closed'}</p>{b.url&&<a href={b.url} target="_blank" rel="noopener noreferrer" className="text-sm text-fuchsia-100 underline">Watch recording</a>}{['PLANNED','READY'].includes(b.state)&&<RecordingOutcomeForm leagueId={b.leagueId} fixtureId={b.fixtureId} ready={b.state==='READY'} completed={b.status==='COMPLETED'}/>}</div>)}{!bookings.length&&<p className="text-sm text-white/60">No accepted filming bookings on this date.</p>}</div>
   <VeoChoiceHistory leagueId={leagueId}/>
-  <p className="text-xs leading-5 text-white/55">New SIXFL TV Priority bookings are free. Older accepted £5 agreements remain visible for audit and keep their existing cancellation/refund protection, but no new filming charge is created.</p>
+  <p className="text-xs leading-5 text-white/55">SIXFL TV Priority is free. Filming decisions here never create or alter a team payment charge.</p>
  </section>;
 }
