@@ -183,8 +183,18 @@ export class FootageUploadQueue {
       if (saved.has(part)) {
         if (await this.transport.digest(bytes) !== saved.get(part)) throw new Error("This file differs from the saved upload. Remove the incomplete upload before using a different version.");
       } else {
+        let lastUiUpdate = 0;
         await this.transport.put(`${endpoint}?assetId=${encodeURIComponent(asset.id)}&part=${part}`, bytes, signal, loaded => {
-          entry.view.uploadedBytes = Math.min(file.size, base + loaded); this.emit();
+          entry.view.uploadedBytes = Math.min(file.size, base + loaded);
+          // XHR can fire upload progress events many times per second. Re-rendering the
+          // full footage page for every event makes large match uploads feel frozen and
+          // can make navigation clicks hard to register. Keep the bytes accurate but
+          // repaint at a human-visible cadence instead.
+          const now = Date.now();
+          if (loaded >= bytes.byteLength || now - lastUiUpdate >= 250) {
+            lastUiUpdate = now;
+            this.emit();
+          }
         });
       }
       entry.view.uploadedBytes = Math.min(base + bytes.byteLength, file.size); this.emit();

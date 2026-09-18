@@ -31,6 +31,7 @@ function UploadProgress() {
       <button type="button" aria-expanded={expanded} aria-controls="sixfl-upload-queue" onClick={() => setExpanded(value => !value)} className="min-w-0 flex-1 text-left text-sm font-semibold">
         Uploads · {active ? `${percent}% · ${pending} remaining` : pending ? `${pending} paused / waiting` : `${tasks.length} complete`} {expanded ? "▾" : "▸"}
       </button>
+      {pending ? <Link href="/admin/sixfl-tv/fixtures" className={button}>Another match</Link> : null}
       {!pending ? <button type="button" className={button} onClick={() => tasks.forEach(task => queue.forget(task.id))}>Dismiss</button> : null}
     </div>
     {active ? <><p className="mt-1 truncate text-xs text-white/70">{active.fixtureLabel} · {active.filename}</p><progress aria-label="Background upload progress" max={100} value={percent ?? 0} className="mt-2 h-2 w-full accent-emerald-400" /></> : null}
