@@ -168,6 +168,26 @@ export async function requestRenders(fixtureId: string, actor: string) {
   return { renders: created, missing: { highlights: !readyHighlights && !clips.length, fullMatch: !fullMatch } };
 }
 
+export async function thumbnailPreviewResponse(fixtureId: string, kind: SixflTvRenderKind, data: Record<string, unknown>) {
+  if (kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown thumbnail type.");
+  const fixture = await studioFixture(fixtureId);
+  if (!fixture.result || fixture.result.isDisputed) throw new StudioError("A confirmed final result is required before previewing the thumbnail.", 409);
+  const headline = safeText(data.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"), 80);
+  const strapline = safeText(data.strapline || fixture.league.name, 120);
+  if (!headline) throw new StudioError("Add a thumbnail headline.");
+  const showScore = data.showScore !== false && data.showScore !== "false" && data.showScore !== "0";
+  const graphic = await studioGraphicFixture(fixtureId);
+  const bytes = await createSixflTvThumbnail({ fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
+  return new Response(bytes, { headers: {
+    "Content-Type": "image/png",
+    "Content-Length": String(bytes.length),
+    "Cache-Control": "private, no-store, max-age=0",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Disposition": "inline; filename=\"sixfl-tv-thumbnail-preview.png\"",
+  } });
+}
+
 export async function saveThumbnail(fixtureId: string, kind: SixflTvRenderKind, actor: string, data: Record<string, unknown>) {
   if (kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown thumbnail type.");
   const fixture = await studioFixture(fixtureId);
