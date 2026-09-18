@@ -122,6 +122,8 @@ export default function NewsArticle({
         <div className="mt-2">
           {a.matches.map((m, index) => {
             const highlighted = Boolean(highlightTeamId && [m.teamAId, m.teamBId].includes(highlightTeamId));
+            const teamAScorers = m.scorers.filter((scorer) => scorer.team === m.teamA);
+            const teamBScorers = m.scorers.filter((scorer) => scorer.team === m.teamB);
             return (
               <section key={m.fixtureId} id={matchAnchor(m.fixtureId)} className="scroll-mt-6 border-b border-[#07130f]/10 py-9 sm:py-11">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -129,16 +131,38 @@ export default function NewsArticle({
                   {highlighted ? <p className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-800">Featuring your team</p> : null}
                 </div>
 
-                <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:gap-6">
-                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-6">
+                  <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                     <NewsImage src={m.badgeA} alt={`${m.teamA} badge`} fallback={m.teamA.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
-                    <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
+                    <div className="min-w-0 text-left">
+                      <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
+                      {teamAScorers.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                          {teamAScorers.map((scorer, scorerIndex) => (
+                            <li key={`${m.fixtureId}-a-${scorer.name}-${scorerIndex}`}>
+                              {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
                   </div>
-                  <p aria-label={`${m.scoreA} to ${m.scoreB}`} className="whitespace-nowrap rounded-xl bg-[#07130f] px-3 py-2 text-2xl font-black tabular-nums text-white sm:px-5 sm:py-3 sm:text-3xl">
+                  <p aria-label={`${m.scoreA} to ${m.scoreB}`} className="self-start whitespace-nowrap rounded-xl bg-[#07130f] px-3 py-2 text-2xl font-black tabular-nums text-white sm:px-5 sm:py-3 sm:text-3xl">
                     {m.scoreA}<span className="px-1.5 text-white/35">–</span>{m.scoreB}
                   </p>
-                  <div className="flex min-w-0 items-center justify-end gap-3 text-right sm:gap-4">
-                    <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
+                  <div className="flex min-w-0 items-start justify-end gap-3 sm:gap-4">
+                    <div className="min-w-0 text-left">
+                      <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
+                      {teamBScorers.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                          {teamBScorers.map((scorer, scorerIndex) => (
+                            <li key={`${m.fixtureId}-b-${scorer.name}-${scorerIndex}`}>
+                              {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
                     <NewsImage src={m.badgeB} alt={`${m.teamB} badge`} fallback={m.teamB.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
                   </div>
                 </div>
@@ -146,10 +170,9 @@ export default function NewsArticle({
                 <h2 className="sr-only">{m.teamA} {m.scoreA}–{m.scoreB} {m.teamB}</h2>
                 <p className="mt-6 max-w-4xl whitespace-pre-line break-words text-base leading-8 text-[#25342d] sm:text-lg sm:leading-9">{m.paragraph}</p>
 
-                {m.scorers.length || m.playersOfMatch.length ? (
-                  <div className="mt-6 grid gap-3 rounded-2xl bg-[#e9ede8] p-4 text-sm leading-6 text-[#304139] sm:grid-cols-2 sm:p-5">
-                    {m.scorers.length ? <p><strong className="text-[#07130f]">Recorded scorers: </strong>{m.scorers.map((s) => `${s.name} (${s.team}, ${s.goals})`).join('; ')}</p> : <span />}
-                    {m.playersOfMatch.length ? <p><strong className="text-[#07130f]">Player of the Match: </strong>{m.playersOfMatch.map((p) => `${p.name} (${p.team})`).join('; ')}</p> : null}
+                {m.playersOfMatch.length ? (
+                  <div className="mt-6 rounded-2xl bg-[#e9ede8] p-4 text-sm leading-6 text-[#304139] sm:p-5">
+                    <p><strong className="text-[#07130f]">Player of the Match: </strong>{m.playersOfMatch.map((p) => `${p.name} (${p.team})`).join('; ')}</p>
                   </div>
                 ) : null}
               </section>
