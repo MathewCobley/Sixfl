@@ -4,6 +4,7 @@ import { runConfiguredPlayerPoolResponseCheck, logConfiguredPlayerPoolResponseDe
 // ========================================
 
 import { runPlayerRepaymentReminderJob } from "@/lib/payments/player-repayment-reminders";
+import { capturePriorityWeeklySnapshot } from "@/lib/sixfl-tv/priority-history";
 import { runAutomaticMatchnightReports } from "@/lib/matchweek-reports/auto-publish";
 import { NextRequest, NextResponse } from "next/server";
 import { runManagedSquadRegistrationReminderJob } from "@/lib/managed-squad/registration-reminders";
@@ -216,6 +217,12 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(200),
   );
 
+  const priorityWeeklySnapshot = await runCronStep(
+    "sixfl-tv-priority-weekly-snapshot",
+    failures,
+    capturePriorityWeeklySnapshot,
+  );
+
   const matchnightReports = await runCronStep(
     "automatic-matchnight-reports",
     failures,
@@ -269,6 +276,7 @@ export async function GET(request: NextRequest) {
     referralEmails,
     referralPayoutEmails,
     generatedQueue,
+    priorityWeeklySnapshot,
     matchnightReports,
     teamPaymentOrderCheckouts,
     matchdayAutoPay,
