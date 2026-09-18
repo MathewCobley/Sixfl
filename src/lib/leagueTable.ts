@@ -24,7 +24,7 @@ export type LeagueTableRow = {
   goalDifference: number;
   points: number;
   recentForm: LeagueFormResult[];
-  movement: LeaguePositionMovement;
+  movement?: LeaguePositionMovement;
 };
 
 type LeagueTableOptions = {
