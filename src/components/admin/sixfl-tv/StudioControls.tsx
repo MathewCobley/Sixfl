@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Kind = "HIGHLIGHTS" | "FULL_MATCH";
-type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null };
+type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string };
 type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: boolean; sizeBytes: number; updatedAt: string };
 type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
 type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null } };
@@ -126,7 +126,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       ...current,
       renders: current.renders.map(render =>
         render.state === "READY"
-          ? { ...render, state: "QUEUED" as const, completedAt: null, error: null, sizeBytes: null, durationMs: null }
+          ? { ...render, state: "QUEUED" as const, completedAt: null, error: null, sizeBytes: null, durationMs: null, progressPercent: 0, progressLabel: "Queuing fresh render" }
           : render,
       ),
     }));
@@ -162,7 +162,29 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       return <section key={kind} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} preview</h3><span className="text-xs text-white/50">{renderStateLabel(render)}</span></div>
         {render?.state === "READY" ? <><video controls preload="metadata" playsInline src={`${endpoint}/render/${encodeURIComponent(render.id)}`} className="mt-4 aspect-video w-full rounded-xl bg-black"/><div className="mt-3 flex flex-wrap gap-2"><a className={button} href={`${endpoint}/render/${encodeURIComponent(render.id)}?download=1`}>Download preview</a><span className="self-center text-xs text-white/45">{sizeLabel(render.sizeBytes)}{render.durationMs ? ` · ${Math.round(render.durationMs / 1000)} sec` : ""}</span></div></> : null}
         {renderStopped(render) ? <p role="status" className="mt-3 text-sm text-amber-100">Rendering stopped. Your uploaded footage is unchanged; you can generate a fresh preview whenever you are ready.</p> : render?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{render.error || "Rendering failed. Generate previews again after checking the source files."}</p> : null}
-        {render && renderActive(render) ? <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-sm text-white/60">{render.state === "QUEUED" ? "Waiting for the video worker." : "Rendering privately. Original match sound is retained."}</p><button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering(kind)}>{busy ? "Stopping…" : `Stop ${kindLabel(kind).toLowerCase()}`}</button></div> : null}
+        {render && renderActive(render) ? <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate text-white/65">{render.progressLabel || (render.state === "QUEUED" ? "Waiting for the video worker" : "Rendering video")}</span>
+            <span className="shrink-0 font-semibold tabular-nums text-emerald-200">{Math.max(0, Math.min(99, render.progressPercent))}%</span>
+          </div>
+          <div
+            className="h-2.5 overflow-hidden rounded-full border border-white/10 bg-white/[0.06]"
+            role="progressbar"
+            aria-label={`${kindLabel(kind)} render progress`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.max(0, Math.min(99, render.progressPercent))}
+          >
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-[width] duration-500 ease-out"
+              style={{ width: `${Math.max(2, Math.min(99, render.progressPercent))}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-white/45">{render.state === "QUEUED" ? "Waiting to start." : "Rendering privately. Original match sound is retained."}</p>
+            <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering(kind)}>{busy ? "Stopping…" : `Stop ${kindLabel(kind).toLowerCase()}`}</button>
+          </div>
+        </div> : null}
         {!render ? <p className="mt-3 text-sm text-white/50">No preview generated yet.</p> : null}
       </section>;
     })}</div>
