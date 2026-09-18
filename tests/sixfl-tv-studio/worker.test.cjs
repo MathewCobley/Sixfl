@@ -19,12 +19,14 @@ async function loadWorker(db, objects, uploadHook) {
     title: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#2563eb' } }).png().toBuffer(),
     result: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#dc2626' } }).png().toBuffer(),
     goal: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#c026d3' } }).png().toBuffer(),
+    scoreBug: await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="620" height="146" rx="22" fill="#ffff00" fill-opacity="0.95"/></svg>')).png().toBuffer(),
   };
   const mocks = {
     '@prisma/client': { PrismaClient: class { constructor() { return db; } } },
     '../src/lib/sixfl-tv/graphics': {
       createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title,
       createSixflTvGoalOfMonthCard: async () => cards.goal,
+      createSixflTvScoreBug: async () => cards.scoreBug,
     },
     '../src/lib/sixfl-tv/videos': {},
     '../src/lib/storage/railway-s3': {
@@ -146,6 +148,20 @@ test('swipe transition is animated, full-HD and decodable', { timeout: 90000 }, 
   const hashes = await w.run('ffmpeg', ['-i', target, '-vf', "select='eq(n,0)+eq(n,5)+eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true);
   const md5s = hashes.split('\n').filter(line => /^[0-9]/.test(line)).map(line => line.split(',').at(-1).trim());
   assert.ok(new Set(md5s).size >= 2, 'Swipe frames must visibly change across the transition');
+});
+
+test('highlight normalisation overlays a persistent scorebug without removing match audio', { timeout: 90000 }, async t => {
+  const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t);
+  const source = path.join(dir, 'source.mp4'), plain = path.join(dir, 'plain.mp4'), scored = path.join(dir, 'scored.mp4'), bug = path.join(dir, 'scorebug.png');
+  await w.run('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=25', '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000', '-t', '0.8', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', source]);
+  await fs.writeFile(bug, await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="620" height="146" fill="#ffff00"/></svg>')).png().toBuffer());
+  await w.normaliseVideo(source, plain);
+  await w.normaliseVideo(source, scored, bug);
+  const hash = async file => (await w.run('ffmpeg', ['-i', file, '-vf', "select='eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true))
+    .split('\n').find(line => /^[0-9]/.test(line))?.split(',').at(-1).trim();
+  assert.notEqual(await hash(plain), await hash(scored), 'Scorebug must visibly alter the match-footage frame');
+  const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', scored], true));
+  assert.ok(meta.streams.some(stream => stream.codec_type === 'audio'), 'Scorebug overlay must keep the original match audio');
 });
 
 test('actual FFmpeg assembly reconstructs saved manifests and produces a decodable private MP4', { timeout: 90000 }, async t => {
