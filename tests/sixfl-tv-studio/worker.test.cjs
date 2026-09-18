@@ -112,10 +112,10 @@ function memoryDb() {
 }
 function addJob(db, id = randomUUID(), leaseToken = randomUUID()) {
   const job = { id, fixtureId: 'test-fixture', kind: 'HIGHLIGHTS', leaseToken, metadataJson: { fixture: { firstTeam: { name: 'Test A', score: 4 }, secondTeam: { name: 'Test B', score: 2 }, scorers: ['Test A: Player One x2', 'Test B: Player Two'], firstTeamLineup: ['Player One (C)', 'Keeper A (GK)'], secondTeamLineup: ['Player Two', 'Keeper B (GK)'], predictor: { firstTeamScore: 3, secondTeamScore: 2, headline: 'Test A edged' }, leagueTable: { title: 'Test League', rows: [
-    { position: 1, teamId: 'a', teamName: 'Test A', played: 4, goalDifference: 7, points: 10 },
-    { position: 2, teamId: 'b', teamName: 'Test B', played: 4, goalDifference: 3, points: 8 },
-    { position: 3, teamId: 'c', teamName: 'Test C', played: 4, goalDifference: 1, points: 7 },
-    { position: 4, teamId: 'd', teamName: 'Test D', played: 4, goalDifference: -1, points: 4 },
+    { position: 1, teamId: 'a', teamName: 'Test A', played: 4, goalDifference: 7, points: 10, movement: 'UP' },
+    { position: 2, teamId: 'c', teamName: 'Test C', played: 4, goalDifference: 1, points: 7, movement: 'SAME' },
+    { position: 3, teamId: 'd', teamName: 'Test D', played: 4, goalDifference: -1, points: 4, movement: 'DOWN' },
+    { position: 4, teamId: 'b', teamName: 'Test B', played: 4, goalDifference: -3, points: 3, movement: 'DOWN' },
   ] } }, label: 'TEST' } };
   db.jobs.set(id, { ...job, state: 'PROCESSING', active: true }); return job;
 }
@@ -173,7 +173,7 @@ test('swipe transition is animated, full-HD and decodable', { timeout: 90000 }, 
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920);
   assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
   assert.ok(meta.streams.some(s => s.codec_type === 'audio'));
-  assert.ok(Number(meta.format.duration) >= 0.35 && Number(meta.format.duration) <= 0.5);
+  assert.ok(Number(meta.format.duration) >= 0.75 && Number(meta.format.duration) <= 0.9);
   const hashes = await w.run('ffmpeg', ['-i', target, '-vf', "select='eq(n,0)+eq(n,5)+eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true);
   const md5s = hashes.split('\n').filter(line => /^[0-9]/.test(line)).map(line => line.split(',').at(-1).trim());
   assert.ok(new Set(md5s).size >= 2, 'Swipe frames must visibly change across the transition');
@@ -204,18 +204,20 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   await fs.writeFile(result, Buffer.concat(parts.map(p => { assert.equal(sha(objects.get(p.objectKey)), p.sha256); return objects.get(p.objectKey); })));
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920); assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
-  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 20.0);
+  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 28.0);
   const titleFrame = await w.run('ffmpeg', ['-ss', '1.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const lineupFrame = await w.run('ffmpeg', ['-ss', '5.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const firstSwipeFrame = await w.run('ffmpeg', ['-ss', '9.15', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const footageFrame = await w.run('ffmpeg', ['-ss', '9.55', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const finalSwipeFrame = await w.run('ffmpeg', ['-ss', '9.95', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const goalFrame = await w.run('ffmpeg', ['-ss', '12.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const topTableFrame = await w.run('ffmpeg', ['-ss', '17.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const bottomTableFrame = await w.run('ffmpeg', ['-ss', '22.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const titleToLineupSwipe = await w.run('ffmpeg', ['-ss', '4.4', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const lineupFrame = await w.run('ffmpeg', ['-ss', '6.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const firstSwipeFrame = await w.run('ffmpeg', ['-ss', '10.2', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const footageFrame = await w.run('ffmpeg', ['-ss', '10.8', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const finalSwipeFrame = await w.run('ffmpeg', ['-ss', '11.4', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const goalFrame = await w.run('ffmpeg', ['-ss', '13.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const topTableFrame = await w.run('ffmpeg', ['-ss', '19.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const bottomTableFrame = await w.run('ffmpeg', ['-ss', '25.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  assert.notEqual(titleToLineupSwipe,lineupFrame,'Title and lineup pages must have a visible transition');
   assert.notEqual(firstSwipeFrame,footageFrame,'A transition must appear before the first content frame');
   assert.notEqual(finalSwipeFrame,footageFrame,'A transition must appear after the final content frame');
-  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,goalFrame,topTableFrame,bottomTableFrame]).size,6,'Title, lineup with predictor, footage, Goal of the Month and both league-table halves must survive assembly');
+  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,goalFrame,topTableFrame,bottomTableFrame]).size,6,'Title, lineup, footage, Goal of the Month and the applicable table halves must survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });

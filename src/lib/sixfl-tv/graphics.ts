@@ -28,6 +28,7 @@ export type SixflTvGraphicFixture = {
       played: number;
       goalDifference: number;
       points: number;
+      movement?: "UP" | "DOWN" | "SAME" | null;
     }>;
   } | null;
   decisionNote?: string | null;
@@ -258,6 +259,7 @@ export async function createSixflTvThumbnail(input: {
   const accent = isHighlights ? "#23d18b" : "#ff3b5c";
   const accentDark = isHighlights ? "#0b6f4d" : "#8d1730";
   const typeLabel = isHighlights ? "HIGHLIGHTS" : "FULL MATCH";
+  const typeSubtitle = isHighlights ? "Match highlights" : "Full match";
 
   const scoreShape = scoreVisible
     ? `<g filter="url(#scoreShadow)">
@@ -311,7 +313,8 @@ export async function createSixflTvThumbnail(input: {
   const textJobs = [
     thumbnailTextPng({ text: typeLabel, width: 178, height: 40, fontSize: 19, bold: true, fill: "#06110c", align: "center", letterSpacing: 1.8 }),
     thumbnailTextPng({ text: headline, width: 850, height: 92, fontSize: 78, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: strapline, width: 760, height: 38, fontSize: 23, bold: true, fill: "#d1fae5" }),
+    thumbnailTextPng({ text: typeSubtitle, width: 760, height: 34, fontSize: 22, bold: true, fill: "#a7f3d0" }),
+    thumbnailTextPng({ text: strapline, width: 760, height: 30, fontSize: 18, bold: false, fill: "#d1d5db" }),
     thumbnailTextPng({ text: firstName, width: 340, height: 48, fontSize: 31, bold: true, fill: "#ffffff", align: "center" }),
     thumbnailTextPng({ text: secondName, width: 340, height: 48, fontSize: 31, bold: true, fill: "#ffffff", align: "center" }),
     thumbnailTextPng({ text: league, width: 650, height: 38, fontSize: 21, bold: true, fill: "#ffffff" }),
@@ -332,11 +335,12 @@ export async function createSixflTvThumbnail(input: {
       : Promise.resolve(Buffer.alloc(0)),
   ];
 
-  const [typeText, headlineText, strapText, firstTeamText, secondTeamText, leagueText, dateText, scoreLabelText, scoreText] = await Promise.all(textJobs);
+  const [typeText, headlineText, typeSubtitleText, strapText, firstTeamText, secondTeamText, leagueText, dateText, scoreLabelText, scoreText] = await Promise.all(textJobs);
   const composites: sharp.OverlayOptions[] = [
     { input: typeText, left: 56, top: 44 },
     { input: headlineText, left: 60, top: 104 },
-    { input: strapText, left: 62, top: 208 },
+    { input: typeSubtitleText, left: 62, top: 202 },
+    { input: strapText, left: 62, top: 235 },
     { input: firstTeamText, left: 35, top: 548 },
     { input: secondTeamText, left: 905, top: 548 },
     { input: leagueText, left: 82, top: 640 },
@@ -382,8 +386,8 @@ export async function createSixflTvVideoCard(input: {
       <text x="960" y="505" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="800" fill="#34d399">–</text>
       <text x="1100" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="170" font-weight="900" fill="#ffffff">${input.fixture.secondTeam.score}</text>
     </g>` : `<text x="960" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
-    ${firstScorers.map((line, index) => `<g><circle cx="712" cy="${561 + index * 30}" r="4" fill="#34d399"/><text x="726" y="${568 + index * 30}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="20" font-weight="600" fill="#d1fae5">${xml(line)}</text></g>`).join("")}
-    ${secondScorers.map((line, index) => `<g><circle cx="1012" cy="${561 + index * 30}" r="4" fill="#34d399"/><text x="1026" y="${568 + index * 30}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="20" font-weight="600" fill="#d1fae5">${xml(line)}</text></g>`).join("")}
+    ${firstScorers.map((line, index) => `<g><text x="690" y="${570 + index * 31}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="23" font-weight="900" fill="#34d399">•</text><text x="716" y="${570 + index * 31}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="650" fill="#d1fae5">${xml(line)}</text></g>`).join("")}
+    ${secondScorers.map((line, index) => `<g><text x="1015" y="${570 + index * 31}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="23" font-weight="900" fill="#34d399">•</text><text x="1041" y="${570 + index * 31}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="650" fill="#d1fae5">${xml(line)}</text></g>`).join("")}
 
     <text x="350" y="710" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
     ${formRun(input.fixture.firstTeamForm, 220, 735, "start")}
@@ -484,18 +488,24 @@ export async function createSixflTvLeagueTableCard(input: {
     input.fixture.firstTeam.name.toLowerCase(),
     input.fixture.secondTeam.name.toLowerCase(),
   ]);
-  const rowHeight = Math.min(92, Math.floor(610 / Math.max(1, rows.length)));
-  const startY = 315;
+  const rowHeight = Math.min(78, Math.floor(520 / Math.max(1, rows.length)));
+  const startY = 392;
   const tableRows = rows.map((row, index) => {
     const y = startY + index * rowHeight;
     const highlighted = currentTeamIds.has(row.teamName.toLowerCase());
     const bg = highlighted
-      ? `<rect x="180" y="${y - 47}" width="1560" height="${rowHeight - 6}" rx="18" fill="#10b981" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.48" stroke-width="2"/>`
-      : `<rect x="180" y="${y - 47}" width="1560" height="${rowHeight - 6}" rx="18" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.045" : "0.025"}"/>`;
+      ? `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#10b981" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.48" stroke-width="2"/>`
+      : `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.045" : "0.025"}"/>`;
+    const movement =
+      row.movement === "UP" ? { symbol: "↑", colour: "#6ee7b7" } :
+      row.movement === "DOWN" ? { symbol: "↓", colour: "#fca5a5" } :
+      row.movement === "SAME" ? { symbol: "→", colour: "#94a3b8" } :
+      { symbol: "•", colour: "#475569" };
     return `<g>
       ${bg}
       <text x="235" y="${y}" font-size="29" font-weight="900" fill="${highlighted ? "#6ee7b7" : "#ffffff"}">${row.position}</text>
-      <text x="330" y="${y}" font-size="31" font-weight="${highlighted ? "900" : "700"}" fill="#ffffff">${xml(fit(row.teamName, 34))}</text>
+      <text x="292" y="${y}" text-anchor="middle" font-size="30" font-weight="900" fill="${movement.colour}">${movement.symbol}</text>
+      <text x="360" y="${y}" font-size="31" font-weight="${highlighted ? "900" : "700"}" fill="#ffffff">${xml(fit(row.teamName, 32))}</text>
       <text x="1270" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="#d1d5db">${row.played}</text>
       <text x="1450" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="${row.goalDifference >= 0 ? "#a7f3d0" : "#fca5a5"}">${row.goalDifference > 0 ? "+" : ""}${row.goalDifference}</text>
       <text x="1640" y="${y}" text-anchor="middle" font-size="31" font-weight="900" fill="#ffffff">${row.points}</text>
@@ -505,16 +515,18 @@ export async function createSixflTvLeagueTableCard(input: {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${fontCss}
     ${stadiumBackground(1920, 1080)}
-    ${logoImage(sixflTvLogoBytes, 760, 28, 400, 128)}
-    <text x="960" y="210" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">LEAGUE TABLE</text>
-    <text x="960" y="258" text-anchor="middle" font-size="25" font-weight="800" letter-spacing="4" fill="#a7f3d0">${input.page === "TOP" ? "TOP HALF" : "BOTTOM HALF"}</text>
-    <text x="185" y="285" font-size="23" font-weight="700" fill="#d1d5db">${xml(fit(table.title, 68))}</text>
+    ${logoImage(sixflTvLogoBytes, 790, 18, 340, 108)}
+    <text x="960" y="180" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">LEAGUE TABLE</text>
+    <text x="960" y="228" text-anchor="middle" font-size="25" font-weight="800" letter-spacing="4" fill="#a7f3d0">${input.page === "TOP" ? "TOP HALF" : "BOTTOM HALF"}</text>
+    <text x="960" y="276" text-anchor="middle" font-size="23" font-weight="700" fill="#d1d5db">${xml(fit(table.title, 68))}</text>
+    <line x1="180" y1="304" x2="1740" y2="304" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
 
-    <text x="235" y="302" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">POS</text>
-    <text x="330" y="302" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
-    <text x="1270" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">P</text>
-    <text x="1450" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
-    <text x="1640" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
+    <text x="235" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">POS</text>
+    <text x="292" y="344" text-anchor="middle" font-size="18" font-weight="800" fill="#94a3b8">↕</text>
+    <text x="360" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
+    <text x="1270" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">P</text>
+    <text x="1450" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
+    <text x="1640" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
     ${tableRows}
     <text x="960" y="988" text-anchor="middle" font-size="23" font-weight="600" fill="#d1d5db">Table updated after this match</text>
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>

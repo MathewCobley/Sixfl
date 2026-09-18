@@ -24,7 +24,7 @@ const TITLE_SECONDS = 4;
 const LINEUP_SECONDS = 5;
 const LEAGUE_TABLE_SECONDS = 5;
 const GOAL_OF_MONTH_END_SECONDS = 5;
-const SWIPE_FRAMES = 12;
+const SWIPE_FRAMES = 24;
 const SWIPE_FPS = 30;
 function operationSignal(ms: number) {
   return AbortSignal.any([shutdown.signal, AbortSignal.timeout(ms), ...(renderSignals.getStore() ? [renderSignals.getStore()!] : [])]);
@@ -407,12 +407,14 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering intro"); segments.push(normal);
     }
-    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
-    if (lineupBytes) {
-      const lineup = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(lineupPng, lineup, LINEUP_SECONDS); segments.push(lineup);
-    }
     const swipe = content.length ? path.join(dir, "normalised", "swipe.mp4") : null;
     if (swipe) await swipeVideo(dir, swipe);
+
+    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
+    if (lineupBytes) {
+      if (swipe) segments.push(swipe);
+      const lineup = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(lineupPng, lineup, LINEUP_SECONDS); segments.push(lineup);
+    }
     if (swipe) segments.push(swipe);
     for (let index = 0; index < content.length; index++) {
       if (index > 0 && swipe) segments.push(swipe);
@@ -432,24 +434,32 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
     await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
 
-    if (leagueTopBytes) {
+    const tableRows = metadata.fixture.leagueTable?.rows || [];
+    const tableMidpoint = Math.ceil(tableRows.length / 2);
+    const firstTableIndex = tableRows.findIndex(row => row.teamName.toLowerCase() === metadata.fixture.firstTeam.name.toLowerCase());
+    const secondTableIndex = tableRows.findIndex(row => row.teamName.toLowerCase() === metadata.fixture.secondTeam.name.toLowerCase());
+    const showTopHalf = [firstTableIndex, secondTableIndex].some(index => index >= 0 && index < tableMidpoint);
+    const showBottomHalf = [firstTableIndex, secondTableIndex].some(index => index >= tableMidpoint);
+
+    if (leagueTopBytes && showTopHalf) {
       if (swipe) segments.push(swipe);
-      reportProgress(87, "Adding top-half league table");
+      reportProgress(87, "Adding relevant top-half league table");
       const leagueTop = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await cardVideo(leagueTopPng, leagueTop, LEAGUE_TABLE_SECONDS); segments.push(leagueTop);
     }
-    if (leagueBottomBytes) {
+    if (leagueBottomBytes && showBottomHalf) {
       if (swipe) segments.push(swipe);
-      reportProgress(89, "Adding bottom-half league table");
+      reportProgress(89, "Adding relevant bottom-half league table");
       const leagueBottom = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await cardVideo(leagueBottomPng, leagueBottom, LEAGUE_TABLE_SECONDS); segments.push(leagueBottom);
     }
 
+    if (outro.length && swipe) segments.push(swipe);
     for (const input of outro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length + 1 + (leagueTopBytes ? 1 : 0) + (leagueBottomBytes ? 1 : 0) : 0} resultCard=0 goalOfMonthAfterFootage=1 leagueTableTop=${leagueTopBytes ? 1 : 0} leagueTableBottom=${leagueBottomBytes ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} slowSwipeSeconds=${(SWIPE_FRAMES / SWIPE_FPS).toFixed(1)} resultCard=0 goalOfMonthAfterFootage=1 relevantTopHalf=${leagueTopBytes && showTopHalf ? 1 : 0} relevantBottomHalf=${leagueBottomBytes && showBottomHalf ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");

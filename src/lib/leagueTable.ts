@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 export type LeagueFormResult = "W" | "D" | "L";
+export type LeaguePositionMovement = "UP" | "DOWN" | "SAME" | null;
 
 export type LeagueTableRow = {
   teamId: string;
@@ -22,6 +23,7 @@ export type LeagueTableRow = {
   goalDifference: number;
   points: number;
   recentForm: LeagueFormResult[];
+  movement?: LeaguePositionMovement;
 };
 
 type LeagueTableOptions = {
@@ -57,6 +59,7 @@ function createRow(input: {
     goalDifference: 0,
     points: 0,
     recentForm: [],
+    movement: null,
   };
 }
 
@@ -166,49 +169,46 @@ async function getLeagueTableTeams(
   return removeFixturePlaceholderTeams(legacyTeams);
 }
 
-export async function getLeagueTable(
-  leagueId: string,
-  options: LeagueTableOptions = {},
-): Promise<LeagueTableRow[]> {
-  const [teams, fixtures] = await Promise.all([
-    getLeagueTableTeams(leagueId, options),
-    prisma.fixture.findMany({
-      where: {
-        leagueId,
-        // A saved result is the authoritative indication that a game was played.
-        // Do not trust legacy/stale Fixture.status or Fixture.divisionId here.
-        // Division membership is enforced below by allowedTeamIds.
-        result: { isNot: null },
-      },
-      orderBy: { kickoffAt: "asc" },
-      include: {
-        homeTeam: { select: { id: true, name: true, logoUrl: true } },
-        awayTeam: { select: { id: true, name: true, logoUrl: true } },
-        result: { select: { homeScore: true, awayScore: true } },
-      },
-    }),
-  ]);
+function londonDateKey(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const get = (type: "year" | "month" | "day") =>
+    parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 
+function sortLeagueRows(rows: LeagueTableRow[]) {
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.teamName.localeCompare(b.teamName);
+  });
+  return rows;
+}
+
+function buildTableRows(
+  teams: TableTeamRow[],
+  fixtures: Array<{
+    homeTeamId: string;
+    awayTeamId: string;
+    homeTeam: TableTeamRow;
+    awayTeam: TableTeamRow;
+    result: { homeScore: number; awayScore: number } | null;
+  }>,
+) {
   const table = new Map<string, LeagueTableRow>();
-
-  // The selected/active team list is always authoritative, including when it
-  // is empty. Historic fixtures must never recreate a removed or affiliated-only
-  // team in the current league table. For division tables, this also means a
-  // result counts only when both participating teams are active in that division.
   const allowedTeamIds = new Set(teams.map((team) => team.id));
 
-  for (const team of teams) {
-    table.set(team.id, createRow(team));
-  }
+  for (const team of teams) table.set(team.id, createRow(team));
 
   for (const fixture of fixtures) {
     if (!fixture.result) continue;
-    if (
-      !allowedTeamIds.has(fixture.homeTeamId) ||
-      !allowedTeamIds.has(fixture.awayTeamId)
-    ) {
-      continue;
-    }
+    if (!allowedTeamIds.has(fixture.homeTeamId) || !allowedTeamIds.has(fixture.awayTeamId)) continue;
 
     const home = getOrCreateRow(table, fixture.homeTeam);
     const away = getOrCreateRow(table, fixture.awayTeam);
@@ -244,20 +244,63 @@ export async function getLeagueTable(
     }
   }
 
-  const rows = Array.from(table.values()).map((row) => ({
+  return sortLeagueRows(Array.from(table.values()).map((row) => ({
     ...row,
     goalDifference: row.goalsFor - row.goalsAgainst,
     recentForm: row.recentForm.slice(-5),
-  }));
+  })));
+}
 
-  rows.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) {
-      return b.goalDifference - a.goalDifference;
-    }
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    return a.teamName.localeCompare(b.teamName);
+export async function getLeagueTable(
+  leagueId: string,
+  options: LeagueTableOptions = {},
+): Promise<LeagueTableRow[]> {
+  const [teams, fixtures] = await Promise.all([
+    getLeagueTableTeams(leagueId, options),
+    prisma.fixture.findMany({
+      where: {
+        leagueId,
+        result: { isNot: null },
+      },
+      orderBy: { kickoffAt: "asc" },
+      include: {
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
+        result: { select: { homeScore: true, awayScore: true } },
+      },
+    }),
+  ]);
+
+  const rows = buildTableRows(teams, fixtures);
+  const latestPlayedFixture = [...fixtures].reverse().find((fixture) => fixture.result);
+  if (!latestPlayedFixture) return rows;
+
+  // Movement is measured against the table before the latest match night,
+  // so all teams playing on the same evening share the same baseline.
+  const latestMatchday = londonDateKey(latestPlayedFixture.kickoffAt);
+  const previousRows = buildTableRows(
+    teams,
+    fixtures.filter(
+      (fixture) => fixture.result && londonDateKey(fixture.kickoffAt) !== latestMatchday,
+    ),
+  );
+  const previousPositions = new Map(
+    previousRows.map((row, index) => [row.teamId, index + 1]),
+  );
+
+  return rows.map((row, index) => {
+    const previous = previousPositions.get(row.teamId);
+    const current = index + 1;
+    return {
+      ...row,
+      movement:
+        previous == null
+          ? null
+          : current < previous
+            ? "UP"
+            : current > previous
+              ? "DOWN"
+              : "SAME",
+    };
   });
-
-  return rows;
 }
