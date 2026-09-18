@@ -5,13 +5,12 @@ import { requireAdmin } from '@/lib/requireAdmin';
 import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScoreBadge';
 import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
-import { londonVeoDate, previewVeoNight, quoteVeoFixture, readVeoNight, readVeoSettings, readVeoSnapshots, readVeoTeams, validVeoDate, VeoAllocationError } from '@/lib/veo/service';
+import { londonVeoDate, previewVeoNight, readVeoNight, readVeoSettings, readVeoSnapshots, readVeoTeams, validVeoDate, VeoAllocationError } from '@/lib/veo/service';
 import { saveVeoSettings, saveVeoVideo } from './actions';
 import FixtureVeoNightPanel from './FixtureVeoNightPanel';
 import SubmitButton from './SubmitButton';
 
 export const dynamic = 'force-dynamic';
-const money = (pence: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 const time = (date: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }).format(date);
 const input = 'min-h-11 w-full rounded-xl border border-white/20 bg-black/30 px-3 py-2 text-white';
 const panel = 'space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6';
@@ -45,7 +44,6 @@ export default async function VeoPriorityPage({ params, searchParams }: {
   const savedById = new Map(snapshots.map(s => [s.fixtureId, s]));
   const priorityIds = new Set<string>();
   const coveredIds = new Set<string>();
-  let supplement = 0;
   let allocatedCount = 0;
   for (const f of fixtures) {
     const s = savedById.get(f.id);
@@ -53,8 +51,6 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     if (s?.homePriority ?? f.homePriority) priorityIds.add(f.homeTeamId);
     if (s?.awayPriority ?? f.awayPriority) priorityIds.add(f.awayTeamId);
     if (allocated) { allocatedCount++; coveredIds.add(f.homeTeamId); coveredIds.add(f.awayTeamId); }
-    if (s) supplement += s.homeSupplementPence + s.awaySupplementPence;
-    else if (!f.locked && f.eligible) { const q = quoteVeoFixture(f, chosen.has(f.id)); supplement += q.home.supplementPence + q.away.supplementPence; }
   }
   const missed = [...priorityIds].filter(teamId => !coveredIds.has(teamId)).map(teamId => teams.find(t => t.id === teamId)?.name ?? fixtures.flatMap(f => [{ id: f.homeTeamId, name: f.homeName }, { id: f.awayTeamId, name: f.awayName }]).find(t => t.id === teamId)?.name ?? 'Team');
   const venueOptions = venues.length ? venues : [{ id: null, name: league.venueName || 'League venue (not set on fixtures)' }];
@@ -62,7 +58,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
   return <div className="mx-auto max-w-7xl space-y-6 text-white">
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">SIXFL TV Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
-      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Recorded-pitch priority is free and earned from each team’s SIXFL TV Priority Score. On-time payments carry the most weight, with confirmation and match-report completion also rewarded.</p>
+      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Recorded-pitch priority is free and earned from each team’s SIXFL TV Priority Score. Completing the match card is the biggest part of the score, with on-time payment, confirmation, assists and ratings also rewarded.</p>
     </header>
     {query.saved && <p role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">Saved. No existing fixtures or charges were recalculated.</p>}
     {query.error && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-4">{query.error.slice(0, 500)}</p>}
@@ -101,27 +97,22 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     </section>
     {settings.confirmAtFixture && <FixtureVeoNightPanel leagueId={id} date={date} />}
     {(!settings.confirmAtFixture || snapshots.length > 0) && <section className={panel}>
-      <h2 className="text-xl font-semibold">Earlier Veo agreements and publication preview</h2>
+      <h2 className="text-xl font-semibold">Earlier SIXFL TV allocations and publication preview</h2>
       <form method="get" className="flex flex-wrap items-end gap-3"><label className="space-y-2"><span className="block text-sm text-white/70">Match date (UK time)</span><input name="date" type="date" required defaultValue={date} className={input} /></label><button className="min-h-11 rounded-xl border border-white/20 px-4 py-2">Show night</button></form>
-      <p className="text-sm leading-6 text-white/60">This legacy publication preview does not save anything. New SIXFL TV Priority allocations do not add a filming fee. Existing historic Veo agreements remain protected.</p>
-      {!settings.enabled && <p className="rounded-xl bg-white/5 p-4 text-sm">SIXFL TV recorded-pitch priority is off. Existing saved agreements remain visible below.</p>}
+      <p className="text-sm leading-6 text-white/60">This older allocation view is retained for filming history only. SIXFL TV Priority is free and no payment information is read or changed here.</p>
+      {!settings.enabled && <p className="rounded-xl bg-white/5 p-4 text-sm">SIXFL TV recorded-pitch priority is off. Existing filming allocations remain visible below.</p>}
       {previewError && <p role="alert" className="rounded-xl border border-amber-400/30 p-4 text-amber-100">{previewError}</p>}
-      <div className="grid gap-3 sm:grid-cols-3">{[[String(allocatedCount), 'TV matches: saved + preview'], [String(missed.length), 'Priority teams not allocated'], [money(supplement), 'Historic Veo supplement value']].map(([value, label]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="text-2xl font-semibold">{value}</div><p className="mt-1 text-xs leading-5 text-white/60">{label}</p></div>)}</div>
-      <p className="text-xs leading-5 text-white/50">Any non-zero supplement shown here is from an older saved Veo agreement. New SIXFL TV Priority allocations are free. A TV allocation is a filming plan, not confirmation that footage has been uploaded.</p>
+      <div className="grid gap-3 sm:grid-cols-2">{[[String(allocatedCount), 'TV matches: saved + preview'], [String(missed.length), 'Priority teams not allocated']].map(([value, label]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="text-2xl font-semibold">{value}</div><p className="mt-1 text-xs leading-5 text-white/60">{label}</p></div>)}</div>
+      <p className="text-xs leading-5 text-white/50">A TV allocation is a filming plan, not confirmation that footage has been uploaded.</p>
       {missed.length > 0 && <p className="text-sm leading-6 text-amber-100">Not allocated: {missed.join(', ')}. Recorded-pitch priority is not guaranteed even when a team qualifies.</p>}
       <div className="space-y-3">{fixtures.map(f => {
         const saved = savedById.get(f.id); const choice = choices.find(c => c.fixtureId === f.id);
         const displaced = choices.find(c => c.swapWithId === f.id);
         const newPitch = choice?.pitch ?? (displaced ? fixtures.find(x => x.id === displaced.fixtureId)?.pitch : f.pitch);
         const filmed = saved?.allocated ?? (Boolean(choice) || f.filmed);
-        const q = !f.locked && f.eligible ? quoteVeoFixture(f, Boolean(choice)) : null;
-        const fees = saved ? [{ name: f.homeName, base: saved.homeBasePence, extra: saved.homeSupplementPence }, { name: f.awayName, base: saved.awayBasePence, extra: saved.awaySupplementPence }]
-          : q ? [{ name: f.homeName, base: q.home.basePence, extra: q.home.supplementPence }, { name: f.awayName, base: q.away.basePence, extra: q.away.supplementPence }]
-          : [];
         return <article key={f.id} className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{time(f.kickoffAt)} · {f.homeName} vs {f.awayName}</h3><p className="mt-1 text-sm text-white/60">Pitch {normaliseVeoPitch(saved?.pitch ?? newPitch ?? null) || 'not set'}{choice?.swapWithId || displaced ? ' · pitch swap proposed' : ''}</p></div><span className="rounded-full border border-white/20 px-3 py-1 text-xs">{filmed ? '📹 Veo / SIXFL TV' : 'Not allocated to Veo'}</span></div>
-          <p className="text-xs text-white/50">{saved ? 'Saved at publication — original price snapshot' : f.locked ? 'Existing / locked fixture — unchanged by Veo' : 'Preview only — not yet saved'}</p>
-          {fees.length > 0 ? <div className="grid gap-2 sm:grid-cols-2">{fees.map(fee => <p key={fee.name} className="text-sm leading-6"><span className="text-white/65">{fee.name}: </span>{money(fee.base)}{fee.extra > 0 && ` + ${money(fee.extra)} Veo Priority`}<strong> = {money(fee.base + fee.extra)}</strong></p>)}</div> : <p className="text-sm text-white/60">Veo has not changed this fixture’s fees. See Payments for any current charge.</p>}
+          <p className="text-xs text-white/50">{saved ? 'Saved filming allocation' : f.locked ? 'Existing / locked fixture' : 'Preview only — not yet saved'}</p>
           {saved?.allocated && <details className="text-sm"><summary className="cursor-pointer py-2 text-fuchsia-200">YouTube / SIXFL TV link</summary><form action={saveVeoVideo.bind(null, id)} className="mt-2 flex flex-col gap-3 sm:flex-row"><input type="hidden" name="date" value={date} /><input type="hidden" name="fixtureId" value={f.id} /><input aria-label={`Video link for ${f.homeName} vs ${f.awayName}`} type="url" name="videoUrl" defaultValue={f.sixflTvUrl ?? ''} placeholder="https://www.youtube.com/watch?v=…" className={input} /><SubmitButton>Save video link</SubmitButton></form></details>}
         </article>;
       })}{!fixtures.length && <p className="py-4 text-white/60">No fixtures on this date.</p>}</div>
