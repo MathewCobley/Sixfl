@@ -10,6 +10,7 @@ on:
       - 'src/app/captain/team/[teamid]/results/page.tsx'
       - 'src/components/admin/email-templates/EmailTemplateForm.tsx'
       - 'src/lib/communications/send-team-broadcast.ts'
+      - 'src/app/(admin)/admin/communications/actions.ts'
       - 'src/app/**/veo-priority/**'
       - 'src/components/captain/*Veo*'
       - 'src/components/captain/CaptainFixtureConfirmation.tsx'
