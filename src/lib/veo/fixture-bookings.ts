@@ -1,10 +1,10 @@
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveTeamFixtureFeePence } from '@/lib/payments/fixture-fee-policy';
 import { allocateVeoNight, normaliseVeoPitch, type VeoFixture, type VeoHistory } from './allocator';
 import { readVeoSettings, londonVeoDate, validVeoDate } from './service';
-import { readVeoOffer } from './priority-requests';
+import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
 import { VEO_FIXTURE_TERMS, parseVeoFixtureChoice, veoCameraKey, veoVersion, validateVeoVideo, type VeoFixtureChoice } from './fixture-policy';
 
 export class VeoBookingError extends Error {}
@@ -43,23 +43,28 @@ async function rowsForTeam(db: Db, fixtureId: string, teamId: string) {
 }
 export async function readFixtureVeoOffer(fixtureId: string, teamId: string, db: Db = prisma): Promise<FixtureVeoOffer|null> {
   const f = await match(db, fixtureId);
-  if (![f.homeTeamId,f.awayTeamId].includes(teamId) || f.placeholder) return null;
+  if (![f.homeTeamId, f.awayTeamId].includes(teamId) || f.placeholder) return null;
   const settings = await readVeoSettings(f.leagueId, db);
   const request = await rowsForTeam(db, fixtureId, teamId);
-  const offer = await readVeoOffer(f.leagueId, teamId, db);
-  if ((!settings.enabled || !settings.confirmAtFixture || !offer) && !request) return null;
-  const pref = (await db.$queryRaw<{enabled:boolean; updatedAt:Date}[]>`SELECT enabled,"updatedAt" FROM "VeoTeamPriority" WHERE "leagueId"=${f.leagueId} AND "teamId"=${teamId}`)[0];
-  const sameMatch = request && request.homeTeamId===f.homeTeamId && request.awayTeamId===f.awayTeamId && +request.kickoffAt===+f.kickoffAt;
-  const reason = !settings.enabled || !settings.confirmAtFixture || !offer ? 'Veo requests are not available for this team in this league.'
-    : f.legacy ? 'Veo arrangements for this match were already agreed. Your existing fee stays unchanged.'
-    : f.bookingState ? 'The Veo decision for this match has been made. Your confirmed booking stays unchanged.'
-    : !f.publishedAt || f.status!=='SCHEDULED' || +f.kickoffAt<=Date.now() ? 'Veo choices are closed for this fixture.' : null;
-  const video = f.bookingState === 'READY' ? (await db.$queryRaw<{url:string|null}[]>`SELECT "sixflTvUrl" AS url FROM "Fixture" WHERE id=${fixtureId}`)[0]?.url : null;
-  return { available: !reason, reason, preference: pref?.enabled===true,
-    defaultChoice: sameMatch ? request.choice : pref?.enabled ? 'ONGOING':'NONE',
-    requestStatus: sameMatch ? request.status:null, bookingState:f.bookingState,
-    agreedPence:sameMatch ? request.agreedPence:null, maxMatches:settings.maxMatches, videoUrl:video,
-    version:veoVersion([f,pref??null,request?.revision??0,settings.revision,settings.enabled]) };
+  if (!settings.enabled && !request && !f.bookingState) return null;
+  const sameMatch = request && request.homeTeamId === f.homeTeamId && request.awayTeamId === f.awayTeamId && +request.kickoffAt === +f.kickoffAt;
+  const video = f.bookingState === 'READY'
+    ? (await db.$queryRaw<{url:string|null}[]>`SELECT "sixflTvUrl" AS url FROM "Fixture" WHERE id=${fixtureId}`)[0]?.url
+    : null;
+  return {
+    available: false,
+    reason: settings.enabled
+      ? 'SIXFL TV Priority is earned automatically from your team score. There is no extra fee or opt-in.'
+      : 'SIXFL TV recorded-pitch priority is not enabled for this league.',
+    preference: false,
+    defaultChoice: 'NONE',
+    requestStatus: sameMatch ? request.status : null,
+    bookingState: f.bookingState,
+    agreedPence: sameMatch ? request.agreedPence : null,
+    maxMatches: settings.maxMatches,
+    videoUrl: video,
+    version: veoVersion([f, request?.revision ?? 0, settings.revision, settings.enabled, 'earned-priority-v1']),
+  };
 }
 /** Attendance is saved independently. A camera choice can never make a confirmed
  * team appear unavailable or charge anyone. Exact team membership is rechecked. */
@@ -74,31 +79,8 @@ export async function confirmCaptainAttendance(fixtureId:string,teamId:string,us
       ON CONFLICT ("fixtureId","teamId") DO UPDATE SET status='CONFIRMED',"confirmedAt"=COALESCE("FixtureCaptainConfirmation"."confirmedAt",NOW()),note=NULL,"issueRaisedAt"=NULL,"confirmedByUserId"=${userId},"updatedAt"=NOW()`;
   });
 }
-export async function saveFixtureVeoChoice(input:{fixtureId:string;teamId:string;actorId:string;choice:VeoFixtureChoice;termsVersion:string;version:string}) {
-  const choice=parseVeoFixtureChoice(input.choice);
-  if (input.termsVersion!==VEO_FIXTURE_TERMS) throw new VeoBookingError('The Veo offer changed. Refresh before making your choice.');
-  return veoTransaction(async db => {
-    await actor(db,input.actorId,input.teamId);
-    const initial=await match(db,input.fixtureId);
-    await db.$queryRaw`SELECT id FROM "League" WHERE id=${initial.leagueId} FOR UPDATE`;
-    await db.$queryRaw`SELECT id FROM "Fixture" WHERE id=${input.fixtureId} FOR UPDATE`;
-    const f=await match(db,input.fixtureId);
-    const offer=await readFixtureVeoOffer(input.fixtureId,input.teamId,db);
-    if (!offer?.available) throw new VeoBookingError(offer?.reason??'Veo is not available for this team.');
-    const previous=await rowsForTeam(db,input.fixtureId,input.teamId);
-    if (previous?.choice===choice && previous.status===(choice==='NONE'?'NONE':'REQUESTED') && previous.actorId===input.actorId && previous.homeTeamId===f.homeTeamId && previous.awayTeamId===f.awayTeamId && +previous.kickoffAt===+f.kickoffAt) return previous.status;
-    if (offer.version!==input.version) throw new VeoBookingError('This fixture or choice changed in another window. Refresh before saving.');
-    const confirmed=await db.$queryRaw<{id:string}[]>`SELECT id FROM "FixtureCaptainConfirmation" WHERE "fixtureId"=${f.id} AND "teamId"=${input.teamId} AND status::text='CONFIRMED'`;
-    if (!confirmed.length) throw new VeoBookingError('Confirm your team can play before requesting Veo.');
-    if (choice==='ONGOING') await db.$executeRaw`INSERT INTO "VeoTeamPriority" ("leagueId","teamId",enabled,"updatedBy") VALUES (${f.leagueId},${input.teamId},true,${input.actorId})
-      ON CONFLICT ("leagueId","teamId") DO UPDATE SET enabled=true,"updatedBy"=EXCLUDED."updatedBy","updatedAt"=NOW()`;
-    await db.$executeRaw`INSERT INTO "VeoFixtureRequest" ("fixtureId","teamId","leagueId",choice,status,"actorId","termsVersion","homeTeamId","awayTeamId","kickoffAt")
-      VALUES (${f.id},${input.teamId},${f.leagueId},${choice},${choice==='NONE'?'NONE':'REQUESTED'},${input.actorId},${VEO_FIXTURE_TERMS},${f.homeTeamId},${f.awayTeamId},${f.kickoffAt})
-      ON CONFLICT ("fixtureId","teamId") DO UPDATE SET choice=EXCLUDED.choice,status=EXCLUDED.status,"actorId"=EXCLUDED."actorId","termsVersion"=EXCLUDED."termsVersion",
-        "homeTeamId"=EXCLUDED."homeTeamId","awayTeamId"=EXCLUDED."awayTeamId","kickoffAt"=EXCLUDED."kickoffAt","requestedAt"=NOW(),revision="VeoFixtureRequest".revision+1`;
-    await audit(db,f.leagueId,input.actorId,{kind:'fixture_veo_choice',fixtureId:f.id,choice,termsVersion:VEO_FIXTURE_TERMS},input.teamId);
-    return choice==='NONE'?'NONE':'REQUESTED';
-  });
+export async function saveFixtureVeoChoice(_input:{fixtureId:string;teamId:string;actorId:string;choice:VeoFixtureChoice;termsVersion:string;version:string}) {
+  throw new VeoBookingError('SIXFL TV Priority is now earned automatically from your team score. There is no paid Veo Priority request to save.');
 }
 export async function stopFutureVeoPriority(teamId:string,leagueId:string,userId:string) {
   return veoTransaction(async db=>{
@@ -136,19 +118,19 @@ export async function previewFixtureVeoNight(leagueId:string,date:string,db:Db=p
   const confirmations=await db.$queryRaw<{fixtureId:string;teamId:string}[]>`SELECT c."fixtureId",c."teamId" FROM "FixtureCaptainConfirmation" c JOIN "Fixture" f ON f.id=c."fixtureId"
     WHERE f."venueId"=${settings.venueId} AND to_char(f."kickoffAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London','YYYY-MM-DD')=${date} AND c.status::text='CONFIRMED' ORDER BY c."fixtureId",c."teamId"`;
   const confirmed=new Set(confirmations.map(x=>`${x.fixtureId}:${x.teamId}`));
-  const validRequests=new Set<string>();
-  for(const r of requests.filter(r=>r.status==='REQUESTED')) {
-    const membership=await db.$queryRaw<{id:string}[]>`SELECT m.id FROM "TeamMember" m JOIN "User" u ON u.id=m."userId" WHERE m."teamId"=${r.teamId} AND m."userId"=${r.actorId} AND m.role::text='CAPTAIN' AND COALESCE(m."isActive",true) AND u.role::text<>'ADMIN'`;
-    const offer=await readVeoOffer(r.leagueId,r.teamId,db);
-    if(membership.length && offer && (r.choice!=='ONGOING'||offer.priority))validRequests.add(`${r.fixtureId}:${r.teamId}`);
-  }
+  const teamIds=[...new Set(rows.flatMap(f=>[f.homeTeamId as string,f.awayTeamId as string]))];
+  const priorityScores=await getSixflTvPriorityScores(teamIds,db);
   const fixtures:NightMatch[]=rows.map(f=>{
     const own=requests.filter(r=>r.fixtureId===f.id);
-    const requested=(teamId:string,mode:string)=>mode==='STANDARD' && own.some(r=>r.teamId===teamId && r.status==='REQUESTED' && validRequests.has(`${r.fixtureId}:${r.teamId}`) && r.termsVersion===VEO_FIXTURE_TERMS && r.homeTeamId===f.homeTeamId && r.awayTeamId===f.awayTeamId && +r.kickoffAt===+f.kickoffAt && confirmed.has(`${f.id}:${teamId}`));
-    const homePriority=requested(f.homeTeamId,f.homeMode),awayPriority=requested(f.awayTeamId,f.awayMode);
+    const homeScore=priorityScores.get(f.homeTeamId);
+    const awayScore=priorityScores.get(f.awayTeamId);
+    const homePriority=Boolean(homeScore?.qualifies && confirmed.has(`${f.id}:${f.homeTeamId}`));
+    const awayPriority=Boolean(awayScore?.qualifies && confirmed.has(`${f.id}:${f.awayTeamId}`));
     return {id:f.id,leagueId:f.leagueId,homeTeamId:f.homeTeamId,awayTeamId:f.awayTeamId,homeName:f.homeName,awayName:f.awayName,kickoffAt:f.kickoffAt,kickoffMs:+f.kickoffAt,venueId:f.venueId,pitch:f.pitch,durationMinutes:f.duration,
       locked:!!f.legacy || ['PLANNED','READY'].includes(f.bookingState) || f.sixflTvRecorded || !f.publishedAt || f.status!=='SCHEDULED' || +f.kickoffAt<=Date.now() || !leagueIds.includes(f.leagueId),
-      eligible:!f.placeholder && !f.bookingState && (homePriority||awayPriority),homePriority,awayPriority,filmed:f.sixflTvRecorded || ['PLANNED','READY'].includes(f.bookingState),bookingState:f.bookingState,requestRows:own,
+      eligible:!f.placeholder && !f.bookingState && (homePriority||awayPriority),
+      homePriority,awayPriority,homePriorityScore:homeScore?.score??0,awayPriorityScore:awayScore?.score??0,
+      filmed:f.sixflTvRecorded || ['PLANNED','READY'].includes(f.bookingState),bookingState:f.bookingState,requestRows:own,
       homeBase:resolveTeamFixtureFeePence(f.homeMatchFeePence,f.homeStandard,f.matchFeePence),awayBase:resolveTeamFixtureFeePence(f.awayMatchFeePence,f.awayStandard,f.matchFeePence)};
   });
   const historyRows=await db.$queryRaw<{teamId:string;count:number;last:Date}[]>`SELECT side."teamId",COUNT(*)::integer AS count,MAX(f."kickoffAt") AS last
@@ -158,7 +140,8 @@ export async function previewFixtureVeoNight(leagueId:string,date:string,db:Db=p
       AND f."sixflTvRecorded" AND (b.state IS NULL OR b.state='READY') AND f.status::text='COMPLETED' GROUP BY side."teamId"`;
   const history:VeoHistory=Object.fromEntries(historyRows.map(x=>[x.teamId,{count:x.count,lastMs:+x.last}]));
   const choices=allocateVeoNight(fixtures,{...settings,maxMatches:capacity},history);
-  return {settings:{...settings,maxMatches:capacity},fixtures,choices,cameraKey,fingerprint:veoVersion([settings,sharing,fixtures,confirmations,history,choices])};
+  const scoreFingerprint=[...priorityScores.values()].map(score=>({teamId:score.teamId,score:score.score,qualifies:score.qualifies,matchesCount:score.matchesCount}));
+  return {settings:{...settings,maxMatches:capacity},fixtures,choices,cameraKey,fingerprint:veoVersion([settings,sharing,fixtures,confirmations,scoreFingerprint,history,choices])};
 }
 export async function finaliseFixtureVeoNight(leagueId:string,date:string,actorId:string,fingerprint:string) {
   return veoTransaction(async db=>{
@@ -179,16 +162,13 @@ export async function finaliseFixtureVeoNight(leagueId:string,date:string,actorI
       await db.$executeRaw`UPDATE "Fixture" SET pitch=${c.pitch},"sixflTvRecorded"=true,"updatedAt"=NOW() WHERE id=${f.id}`;
       await db.$executeRaw`INSERT INTO "VeoMatchBooking" ("fixtureId","leagueId","cameraKey","homeTeamId","awayTeamId","kickoffAt","venueId",pitch,"decidedBy")
         VALUES (${f.id},${f.leagueId},${preview.cameraKey},${f.homeTeamId},${f.awayTeamId},${f.kickoffAt},${f.venueId},${c.pitch},${actorId})`;
-      for (const [teamId,priority,base] of [[f.homeTeamId,f.homePriority,f.homeBase],[f.awayTeamId,f.awayPriority,f.awayBase]] as const) {
-        if (!priority) continue;
-        await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='ACCEPTED',"basePence"=${base},"agreedPence"=${base>0?500:0},revision=revision+1 WHERE "fixtureId"=${f.id} AND "teamId"=${teamId} AND status='REQUESTED'`;
-      }
+      await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='UNAVAILABLE',"agreedPence"=0,revision=revision+1 WHERE "fixtureId"=${f.id} AND status='REQUESTED'`;
     }
     for (const f of preview.fixtures) {
       if (selected.has(f.id) || f.locked) continue;
       await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='UNAVAILABLE',revision=revision+1 WHERE "fixtureId"=${f.id} AND status='REQUESTED'`;
     }
-    await audit(db,leagueId,actorId,{kind:'fixture_veo_finalised',date,cameraKey:preview.cameraKey,choices:preview.choices,fingerprint,noBaseFeesChanged:true});
+    await audit(db,leagueId,actorId,{kind:'fixture_veo_finalised',date,cameraKey:preview.cameraKey,choices:preview.choices,fingerprint,priorityModel:'SIXFL_TV_SCORE',noPriorityFees:true,noBaseFeesChanged:true});
     return preview.choices.length;
   });
 }
@@ -207,17 +187,9 @@ export async function setVeoRecordingOutcome(input:{leagueId:string;fixtureId:st
     if (f.bookingState===input.outcome) return;
     if (['FAILED','CANCELLED'].includes(f.bookingState)) throw new VeoBookingError('This booking is already closed. It cannot be billed again.');
     if (input.outcome==='READY' && (f.status!=='COMPLETED' || +f.kickoffAt>Date.now())) throw new VeoBookingError('Confirm usable footage only after the fixture has been completed.');
-    const requests=await db.$queryRaw<RequestRow[]>`SELECT * FROM "VeoFixtureRequest" WHERE "fixtureId"=${f.id} AND status='ACCEPTED' ORDER BY "teamId" FOR UPDATE`;
-    if (input.outcome==='READY') {
-      for (const r of requests) {
-        if (r.chargeId || r.agreedPence!==500) continue;
-        const team=await db.$queryRaw<{id:string}[]>`SELECT id FROM "Team" WHERE id=${r.teamId} AND "teamMode"::text='STANDARD'`;
-        if(!team.length)throw new VeoBookingError('The team payment model changed. Review this booking before billing.');
-        const charge=await db.paymentCharge.create({data:{id:`veo_${randomUUID()}`,teamId:r.teamId,leagueId:f.leagueId,fixtureId:null,
-          title:`Veo Priority — ${f.homeName} vs ${f.awayName} (${londonVeoDate(f.kickoffAt)})`,description:`Optional filming for fixture ${f.id}. Usable recording: ${video}. Original match fee unchanged.`,amountPence:500,dueDate:new Date(),paymentToken:randomBytes(24).toString('hex'),status:'OPEN',latePaymentFeeStatus:'WAIVED',latePaymentFeeNote:'No late fee on optional Veo recording.'},select:{id:true}});
-        await db.$executeRaw`UPDATE "VeoFixtureRequest" SET "chargeId"=${charge.id},revision=revision+1 WHERE "fixtureId"=${f.id} AND "teamId"=${r.teamId}`;
-      }
-    }
+    // New SIXFL TV Priority bookings never create a filming charge. Historic linked
+    // charges remain untouched here; failed/cancelled historic bookings are still
+    // handled by the existing cleanup below.
     await db.$executeRaw`UPDATE "VeoMatchBooking" SET state=${input.outcome},"recordingNote"=${input.note.trim().slice(0,1000)},"updatedAt"=NOW() WHERE "fixtureId"=${f.id}`;
     if (input.outcome!=='READY') {
       await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='CANCELLED',revision=revision+1 WHERE "fixtureId"=${f.id} AND status='ACCEPTED'`;
