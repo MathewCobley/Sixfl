@@ -4,6 +4,7 @@
 
 import { Prisma } from "@prisma/client";
 
+import { toLondonDateInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
@@ -22,6 +23,7 @@ export type LeagueTableRow = {
   goalDifference: number;
   points: number;
   recentForm: LeagueFormResult[];
+  positionChange: number | null;
 };
 
 type LeagueTableOptions = {
@@ -57,6 +59,7 @@ function createRow(input: {
     goalDifference: 0,
     points: 0,
     recentForm: [],
+    positionChange: null,
   };
 }
 
@@ -250,14 +253,83 @@ export async function getLeagueTable(
     recentForm: row.recentForm.slice(-5),
   }));
 
-  rows.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) {
-      return b.goalDifference - a.goalDifference;
+  const sortRows = (input: LeagueTableRow[]) => {
+    input.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.goalDifference !== a.goalDifference) {
+        return b.goalDifference - a.goalDifference;
+      }
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      return a.teamName.localeCompare(b.teamName);
+    });
+    return input;
+  };
+
+  sortRows(rows);
+
+  const countedFixtures = fixtures.filter(
+    (fixture) =>
+      fixture.result &&
+      allowedTeamIds.has(fixture.homeTeamId) &&
+      allowedTeamIds.has(fixture.awayTeamId),
+  );
+  const matchDates = [...new Set(countedFixtures.map((fixture) => toLondonDateInputValue(fixture.kickoffAt)))];
+
+  // Position arrows compare the current table with the table immediately before
+  // the latest completed matchnight. Do not invent movement after the first
+  // night, when there is no meaningful previous table yet.
+  if (matchDates.length >= 2) {
+    const latestMatchDate = matchDates.at(-1)!;
+    const previousRows = rows.map((row) => ({ ...row, recentForm: [...row.recentForm], positionChange: null }));
+
+    const previousByTeam = new Map(previousRows.map((row) => [row.teamId, row]));
+
+    for (const fixture of countedFixtures) {
+      if (!fixture.result || toLondonDateInputValue(fixture.kickoffAt) !== latestMatchDate) continue;
+
+      const home = previousByTeam.get(fixture.homeTeamId);
+      const away = previousByTeam.get(fixture.awayTeamId);
+      if (!home || !away) continue;
+
+      const homeScore = fixture.result.homeScore;
+      const awayScore = fixture.result.awayScore;
+
+      home.played = Math.max(0, home.played - 1);
+      away.played = Math.max(0, away.played - 1);
+      home.goalsFor -= homeScore;
+      home.goalsAgainst -= awayScore;
+      away.goalsFor -= awayScore;
+      away.goalsAgainst -= homeScore;
+
+      if (homeScore > awayScore) {
+        home.won = Math.max(0, home.won - 1);
+        away.lost = Math.max(0, away.lost - 1);
+        home.points = Math.max(0, home.points - 3);
+      } else if (awayScore > homeScore) {
+        away.won = Math.max(0, away.won - 1);
+        home.lost = Math.max(0, home.lost - 1);
+        away.points = Math.max(0, away.points - 3);
+      } else {
+        home.drawn = Math.max(0, home.drawn - 1);
+        away.drawn = Math.max(0, away.drawn - 1);
+        home.points = Math.max(0, home.points - 1);
+        away.points = Math.max(0, away.points - 1);
+      }
+
+      home.goalDifference = home.goalsFor - home.goalsAgainst;
+      away.goalDifference = away.goalsFor - away.goalsAgainst;
     }
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    return a.teamName.localeCompare(b.teamName);
-  });
+
+    sortRows(previousRows);
+    const previousPosition = new Map(
+      previousRows.map((row, index) => [row.teamId, index + 1]),
+    );
+
+    rows.forEach((row, index) => {
+      const before = previousPosition.get(row.teamId);
+      row.positionChange = before == null ? null : before - (index + 1);
+    });
+  }
 
   return rows;
 }
