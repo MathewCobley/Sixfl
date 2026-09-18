@@ -75,6 +75,10 @@ test('studio queues saved sources in editing order and requires confirmed result
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
+    const beforePreviewObjects=objects.size;
+    const preview=await studio.thumbnailPreviewResponse('match-a','HIGHLIGHTS',{headline:'LIVE PREVIEW',strapline:'Week 4',showScore:'true'});
+    assert.equal(preview.status,200);assert.match(preview.headers.get('content-type'),/png/);assert.equal(objects.size,beforePreviewObjects,'Live preview must not save or replace thumbnail storage');
+    const previewMeta=await sharp(Buffer.from(await preview.arrayBuffer())).metadata();assert.equal(previewMeta.width,1280);assert.equal(previewMeta.height,720);
     const saved=await studio.saveThumbnail('match-a','HIGHLIGHTS','admin',{headline:'NORTHALLERTON HIGHLIGHTS',strapline:'Week 4',showScore:true});assert.equal(saved.kind,'HIGHLIGHTS');assert.ok(saved.sizeBytes>1000);
     const thumbResponse=await studio.thumbnailResponse(new Request('https://sixfl.co.uk/test'),'match-a','HIGHLIGHTS');assert.equal(thumbResponse.status,200);assert.match(thumbResponse.headers.get('content-type'),/png/);
     const state=await studio.studioState('match-a');assert.equal(state.youtube.configured,true);assert.equal(state.youtube.connected,false);assert.equal(state.thumbnails.length,1);
@@ -91,8 +95,8 @@ test('studio queues saved sources in editing order and requires confirmed result
 });
 
 test('studio source keeps publishing explicit, private and isolated from customer notifications',()=>{
-  const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
-  assert.match(ui,/Approve & upload privately to YouTube/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
+  const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const thumbRoute=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/thumbnail/[kind]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
+  assert.match(ui,/Approve & upload privately to YouTube/);assert.match(ui,/Live preview/);assert.match(ui,/preview: "1"/);assert.match(thumbRoute,/thumbnailPreviewResponse/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
   assert.match(worker,/swipeVideo/);assert.match(worker,/generatedIntro/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/scoreBug=\$\{scoreBugPng/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
