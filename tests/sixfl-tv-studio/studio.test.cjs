@@ -29,12 +29,18 @@ const fixtureData = (id) => ({
   id, kickoffAt:new Date('2026-09-17T19:00:00Z'), status:'COMPLETED',
   league:{id:'league-a',name:'Northallerton Wednesday',season:'Autumn 2026'},
   homeTeam:{id:'team-a',name:'Town Hall 6s',logoUrl:null}, awayTeam:{id:'team-b',name:'Ballerz FC',logoUrl:null},
-  selections:[
+  selections:id==='legacy-lineup'?[]:[
     {selectionStatus:'SELECTED',isCaptain:true,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:00:00Z'),teamMember:{teamId:'team-a',user:{name:'Alex One'}}},
     {selectionStatus:'SELECTED',isCaptain:false,isGoalkeeper:true,createdAt:new Date('2026-09-17T18:01:00Z'),teamMember:{teamId:'team-a',user:{name:'Sam Keeper'}}},
+    {selectionStatus:'BACKUP',isCaptain:false,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:01:30Z'),teamMember:{teamId:'team-a',user:{name:'Backup Person'}}},
     {selectionStatus:'SELECTED',isCaptain:false,isGoalkeeper:true,createdAt:new Date('2026-09-17T18:02:00Z'),teamMember:{teamId:'team-b',user:{name:'Chris Three'}}},
     {selectionStatus:'NOT_SELECTED',isCaptain:false,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:03:00Z'),teamMember:{teamId:'team-b',user:{name:'Not Playing'}}},
   ],
+  playerMatchFees:id==='legacy-lineup'?[
+    {teamId:'team-a',status:'PAID',createdAt:new Date('2026-09-17T17:00:00Z'),teamMember:{user:{name:'Legacy One'}},prospect:null},
+    {teamId:'team-a',status:'OPEN',createdAt:new Date('2026-09-17T17:01:00Z'),teamMember:{user:{name:'Legacy Two'}},prospect:null},
+    {teamId:'team-b',status:'WAIVED',createdAt:new Date('2026-09-17T17:02:00Z'),teamMember:null,prospect:{firstName:'Guest',lastName:'Player'}},
+  ]:[],
   result:id==='no-result'?null:{id:'result-1',homeScore:4,awayScore:2,isDisputed:id==='disputed',overturn:null,teamMetadata:[
     {teamId:'team-a',scorers:[{name:'Alex One',goals:2,assists:0},{name:'Sam Two',goals:1,assists:1}],goalsRecorded:3},
     {teamId:'team-b',scorers:[{name:'Chris Three',goals:1,assists:0}],goalsRecorded:1},
@@ -43,22 +49,29 @@ const fixtureData = (id) => ({
 
 test('fixture graphics generate deterministic YouTube and video-card PNG shapes', async()=>{
   const brand=await sharp({create:{width:320,height:120,channels:4,background:{r:16,g:185,b:129,alpha:1}}}).png().toBuffer();
+  const fontRegular=fs.readFileSync('public/fonts/Inter-Regular.ttf');
+  const fontBold=fs.readFileSync('public/fonts/Inter-Bold.ttf');
   const originalFetch=global.fetch;
   global.fetch=async input=>{
     const url=String(input instanceof Request?input.url:input);
     if(url.endsWith('/Sixfl-tv.png')||url.endsWith('/logos/sixfl-ai-predictor.png'))return new Response(new Uint8Array(brand),{status:200,headers:{'content-type':'image/png'}});
+    if(url.endsWith('/fonts/Inter-Regular.ttf'))return new Response(new Uint8Array(fontRegular),{status:200,headers:{'content-type':'font/ttf'}});
+    if(url.endsWith('/fonts/Inter-Bold.ttf'))return new Response(new Uint8Array(fontBold),{status:200,headers:{'content-type':'font/ttf'}});
     throw new Error('Unexpected graphics fetch '+url);
   };
   try{
     const graphics=loader({})('src/lib/sixfl-tv/graphics.ts');
     const fixture={leagueName:'Northallerton Wednesday · Autumn 2026',kickoffLabel:'Thu, 17 Sep 2026',firstTeam:{name:'Town Hall 6s',logoUrl:null,score:4},secondTeam:{name:'Ballerz FC',logoUrl:null,score:2},scorers:['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']};
-    const thumb=await graphics.createSixflTvThumbnail({fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
+    const thumb=await graphics.createSixflTvThumbnail({kind:'HIGHLIGHTS',fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
+    const fullThumb=await graphics.createSixflTvThumbnail({kind:'FULL_MATCH',fixture,headline:'FULL MATCH',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
     const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
     const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk'});
     const scoreBug=await graphics.createSixflTvScoreBug({fixture,siteUrl:'https://sixfl.co.uk'});
     const lineup=await graphics.createSixflTvLineupCard({fixture:{...fixture,firstTeamLineup:['Alex One (C)','Sam Keeper (GK)'],secondTeamLineup:['Chris Three (GK)'],predictor:{firstTeamScore:3,secondTeamScore:2}},siteUrl:'https://sixfl.co.uk'});
-    const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata(), lm=await sharp(lineup).metadata();
+    const tm=await sharp(thumb).metadata(), ftm=await sharp(fullThumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata(), lm=await sharp(lineup).metadata();
     assert.equal(tm.format,'png');assert.equal(tm.width,1280);assert.equal(tm.height,720);
+    assert.equal(ftm.format,'png');assert.equal(ftm.width,1280);assert.equal(ftm.height,720);
+    assert.notDeepEqual(thumb,fullThumb,'Highlights and full-match thumbnails need visibly distinct templates');
     assert.equal(cm.format,'png');assert.equal(cm.width,1920);assert.equal(cm.height,1080);
     assert.equal(gm.format,'png');assert.equal(gm.width,1920);assert.equal(gm.height,1080);
     assert.equal(sm.format,'png');assert.equal(sm.width,1920);assert.equal(sm.height,1080);
@@ -101,11 +114,14 @@ test('studio queues saved sources in editing order and requires confirmed result
     const first=await studio.requestRenders('match-a','admin');assert.equal(first.renders.length,2);
     const second=await studio.requestRenders('match-a','admin');assert.deepEqual(second.renders.map(x=>x.id).sort(),first.renders.map(x=>x.id).sort());
     const jobs=await db.$queryRaw`SELECT "id","kind","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind"`;assert.equal(jobs.length,2);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===7),'Renderer version must invalidate old finished previews after editing changes');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===8),'Renderer version must invalidate old finished previews after editing changes');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
     assert.deepEqual(graphic.firstTeamLineup,['Alex One (C)','Sam Keeper (GK)']);assert.deepEqual(graphic.secondTeamLineup,['Chris Three (GK)']);
+    assert.ok(!graphic.firstTeamLineup.includes('Backup Person'),'Backups are not part of the matchday lineup card');
+    const legacyGraphic=await studio.studioGraphicFixture('legacy-lineup');
+    assert.deepEqual(legacyGraphic.firstTeamLineup,['Legacy One','Legacy Two']);assert.deepEqual(legacyGraphic.secondTeamLineup,['Guest Player']);
     assert.deepEqual(graphic.firstTeamForm,['W','D']);assert.deepEqual(graphic.secondTeamForm,['L']);
     assert.deepEqual(graphic.predictor,{firstTeamScore:3,secondTeamScore:2,headline:'Town Hall 6s edged'});
     const beforePreviewObjects=objects.size;
@@ -131,8 +147,8 @@ test('studio source keeps publishing explicit, private and isolated from custome
   const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const graphics=fs.readFileSync('src/lib/sixfl-tv/graphics.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const thumbRoute=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/thumbnail/[kind]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
   assert.match(ui,/Approve & upload privately to YouTube/);assert.match(ui,/Live preview/);assert.match(ui,/preview: "1"/);assert.match(thumbRoute,/thumbnailPreviewResponse/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
-  assert.match(worker,/swipeVideo/);assert.match(worker,/LINEUP_SECONDS/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/createSixflTvLineupCard/);assert.match(worker,/footageOverlay=\$\{job\.kind/);
-  assert.match(graphics,/brandingAsset\(siteUrl, "\/Sixfl-tv\.png"\)/);assert.match(graphics,/brandingAsset\(siteUrl, "\/logos\/sixfl-ai-predictor\.png"\)/);assert.doesNotMatch(graphics,/node:fs|readFile\(|process\.cwd\(\)/);assert.doesNotMatch(graphics,/>SIXFL TV<\/text>/);assert.doesNotMatch(graphics,/>SIXFL PREDICTOR/);assert.match(graphics,/RECENT FORM/);assert.match(graphics,/PRE-MATCH PREDICTION/);
+  assert.match(worker,/swipeVideo/);assert.match(worker,/LINEUP_SECONDS/);assert.match(worker,/PREDICTOR_SECONDS/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/createSixflTvLineupCard/);assert.match(worker,/createSixflTvPredictorCard/);assert.match(worker,/predictorCard=\$\{predictorBytes/);assert.match(worker,/footageOverlay=\$\{job\.kind/);
+  assert.match(graphics,/brandingAsset\(siteUrl, "\/Sixfl-tv\.png"\)/);assert.match(graphics,/brandingAsset\(siteUrl, "\/logos\/sixfl-ai-predictor\.png"\)/);assert.match(graphics,/sixflFont\(siteUrl, "\/fonts\/Inter-Regular\.ttf"\)/);assert.match(graphics,/sixflFont\(siteUrl, "\/fonts\/Inter-Bold\.ttf"\)/);assert.doesNotMatch(graphics,/node:fs|readFile\(|process\.cwd\(\)/);assert.doesNotMatch(graphics,/>SIXFL TV<\/text>/);assert.doesNotMatch(graphics,/>SIXFL PREDICTOR/);assert.match(graphics,/RECENT FORM/);assert.match(graphics,/PRE-MATCH PREDICTION/);assert.match(graphics,/PREDICTED BEFORE KICK-OFF/);assert.match(graphics,/typeLabel = isHighlights \? "HIGHLIGHTS" : "FULL MATCH"/);assert.match(graphics,/badgeGlow/);assert.match(graphics,/scoreShadow/);assert.match(graphics,/scorerTextForTeam/);assert.match(graphics,/GOALSCORERS/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
