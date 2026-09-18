@@ -377,7 +377,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const mediaInputs = [...intro, ...content, ...outro];
     const totalMediaBytes = Math.max(1, mediaInputs.reduce((sum, input) => sum + Number(input.sizeBytes), 0));
     let completedMediaBytes = 0;
-    const normaliseInput = async (input: InputRow, source: string, normal: string, overlay: string | undefined, label: string) => {
+    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string) => {
       const mediaBytes = Math.max(1, Number(input.sizeBytes));
       const progressFor = (fraction: number) =>
         12 + ((completedMediaBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
