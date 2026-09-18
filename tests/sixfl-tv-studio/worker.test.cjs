@@ -42,6 +42,9 @@ async function loadWorker(db, objects, uploadHook) {
     '../src/lib/sixfl-tv/thumbnail-background': {
       sixflTvThumbnailBackgroundKey: fixtureId => `sixfl-tv-thumbnail-background/v1/${fixtureId}/match-action.jpg`,
     },
+    '../src/lib/sixfl-tv/goal-clip-poster': {
+      sixflTvGoalClipPosterKey: assetId => `sixfl-tv-goal-clips/v1/${assetId}.jpg`,
+    },
     '../src/lib/goal-of-month/calendar': {
       monthlyCycle: () => ({ latestClosedMonth: '2026-08' }),
     },
