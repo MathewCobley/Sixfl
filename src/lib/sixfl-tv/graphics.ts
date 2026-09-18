@@ -277,6 +277,7 @@ export async function createSixflTvVideoCard(input: {
   const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH RESULT";
   const scorerLines = input.mode === "FULL_TIME" ? (input.fixture.scorers || []).slice(0, 3).map(value => fit(value, 82)) : [];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${fontCss}
     ${stadiumBackground(1920, 1080)}
     ${logoImage(sixflTvLogoBytes, 760, 28, 400, 128)}
     <text x="960" y="225" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="60" font-weight="900" fill="#ffffff">${xml(cardHeading)}</text>
