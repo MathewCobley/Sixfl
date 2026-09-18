@@ -42,19 +42,28 @@ const fixtureData = (id) => ({
 });
 
 test('fixture graphics generate deterministic YouTube and video-card PNG shapes', async()=>{
-  const graphics=loader({})('src/lib/sixfl-tv/graphics.ts');
-  const fixture={leagueName:'Northallerton Wednesday · Autumn 2026',kickoffLabel:'Thu, 17 Sep 2026',firstTeam:{name:'Town Hall 6s',logoUrl:null,score:4},secondTeam:{name:'Ballerz FC',logoUrl:null,score:2},scorers:['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']};
-  const thumb=await graphics.createSixflTvThumbnail({fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
-  const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
-  const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk'});
-  const scoreBug=await graphics.createSixflTvScoreBug({fixture});
-  const lineup=await graphics.createSixflTvLineupCard({fixture:{...fixture,firstTeamLineup:['Alex One (C)','Sam Keeper (GK)'],secondTeamLineup:['Chris Three (GK)']}});
-  const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata(), lm=await sharp(lineup).metadata();
-  assert.equal(tm.format,'png');assert.equal(tm.width,1280);assert.equal(tm.height,720);
-  assert.equal(cm.format,'png');assert.equal(cm.width,1920);assert.equal(cm.height,1080);
-  assert.equal(gm.format,'png');assert.equal(gm.width,1920);assert.equal(gm.height,1080);
-  assert.equal(sm.format,'png');assert.equal(sm.width,1920);assert.equal(sm.height,1080);
-  assert.equal(lm.format,'png');assert.equal(lm.width,1920);assert.equal(lm.height,1080);
+  const brand=await sharp({create:{width:320,height:120,channels:4,background:{r:16,g:185,b:129,alpha:1}}}).png().toBuffer();
+  const originalFetch=global.fetch;
+  global.fetch=async input=>{
+    const url=String(input instanceof Request?input.url:input);
+    if(url.endsWith('/Sixfl-tv.png')||url.endsWith('/logos/sixfl-ai-predictor.png'))return new Response(new Uint8Array(brand),{status:200,headers:{'content-type':'image/png'}});
+    throw new Error('Unexpected graphics fetch '+url);
+  };
+  try{
+    const graphics=loader({})('src/lib/sixfl-tv/graphics.ts');
+    const fixture={leagueName:'Northallerton Wednesday · Autumn 2026',kickoffLabel:'Thu, 17 Sep 2026',firstTeam:{name:'Town Hall 6s',logoUrl:null,score:4},secondTeam:{name:'Ballerz FC',logoUrl:null,score:2},scorers:['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']};
+    const thumb=await graphics.createSixflTvThumbnail({fixture,headline:'MATCH HIGHLIGHTS',strapline:'Northallerton Wednesday',showScore:true,siteUrl:'https://sixfl.co.uk'});
+    const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
+    const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk'});
+    const scoreBug=await graphics.createSixflTvScoreBug({fixture,siteUrl:'https://sixfl.co.uk'});
+    const lineup=await graphics.createSixflTvLineupCard({fixture:{...fixture,firstTeamLineup:['Alex One (C)','Sam Keeper (GK)'],secondTeamLineup:['Chris Three (GK)'],predictor:{firstTeamScore:3,secondTeamScore:2}},siteUrl:'https://sixfl.co.uk'});
+    const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata(), lm=await sharp(lineup).metadata();
+    assert.equal(tm.format,'png');assert.equal(tm.width,1280);assert.equal(tm.height,720);
+    assert.equal(cm.format,'png');assert.equal(cm.width,1920);assert.equal(cm.height,1080);
+    assert.equal(gm.format,'png');assert.equal(gm.width,1920);assert.equal(gm.height,1080);
+    assert.equal(sm.format,'png');assert.equal(sm.width,1920);assert.equal(sm.height,1080);
+    assert.equal(lm.format,'png');assert.equal(lm.width,1920);assert.equal(lm.height,1080);
+  }finally{global.fetch=originalFetch;}
 });
 
 test('studio queues saved sources in editing order and requires confirmed result', async t=>{
@@ -123,7 +132,7 @@ test('studio source keeps publishing explicit, private and isolated from custome
   assert.match(ui,/Approve & upload privately to YouTube/);assert.match(ui,/Live preview/);assert.match(ui,/preview: "1"/);assert.match(thumbRoute,/thumbnailPreviewResponse/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
   assert.match(worker,/swipeVideo/);assert.match(worker,/LINEUP_SECONDS/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/createSixflTvLineupCard/);assert.match(worker,/footageOverlay=\$\{job\.kind/);
-  assert.match(graphics,/public", "Sixfl-tv\.png"/);assert.match(graphics,/public", "logos", "sixfl-ai-predictor\.png"/);assert.doesNotMatch(graphics,/>SIXFL TV<\/text>/);assert.doesNotMatch(graphics,/>SIXFL PREDICTOR/);assert.match(graphics,/RECENT FORM/);assert.match(graphics,/PRE-MATCH PREDICTION/);
+  assert.match(graphics,/brandingAsset\(siteUrl, "\/Sixfl-tv\.png"\)/);assert.match(graphics,/brandingAsset\(siteUrl, "\/logos\/sixfl-ai-predictor\.png"\)/);assert.doesNotMatch(graphics,/node:fs|readFile\(|process\.cwd\(\)/);assert.doesNotMatch(graphics,/>SIXFL TV<\/text>/);assert.doesNotMatch(graphics,/>SIXFL PREDICTOR/);assert.match(graphics,/RECENT FORM/);assert.match(graphics,/PRE-MATCH PREDICTION/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
