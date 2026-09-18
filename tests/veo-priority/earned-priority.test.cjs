@@ -7,7 +7,7 @@ const allocator = fs.readFileSync('src/lib/veo/allocator.ts', 'utf8');
 const bookings = fs.readFileSync('src/lib/veo/fixture-bookings.ts', 'utf8');
 const nightBoard = fs.readFileSync('src/lib/veo/night-board.ts', 'utf8');
 const captainCard = fs.readFileSync('src/components/captain/CaptainVeoPriorityCard.tsx', 'utf8');
-const captainForm = fs.readFileSync('src/components/captain/FixtureVeoConfirmationForm.tsx', 'utf8');
+const captainConfirmationPage = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/page.tsx', 'utf8');
 const teamList = fs.readFileSync('src/app/(admin)/admin/teams/page.tsx', 'utf8');
 const captainLayout = fs.readFileSync('src/app/captain/team/[teamid]/layout.tsx', 'utf8');
 const templateForm = fs.readFileSync('src/components/admin/email-templates/EmailTemplateForm.tsx', 'utf8');
@@ -66,12 +66,14 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /missed/);
   assert.match(captainCard, /players who played/);
   assert.match(captainCard, /60\/100/);
-  assert.doesNotMatch(captainForm, /£5 extra for the whole team/);
-  assert.match(captainForm, /earned automatically/);
+  assert.doesNotMatch(captainConfirmationPage, /FixtureVeoConfirmationForm|CaptainFixtureConfirmation|readFixtureVeoOffer|confirmFixtureWithVeoAction/);
+  assert.match(captainConfirmationPage, /<form action=\{confirmFixtureAction\}/);
+  assert.match(captainConfirmationPage, /Yes — we can play/);
+  assert.match(captainConfirmationPage, /markFixtureUnavailableAction/);
 });
 
 test('legacy £5 pilot fees are retired without leaving fee UI or double-credit paths', () => {
-  for (const source of [adminPriorityPage, adminNightPanel, captainBookings, captainFixtures, captainForm]) {
+  for (const source of [adminPriorityPage, adminNightPanel, captainBookings, captainFixtures, captainConfirmationPage]) {
     assert.doesNotMatch(source, /historic £5|older Veo Priority|Veo supplement value|agreedPence === 500|View Team payments/);
   }
   assert.match(feeRetirementMigration, /title LIKE 'Veo Priority — %'/);
