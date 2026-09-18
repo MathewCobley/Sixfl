@@ -52,8 +52,8 @@ export default function MonthlyGoalsPanel() {
 
   const selected = data.nominations.find(period => period.key === month) ?? data.nominations[0];
   const fixture = selected?.fixtures.find(row => row.id === fixtureId);
-  const clip = fixture?.clips.find(row => row.id === clipAssetId);
-  const usesClips = Boolean(fixture?.clips.length);
+  const clip = fixture?.clips?.find(row => row.id === clipAssetId);
+  const usesClips = Boolean(fixture?.clips?.length);
   const eligible = data.viewer.eligible;
   const available = selected ? selected.usedNominations < selected.maxNominations : false;
 
