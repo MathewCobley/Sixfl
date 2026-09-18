@@ -7,15 +7,19 @@ import { MONTHLY_FINALIST_LIMIT, MONTHLY_NOMINATION_LIMIT, monthKey, monthlyCycl
 type Db = Pick<Prisma.TransactionClient, "$queryRaw" | "$executeRaw">;
 export type MonthlyCandidate = {
   id: string; fixtureId: string; teamId: string; monthKey: string;
-  goalNumber: number; scorerName: string | null; createdAt: Date;
+  goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null;
+  scorerName: string | null; createdAt: Date;
   teamName: string; teamLogoUrl: string | null; opponentName: string;
   leagueName: string; kickoffAt: Date; sixflTvUrl: string;
   nominationCount: number; voteCount: number;
 };
+export type MonthlyClip = {
+  id: string; fixtureId: string; clipNumber: number; filename: string;
+};
 export type MonthlyFixture = {
   id: string; kickoffAt: Date; homeTeamId: string; awayTeamId: string;
   homeTeamName: string; awayTeamName: string; homeScore: number; awayScore: number;
-  sixflTvUrl: string; leagueName: string;
+  sixflTvUrl: string; leagueName: string; clips: MonthlyClip[];
 };
 export type AwardTransition = {
   firstMonth: string; weeklyNominationsCloseAt: Date; weeklyVotingClosesAt: Date;
@@ -38,26 +42,30 @@ export function safeVideoLinks(value: string): string[] {
 }
 
 export function monthlyCandidatePayload(row: MonthlyCandidate) {
+  const clipNumber = row.clipNumber == null ? null : Number(row.clipNumber);
   return {
     id: row.id, fixtureId: row.fixtureId, teamId: row.teamId, monthKey: row.monthKey,
-    goalNumber: Number(row.goalNumber), scorerName: row.scorerName,
+    goalNumber: row.goalNumber == null ? null : Number(row.goalNumber),
+    clipAssetId: row.clipAssetId, clipNumber, scorerName: row.scorerName,
     teamName: row.teamName, teamLogoUrl: row.teamLogoUrl, opponentName: row.opponentName,
     leagueName: row.leagueName, kickoffAt: row.kickoffAt.toISOString(),
     nominationCount: Number(row.nominationCount), voteCount: Number(row.voteCount),
+    clipVideoUrl: row.clipAssetId ? `/api/goal-of-month/clips/${encodeURIComponent(row.id)}` : null,
+    thumbnailUrl: row.clipAssetId ? `/api/goal-of-month/thumbnails/${encodeURIComponent(row.id)}` : null,
     videoUrls: safeVideoLinks(row.sixflTvUrl),
   };
 }
 
-/** A candidate is one fixture/goal, irrespective of how many people nominate it.
- * Nominations close before voting begins, so this ordering cannot change through
- * another player nomination once the six-goal ballot is open. */
+/** A candidate is one exact SIXFL TV clip when clipAssetId is present.
+ * Older nominations retain their fixture/goalNumber identity unchanged. */
 export async function getMonthlyCandidates(key: string, limit = 300, db: Db = prisma): Promise<MonthlyCandidate[]> {
   const period = monthlyPeriod(key);
   return db.$queryRaw<MonthlyCandidate[]>(Prisma.sql`
-    SELECT c."id", c."fixtureId", c."teamId", c."monthKey", c."goalNumber", c."scorerName", c."createdAt",
+    SELECT c."id", c."fixtureId", c."teamId", c."monthKey", c."goalNumber", c."clipAssetId",
+      clip."clipNumber", c."scorerName", c."createdAt",
       t."name" AS "teamName", t."logoUrl" AS "teamLogoUrl",
       CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
-      l."name" AS "leagueName", f."kickoffAt", f."sixflTvUrl",
+      l."name" AS "leagueName", f."kickoffAt", COALESCE(f."sixflTvUrl", '') AS "sixflTvUrl",
       COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
     FROM "GoalOfMonthCandidate" c
     JOIN "Fixture" f ON f."id" = c."fixtureId"
@@ -65,14 +73,23 @@ export async function getMonthlyCandidates(key: string, limit = 300, db: Db = pr
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
     JOIN "League" l ON l."id" = f."leagueId"
+    LEFT JOIN "SixflTvFootageAsset" clip
+      ON clip."id" = c."clipAssetId"
+      AND clip."fixtureId" = c."fixtureId"
+      AND clip."kind" = 'CLIP'
     LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId" = c."id"
     LEFT JOIN "GoalOfMonthVote" v ON v."candidateId" = c."id" AND v."monthKey" = c."monthKey"
     WHERE c."monthKey" = ${key} AND c."status" = 'ACTIVE'
       AND f."status"::text = 'COMPLETED' AND f."publishedAt" IS NOT NULL
       AND f."kickoffAt" >= ${period.startsAt} AND f."kickoffAt" < ${period.endsAt}
-      AND f."sixflTvRecorded" = TRUE AND COALESCE(f."sixflTvUrl", '') <> ''
       AND c."teamId" IN (f."homeTeamId", f."awayTeamId")
-    GROUP BY c."id", t."name", t."logoUrl", f."homeTeamId", away."name", home."name", l."name", f."kickoffAt", f."sixflTvUrl"
+      AND (
+        (c."clipAssetId" IS NOT NULL AND clip."state" = 'READY' AND clip."clipNumber" IS NOT NULL)
+        OR
+        (c."clipAssetId" IS NULL AND f."sixflTvRecorded" = TRUE AND COALESCE(f."sixflTvUrl", '') <> '')
+      )
+    GROUP BY c."id", t."name", t."logoUrl", f."homeTeamId", away."name", home."name",
+      l."name", f."kickoffAt", f."sixflTvUrl", clip."clipNumber"
     ORDER BY COUNT(DISTINCT n."id") DESC, c."createdAt" ASC, c."id" ASC
     LIMIT ${Math.max(1, Math.min(Math.trunc(limit), 1000))}
   `);
@@ -80,11 +97,11 @@ export async function getMonthlyCandidates(key: string, limit = 300, db: Db = pr
 
 export async function getMonthlyFixtures(key: string, db: Db = prisma, fixtureId?: string): Promise<MonthlyFixture[]> {
   const period = monthlyPeriod(key);
-  return db.$queryRaw<MonthlyFixture[]>(Prisma.sql`
+  const fixtures = await db.$queryRaw<Omit<MonthlyFixture, "clips">[]>(Prisma.sql`
     SELECT f."id", f."kickoffAt", f."homeTeamId", f."awayTeamId",
       home."name" AS "homeTeamName", away."name" AS "awayTeamName",
       r."homeScore"::int AS "homeScore", r."awayScore"::int AS "awayScore",
-      f."sixflTvUrl", l."name" AS "leagueName"
+      COALESCE(f."sixflTvUrl", '') AS "sixflTvUrl", l."name" AS "leagueName"
     FROM "Fixture" f
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
@@ -92,10 +109,33 @@ export async function getMonthlyFixtures(key: string, db: Db = prisma, fixtureId
     JOIN "MatchResult" r ON r."fixtureId" = f."id"
     WHERE f."kickoffAt" >= ${period.startsAt} AND f."kickoffAt" < ${period.endsAt}
       AND f."status"::text = 'COMPLETED' AND f."publishedAt" IS NOT NULL
-      AND f."sixflTvRecorded" = TRUE AND COALESCE(f."sixflTvUrl", '') <> ''
+      AND (
+        (f."sixflTvRecorded" = TRUE AND COALESCE(f."sixflTvUrl", '') <> '')
+        OR EXISTS (
+          SELECT 1 FROM "SixflTvFootageAsset" a
+          WHERE a."fixtureId" = f."id" AND a."kind" = 'CLIP'
+            AND a."state" = 'READY' AND a."clipNumber" IS NOT NULL
+        )
+      )
       ${fixtureId ? Prisma.sql`AND f."id" = ${fixtureId}` : Prisma.empty}
     ORDER BY f."kickoffAt" DESC, f."id" ASC
   `);
+  if (!fixtures.length) return [];
+
+  const clips = await db.$queryRaw<MonthlyClip[]>(Prisma.sql`
+    SELECT "id", "fixtureId", "clipNumber", "filename"
+    FROM "SixflTvFootageAsset"
+    WHERE "fixtureId" IN (${Prisma.join(fixtures.map(row => row.id))})
+      AND "kind" = 'CLIP' AND "state" = 'READY' AND "clipNumber" IS NOT NULL
+    ORDER BY "fixtureId", "clipNumber", "createdAt", "id"
+  `);
+  const clipsByFixture = new Map<string, MonthlyClip[]>();
+  for (const clip of clips) {
+    const list = clipsByFixture.get(clip.fixtureId) ?? [];
+    list.push({ ...clip, clipNumber: Number(clip.clipNumber) });
+    clipsByFixture.set(clip.fixtureId, list);
+  }
+  return fixtures.map(fixture => ({ ...fixture, clips: clipsByFixture.get(fixture.id) ?? [] }));
 }
 
 export function pickMonthlyWinner(candidates: MonthlyCandidate[]): MonthlyCandidate | null {
@@ -137,7 +177,15 @@ export async function getMonthlyPageData(viewerId: string | null, now = new Date
     ]);
     return {
       key, label: period.label, closesAt: period.nominationsCloseAt.toISOString(),
-      fixtures: fixtures.map(f => ({ ...f, kickoffAt: f.kickoffAt.toISOString(), videoUrls: safeVideoLinks(f.sixflTvUrl) })),
+      fixtures: fixtures.map(f => ({
+        ...f,
+        kickoffAt: f.kickoffAt.toISOString(),
+        videoUrls: safeVideoLinks(f.sixflTvUrl),
+        clips: f.clips.map(clip => ({
+          ...clip,
+          videoUrl: `/api/goal-of-month/fixtures/${encodeURIComponent(f.id)}/clips/${encodeURIComponent(clip.id)}`,
+        })),
+      })),
       candidates: candidates.map(monthlyCandidatePayload), nominatedCandidateIds: mine.map(n => n.candidateId),
       usedNominations: mine.length, maxNominations: MONTHLY_NOMINATION_LIMIT,
     };
@@ -164,39 +212,68 @@ export class GoalAwardError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
 
-export async function nominateMonthlyGoal(input: { userId: string; fixtureId: string; scoringTeamId: string; goalNumber: number; scorerName: string | null }, now = new Date()) {
+export async function nominateMonthlyGoal(input: {
+  userId: string;
+  fixtureId: string;
+  scoringTeamId: string;
+  scorerName: string | null;
+  clipAssetId?: string | null;
+  goalNumber?: number | null;
+}, now = new Date()) {
   return prisma.$transaction(async tx => {
-    // Serialize the user's allowance and this fixture's goal identity separately.
+    const clipAssetId = input.clipAssetId ?? null;
+    const goalNumber = input.goalNumber ?? null;
+    const identity = clipAssetId ? `clip:${clipAssetId}` : `goal:${goalNumber ?? ""}`;
+
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${'monthly-goal-user:' + input.userId}, 0))`);
-    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${'monthly-goal:' + input.fixtureId + ':' + input.goalNumber}, 0))`);
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${'monthly-goal:' + input.fixtureId + ':' + identity}, 0))`);
+
     const [fixtureDate] = await tx.$queryRaw<Array<{ kickoffAt: Date }>>(Prisma.sql`SELECT "kickoffAt" FROM "Fixture" WHERE "id" = ${input.fixtureId}`);
     if (!fixtureDate) throw new GoalAwardError("That fixture is not available to nominate.", 400);
     const key = monthKey(fixtureDate.kickoffAt);
     const transition = await getAwardTransition(tx);
     if (key < transition.firstMonth || !nominationOpen(key, now)) throw new GoalAwardError("Nominations for that match month are closed.");
+
     const [fixture] = await getMonthlyFixtures(key, tx, input.fixtureId);
-    if (!fixture || !safeVideoLinks(fixture.sixflTvUrl).length) throw new GoalAwardError("Choose a completed, published SIXFL TV fixture with available footage.", 400);
-    const goals = Number(fixture.homeScore) + Number(fixture.awayScore);
-    if (!Number.isInteger(input.goalNumber) || input.goalNumber < 1 || input.goalNumber > goals)
-      throw new GoalAwardError("Choose a valid goal number from that match.", 400);
+    if (!fixture) throw new GoalAwardError("Choose a completed, published SIXFL TV fixture with available footage.", 400);
     if (![fixture.homeTeamId, fixture.awayTeamId].includes(input.scoringTeamId))
       throw new GoalAwardError("The scoring team must have played in that match.", 400);
-    const [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string }>>(Prisma.sql`
-      SELECT "id", "teamId", "status" FROM "GoalOfMonthCandidate" WHERE "fixtureId" = ${input.fixtureId} AND "goalNumber" = ${input.goalNumber}
-    `);
-    if (existing && (existing.status !== 'ACTIVE' || existing.teamId !== input.scoringTeamId))
+
+    let existing: { id: string; teamId: string; status: string } | undefined;
+    if (clipAssetId) {
+      const clip = fixture.clips.find(row => row.id === clipAssetId);
+      if (!clip) throw new GoalAwardError("Choose an available SIXFL TV clip from that match.", 400);
+      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string }>>(Prisma.sql`
+        SELECT "id", "teamId", "status" FROM "GoalOfMonthCandidate"
+        WHERE "clipAssetId" = ${clipAssetId}
+      `);
+    } else {
+      const goals = Number(fixture.homeScore) + Number(fixture.awayScore);
+      if (!Number.isInteger(goalNumber) || Number(goalNumber) < 1 || Number(goalNumber) > goals)
+        throw new GoalAwardError("Choose a valid goal number from that match.", 400);
+      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string }>>(Prisma.sql`
+        SELECT "id", "teamId", "status" FROM "GoalOfMonthCandidate"
+        WHERE "fixtureId" = ${input.fixtureId} AND "clipAssetId" IS NULL AND "goalNumber" = ${goalNumber}
+      `);
+    }
+
+    if (existing && (existing.status !== "ACTIVE" || existing.teamId !== input.scoringTeamId))
       throw new GoalAwardError("That goal was removed or has a different scoring team recorded. Ask SIXFL to review it.");
+
     const mine = await tx.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
       SELECT n."candidateId" FROM "GoalOfMonthNomination" n JOIN "GoalOfMonthCandidate" c ON c."id" = n."candidateId"
       WHERE n."userId" = ${input.userId} AND c."monthKey" = ${key} AND c."status" = 'ACTIVE'
     `);
     if (existing && mine.some(n => n.candidateId === existing.id)) return { candidateId: existing.id, monthKey: key, alreadyNominated: true };
     if (mine.length >= MONTHLY_NOMINATION_LIMIT) throw new GoalAwardError("You have used your three nominations for this month.");
+
     const candidateId = existing?.id ?? randomUUID();
-    if (!existing) await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "GoalOfMonthCandidate" ("id", "fixtureId", "teamId", "monthKey", "goalNumber", "scorerName")
-      VALUES (${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${input.goalNumber}, ${input.scorerName})
-    `);
+    if (!existing) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "GoalOfMonthCandidate" ("id", "fixtureId", "teamId", "monthKey", "goalNumber", "clipAssetId", "scorerName")
+        VALUES (${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${goalNumber}, ${clipAssetId}, ${input.scorerName})
+      `);
+    }
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "GoalOfMonthNomination" ("id", "candidateId", "userId") VALUES (${randomUUID()}, ${candidateId}, ${input.userId})
       ON CONFLICT ("candidateId", "userId") DO NOTHING

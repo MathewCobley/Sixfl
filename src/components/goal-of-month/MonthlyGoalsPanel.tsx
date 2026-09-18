@@ -14,6 +14,7 @@ export default function MonthlyGoalsPanel() {
   const { data, loading, error, refresh } = useMonthlyGoals();
   const [month, setMonth] = useState("");
   const [fixtureId, setFixtureId] = useState("");
+  const [clipAssetId, setClipAssetId] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [feedback, setFeedback] = useState("");
@@ -29,26 +30,40 @@ export default function MonthlyGoalsPanel() {
       const response = await fetch("/api/goal-of-month/community", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Could not save your selection.");
-      setFeedback(payload.action === "vote" ? "Your vote is saved. You can change it before voting closes." : result.alreadyNominated ? "You have already nominated this goal." : "Nomination saved. The goal and its linked footage are now in the nominees.");
+      setFeedback(payload.action === "vote" ? "Your vote is saved. You can change it before voting closes." : result.alreadyNominated ? "You have already nominated this goal." : "Nomination saved. The exact SIXFL TV clip is now attached to this goal.");
       await refresh();
     } catch (failure) {
       setFailed(true);
       setFeedback(failure instanceof Error && failure.name !== "AbortError" ? failure.message : "The save could not be confirmed. Refresh to check your selection before trying again.");
     } finally { clearTimeout(timeout); inFlight.current = false; setBusy(false); }
   }
-  const nominate = (goal: GoalNominee) => void save({ action: "nominate", fixtureId: goal.fixtureId, scoringTeamId: goal.teamId, goalNumber: goal.goalNumber, scorerName: goal.scorerName });
+
+  const nominate = (goal: GoalNominee) => void save({
+    action: "nominate",
+    fixtureId: goal.fixtureId,
+    scoringTeamId: goal.teamId,
+    clipAssetId: goal.clipAssetId,
+    goalNumber: goal.goalNumber,
+    scorerName: goal.scorerName,
+  });
+
   if (loading && !data) return <p role="status" className="p-6 text-white/70">Loading Goal of the Month…</p>;
   if (!data) return <div className="rounded-2xl border border-red-300/20 p-6"><p role="alert">{error || "Competition unavailable."}</p><button type="button" onClick={() => void refresh()} className="mt-3 underline">Try again</button></div>;
+
   const selected = data.nominations.find(period => period.key === month) ?? data.nominations[0];
   const fixture = selected?.fixtures.find(row => row.id === fixtureId);
+  const clip = fixture?.clips?.find(row => row.id === clipAssetId);
+  const usesClips = Boolean(fixture?.clips?.length);
   const eligible = data.viewer.eligible;
   const available = selected ? selected.usedNominations < selected.maxNominations : false;
+
   return (
     <div className="space-y-8">
       <div role={failed ? "alert" : "status"} aria-live="polite" className={failed ? "text-red-200" : "text-emerald-100"}>{feedback}</div>
       {error ? <p role="alert" className="text-amber-200">{error} <button type="button" onClick={() => void refresh()} className="underline">Refresh</button></p> : null}
       {!eligible ? <p className="rounded-xl border border-white/10 p-4 text-sm text-white/70">Anyone can watch. Nominations and voting need a verified SIXFL player or captain account. <Link href="/login?callbackUrl=%2Fgoal-of-the-month" className="text-emerald-200 underline">Sign in to take part</Link></p> : null}
       {data.legacy.votingMayBeOpen ? <p className="rounded-xl border border-amber-300/20 bg-amber-400/5 p-4 text-sm text-amber-100">The final weekly round is finishing on its original timetable. Its existing nominations and votes are preserved. <Link href="/goal-of-the-week?legacy=1" className="underline">Open the final weekly round and archive</Link>.</p> : null}
+
       {data.voting.open ? (
         <section aria-labelledby="monthly-voting" className="space-y-4 rounded-3xl border border-amber-300/25 bg-amber-400/5 p-5">
           <h2 id="monthly-voting" className="text-2xl font-bold">Vote for {data.voting.label}</h2>
@@ -57,33 +72,77 @@ export default function MonthlyGoalsPanel() {
           {!data.voting.candidates.length ? <p>No goals reached this month’s ballot.</p> : null}
         </section>
       ) : null}
+
       {selected ? (
         <section aria-labelledby="monthly-nominees" className="space-y-5 rounded-3xl border border-fuchsia-300/20 bg-white/[0.03] p-5 sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div><h2 id="monthly-nominees" className="text-2xl font-bold">{selected.label} — current nominees</h2><p className="mt-2 text-sm text-white/60">Nominate until {deadline(selected.closesAt)} UK time. Goals qualify by match date.</p></div>
-            {data.nominations.length > 1 ? <label className="text-sm">Award month<select aria-label="Award month" value={selected.key} onChange={event => { setMonth(event.target.value); setFixtureId(""); }} className={field}>{data.nominations.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label> : null}
+            {data.nominations.length > 1 ? <label className="text-sm">Award month<select aria-label="Award month" value={selected.key} onChange={event => { setMonth(event.target.value); setFixtureId(""); setClipAssetId(""); }} className={field}>{data.nominations.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label> : null}
           </div>
-          <p className="text-sm text-white/60">Watch the videos attached to each nominated fixture. Goal numbers identify the nominated moments; these links may contain match highlights rather than a separate goal-only clip.</p>
+
+          <p className="text-sm text-white/60">New nominations use the exact SIXFL TV clip, so everyone can watch the goal directly here. Older nominations keep their original match-video links.</p>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{selected.candidates.map(goal => <GoalNomineeCard key={goal.id} goal={goal} onAction={() => nominate(goal)} actionLabel={selected.nominatedCandidateIds.includes(goal.id) ? "You nominated this goal" : "Nominate this goal"} disabled={busy || !eligible || !available || selected.nominatedCandidateIds.includes(goal.id)} />)}</div>
           {!selected.candidates.length ? <p className="rounded-xl border border-white/10 p-4 text-white/60">No nominations yet. Choose a goal below to get this month started.</p> : null}
+
           <details className="rounded-2xl border border-white/10 p-4" open>
             <summary className="cursor-pointer text-lg font-bold">Nominate a goal</summary>
-            <p className="my-3 text-sm text-white/65">{selected.usedNominations} of {selected.maxNominations} nominations used for {selected.label}. Several nominations of the same goal share one card.</p>
+            <p className="my-3 text-sm text-white/65">{selected.usedNominations} of {selected.maxNominations} nominations used for {selected.label}. Several nominations of the same clip share one card.</p>
             <form className="grid gap-4 sm:grid-cols-2" onSubmit={event => {
               event.preventDefault(); const values = new FormData(event.currentTarget);
-              void save({ action: "nominate", fixtureId: values.get("fixtureId"), scoringTeamId: values.get("scoringTeamId"), goalNumber: values.get("goalNumber"), scorerName: values.get("scorerName") });
+              void save({
+                action: "nominate",
+                fixtureId: values.get("fixtureId"),
+                scoringTeamId: values.get("scoringTeamId"),
+                clipAssetId: values.get("clipAssetId"),
+                goalNumber: values.get("goalNumber"),
+                scorerName: values.get("scorerName"),
+              });
             }}>
-              <label className="min-w-0 text-sm sm:col-span-2">Recorded fixture<select name="fixtureId" required value={fixture?.id ?? ""} onChange={event => setFixtureId(event.target.value)} disabled={busy || !eligible || !available} className={field}><option value="">Choose a recorded match</option>{selected.fixtures.map(row => <option key={row.id} value={row.id}>{row.homeTeamName} v {row.awayTeamName} · {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(new Date(row.kickoffAt))}</option>)}</select></label>
-              {fixture ? <div className="flex flex-wrap gap-3 text-sm sm:col-span-2">{fixture.videoUrls.map((link, index) => <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="text-emerald-200 underline">Watch fixture video {index + 1} ↗</a>)}</div> : null}
-              <label className="text-sm">Goal number in the match<input type="number" name="goalNumber" min={1} max={fixture ? fixture.homeScore + fixture.awayScore : 1} required disabled={busy || !eligible || !available || !fixture} className={field} /></label>
-              <label className="min-w-0 text-sm">Scoring team<select key={fixture?.id ?? "none"} name="scoringTeamId" required disabled={busy || !eligible || !available || !fixture} className={field} defaultValue=""><option value="">Choose the scoring team</option>{fixture ? <><option value={fixture.homeTeamId}>{fixture.homeTeamName}</option><option value={fixture.awayTeamId}>{fixture.awayTeamName}</option></> : null}</select></label>
-              <label className="text-sm">Scorer’s name (optional)<input name="scorerName" maxLength={100} disabled={busy || !eligible || !available} className={field} /></label>
-              <button type="submit" disabled={busy || !eligible || !available || !fixture} className="self-end rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40">{busy ? "Saving…" : "Submit nomination"}</button>
+              <label className="min-w-0 text-sm sm:col-span-2">Recorded fixture
+                <select name="fixtureId" required value={fixture?.id ?? ""} onChange={event => { setFixtureId(event.target.value); setClipAssetId(""); }} disabled={busy || !eligible || !available} className={field}>
+                  <option value="">Choose a recorded match</option>
+                  {selected.fixtures.map(row => <option key={row.id} value={row.id}>{row.homeTeamName} v {row.awayTeamName} · {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(new Date(row.kickoffAt))}</option>)}
+                </select>
+              </label>
+
+              {fixture && usesClips ? (
+                <>
+                  <label className="min-w-0 text-sm sm:col-span-2">Goal clip
+                    <select name="clipAssetId" required value={clip?.id ?? ""} onChange={event => setClipAssetId(event.target.value)} disabled={busy || !eligible || !available} className={field}>
+                      <option value="">Choose the clip containing the goal</option>
+                      {fixture.clips.map(row => <option key={row.id} value={row.id}>Clip {row.clipNumber}</option>)}
+                    </select>
+                  </label>
+                  {clip ? (
+                    <div className="sm:col-span-2 overflow-hidden rounded-2xl border border-white/10 bg-black">
+                      <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">Clip {clip.clipNumber}</div>
+                      <video controls preload="metadata" playsInline src={clip.videoUrl} className="aspect-video w-full object-contain" />
+                    </div>
+                  ) : null}
+                </>
+              ) : fixture ? (
+                <>
+                  <div className="flex flex-wrap gap-3 text-sm sm:col-span-2">{fixture.videoUrls.map((link, index) => <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="text-emerald-200 underline">Watch fixture video {index + 1} ↗</a>)}</div>
+                  <label className="text-sm">Goal number in the match<input type="number" name="goalNumber" min={1} max={fixture.homeScore + fixture.awayScore} required disabled={busy || !eligible || !available} className={field} /></label>
+                </>
+              ) : null}
+
+              <label className="min-w-0 text-sm">Scoring team
+                <select key={fixture?.id ?? "none"} name="scoringTeamId" required disabled={busy || !eligible || !available || !fixture} className={field} defaultValue="">
+                  <option value="">Choose the scoring team</option>
+                  {fixture ? <><option value={fixture.homeTeamId}>{fixture.homeTeamName}</option><option value={fixture.awayTeamId}>{fixture.awayTeamName}</option></> : null}
+                </select>
+              </label>
+              <label className="text-sm">Scorer’s name{usesClips ? "" : " (optional)"}
+                <input name="scorerName" maxLength={100} required={usesClips} disabled={busy || !eligible || !available || !fixture} className={field} />
+              </label>
+              <button type="submit" disabled={busy || !eligible || !available || !fixture || (usesClips && !clip)} className="self-end rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40">{busy ? "Saving…" : "Submit nomination"}</button>
             </form>
             {!selected.fixtures.length ? <p className="mt-3 text-sm text-white/60">Eligible matches appear when their result and SIXFL TV footage are available.</p> : null}
           </details>
         </section>
       ) : null}
+
       <section aria-labelledby="monthly-winners" className="space-y-4">
         <h2 id="monthly-winners" className="text-2xl font-bold">Monthly winner archive</h2>
         <p className="text-sm text-white/60">Voting closes after the 12th. A tied vote is decided by nominations, then the earliest nominee. A round with no votes has no player-voted winner.</p>
