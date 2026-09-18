@@ -27,7 +27,23 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
   const [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const [previewKey, setPreviewKey] = useState(0);
   const version = current?.updatedAt ? encodeURIComponent(current.updatedAt) : "new";
+  const previewSrc = useMemo(() => {
+    const params = new URLSearchParams({
+      preview: "1",
+      headline,
+      strapline,
+      showScore: showScore ? "true" : "false",
+      v: String(previewKey),
+    });
+    return `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?${params.toString()}`;
+  }, [fixtureId, kind, headline, strapline, showScore, previewKey]);
+  const [debouncedPreviewSrc, setDebouncedPreviewSrc] = useState(previewSrc);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedPreviewSrc(previewSrc), 250);
+    return () => window.clearTimeout(timer);
+  }, [previewSrc]);
   async function save() {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -39,7 +55,11 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
   }
   return <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} thumbnail</h3>{current ? <span className="text-xs text-emerald-200">Saved</span> : <span className="text-xs text-white/45">Not saved yet</span>}</div>
-    {current ? <img key={version} src={`/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?v=${version}`} alt={`${kindLabel(kind)} thumbnail preview`} className="mt-4 aspect-video w-full rounded-xl border border-white/10 object-cover" /> : null}
+    <div className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Live preview</span><span className="text-xs text-white/40">Updates as you type</span></div>
+      <img key={debouncedPreviewSrc} src={debouncedPreviewSrc} alt={`${kindLabel(kind)} live thumbnail preview`} className="aspect-video w-full rounded-xl border border-white/10 bg-black object-cover" onError={() => setPreviewKey(value => value + 1)} />
+      {current ? <p className="mt-2 text-xs text-white/40">The preview above shows your current fields. Your saved thumbnail stays unchanged until you press Save thumbnail.</p> : <p className="mt-2 text-xs text-white/40">This is a preview only. Nothing is saved or sent to YouTube until you press Save thumbnail and later approve the video.</p>}
+    </div>
     <div className="mt-4 grid gap-3">
       <label className="text-sm text-white/70">Headline<input value={headline} maxLength={80} onChange={e => setHeadline(e.target.value)} className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <label className="text-sm text-white/70">Strapline<input value={strapline} maxLength={120} onChange={e => setStrapline(e.target.value)} placeholder="League or match wording" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
