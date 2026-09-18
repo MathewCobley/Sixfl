@@ -28,6 +28,7 @@ export type SixflTvGraphicFixture = {
       played: number;
       goalDifference: number;
       points: number;
+      movement?: "UP" | "DOWN" | "SAME" | null;
     }>;
   } | null;
   decisionNote?: string | null;
@@ -492,10 +493,16 @@ export async function createSixflTvLeagueTableCard(input: {
     const bg = highlighted
       ? `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#10b981" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.48" stroke-width="2"/>`
       : `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.045" : "0.025"}"/>`;
+    const movement =
+      row.movement === "UP" ? { symbol: "↑", colour: "#6ee7b7" } :
+      row.movement === "DOWN" ? { symbol: "↓", colour: "#fca5a5" } :
+      row.movement === "SAME" ? { symbol: "→", colour: "#94a3b8" } :
+      { symbol: "•", colour: "#475569" };
     return `<g>
       ${bg}
       <text x="235" y="${y}" font-size="29" font-weight="900" fill="${highlighted ? "#6ee7b7" : "#ffffff"}">${row.position}</text>
-      <text x="330" y="${y}" font-size="31" font-weight="${highlighted ? "900" : "700"}" fill="#ffffff">${xml(fit(row.teamName, 34))}</text>
+      <text x="292" y="${y}" text-anchor="middle" font-size="30" font-weight="900" fill="${movement.colour}">${movement.symbol}</text>
+      <text x="360" y="${y}" font-size="31" font-weight="${highlighted ? "900" : "700"}" fill="#ffffff">${xml(fit(row.teamName, 32))}</text>
       <text x="1270" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="#d1d5db">${row.played}</text>
       <text x="1450" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="${row.goalDifference >= 0 ? "#a7f3d0" : "#fca5a5"}">${row.goalDifference > 0 ? "+" : ""}${row.goalDifference}</text>
       <text x="1640" y="${y}" text-anchor="middle" font-size="31" font-weight="900" fill="#ffffff">${row.points}</text>
@@ -512,7 +519,8 @@ export async function createSixflTvLeagueTableCard(input: {
     <line x1="180" y1="304" x2="1740" y2="304" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
 
     <text x="235" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">POS</text>
-    <text x="330" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
+    <text x="292" y="344" text-anchor="middle" font-size="18" font-weight="800" fill="#94a3b8">↕</text>
+    <text x="360" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
     <text x="1270" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">P</text>
     <text x="1450" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
     <text x="1640" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
