@@ -60,7 +60,7 @@ export async function readFixtureVeoOffer(fixtureId: string, teamId: string, db:
     defaultChoice: 'NONE',
     requestStatus: sameMatch ? request.status : null,
     bookingState: f.bookingState,
-    agreedPence: sameMatch ? request.agreedPence : null,
+    agreedPence: null,
     maxMatches: settings.maxMatches,
     videoUrl: video,
     version: veoVersion([f, request?.revision ?? 0, settings.revision, settings.enabled, 'earned-priority-v1']),
@@ -172,8 +172,8 @@ export async function finaliseFixtureVeoNight(leagueId:string,date:string,actorI
     return preview.choices.length;
   });
 }
-/** A separate optional charge is created only after usable footage is confirmed.
- * Never edit the settled base fee, player shares, legacy snapshots or mandates. */
+/** Recording outcomes only manage filming state and video availability.
+ * SIXFL TV Priority never creates, edits or voids a payment charge. */
 export async function setVeoRecordingOutcome(input:{leagueId:string;fixtureId:string;actorId:string;outcome:'READY'|'FAILED'|'CANCELLED';videoUrl?:string;note:string}) {
   const video=input.outcome==='READY'?validateVeoVideo(input.videoUrl??''):null;
   if (!['READY','FAILED','CANCELLED'].includes(input.outcome)) throw new VeoBookingError('Choose a recording outcome.');
@@ -187,13 +187,10 @@ export async function setVeoRecordingOutcome(input:{leagueId:string;fixtureId:st
     if (f.bookingState===input.outcome) return;
     if (['FAILED','CANCELLED'].includes(f.bookingState)) throw new VeoBookingError('This booking is already closed. It cannot be billed again.');
     if (input.outcome==='READY' && (f.status!=='COMPLETED' || +f.kickoffAt>Date.now())) throw new VeoBookingError('Confirm usable footage only after the fixture has been completed.');
-    // New SIXFL TV Priority bookings never create a filming charge. Historic linked
-    // charges remain untouched here; failed/cancelled historic bookings are still
-    // handled by the existing cleanup below.
+    // Payment handling is deliberately absent: SIXFL TV Priority is permanently free.
     await db.$executeRaw`UPDATE "VeoMatchBooking" SET state=${input.outcome},"recordingNote"=${input.note.trim().slice(0,1000)},"updatedAt"=NOW() WHERE "fixtureId"=${f.id}`;
     if (input.outcome!=='READY') {
-      await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='CANCELLED',revision=revision+1 WHERE "fixtureId"=${f.id} AND status='ACCEPTED'`;
-      await db.$executeRaw`UPDATE "PaymentCharge" SET status='VOID',"updatedAt"=NOW() WHERE id IN (SELECT "chargeId" FROM "VeoFixtureRequest" WHERE "fixtureId"=${f.id})`;
+      await db.$executeRaw`UPDATE "VeoFixtureRequest" SET status='CANCELLED',"agreedPence"=0,revision=revision+1 WHERE "fixtureId"=${f.id} AND status='ACCEPTED'`;
     }
     await db.$executeRaw`UPDATE "Fixture" SET "sixflTvRecorded"=${input.outcome==='READY'},"sixflTvUrl"=${video},"updatedAt"=NOW() WHERE id=${f.id}`;
     await audit(db,f.leagueId,input.actorId,{kind:'veo_recording_outcome',fixtureId:f.id,outcome:input.outcome,videoUrl:video,note:input.note.trim(),baseFeesUnchanged:true});
