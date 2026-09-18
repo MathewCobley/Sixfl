@@ -27,7 +27,7 @@ function applySql(db,file){const sql=fs.readFileSync(file,'utf8');return Promise
 
 const fixtureData = (id) => ({
   id, kickoffAt:new Date('2026-09-17T19:00:00Z'), status:'COMPLETED',
-  league:{name:'Northallerton Wednesday',season:'Autumn 2026'},
+  league:{id:'league-a',name:'Northallerton Wednesday',season:'Autumn 2026'},
   homeTeam:{id:'team-a',name:'Town Hall 6s',logoUrl:null}, awayTeam:{id:'team-b',name:'Ballerz FC',logoUrl:null},
   selections:[
     {selectionStatus:'SELECTED',isCaptain:true,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:00:00Z'),teamMember:{teamId:'team-a',user:{name:'Alex One'}}},
@@ -62,7 +62,20 @@ test('studio queues saved sources in editing order and requires confirmed result
   assert.ok(['postgres:','postgresql:'].includes(url.protocol)&&['127.0.0.1','localhost'].includes(url.hostname));
   const schema='studio_'+randomUUID().replaceAll('-','');const root=new PrismaClient({datasources:{db:{url:url.toString()}}});await root.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);url.searchParams.set('schema',schema);const db=new PrismaClient({datasources:{db:{url:url.toString()}}});
   const objects=new Map();
-  const mockDb={$queryRaw:db.$queryRaw.bind(db),$executeRaw:db.$executeRaw.bind(db),$transaction:fn=>db.$transaction(fn),fixture:{findUnique:async({where})=>fixtureData(where.id)}};
+  const priorFixtures=[
+    {homeTeamId:'team-a',awayTeamId:'prior-1',kickoffAt:new Date('2026-08-20T19:00:00Z'),result:{homeScore:4,awayScore:1}},
+    {homeTeamId:'prior-2',awayTeamId:'team-a',kickoffAt:new Date('2026-08-27T19:00:00Z'),result:{homeScore:2,awayScore:2}},
+    {homeTeamId:'team-b',awayTeamId:'prior-3',kickoffAt:new Date('2026-09-03T19:00:00Z'),result:{homeScore:1,awayScore:3}},
+  ];
+  const mockDb={
+    $queryRaw:async(strings,...values)=>{
+      const sql=strings.join('?');
+      if(sql.includes('FROM "FixtureAiPrediction"'))return [{predictedHomeScore:3,predictedAwayScore:2,headline:'Town Hall 6s edged'}];
+      return db.$queryRaw(strings,...values);
+    },
+    $executeRaw:db.$executeRaw.bind(db),$transaction:fn=>db.$transaction(fn),
+    fixture:{findUnique:async({where})=>fixtureData(where.id),findMany:async()=>priorFixtures},
+  };
   const load=loader({'@/lib/prisma':{prisma:mockDb},'@/lib/storage/railway-s3':{
     uploadRailwayObject:async({key,body})=>objects.set(key,Buffer.from(body)),deleteRailwayObject:async key=>objects.delete(key),fetchRailwayObject:async({key})=>objects.has(key)?new Response(new Uint8Array(objects.get(key)),{status:200,headers:{'content-type':'image/png'}}):new Response(null,{status:404}),
   }});
@@ -79,11 +92,13 @@ test('studio queues saved sources in editing order and requires confirmed result
     const first=await studio.requestRenders('match-a','admin');assert.equal(first.renders.length,2);
     const second=await studio.requestRenders('match-a','admin');assert.deepEqual(second.renders.map(x=>x.id).sort(),first.renders.map(x=>x.id).sort());
     const jobs=await db.$queryRaw`SELECT "id","kind","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind"`;assert.equal(jobs.length,2);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===6),'Renderer version must invalidate old finished previews after editing changes');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===7),'Renderer version must invalidate old finished previews after editing changes');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
     assert.deepEqual(graphic.firstTeamLineup,['Alex One (C)','Sam Keeper (GK)']);assert.deepEqual(graphic.secondTeamLineup,['Chris Three (GK)']);
+    assert.deepEqual(graphic.firstTeamForm,['W','D']);assert.deepEqual(graphic.secondTeamForm,['L']);
+    assert.deepEqual(graphic.predictor,{firstTeamScore:3,secondTeamScore:2,headline:'Town Hall 6s edged'});
     const beforePreviewObjects=objects.size;
     const preview=await studio.thumbnailPreviewResponse('match-a','HIGHLIGHTS',{headline:'LIVE PREVIEW',strapline:'Week 4',showScore:'true'});
     assert.equal(preview.status,200);assert.match(preview.headers.get('content-type'),/png/);assert.equal(objects.size,beforePreviewObjects,'Live preview must not save or replace thumbnail storage');
