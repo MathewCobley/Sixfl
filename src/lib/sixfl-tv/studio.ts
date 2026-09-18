@@ -249,7 +249,7 @@ export async function thumbnailPreviewResponse(fixtureId: string, kind: SixflTvR
   const graphic = await studioGraphicFixture(fixtureId);
   const bytes = await createSixflTvThumbnail({ fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
   if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
-  return new Response(bytes, { headers: {
+  return new Response(new Uint8Array(bytes), { headers: {
     "Content-Type": "image/png",
     "Content-Length": String(bytes.length),
     "Cache-Control": "private, no-store, max-age=0",
