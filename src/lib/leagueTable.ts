@@ -9,6 +9,8 @@ import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
 
 export type LeagueFormResult = "W" | "D" | "L";
 
+export type LeaguePositionMovement = "UP" | "DOWN" | "SAME" | null;
+
 export type LeagueTableRow = {
   teamId: string;
   teamName: string;
@@ -22,6 +24,7 @@ export type LeagueTableRow = {
   goalDifference: number;
   points: number;
   recentForm: LeagueFormResult[];
+  movement: LeaguePositionMovement;
 };
 
 type LeagueTableOptions = {
@@ -57,6 +60,7 @@ function createRow(input: {
     goalDifference: 0,
     points: 0,
     recentForm: [],
+    movement: null,
   };
 }
 
@@ -166,6 +170,73 @@ async function getLeagueTableTeams(
   return removeFixturePlaceholderTeams(legacyTeams);
 }
 
+function londonDateKey(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const part = (type: "year" | "month" | "day") =>
+    parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function sortLeagueRows(rows: LeagueTableRow[]) {
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.teamName.localeCompare(b.teamName);
+  });
+  return rows;
+}
+
+function tableFromFixtures(
+  teams: TableTeamRow[],
+  fixtures: Array<{
+    homeTeamId: string;
+    awayTeamId: string;
+    homeTeam: TableTeamRow;
+    awayTeam: TableTeamRow;
+    result: { homeScore: number; awayScore: number } | null;
+  }>,
+) {
+  const table = new Map<string, LeagueTableRow>();
+  const allowedTeamIds = new Set(teams.map((team) => team.id));
+  for (const team of teams) table.set(team.id, createRow(team));
+
+  for (const fixture of fixtures) {
+    if (!fixture.result) continue;
+    if (!allowedTeamIds.has(fixture.homeTeamId) || !allowedTeamIds.has(fixture.awayTeamId)) continue;
+    const home = getOrCreateRow(table, fixture.homeTeam);
+    const away = getOrCreateRow(table, fixture.awayTeam);
+    const homeScore = fixture.result.homeScore;
+    const awayScore = fixture.result.awayScore;
+
+    home.played += 1; away.played += 1;
+    home.goalsFor += homeScore; home.goalsAgainst += awayScore;
+    away.goalsFor += awayScore; away.goalsAgainst += homeScore;
+
+    if (homeScore > awayScore) {
+      home.won += 1; home.points += 3; away.lost += 1;
+      home.recentForm.push("W"); away.recentForm.push("L");
+    } else if (awayScore > homeScore) {
+      away.won += 1; away.points += 3; home.lost += 1;
+      away.recentForm.push("W"); home.recentForm.push("L");
+    } else {
+      home.drawn += 1; away.drawn += 1; home.points += 1; away.points += 1;
+      home.recentForm.push("D"); away.recentForm.push("D");
+    }
+  }
+
+  return sortLeagueRows(Array.from(table.values()).map((row) => ({
+    ...row,
+    goalDifference: row.goalsFor - row.goalsAgainst,
+    recentForm: row.recentForm.slice(-5),
+  })));
+}
+
 export async function getLeagueTable(
   leagueId: string,
   options: LeagueTableOptions = {},
@@ -175,9 +246,6 @@ export async function getLeagueTable(
     prisma.fixture.findMany({
       where: {
         leagueId,
-        // A saved result is the authoritative indication that a game was played.
-        // Do not trust legacy/stale Fixture.status or Fixture.divisionId here.
-        // Division membership is enforced below by allowedTeamIds.
         result: { isNot: null },
       },
       orderBy: { kickoffAt: "asc" },
@@ -189,75 +257,27 @@ export async function getLeagueTable(
     }),
   ]);
 
-  const table = new Map<string, LeagueTableRow>();
+  const rows = tableFromFixtures(teams, fixtures);
+  const latestPlayedFixture = [...fixtures].reverse().find((fixture) => fixture.result);
+  if (!latestPlayedFixture) return rows;
 
-  // The selected/active team list is always authoritative, including when it
-  // is empty. Historic fixtures must never recreate a removed or affiliated-only
-  // team in the current league table. For division tables, this also means a
-  // result counts only when both participating teams are active in that division.
-  const allowedTeamIds = new Set(teams.map((team) => team.id));
+  const latestMatchday = londonDateKey(latestPlayedFixture.kickoffAt);
+  const priorFixtures = fixtures.filter(
+    (fixture) => fixture.result && londonDateKey(fixture.kickoffAt) !== latestMatchday,
+  );
+  const priorRows = tableFromFixtures(teams, priorFixtures);
+  const priorPositions = new Map(priorRows.map((row, index) => [row.teamId, index + 1]));
 
-  for (const team of teams) {
-    table.set(team.id, createRow(team));
-  }
-
-  for (const fixture of fixtures) {
-    if (!fixture.result) continue;
-    if (
-      !allowedTeamIds.has(fixture.homeTeamId) ||
-      !allowedTeamIds.has(fixture.awayTeamId)
-    ) {
-      continue;
-    }
-
-    const home = getOrCreateRow(table, fixture.homeTeam);
-    const away = getOrCreateRow(table, fixture.awayTeam);
-    const homeScore = fixture.result.homeScore;
-    const awayScore = fixture.result.awayScore;
-
-    home.played += 1;
-    away.played += 1;
-    home.goalsFor += homeScore;
-    home.goalsAgainst += awayScore;
-    away.goalsFor += awayScore;
-    away.goalsAgainst += homeScore;
-
-    if (homeScore > awayScore) {
-      home.won += 1;
-      home.points += 3;
-      away.lost += 1;
-      home.recentForm.push("W");
-      away.recentForm.push("L");
-    } else if (awayScore > homeScore) {
-      away.won += 1;
-      away.points += 3;
-      home.lost += 1;
-      away.recentForm.push("W");
-      home.recentForm.push("L");
-    } else {
-      home.drawn += 1;
-      away.drawn += 1;
-      home.points += 1;
-      away.points += 1;
-      home.recentForm.push("D");
-      away.recentForm.push("D");
-    }
-  }
-
-  const rows = Array.from(table.values()).map((row) => ({
-    ...row,
-    goalDifference: row.goalsFor - row.goalsAgainst,
-    recentForm: row.recentForm.slice(-5),
-  }));
-
-  rows.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) {
-      return b.goalDifference - a.goalDifference;
-    }
-    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    return a.teamName.localeCompare(b.teamName);
+  return rows.map((row, index) => {
+    const previous = priorPositions.get(row.teamId);
+    const current = index + 1;
+    return {
+      ...row,
+      movement:
+        previous == null ? null :
+        current < previous ? "UP" :
+        current > previous ? "DOWN" :
+        "SAME",
+    };
   });
-
-  return rows;
 }
