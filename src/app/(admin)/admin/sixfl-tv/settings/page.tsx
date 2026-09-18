@@ -56,9 +56,9 @@ export default async function SixflTvSettingsPage({
           </h2>
           <p className="mt-2 text-sm leading-6 text-white/60">
             {youtube.connected
-              ? <>Connected{youtube.channelTitle ? <> to <strong className="text-white/85">{youtube.channelTitle}</strong></> : ""}. This one connection is shared by every SIXFL TV match.</>
+              ? <>Connected{youtube.channelTitle ? <> to <strong className="text-white/85">{youtube.channelTitle}</strong></> : ""}. This one connection is shared by every SIXFL TV match. {youtube.replacementCleanupEnabled ? "Replacement cleanup is enabled: when a newer version is published, older SIXFL copies can be removed from YouTube." : "Reconnect YouTube once to allow SIXFL to remove older copies after a replacement is safely published."}</>
               : youtube.configured
-                ? "Authorise the SIXFL YouTube channel once. Each video still requires its own separate upload approval."
+                ? "Authorise the SIXFL YouTube channel once. The connection is also used to remove superseded SIXFL TV copies after a safe replacement."
                 : "The Google OAuth credentials are not fully configured on the SIXFL server yet."}
           </p>
         </div>
@@ -67,7 +67,7 @@ export default async function SixflTvSettingsPage({
             <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80">Check connection</button>
           </form> : null}
           <Link href="/api/admin/sixfl-tv/youtube/start" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-100">
-            {youtube.connected ? "Reconnect YouTube" : "Connect YouTube"}
+            {youtube.connected && !youtube.replacementCleanupEnabled ? "Reconnect to enable replacement cleanup" : youtube.connected ? "Reconnect YouTube" : "Connect YouTube"}
           </Link>
         </div> : null}
       </div>
