@@ -7,7 +7,7 @@ import type { FootageAsset } from "./footage";
 import { getLeagueStandings } from "@/lib/standings";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 11;
+const SIXFL_TV_RENDER_VERSION = 12;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -248,6 +248,7 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
           played: row.played,
           goalDifference: row.goalDifference,
           points: row.points,
+          movement: row.movement ?? null,
         })),
       };
     }
