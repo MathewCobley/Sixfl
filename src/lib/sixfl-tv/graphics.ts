@@ -484,14 +484,14 @@ export async function createSixflTvLeagueTableCard(input: {
     input.fixture.firstTeam.name.toLowerCase(),
     input.fixture.secondTeam.name.toLowerCase(),
   ]);
-  const rowHeight = Math.min(92, Math.floor(610 / Math.max(1, rows.length)));
-  const startY = 315;
+  const rowHeight = Math.min(78, Math.floor(520 / Math.max(1, rows.length)));
+  const startY = 392;
   const tableRows = rows.map((row, index) => {
     const y = startY + index * rowHeight;
     const highlighted = currentTeamIds.has(row.teamName.toLowerCase());
     const bg = highlighted
-      ? `<rect x="180" y="${y - 47}" width="1560" height="${rowHeight - 6}" rx="18" fill="#10b981" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.48" stroke-width="2"/>`
-      : `<rect x="180" y="${y - 47}" width="1560" height="${rowHeight - 6}" rx="18" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.045" : "0.025"}"/>`;
+      ? `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#10b981" fill-opacity="0.16" stroke="#34d399" stroke-opacity="0.48" stroke-width="2"/>`
+      : `<rect x="180" y="${y - 39}" width="1560" height="${rowHeight - 5}" rx="16" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.045" : "0.025"}"/>`;
     return `<g>
       ${bg}
       <text x="235" y="${y}" font-size="29" font-weight="900" fill="${highlighted ? "#6ee7b7" : "#ffffff"}">${row.position}</text>
@@ -505,16 +505,17 @@ export async function createSixflTvLeagueTableCard(input: {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${fontCss}
     ${stadiumBackground(1920, 1080)}
-    ${logoImage(sixflTvLogoBytes, 760, 28, 400, 128)}
-    <text x="960" y="210" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">LEAGUE TABLE</text>
-    <text x="960" y="258" text-anchor="middle" font-size="25" font-weight="800" letter-spacing="4" fill="#a7f3d0">${input.page === "TOP" ? "TOP HALF" : "BOTTOM HALF"}</text>
-    <text x="185" y="285" font-size="23" font-weight="700" fill="#d1d5db">${xml(fit(table.title, 68))}</text>
+    ${logoImage(sixflTvLogoBytes, 790, 18, 340, 108)}
+    <text x="960" y="180" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">LEAGUE TABLE</text>
+    <text x="960" y="228" text-anchor="middle" font-size="25" font-weight="800" letter-spacing="4" fill="#a7f3d0">${input.page === "TOP" ? "TOP HALF" : "BOTTOM HALF"}</text>
+    <text x="960" y="276" text-anchor="middle" font-size="23" font-weight="700" fill="#d1d5db">${xml(fit(table.title, 68))}</text>
+    <line x1="180" y1="304" x2="1740" y2="304" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
 
-    <text x="235" y="302" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">POS</text>
-    <text x="330" y="302" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
-    <text x="1270" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">P</text>
-    <text x="1450" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
-    <text x="1640" y="302" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
+    <text x="235" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">POS</text>
+    <text x="330" y="344" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">TEAM</text>
+    <text x="1270" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">P</text>
+    <text x="1450" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
+    <text x="1640" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
     ${tableRows}
     <text x="960" y="988" text-anchor="middle" font-size="23" font-weight="600" fill="#d1d5db">Table updated after this match</text>
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
