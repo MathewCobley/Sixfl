@@ -397,6 +397,47 @@ export async function createSixflTvWatermark(input: { siteUrl: string }) {
 }
 
 
+export async function createSixflTvPredictorCard(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
+  const predictor = input.fixture.predictor;
+  if (!predictor) return null;
+  const [firstBadge, secondBadge, sixflTvLogoBytes, predictorLogoBytes, fontCss] = await Promise.all([
+    fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
+    fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(input.siteUrl),
+    sixflPredictorLogo(input.siteUrl),
+    embeddedFontStyle(input.siteUrl),
+  ]);
+  const headline = fit(predictor.headline || "Pre-match prediction", 62);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${fontCss}
+    ${stadiumBackground(1920, 1080)}
+    ${logoImage(sixflTvLogoBytes, 80, 52, 300, 96)}
+    ${logoImage(predictorLogoBytes, 640, 70, 640, 150)}
+    <text x="960" y="265" text-anchor="middle" font-size="26" font-weight="900" letter-spacing="5" fill="#a7f3d0">PRE-MATCH PREDICTION</text>
+
+    <g filter="url(#shadow)">
+      ${badgeImage(firstBadge, 220, 350, 300, input.fixture.firstTeam.name)}
+      ${badgeImage(secondBadge, 1400, 350, 300, input.fixture.secondTeam.name)}
+    </g>
+
+    <text x="370" y="720" text-anchor="middle" font-size="48" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.firstTeam.name, 26))}</text>
+    <text x="1550" y="720" text-anchor="middle" font-size="48" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 26))}</text>
+
+    <g filter="url(#shadow)">
+      <rect x="675" y="360" width="570" height="280" rx="42" fill="#020805" fill-opacity="0.88" stroke="#34d399" stroke-width="5"/>
+      <text x="960" y="475" text-anchor="middle" font-size="148" font-weight="900" fill="#ffffff">${predictor.firstTeamScore}<tspan fill="#34d399"> - </tspan>${predictor.secondTeamScore}</text>
+      <text x="960" y="550" text-anchor="middle" font-size="28" font-weight="800" fill="#d1fae5">${xml(headline)}</text>
+      <text x="960" y="602" text-anchor="middle" font-size="20" font-weight="700" letter-spacing="3" fill="#6ee7b7">PREDICTED BEFORE KICK-OFF</text>
+    </g>
+
+    <text x="960" y="860" text-anchor="middle" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 58))}</text>
+    <text x="960" y="914" text-anchor="middle" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
+    <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
+
 export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
   const first = (input.fixture.firstTeamLineup || []).slice(0, 12);
   const second = (input.fixture.secondTeamLineup || []).slice(0, 12);
