@@ -7,9 +7,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
-import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
+import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
+import { monthlyCycle } from "../src/lib/goal-of-month/calendar";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -27,6 +28,8 @@ const LEAGUE_TABLE_SECONDS = 5;
 const GOAL_OF_MONTH_END_SECONDS = 5;
 const SWIPE_FRAMES = 24;
 const SWIPE_FPS = 30;
+const RETENTION_SWEEP_MS = 5 * 60 * 1000;
+const RETENTION_DELETE_PARTS_PER_SWEEP = 40;
 function operationSignal(ms: number) {
   return AbortSignal.any([shutdown.signal, AbortSignal.timeout(ms), ...(renderSignals.getStore() ? [renderSignals.getStore()!] : [])]);
 }
@@ -749,8 +752,84 @@ async function processPublish(job: PublishJob) {
   await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='READY',"youtubeVideoId"=${videoId},"youtubeUrl"=${youtubeUrl},"uploadedBytes"=(SELECT "outputSizeBytes" FROM "SixflTvRenderJob" WHERE "id"=${job.renderJobId}),"completedAt"=NOW(),"busyUntil"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id}`;
 }
 
+type RetentionAsset = { id: string; fixtureId: string; filename: string; kind: string };
+type RetentionPart = { assetId: string; partNumber: number; objectKey: string };
+
+async function cleanupMaturedGoalOfMonthFootage() {
+  const latestClosedMonth = monthlyCycle(new Date()).latestClosedMonth;
+  const assets = await db.$queryRaw<RetentionAsset[]>(Prisma.sql`
+    SELECT a."id", a."fixtureId", a."filename", a."kind"
+    FROM "SixflTvFootageAsset" a
+    JOIN "Fixture" f ON f."id"=a."fixtureId"
+    WHERE a."fixtureId" IS NOT NULL
+      AND a."state" IN ('READY','DELETING')
+      AND to_char(f."kickoffAt" AT TIME ZONE 'Europe/London','YYYY-MM') <= ${latestClosedMonth}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "SixflTvRenderJob" r
+        WHERE r."fixtureId"=a."fixtureId" AND r."state" IN ('QUEUED','PROCESSING')
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "SixflTvFootageAsset" pending
+        WHERE pending."fixtureId"=a."fixtureId" AND pending."state"='UPLOADING'
+      )
+      AND (
+        (a."kind" IN ('CLIP','HIGHLIGHTS') AND EXISTS (
+          SELECT 1 FROM "SixflTvYoutubePublish" p
+          WHERE p."fixtureId"=a."fixtureId" AND p."kind"='HIGHLIGHTS' AND p."state"='READY' AND p."youtubeVideoId" IS NOT NULL
+        ))
+        OR
+        (a."kind"='FULL_MATCH' AND EXISTS (
+          SELECT 1 FROM "SixflTvYoutubePublish" p
+          WHERE p."fixtureId"=a."fixtureId" AND p."kind"='FULL_MATCH' AND p."state"='READY' AND p."youtubeVideoId" IS NOT NULL
+        ))
+      )
+    ORDER BY f."kickoffAt", a."createdAt", a."id"
+    LIMIT 1
+  `);
+  const asset = assets[0];
+  if (!asset) return false;
+
+  await db.$executeRaw`
+    UPDATE "SixflTvFootageAsset"
+    SET "state"='DELETING',"updatedAt"=NOW()
+    WHERE "id"=${asset.id} AND "state" IN ('READY','DELETING')`;
+
+  const parts = await db.$queryRaw<RetentionPart[]>(Prisma.sql`
+    SELECT "assetId","partNumber","objectKey"
+    FROM "SixflTvFootagePart"
+    WHERE "assetId"=${asset.id}
+    ORDER BY "partNumber"
+    LIMIT ${RETENTION_DELETE_PARTS_PER_SWEEP}
+  `);
+
+  for (const part of parts) {
+    await deleteRailwayObject(part.objectKey, AbortSignal.timeout(15000));
+    await db.$executeRaw`
+      DELETE FROM "SixflTvFootagePart"
+      WHERE "assetId"=${part.assetId} AND "partNumber"=${part.partNumber}`;
+  }
+
+  const remaining = await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+    SELECT COUNT(*)::bigint AS count FROM "SixflTvFootagePart" WHERE "assetId"=${asset.id}
+  `);
+  const remainingParts = Number(remaining[0]?.count || 0n);
+  if (!remainingParts) {
+    await db.$executeRaw`
+      UPDATE "SixflTvFootageAsset"
+      SET "state"='DELETED',"leaseToken"=NULL,"busyUntil"=NULL,"updatedAt"=NOW()
+      WHERE "id"=${asset.id} AND "state"='DELETING'`;
+    console.log(`Retention cleanup deleted ${asset.kind} source ${asset.filename} for fixture ${asset.fixtureId}; Goal of the Month month ${latestClosedMonth} or earlier is settled.`);
+  } else {
+    console.log(`Retention cleanup removed ${parts.length} parts from ${asset.filename}; ${remainingParts} remain.`);
+  }
+  return true;
+}
+
 async function main() {
   console.log("SIXFL TV worker ready");
+  let nextRetentionSweepAt = Date.now() + 60_000;
   while (!shutdown.signal.aborted) {
     const job = await claimJob().catch(error => { console.error("Render claim failed", safeError(error)); return null; });
     if (job) {
@@ -778,12 +857,21 @@ async function main() {
       }
       continue;
     }
+    if (Date.now() >= nextRetentionSweepAt) {
+      try {
+        const cleaned = await cleanupMaturedGoalOfMonthFootage();
+        nextRetentionSweepAt = Date.now() + (cleaned ? 60_000 : RETENTION_SWEEP_MS);
+      } catch (error) {
+        console.error("Retention cleanup failed", safeError(error));
+        nextRetentionSweepAt = Date.now() + RETENTION_SWEEP_MS;
+      }
+    }
     await sleep(POLL_MS);
   }
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
