@@ -240,182 +240,124 @@ export async function createSixflTvThumbnail(input: {
   strapline: string;
   showScore: boolean;
   siteUrl: string;
+  backgroundImage?: Uint8Array | null;
 }) {
-  const [firstBadge, secondBadge, sixflTvLogoBytes] = await Promise.all([
+  const [firstBadge, secondBadge] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
-    sixflTvLogo(input.siteUrl),
   ]);
 
-  const firstScore = input.fixture.firstTeam.score;
-  const secondScore = input.fixture.secondTeam.score;
-  const scoreVisible = input.showScore && Number.isInteger(firstScore) && Number.isInteger(secondScore);
   const isHighlights = input.kind === "HIGHLIGHTS";
   const accent = isHighlights ? "#21e6a1" : "#ff365f";
   const accentDeep = isHighlights ? "#063e2c" : "#4b0a18";
-  const typeLabel = isHighlights ? "HIGHLIGHTS" : "FULL MATCH";
+  const firstScore = input.fixture.firstTeam.score;
+  const secondScore = input.fixture.secondTeam.score;
+  const scoreVisible = input.showScore && Number.isInteger(firstScore) && Number.isInteger(secondScore);
   const headline = fit(input.headline || (isHighlights ? "MATCH HIGHLIGHTS" : "FULL MATCH"), 30).toUpperCase();
-  const headlineWords = headline.split(/\s+/).filter(Boolean);
-  const headlineSplit = headlineWords.length > 1
-    ? Math.max(1, Math.ceil(headlineWords.length / 2))
-    : 1;
-  const headlineLineOne = headlineWords.slice(0, headlineSplit).join(" ");
-  const headlineLineTwo = headlineWords.slice(headlineSplit).join(" ");
-  const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
-  const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
-  const matchup = `${fit(input.fixture.firstTeam.name, 22)}  •  ${fit(input.fixture.secondTeam.name, 22)}`;
+  const words = headline.split(/\s+/).filter(Boolean);
+  const split = words.length > 1 ? Math.max(1, Math.ceil(words.length / 2)) : 1;
+  const headlineOne = words.slice(0, split).join(" ");
+  const headlineTwo = words.slice(split).join(" ");
   const league = fit(input.strapline || input.fixture.leagueName.replaceAll("·", "•"), 58);
   const date = input.fixture.kickoffLabel;
+  const scorebarX = isHighlights ? 34 : 1280 - 34 - 450;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  const background = input.backgroundImage?.length
+    ? await sharp(input.backgroundImage)
+        .rotate()
+        .resize(1280, 720, { fit: "cover", position: "centre" })
+        .modulate({ brightness: 0.78, saturation: 1.08 })
+        .jpeg({ quality: 90 })
+        .toBuffer()
+    : null;
+
+  const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     <defs>
-      <linearGradient id="nightSky" x1="0" y1="0" x2="0" y2="1">
+      <linearGradient id="fallbackBg" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#071932"/>
-        <stop offset="0.5" stop-color="#07130f"/>
+        <stop offset="0.52" stop-color="#07130f"/>
         <stop offset="1" stop-color="#020504"/>
       </linearGradient>
-      <linearGradient id="pitchGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#123a28"/>
-        <stop offset="1" stop-color="#03100b"/>
-      </linearGradient>
-      <linearGradient id="lowerShade" x1="0" y1="0" x2="0" y2="1">
+      <radialGradient id="fallbackGlowLeft" cx="24%" cy="16%" r="34%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
+        <stop offset="0.1" stop-color="#ffffff" stop-opacity="0.42"/>
+        <stop offset="0.35" stop-color="#dbeafe" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="fallbackGlowRight" cx="78%" cy="14%" r="36%">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
+        <stop offset="0.1" stop-color="#ffffff" stop-opacity="0.42"/>
+        <stop offset="0.35" stop-color="#dbeafe" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#000000" stop-opacity="0"/>
-        <stop offset="1" stop-color="#000000" stop-opacity="0.92"/>
-      </linearGradient>
-      <radialGradient id="lampGlowLeft" cx="23%" cy="18%" r="25%">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
-        <stop offset="0.09" stop-color="#ffffff" stop-opacity="0.62"/>
-        <stop offset="0.32" stop-color="#dbeafe" stop-opacity="0.16"/>
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-      </radialGradient>
-      <radialGradient id="lampGlowRight" cx="78%" cy="15%" r="28%">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
-        <stop offset="0.09" stop-color="#ffffff" stop-opacity="0.62"/>
-        <stop offset="0.32" stop-color="#dbeafe" stop-opacity="0.16"/>
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-      </radialGradient>
-      <linearGradient id="beamLeft" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.24"/>
-        <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.025"/>
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-      </linearGradient>
-      <linearGradient id="beamRight" x1="1" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.24"/>
-        <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.025"/>
-        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+        <stop offset="0.35" stop-color="#000000" stop-opacity="0.20"/>
+        <stop offset="1" stop-color="#000000" stop-opacity="0.94"/>
       </linearGradient>
       <linearGradient id="accentSlash" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="${accent}" stop-opacity="0.88"/>
-        <stop offset="1" stop-color="${accentDeep}" stop-opacity="0.18"/>
+        <stop offset="0" stop-color="${accent}" stop-opacity="0.86"/>
+        <stop offset="1" stop-color="${accentDeep}" stop-opacity="0.22"/>
       </linearGradient>
-      <filter id="badgeShadow"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.75"/></filter>
       <filter id="scoreShadow"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.72"/></filter>
+      <filter id="badgeShadow"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.78"/></filter>
     </defs>
 
-    <rect width="1280" height="720" fill="url(#nightSky)"/>
+    ${background ? "" : `
+      <rect width="1280" height="720" fill="url(#fallbackBg)"/>
+      <rect width="1280" height="390" fill="url(#fallbackGlowLeft)"/>
+      <rect width="1280" height="390" fill="url(#fallbackGlowRight)"/>
+      <path d="M0 330 Q180 272 345 288 Q640 220 935 288 Q1100 272 1280 330 L1280 470 Q1090 424 925 438 Q640 386 355 438 Q190 424 0 470 Z" fill="#07100c"/>
+      <path d="M150 720 L1130 720 L870 410 L410 410 Z" fill="#103522" stroke="#a7f3d0" stroke-opacity="0.30" stroke-width="2"/>
+      <path d="M640 410 L640 720 M410 410 L150 720 M870 410 L1130 720" fill="none" stroke="#d1fae5" stroke-opacity="0.20" stroke-width="2"/>
+      <ellipse cx="640" cy="565" rx="104" ry="58" fill="none" stroke="#d1fae5" stroke-opacity="0.20" stroke-width="2"/>
+    `}
 
-    <!-- Stadium lights and beams -->
-    <g id="thumbnailFloodlights">
-      <polygon points="250,70 314,70 620,520 440,520" fill="url(#beamLeft)"/>
-      <polygon points="1030,62 966,62 660,520 840,520" fill="url(#beamRight)"/>
-      <rect width="1280" height="400" fill="url(#lampGlowLeft)"/>
-      <rect width="1280" height="400" fill="url(#lampGlowRight)"/>
+    <rect width="1280" height="720" fill="#020504" fill-opacity="${background ? "0.12" : "0"}"/>
+    <rect y="420" width="1280" height="300" fill="url(#bottomShade)"/>
 
-      <path d="M282 315 L291 103 L297 103 L293 315 Z" fill="#64748b" fill-opacity="0.75"/>
-      <rect x="261" y="84" width="68" height="24" rx="4" fill="#475569" stroke="#cbd5e1" stroke-opacity="0.55"/>
-      <g fill="#ffffff">
-        <circle cx="271" cy="94" r="3.6"/><circle cx="284" cy="94" r="3.6"/><circle cx="297" cy="94" r="3.6"/><circle cx="310" cy="94" r="3.6"/><circle cx="323" cy="94" r="3.6"/>
-        <circle cx="271" cy="102" r="3.6"/><circle cx="284" cy="102" r="3.6"/><circle cx="297" cy="102" r="3.6"/><circle cx="310" cy="102" r="3.6"/><circle cx="323" cy="102" r="3.6"/>
-      </g>
-
-      <path d="M998 315 L989 95 L983 95 L987 315 Z" fill="#64748b" fill-opacity="0.75"/>
-      <rect x="951" y="76" width="68" height="24" rx="4" fill="#475569" stroke="#cbd5e1" stroke-opacity="0.55"/>
-      <g fill="#ffffff">
-        <circle cx="961" cy="86" r="3.6"/><circle cx="974" cy="86" r="3.6"/><circle cx="987" cy="86" r="3.6"/><circle cx="1000" cy="86" r="3.6"/><circle cx="1013" cy="86" r="3.6"/>
-        <circle cx="961" cy="94" r="3.6"/><circle cx="974" cy="94" r="3.6"/><circle cx="987" cy="94" r="3.6"/><circle cx="1000" cy="94" r="3.6"/><circle cx="1013" cy="94" r="3.6"/>
-      </g>
-    </g>
-
-    <!-- Stadium bowl and crowd -->
-    <path d="M0 300 Q170 242 330 260 Q640 186 950 260 Q1110 242 1280 300 L1280 468 Q1085 412 928 426 Q640 372 352 426 Q195 412 0 468 Z" fill="#050a08"/>
-    <path d="M0 323 Q175 270 340 284 Q640 220 940 284 Q1105 270 1280 323 L1280 405 Q1090 364 930 376 Q640 332 350 376 Q190 364 0 405 Z" fill="#101b17"/>
-    <path d="M0 338 Q180 292 348 301 Q640 247 932 301 Q1100 292 1280 338" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="3"/>
-    <g fill="#d1fae5" opacity="0.34">
-      ${Array.from({ length: 48 }, (_, i) => {
-        const x = 18 + i * 27;
-        const y = 335 + (i % 4) * 11;
-        return `<circle cx="${x}" cy="${y}" r="1.9"/>`;
-      }).join("")}
-      ${Array.from({ length: 42 }, (_, i) => {
-        const x = 48 + i * 30;
-        const y = 383 + ((i + 2) % 4) * 9;
-        return `<circle cx="${x}" cy="${y}" r="1.55"/>`;
-      }).join("")}
-    </g>
-
-    <!-- Perspective pitch -->
-    <path d="M155 720 L1125 720 L875 392 L405 392 Z" fill="url(#pitchGrad)" stroke="#9fffdc" stroke-opacity="0.36" stroke-width="2.5"/>
-    <path d="M640 392 L640 720 M405 392 L155 720 M875 392 L1125 720" fill="none" stroke="#d1fae5" stroke-opacity="0.24" stroke-width="2"/>
-    <ellipse cx="640" cy="555" rx="104" ry="59" fill="none" stroke="#d1fae5" stroke-opacity="0.24" stroke-width="2"/>
-    <path d="M450 720 L492 620 L788 620 L830 720 M520 392 L548 455 L732 455 L760 392" fill="none" stroke="#d1fae5" stroke-opacity="0.20" stroke-width="2"/>
-    <path d="M350 720 L405 645 L510 645 L475 720 M930 720 L875 645 L770 645 L805 720" fill="none" stroke="#d1fae5" stroke-opacity="0.17" stroke-width="2"/>
-
-    <!-- Broadcast scorebar -->
     <g filter="url(#scoreShadow)">
-      <rect x="38" y="34" width="704" height="92" rx="22" fill="#020806" fill-opacity="0.92" stroke="${accent}" stroke-width="2.5"/>
-      <rect x="52" y="54" width="64" height="50" rx="25" fill="${accent}"/>
-      ${badgeImage(firstBadge, 134, 45, 70, input.fixture.firstTeam.name)}
-      <rect x="316" y="48" width="172" height="64" rx="17" fill="#07110d" stroke="${accent}" stroke-width="2"/>
-      ${badgeImage(secondBadge, 642, 45, 70, input.fixture.secondTeam.name)}
+      <rect x="${scorebarX}" y="34" width="450" height="116" rx="25" fill="#020806" fill-opacity="0.92" stroke="${accent}" stroke-width="3"/>
+      <g filter="url(#badgeShadow)">
+        ${badgeImage(firstBadge, scorebarX + 24, 46, 92, input.fixture.firstTeam.name)}
+        ${badgeImage(secondBadge, scorebarX + 334, 46, 92, input.fixture.secondTeam.name)}
+      </g>
     </g>
 
-    ${logoImage(sixflTvLogoBytes, 956, 30, 270, 86, 0.97)}
-
-    <!-- Bottom broadcast treatment -->
-    <polygon points="0,720 0,630 490,560 640,720" fill="#020504" fill-opacity="0.90"/>
-    <polygon points="1280,720 1280,560 870,720" fill="${accentDeep}" fill-opacity="0.78"/>
-    <polygon points="1280,720 1280,620 972,720" fill="url(#accentSlash)" opacity="0.72"/>
-    <rect y="575" width="1280" height="145" fill="url(#lowerShade)"/>
+    ${isHighlights
+      ? `<polygon points="0,720 0,635 490,558 640,720" fill="#020504" fill-opacity="0.94"/><polygon points="0,720 0,672 520,590 682,720" fill="url(#accentSlash)" opacity="0.78"/>`
+      : `<polygon points="1280,720 1280,558 870,720" fill="${accentDeep}" fill-opacity="0.86"/><polygon points="1280,720 1280,620 970,720" fill="url(#accentSlash)" opacity="0.76"/>`}
   </svg>`;
 
   const textJobs = [
-    thumbnailTextPng({ text: "FT", width: 64, height: 50, fontSize: 21, bold: true, fill: "#03110b", align: "center" }),
-    thumbnailTextPng({ text: firstCode, width: 94, height: 48, fontSize: 29, bold: true, fill: "#ffffff", align: "center", letterSpacing: 1.3 }),
     thumbnailTextPng({
       markup: scoreVisible
         ? `<span foreground="#ffffff">${firstScore}</span><span foreground="${accent}"> - </span><span foreground="#ffffff">${secondScore}</span>`
         : `<span foreground="#ffffff">VS</span>`,
-      width: 172,
-      height: 64,
-      fontSize: scoreVisible ? 46 : 40,
+      width: 190,
+      height: 82,
+      fontSize: scoreVisible ? 62 : 52,
       bold: true,
       fill: "#ffffff",
       align: "center",
     }),
-    thumbnailTextPng({ text: secondCode, width: 94, height: 48, fontSize: 29, bold: true, fill: "#ffffff", align: "center", letterSpacing: 1.3 }),
-    thumbnailTextPng({ text: typeLabel, width: 210, height: 36, fontSize: 20, bold: true, fill: accent, letterSpacing: 1.8 }),
-    thumbnailTextPng({ text: headlineLineOne, width: 760, height: 92, fontSize: 76, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: headlineLineTwo || " ", width: 820, height: 92, fontSize: 76, bold: true, fill: accent }),
-    thumbnailTextPng({ text: matchup, width: 790, height: 38, fontSize: 23, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: league, width: 720, height: 34, fontSize: 21, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: date, width: 420, height: 34, fontSize: 21, bold: true, fill: "#d1d5db", align: "right" }),
+    thumbnailTextPng({ text: headlineOne, width: 760, height: 96, fontSize: 82, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: headlineTwo || " ", width: 840, height: 96, fontSize: 82, bold: true, fill: accent }),
+    thumbnailTextPng({ text: league, width: 760, height: 36, fontSize: 22, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: date, width: 430, height: 36, fontSize: 22, bold: true, fill: "#d1d5db", align: "right" }),
   ];
+  const [scoreText, headlineOneText, headlineTwoText, leagueText, dateText] = await Promise.all(textJobs);
 
-  const [ftText, firstCodeText, scoreText, secondCodeText, typeText, headlineOneText, headlineTwoText, matchupText, leagueText, dateText] = await Promise.all(textJobs);
   const composites: sharp.OverlayOptions[] = [
-    { input: ftText, left: 52, top: 54 },
-    { input: firstCodeText, left: 212, top: 56 },
-    { input: scoreText, left: 316, top: 48 },
-    { input: secondCodeText, left: 526, top: 56 },
-    { input: typeText, left: 52, top: 404 },
-    { input: headlineOneText, left: 52, top: 445 },
-    { input: headlineTwoText, left: 52, top: 518 },
-    { input: matchupText, left: 54, top: 602 },
-    { input: leagueText, left: 54, top: 648 },
-    { input: dateText, left: 804, top: 648 },
+    { input: Buffer.from(overlaySvg), left: 0, top: 0 },
+    { input: scoreText, left: scorebarX + 130, top: 51 },
+    { input: headlineOneText, left: 42, top: 438 },
+    { input: headlineTwoText, left: 42, top: 518 },
+    { input: leagueText, left: 44, top: 620 },
+    { input: dateText, left: 802, top: 650 },
   ];
 
-  return sharp(Buffer.from(svg))
+  return (background ? sharp(background) : sharp({ create: { width: 1280, height: 720, channels: 3, background: "#020504" } }))
     .composite(composites)
     .png({ compressionLevel: 9 })
     .toBuffer();
