@@ -58,6 +58,12 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /\['8', 'Match card'/);
   assert.match(captainCard, /\['6', 'Payment'/);
   assert.match(captainCard, /Late = 2/);
+  assert.match(captainCard, /Assists', 'Bonus · by 6pm next day'/);
+  assert.match(captainCard, /Ratings', 'Bonus · by 6pm next day'/);
+  assert.match(captainCard, /Assists bonus completed by 6pm/);
+  assert.match(captainCard, /Player ratings bonus completed by 6pm/);
+  assert.match(adminPriorityPage, /assists bonus 1 \(by 6pm next day\)/);
+  assert.match(adminPriorityPage, /ratings bonus 1 \(by 6pm next day\)/);
   assert.match(captainCard, /Match card not completed/);
   assert.match(captainCard, /Available points per match/);
   assert.match(captainCard, /Each completed match is worth up to 20 points/);
