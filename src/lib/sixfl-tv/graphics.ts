@@ -14,6 +14,8 @@ export type SixflTvGraphicFixture = {
   firstTeam: SixflTvGraphicTeam;
   secondTeam: SixflTvGraphicTeam;
   scorers?: string[];
+  firstTeamLineup?: string[];
+  secondTeamLineup?: string[];
   decisionNote?: string | null;
 };
 
@@ -141,21 +143,21 @@ export async function createSixflTvVideoCard(input: {
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
     sixflTvLogo(),
   ]);
-  const scoreVisible = input.mode === "FULL_TIME" && Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
-  const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : input.label === "SIXFL TV" ? "6-A-SIDE FOOTBALL" : fit(input.label, 34);
-  const scorerLine = (input.fixture.scorers || []).slice(0, 5).join(" · ");
+  const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
+  const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : input.label === "SIXFL TV" ? "MATCH RESULT" : fit(input.label, 34);
+  const scorerLines = (input.fixture.scorers || []).slice(0, 3).map(value => fit(value, 82));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
     ${logoImage(sixflTvLogoBytes, 760, 34, 400, 128)}
     <text x="960" y="235" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="900" fill="#ffffff">${xml(cardHeading)}</text>
-    <g filter="url(#shadow)">${badgeImage(firstBadge, 240, 310, 300, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1380, 310, 300, input.fixture.secondTeam.name)}</g>
-    <text x="390" y="700" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.firstTeam.name, 25))}</text>
-    <text x="1530" y="700" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 25))}</text>
-    ${scoreVisible ? `<text x="960" y="585" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="180" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score} <tspan fill="#34d399">–</tspan> ${input.fixture.secondTeam.score}</text>` : `<text x="960" y="560" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
-    <text x="960" y="790" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
-    <text x="960" y="842" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
-    ${scorerLine ? `<text x="960" y="918" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#ffffff">${xml(fit(scorerLine, 95))}</text>` : ""}
-    ${input.fixture.decisionNote ? `<text x="960" y="966" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
+    <g filter="url(#shadow)">${badgeImage(firstBadge, 220, 300, 260, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1440, 300, 260, input.fixture.secondTeam.name)}</g>
+    ${scoreVisible ? `<text x="960" y="535" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="176" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score} <tspan fill="#34d399">–</tspan> ${input.fixture.secondTeam.score}</text>` : `<text x="960" y="520" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
+    ${scorerLines.map((line, index) => `<text x="960" y="${635 + index * 42}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" fill="#ffffff">${xml(line)}</text>`).join("")}
+    <text x="350" y="665" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="46" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.firstTeam.name, 25))}</text>
+    <text x="1570" y="665" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="46" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 25))}</text>
+    <text x="960" y="820" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
+    <text x="960" y="872" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
+    ${input.fixture.decisionNote ? `<text x="960" y="930" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
@@ -210,6 +212,30 @@ export async function createSixflTvWatermark() {
   const sixflTvLogoBytes = await sixflTvLogo();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
+
+export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFixture }) {
+  const first = (input.fixture.firstTeamLineup || []).slice(0, 12);
+  const second = (input.fixture.secondTeamLineup || []).slice(0, 12);
+  if (!first.length && !second.length) return null;
+  const sixflTvLogoBytes = await sixflTvLogo();
+  const rows = Math.max(first.length, second.length, 1);
+  const startY = 370, rowGap = Math.min(54, Math.floor(520 / rows));
+  const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${stadiumBackground(1920, 1080)}
+    ${logoImage(sixflTvLogoBytes, 760, 34, 400, 128)}
+    <text x="960" y="235" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="900" fill="#ffffff">MATCHDAY SQUADS</text>
+    <text x="480" y="315" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.firstTeam.name, 28))}</text>
+    <text x="1440" y="315" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.secondTeam.name, 28))}</text>
+    <line x1="960" y1="300" x2="960" y2="910" stroke="#ffffff" stroke-opacity="0.15" stroke-width="2"/>
+    ${list(first, 480)}
+    ${list(second, 1440)}
+    <text x="960" y="972" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="600" fill="#d1d5db">${xml(fit(input.fixture.leagueName, 62))} · ${xml(input.fixture.kickoffLabel)}</text>
+    <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
