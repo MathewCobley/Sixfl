@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 
 export type SixflTvGraphicTeam = {
@@ -37,22 +35,31 @@ function fit(value: string, max = 34) {
   return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }
 
-let sixflTvLogoPromise: Promise<Buffer> | null = null;
-let sixflPredictorLogoPromise: Promise<Buffer> | null = null;
-async function sixflTvLogo() {
-  if (!sixflTvLogoPromise) sixflTvLogoPromise = (async () => {
-    const source = await readFile(path.join(process.cwd(), "public", "Sixfl-tv.png"));
+const brandingCache = new Map<string, Promise<Buffer>>();
+async function brandingAsset(siteUrl: string, pathname: string) {
+  const base = new URL(siteUrl);
+  const url = new URL(pathname, base);
+  if (url.origin !== base.origin) throw new Error("SIXFL TV branding asset must stay on the SIXFL site.");
+  const cacheKey = url.toString();
+  const existing = brandingCache.get(cacheKey);
+  if (existing) return existing;
+  const pending = (async () => {
+    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(12000) });
+    if (!response.ok) throw new Error(`SIXFL TV branding asset is unavailable (${response.status}).`);
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) throw new Error("SIXFL TV branding asset did not return an image.");
+    const source = Buffer.from(await response.arrayBuffer());
+    if (!source.length || source.length > 8 * 1024 * 1024) throw new Error("SIXFL TV branding asset size is invalid.");
     return sharp(source).png().trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
-  })();
-  return sixflTvLogoPromise;
+  })().catch(error => {
+    brandingCache.delete(cacheKey);
+    throw error;
+  });
+  brandingCache.set(cacheKey, pending);
+  return pending;
 }
-async function sixflPredictorLogo() {
-  if (!sixflPredictorLogoPromise) sixflPredictorLogoPromise = (async () => {
-    const source = await readFile(path.join(process.cwd(), "public", "logos", "sixfl-ai-predictor.png"));
-    return sharp(source).png().trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
-  })();
-  return sixflPredictorLogoPromise;
-}
+function sixflTvLogo(siteUrl: string) { return brandingAsset(siteUrl, "/Sixfl-tv.png"); }
+function sixflPredictorLogo(siteUrl: string) { return brandingAsset(siteUrl, "/logos/sixfl-ai-predictor.png"); }
 function logoImage(buffer: Buffer, x: number, y: number, width: number, height: number, opacity = 1) {
   return `<image href="data:image/png;base64,${buffer.toString("base64")}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}"/>`;
 }
@@ -136,7 +143,7 @@ export async function createSixflTvThumbnail(input: {
   const [firstBadge, secondBadge, sixflTvLogoBytes] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
-    sixflTvLogo(),
+    sixflTvLogo(input.siteUrl),
   ]);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
@@ -168,7 +175,7 @@ export async function createSixflTvVideoCard(input: {
   const [firstBadge, secondBadge, sixflTvLogoBytes] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
-    sixflTvLogo(),
+    sixflTvLogo(input.siteUrl),
   ]);
   const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
   const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH RESULT";
@@ -202,7 +209,7 @@ export async function createSixflTvVideoCard(input: {
 export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
   const destination = new URL("/goal-of-the-month", input.siteUrl);
   const displayUrl = `${destination.host.replace(/^www\./, "")}${destination.pathname}`;
-  const sixflTvLogoBytes = await sixflTvLogo();
+  const sixflTvLogoBytes = await sixflTvLogo(input.siteUrl);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
     ${logoImage(sixflTvLogoBytes, 760, 36, 400, 128)}
@@ -219,7 +226,7 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
 }
 
 
-export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture }) {
+export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
   const [sixflTvLogoBytes] = await Promise.all([sixflTvLogo()]);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
@@ -243,8 +250,8 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
 }
 
 
-export async function createSixflTvWatermark() {
-  const sixflTvLogoBytes = await sixflTvLogo();
+export async function createSixflTvWatermark(input: { siteUrl: string }) {
+  const sixflTvLogoBytes = await sixflTvLogo(input.siteUrl);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
   </svg>`;
@@ -252,11 +259,11 @@ export async function createSixflTvWatermark() {
 }
 
 
-export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFixture }) {
+export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
   const first = (input.fixture.firstTeamLineup || []).slice(0, 12);
   const second = (input.fixture.secondTeamLineup || []).slice(0, 12);
   if (!first.length && !second.length) return null;
-  const [sixflTvLogoBytes, predictorLogoBytes] = await Promise.all([sixflTvLogo(), sixflPredictorLogo()]);
+  const [sixflTvLogoBytes, predictorLogoBytes] = await Promise.all([sixflTvLogo(input.siteUrl), sixflPredictorLogo(input.siteUrl)]);
   const rows = Math.max(first.length, second.length, 1);
   const startY = 420, rowGap = Math.min(50, Math.floor(450 / rows));
   const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
