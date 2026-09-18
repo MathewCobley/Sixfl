@@ -55,36 +55,19 @@ export async function saveVeoSettings(leagueId: string, form: FormData) {
           "venueId" = EXCLUDED."venueId", "maxMatches" = EXCLUDED."maxMatches", "updatedBy" = EXCLUDED."updatedBy",
           "updatedAt" = NOW(), revision = "VeoLeagueSettings".revision + 1
       `;
-      const details = JSON.stringify({ kind: 'league_settings', before: previous, after: { enabled, pitch, venueId, maxMatches }, supplementPence: 500 });
+      const details = JSON.stringify({ kind: 'league_settings', before: previous, after: { enabled, pitch, venueId, maxMatches }, priorityModel: 'SIXFL_TV_SCORE', newPriorityFeePence: 0 });
       await tx.$executeRaw`INSERT INTO "VeoSettingsAudit" (id, "leagueId", "actorId", details) VALUES (${randomUUID()}, ${leagueId}, ${user?.id ?? null}, ${details}::jsonb)`;
     });
   } catch (e) { error = message(e); }
   back(leagueId, form, error);
 }
 export async function setVeoTeamPriority(leagueId: string, form: FormData) {
-  const { user } = await requireAdmin();
-  let error: string | undefined;
-  try {
-    const teamId = String(form.get('teamId') ?? '');
-    const enabled = form.get('enabled') === '1';
-    if (enabled && form.get('agreed') !== 'on') throw new VeoAllocationError('Confirm the captain has agreed to the £5 supplement before switching Priority on.');
-    await prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM "League" WHERE id = ${leagueId} FOR UPDATE`;
-      const team = (await readVeoTeams(leagueId, tx)).find(t => t.id === teamId);
-      if (!team || team.teamMode !== 'STANDARD') throw new VeoAllocationError('Choose a standard team in this league. Managed teams and placeholders cannot opt in.');
-      if (team.priority !== (form.get('previous') === '1')) throw new VeoAllocationError('This team setting changed. Refresh before saving.');
-      await tx.$executeRaw`
-        INSERT INTO "VeoTeamPriority" ("leagueId", "teamId", enabled, "updatedBy")
-        VALUES (${leagueId}, ${teamId}, ${enabled}, ${user?.id ?? null})
-        ON CONFLICT ("leagueId", "teamId") DO UPDATE SET enabled = EXCLUDED.enabled, "updatedAt" = NOW(), "updatedBy" = EXCLUDED."updatedBy"
-      `;
-      if (enabled && user?.id) await approvePendingVeoRequests(tx, leagueId, teamId, user.id);
-      const details = JSON.stringify({ kind: 'team_priority', before: team.priority, enabled, captainAgreementConfirmed: enabled, supplementPence: 500 });
-      await tx.$executeRaw`INSERT INTO "VeoSettingsAudit" (id, "leagueId", "teamId", "actorId", details) VALUES (${randomUUID()}, ${leagueId}, ${teamId}, ${user?.id ?? null}, ${details}::jsonb)`;
-    });
-  } catch (e) { error = message(e); }
-  revalidatePath('/captain/team/[teamid]/fixtures', 'layout');
-  back(leagueId, form, error);
+  await requireAdmin();
+  back(
+    leagueId,
+    form,
+    'Manual paid Veo Priority has ended. SIXFL TV Priority is calculated automatically from each team’s score.',
+  );
 }
 export async function saveVeoVideo(leagueId: string, form: FormData) {
   const { user } = await requireAdmin();
