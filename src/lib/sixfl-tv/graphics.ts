@@ -439,7 +439,7 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string; fix
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
-export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string }) {
+export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string; clipNumber?: number | null }) {
   const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
@@ -452,6 +452,9 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
   const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
   const footageLabel = input.kind === "HIGHLIGHTS" ? "Match highlights" : "Full match";
+  const clipLabel = input.kind === "HIGHLIGHTS" && Number.isInteger(input.clipNumber)
+    ? `Clip ${input.clipNumber}`
+    : null;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -479,6 +482,7 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
     <g transform="translate(54 146)">
       <rect width="190" height="38" rx="19" fill="#020805" fill-opacity="0.76" stroke="#2dd4bf" stroke-opacity="0.5"/>
       <text x="95" y="26" text-anchor="middle" font-size="18" font-weight="800" fill="#d1fae5">${xml(footageLabel)}</text>
+      ${clipLabel ? `<g transform="translate(198 5)"><rect width="82" height="28" rx="14" fill="#020805" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.24"/><text x="41" y="20" text-anchor="middle" font-size="14" font-weight="800" fill="#ffffff">${xml(clipLabel)}</text></g>` : ""}
     </g>
     ${logoImage(sixflTvLogoBytes, 1585, 34, 275, 88, 0.94)}
   </svg>`;
