@@ -3,6 +3,7 @@ import sharp from "sharp";
 export type SixflTvGraphicTeam = {
   name: string;
   logoUrl: string | null;
+  broadcastCode?: string | null;
   score?: number | null;
 };
 
@@ -36,11 +37,24 @@ function fit(value: string, max = 34) {
   return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }
 
-function scorerTextForTeam(scorers: string[] | undefined, teamName: string) {
+function scorerLinesForTeam(scorers: string[] | undefined, teamName: string) {
   const prefix = `${teamName.trim()}:`;
   const row = (scorers || []).find(value => value.trim().toLowerCase().startsWith(prefix.toLowerCase()));
-  if (!row) return "";
-  return fit(row.trim().slice(prefix.length).trim(), 46);
+  if (!row) return [] as string[];
+  return row
+    .trim()
+    .slice(prefix.length)
+    .split(",")
+    .map(value => fit(value.trim(), 30))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function broadcastCodeForTeam(team: SixflTvGraphicTeam) {
+  const saved = String(team.broadcastCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (saved.length === 3) return saved;
+  const fallback = team.name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return (fallback.slice(0, 3) || "SIX").padEnd(3, "X");
 }
 
 const brandingCache = new Map<string, Promise<Buffer>>();
@@ -286,8 +300,8 @@ export async function createSixflTvVideoCard(input: {
   ]);
   const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
   const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH RESULT";
-  const firstScorers = input.mode === "FULL_TIME" ? scorerTextForTeam(input.fixture.scorers, input.fixture.firstTeam.name) : "";
-  const secondScorers = input.mode === "FULL_TIME" ? scorerTextForTeam(input.fixture.scorers, input.fixture.secondTeam.name) : "";
+  const firstScorers = scorerLinesForTeam(input.fixture.scorers, input.fixture.firstTeam.name);
+  const secondScorers = scorerLinesForTeam(input.fixture.scorers, input.fixture.secondTeam.name);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${fontCss}
     ${stadiumBackground(1920, 1080)}
@@ -298,17 +312,21 @@ export async function createSixflTvVideoCard(input: {
     <text x="1570" y="300" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="44" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 24))}</text>
     <g filter="url(#shadow)">${badgeImage(firstBadge, 220, 330, 260, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1440, 330, 260, input.fixture.secondTeam.name)}</g>
 
-    ${scoreVisible ? `<text x="960" y="535" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="176" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score} <tspan fill="#34d399">–</tspan> ${input.fixture.secondTeam.score}</text>` : `<text x="960" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
-    ${firstScorers ? `<text x="760" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="18" font-weight="600" fill="#d1fae5">${xml(firstScorers)}</text>` : ""}
-    ${secondScorers ? `<text x="1160" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="18" font-weight="600" fill="#d1fae5">${xml(secondScorers)}</text>` : ""}
+    ${scoreVisible ? `<g>
+      <text x="820" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="170" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score}</text>
+      <text x="960" y="505" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="800" fill="#34d399">–</text>
+      <text x="1100" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="170" font-weight="900" fill="#ffffff">${input.fixture.secondTeam.score}</text>
+    </g>` : `<text x="960" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
+    ${firstScorers.map((line, index) => `<text x="820" y="${568 + index * 28}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="20" font-weight="600" fill="#d1fae5">${xml(line)}</text>`).join("")}
+    ${secondScorers.map((line, index) => `<text x="1100" y="${568 + index * 28}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="20" font-weight="600" fill="#d1fae5">${xml(line)}</text>`).join("")}
 
-    <text x="350" y="650" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
-    ${formRun(input.fixture.firstTeamForm, 220, 675, "start")}
-    <text x="1570" y="650" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
-    ${formRun(input.fixture.secondTeamForm, 1700, 675, "end")}
+    <text x="350" y="710" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
+    ${formRun(input.fixture.firstTeamForm, 220, 735, "start")}
+    <text x="1570" y="710" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
+    ${formRun(input.fixture.secondTeamForm, 1700, 735, "end")}
 
-    <text x="960" y="840" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
-    <text x="960" y="892" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
+    <text x="960" y="870" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
+    <text x="960" y="922" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
     ${input.fixture.decisionNote ? `<text x="960" y="944" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="24" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
@@ -350,12 +368,12 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
-  const firstName = fit(input.fixture.firstTeam.name, 17);
-  const secondName = fit(input.fixture.secondTeam.name, 17);
+  const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
+  const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
-      <filter id="scorebugShadow"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.58"/></filter>
+      <filter id="scorebugShadow"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.58"/></filter>
       <linearGradient id="scorebugBg" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#03100b" stop-opacity="0.96"/>
         <stop offset="1" stop-color="#010604" stop-opacity="0.94"/>
@@ -363,21 +381,18 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
     </defs>
     ${fontCss}
     <g transform="translate(54 46)" filter="url(#scorebugShadow)">
-      <rect width="1280" height="154" rx="22" fill="url(#scorebugBg)" stroke="#2dd4bf" stroke-width="3"/>
-      <rect x="18" y="22" width="68" height="42" rx="21" fill="#10b981"/>
-      <text x="52" y="51" text-anchor="middle" font-size="20" font-weight="900" fill="#02140d" letter-spacing="1.5">FT</text>
+      <rect width="820" height="116" rx="20" fill="url(#scorebugBg)" stroke="#2dd4bf" stroke-width="3"/>
+      <rect x="16" y="36" width="62" height="42" rx="21" fill="#10b981"/>
+      <text x="47" y="65" text-anchor="middle" font-size="19" font-weight="900" fill="#02140d" letter-spacing="1.2">FT</text>
 
-      <g transform="translate(108 18)">${badgeImage(firstBadge, 0, 0, 110, input.fixture.firstTeam.name)}</g>
-      <g transform="translate(1062 18)">${badgeImage(secondBadge, 0, 0, 110, input.fixture.secondTeam.name)}</g>
+      <g transform="translate(96 18)">${badgeImage(firstBadge, 0, 0, 80, input.fixture.firstTeam.name)}</g>
+      <text x="214" y="72" text-anchor="middle" font-size="31" font-weight="900" fill="#ffffff" letter-spacing="2">${xml(firstCode)}</text>
 
-      <text x="250" y="88" font-size="30" font-weight="900" fill="#ffffff">${xml(firstName)}</text>
-      <text x="1032" y="88" text-anchor="end" font-size="30" font-weight="900" fill="#ffffff">${xml(secondName)}</text>
+      <rect x="302" y="19" width="170" height="78" rx="18" fill="#06150f" stroke="#10b981" stroke-width="2"/>
+      <text x="387" y="73" text-anchor="middle" font-size="48" font-weight="900" fill="#ffffff">${firstScore}<tspan fill="#34d399"> - </tspan>${secondScore}</text>
 
-      <line x1="250" y1="112" x2="520" y2="112" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
-      <line x1="760" y1="112" x2="1032" y2="112" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
-
-      <rect x="544" y="20" width="192" height="114" rx="22" fill="#06150f" stroke="#10b981" stroke-width="2"/>
-      <text x="640" y="98" text-anchor="middle" font-size="66" font-weight="900" fill="#ffffff">${firstScore}<tspan fill="#34d399"> - </tspan>${secondScore}</text>
+      <text x="560" y="72" text-anchor="middle" font-size="31" font-weight="900" fill="#ffffff" letter-spacing="2">${xml(secondCode)}</text>
+      <g transform="translate(646 18)">${badgeImage(secondBadge, 0, 0, 80, input.fixture.secondTeam.name)}</g>
     </g>
     ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
   </svg>`;
@@ -439,15 +454,19 @@ export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFi
   const second = (input.fixture.secondTeamLineup || []).slice(0, 12);
   if (!first.length && !second.length) return null;
   const [sixflTvLogoBytes, predictorLogoBytes, fontCss] = await Promise.all([sixflTvLogo(input.siteUrl), sixflPredictorLogo(input.siteUrl), embeddedFontStyle(input.siteUrl)]);
-  const rows = Math.max(first.length, second.length, 1);
-  const startY = 420, rowGap = Math.min(50, Math.floor(450 / rows));
-  const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="29" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
   const predictor = input.fixture.predictor;
+  const rows = Math.max(first.length, second.length, 1);
+  const teamNameY = predictor ? 470 : 330;
+  const startY = predictor ? 535 : 395;
+  const rowGap = Math.min(46, Math.floor((predictor ? 365 : 500) / rows));
+  const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
   const predictorPanel = predictor
-    ? `<g><rect x="700" y="242" width="520" height="126" rx="24" fill="#020805" fill-opacity="0.82" stroke="#34d399" stroke-width="3"/>
-        ${logoImage(predictorLogoBytes, 770, 252, 380, 62)}
-        <text x="960" y="326" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="17" font-weight="800" letter-spacing="3" fill="#a7f3d0">PRE-MATCH PREDICTION</text>
-        <text x="960" y="365" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="44" font-weight="900" fill="#ffffff">${predictor.firstTeamScore} <tspan fill="#34d399">–</tspan> ${predictor.secondTeamScore}</text></g>`
+    ? `<g>
+        <rect x="710" y="230" width="500" height="190" rx="28" fill="#020805" fill-opacity="0.82" stroke="#34d399" stroke-width="3"/>
+        ${logoImage(predictorLogoBytes, 825, 244, 270, 68)}
+        <text x="960" y="342" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="18" font-weight="800" letter-spacing="3" fill="#a7f3d0">PRE-MATCH PREDICTION</text>
+        <text x="960" y="402" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="52" font-weight="900" fill="#ffffff">${predictor.firstTeamScore} <tspan fill="#34d399">–</tspan> ${predictor.secondTeamScore}</text>
+      </g>`
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${fontCss}
@@ -455,9 +474,9 @@ export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFi
     ${logoImage(sixflTvLogoBytes, 760, 24, 400, 128)}
     <text x="960" y="205" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="58" font-weight="900" fill="#ffffff">MATCHDAY SQUADS</text>
     ${predictorPanel}
-    <text x="480" y="390" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.firstTeam.name, 28))}</text>
-    <text x="1440" y="390" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.secondTeam.name, 28))}</text>
-    <line x1="960" y1="380" x2="960" y2="910" stroke="#ffffff" stroke-opacity="0.15" stroke-width="2"/>
+    <text x="480" y="${teamNameY}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.firstTeam.name, 28))}</text>
+    <text x="1440" y="${teamNameY}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.secondTeam.name, 28))}</text>
+    <line x1="960" y1="${teamNameY - 10}" x2="960" y2="910" stroke="#ffffff" stroke-opacity="0.15" stroke-width="2"/>
     ${list(first, 480)}
     ${list(second, 1440)}
     <text x="960" y="972" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="25" font-weight="600" fill="#d1d5db">${xml(fit(input.fixture.leagueName, 62))} · ${xml(input.fixture.kickoffLabel)}</text>
