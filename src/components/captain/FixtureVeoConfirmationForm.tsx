@@ -96,7 +96,7 @@ function LiveForm(props: Props) {
           </button>
           <p className="text-xs leading-5 text-white/65">
             Confirming on time contributes to your SIXFL TV Priority Score. Recorded-pitch
-            allocation is automatic and free; there is no Veo Priority purchase.
+            allocation is automatic and free; there is no SIXFL TV Priority purchase or filming fee.
           </p>
         </>
       )}
