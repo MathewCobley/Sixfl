@@ -7,7 +7,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
-import CaptainFixtureConfirmation from "@/components/captain/CaptainFixtureConfirmation";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import TeamShirt from "@/components/fixtures/TeamShirt";
@@ -292,6 +291,47 @@ function revalidateFixtureConfirmationPaths(teamid: string) {
   revalidatePath("/admin/fixtures");
   revalidatePath("/admin/fixtures/issues");
   revalidatePath("/admin/fixtures/unavailable");
+}
+
+async function confirmFixtureAction(formData: FormData) {
+  "use server";
+
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const fixtureId = String(formData.get("fixtureId") ?? "").trim();
+  const access = await requireCaptain(teamid);
+
+  try {
+    // A late Yes is still useful operationally, but the original confirmedAt is
+    // what the SIXFL TV Priority score uses to decide whether it was on time.
+    await getConfirmableFixture(fixtureId, teamid, {
+      allowLateConfirmation: true,
+    });
+
+    await prisma.fixtureCaptainConfirmation.upsert({
+      where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
+      update: {
+        status: "CONFIRMED",
+        note: null,
+        confirmedAt: new Date(),
+        issueRaisedAt: null,
+        confirmedByUserId: access.user?.id ?? null,
+      },
+      create: {
+        fixtureId,
+        teamId: teamid,
+        status: "CONFIRMED",
+        confirmedAt: new Date(),
+        confirmedByUserId: access.user?.id ?? null,
+      },
+    });
+
+    revalidateFixtureConfirmationPaths(teamid);
+  } catch (error) {
+    console.error("Captain fixture confirmation failed", error);
+    redirect(buildFixtureRedirect(teamid, { fixtureId, error: getFriendlyErrorMessage(error) }));
+  }
+
+  redirect(buildFixtureRedirect(teamid, { fixtureId, saved: "confirmed" }));
 }
 
 async function markFixtureUnavailableAction(formData: FormData) {
@@ -609,7 +649,23 @@ export default async function CaptainFixturesPage({
                     If your team cannot play, you need to change a previous response, or there is another issue, email SIXFL directly now.
                   </p>
 
-                  <CaptainFixtureConfirmation teamId={team.id} fixtureId={selectedFixture.id} confirmed={isSelectedFixtureConfirmed} />
+                  <form action={confirmFixtureAction} className="mt-4">
+                    <input type="hidden" name="teamid" value={team.id} />
+                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                    <button
+                      type="submit"
+                      data-attendance-team={team.id}
+                      data-attendance-fixture={selectedFixture.id}
+                      disabled={isSelectedFixtureConfirmed}
+                      className={`inline-flex min-h-12 w-full items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                        isSelectedFixtureConfirmed
+                          ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/75"
+                          : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                      }`}
+                    >
+                      {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
+                    </button>
+                  </form>
 
                   <a
                     href={selectedFixtureEmailHref}
@@ -627,8 +683,24 @@ export default async function CaptainFixturesPage({
                       Please confirm at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Choose Yes when the whole team can play. If the whole team cannot play, choose No and give a brief reason so SIXFL can review it.
                     </p>
 
-                    <div className="mt-4 grid gap-4">
-                      <CaptainFixtureConfirmation teamId={team.id} fixtureId={selectedFixture.id} confirmed={isSelectedFixtureConfirmed} />
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <form action={confirmFixtureAction}>
+                        <input type="hidden" name="teamid" value={team.id} />
+                        <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                        <button
+                          type="submit"
+                          data-attendance-team={team.id}
+                          data-attendance-fixture={selectedFixture.id}
+                          disabled={isSelectedFixtureConfirmed}
+                          className={`inline-flex min-h-14 w-full items-center justify-center rounded-2xl border px-5 py-3 text-center text-sm font-semibold transition ${
+                            isSelectedFixtureConfirmed
+                              ? "cursor-not-allowed border-emerald-400/20 bg-emerald-500/10 text-emerald-100/70"
+                              : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20"
+                          }`}
+                        >
+                          {isSelectedFixtureConfirmed ? "✓ Team can play" : "Yes — we can play"}
+                        </button>
+                      </form>
 
                       <form action={markFixtureUnavailableAction}>
                         <input type="hidden" name="teamid" value={team.id} />
