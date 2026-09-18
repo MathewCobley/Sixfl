@@ -826,6 +826,65 @@ async function processPublish(job: PublishJob) {
   await cleanupOlderYoutubeCopies(job, videoId, auth).catch(error => console.error("YouTube replacement cleanup failed", safeError(error)));
 }
 
+async function cleanupOneSupersededYoutubeVideo() {
+  const connection = await db.$queryRaw<Array<{ scope: string }>>`
+    SELECT "scope" FROM "SixflTvYoutubeConnection" WHERE "id"='primary' LIMIT 1`;
+  if (!connection[0] || !canDeleteYoutubeVideos(connection[0].scope || "")) return false;
+
+  const candidates = await db.$queryRaw<Array<{
+    id: string;
+    fixtureId: string;
+    kind: "HIGHLIGHTS" | "FULL_MATCH";
+    youtubeVideoId: string;
+    keepVideoId: string;
+  }>>(Prisma.sql`
+    WITH ranked AS (
+      SELECT
+        p."id",
+        p."fixtureId",
+        p."kind",
+        p."youtubeVideoId",
+        FIRST_VALUE(p."youtubeVideoId") OVER (
+          PARTITION BY p."fixtureId", p."kind"
+          ORDER BY p."completedAt" DESC NULLS LAST, p."createdAt" DESC, p."id" DESC
+        ) AS "keepVideoId",
+        ROW_NUMBER() OVER (
+          PARTITION BY p."fixtureId", p."kind"
+          ORDER BY p."completedAt" DESC NULLS LAST, p."createdAt" DESC, p."id" DESC
+        ) AS rank
+      FROM "SixflTvYoutubePublish" p
+      WHERE p."state"='READY' AND p."youtubeVideoId" IS NOT NULL
+    )
+    SELECT "id","fixtureId","kind","youtubeVideoId","keepVideoId"
+    FROM ranked
+    WHERE rank > 1
+    ORDER BY "fixtureId","kind","id"
+    LIMIT 10
+  `);
+  if (!candidates.length) return false;
+
+  const auth = await youtubeAccessToken();
+  for (const candidate of candidates) {
+    const fixture = await db.$queryRaw<Array<{ sixflTvUrl: string | null }>>`
+      SELECT "sixflTvUrl" FROM "Fixture" WHERE "id"=${candidate.fixtureId} LIMIT 1`;
+    if (!fixture[0]) continue;
+    const current = parseSixflTvVideoValue(fixture[0].sixflTvUrl);
+    const expected = `https://www.youtube.com/watch?v=${encodeURIComponent(candidate.keepVideoId)}`;
+    const activeUrl = candidate.kind === "HIGHLIGHTS" ? current.highlights : current.fullMatch;
+    if (activeUrl !== expected) {
+      console.warn(`Skipped old YouTube cleanup for ${candidate.fixtureId} ${candidate.kind}: fixture does not point at newest published video.`);
+      continue;
+    }
+    await deleteYoutubeVideo(candidate.youtubeVideoId, auth.accessToken);
+    await db.$executeRaw`
+      UPDATE "SixflTvYoutubePublish"
+      SET "state"='FAILED',"error"='Superseded by a newer SIXFL TV publish and removed from YouTube.',"busyUntil"=NULL,"updatedAt"=NOW()
+      WHERE "id"=${candidate.id} AND "state"='READY'`;
+    console.log(`Retroactive cleanup deleted superseded YouTube video ${candidate.youtubeVideoId} for ${candidate.kind} fixture ${candidate.fixtureId}.`);
+    return true;
+  }
+  return false;
+}
 type AutoPublishCandidate = {
   renderJobId: string;
   fixtureId: string;
@@ -1058,6 +1117,7 @@ async function cleanupMaturedGoalOfMonthFootage() {
 async function main() {
   console.log("SIXFL TV worker ready");
   let nextRetentionSweepAt = Date.now() + 60_000;
+  let nextYoutubeReplacementSweepAt = Date.now() + 15_000;
   while (!shutdown.signal.aborted) {
     const job = await claimJob().catch(error => { console.error("Render claim failed", safeError(error)); return null; });
     if (job) {
@@ -1086,6 +1146,15 @@ async function main() {
       }
       continue;
     }
+    if (Date.now() >= nextYoutubeReplacementSweepAt) {
+      try {
+        const cleaned = await cleanupOneSupersededYoutubeVideo();
+        nextYoutubeReplacementSweepAt = Date.now() + (cleaned ? 5_000 : 60_000);
+      } catch (error) {
+        console.error("YouTube replacement sweep failed", safeError(error));
+        nextYoutubeReplacementSweepAt = Date.now() + 60_000;
+      }
+    }
     if (Date.now() >= nextRetentionSweepAt) {
       try {
         const cleaned = await cleanupMaturedGoalOfMonthFootage();
@@ -1100,7 +1169,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, queueAutomaticYoutubePublish };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
