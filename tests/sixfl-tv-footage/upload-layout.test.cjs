@@ -20,4 +20,5 @@ test('upload queue is owned by persistent authenticated admin layout, not a fixt
   assert.doesNotMatch(uploader, /new XMLHttpRequest|async function upload\(/);
   for (const source of [provider, uploader, queue]) assert.doesNotMatch(source, /MutationObserver|document\.querySelector|queueNotification|sendEmail\(|spawn\(/);
   assert.doesNotMatch(uploader, /not connected yet|Keep this page open while uploading/);
+  assert.match(uploader, /retained through the Goal of the Month cycle/);
 });
