@@ -35,6 +35,7 @@ test("regenerate hides stale video immediately and labels the fresh state clearl
     source,
     /Fresh preview jobs queued\. Old previews stay hidden until the new versions are ready\./,
   );
-  assert.match(source, /hasReadyPreview \? "Regenerate previews" : "Generate previews"/);
+  assert.match(source, /hasReadyPreview \? "Regenerate all previews" : "Generate all previews"/);
+  assert.match(source, /Regenerate \$\{kindLabel\(kind\)\} only/);
   assert.match(source, /try \{ await refresh\(\); \} catch \{ setState/);
 });
