@@ -11,6 +11,7 @@ import { Prisma, TeamMode } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { isValidTeamBroadcastCode, normaliseTeamBroadcastCode } from "@/lib/teams/broadcast-code";
 
 function normaliseNullableString(value: FormDataEntryValue | null) {
   const parsed = String(value ?? "").trim();
@@ -49,6 +50,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const leagueId = normaliseNullableString(formData.get("leagueId"));
   const logoUrl = normaliseNullableString(formData.get("logoUrl"));
+  const broadcastCode = normaliseTeamBroadcastCode(formData.get("broadcastCode"), name);
   const latestKickoffTime = normaliseNullableString(
     formData.get("latestKickoffTime"),
   );
@@ -83,6 +85,10 @@ export async function updateTeamDetailsAction(formData: FormData) {
     redirect(buildTeamRedirect(id, "?error=missing_name"));
   }
 
+  if (!isValidTeamBroadcastCode(broadcastCode)) {
+    redirect(buildTeamRedirect(id, "?error=invalid_broadcast_code"));
+  }
+
   const existingTeam = await prisma.team.findUnique({
     where: { id },
     select: {
@@ -106,6 +112,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
         name,
         leagueId,
         logoUrl,
+        broadcastCode,
         latestKickoffTime,
         teamMode,
         isRecruiting,
