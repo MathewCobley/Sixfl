@@ -96,7 +96,7 @@ test('shared news, publishing and discovery survive full source preparation with
  assert.match(read('src/components/news/LatestNews.tsx'),/Matchweek/);
  assert.doesNotMatch(read('src/components/news/LatestNews.tsx'),/This week&apos;s matchnight report/);
  assert.match(read('src/lib/league-news/read.ts'),/matchweekNumber/);
- assert.match(read('src/lib/league-news/read.ts'),/COUNT\(DISTINCT f\."round"\)=1/);
+ assert.match(read('src/lib/league-news/read.ts'),/to_jsonb\(f\)->>'round'/);
  assert.doesNotMatch(read('src/components/news/LatestNews.tsx'),/querySelector|MutationObserver/);
  assert.match(read('src/components/admin/matchweek-reports/ReportEditor.tsx'),/<NewsPublishingControls/);
  assert.match(read('src/app/(admin)/admin/matchweek-reports/[slug]/preview/page.tsx'),/await requireAdmin\(\)/);
