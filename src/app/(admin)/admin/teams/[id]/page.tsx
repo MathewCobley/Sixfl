@@ -750,7 +750,7 @@ export default async function AdminTeamPage({
 
               <div className="space-y-2">
                 <label htmlFor="broadcastCode" className="text-sm text-white/60">
-                  Broadcast abbreviation
+                  Team short name
                 </label>
                 <input
                   id="broadcastCode"
@@ -764,8 +764,9 @@ export default async function AdminTeamPage({
                 />
                 <div className="text-xs leading-5 text-white/50">
                   Used in the compact SIXFL TV score graphic. It is automatically
-                  filled from the first three letters of the team name, but you can
-                  change it — for example <span className="font-mono text-white/70">W5W</span>.
+                  filled from the team name, but you can change it — for example
+                  <span className="font-mono text-white/70"> W5W</span> or
+                  <span className="font-mono text-white/70"> A&amp;B</span>.
                 </div>
               </div>
 
