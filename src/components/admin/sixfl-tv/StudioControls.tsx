@@ -145,24 +145,27 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
     const timer = window.setInterval(() => void refresh().catch(() => undefined), publishingOnly ? 15000 : 5000);
     return () => window.clearInterval(timer);
   }, [active, activeRenders.length, endpoint, state.publishes]);
-  async function generate() {
+  async function generate(kind?: Kind) {
     if (busy || activeRenders.length > 0) return;
     const previousRenders = state.renders;
-    setBusy(true); setError(""); setMessage("Regenerating private video previews…");
-    // Hide completed previews at the instant Regenerate is pressed. Keeping the
-    // old video visible while a new render was queued made READY look current.
+    const target = kind ? kindLabel(kind).toLowerCase() : "video previews";
+    setBusy(true); setError(""); setMessage(kind ? `Regenerating ${target} only…` : "Regenerating private video previews…");
+    // Hide only the preview being regenerated. A finished preview for the other
+    // video type must stay visible and usable when just one version needs updating.
     setState(current => ({
       ...current,
       renders: current.renders.map(render =>
-        render.state === "READY"
+        render.state === "READY" && (!kind || render.kind === kind)
           ? { ...render, state: "QUEUED" as const, completedAt: null, error: null, sizeBytes: null, durationMs: null, progressPercent: 0, progressLabel: "Queuing fresh render" }
           : render,
       ),
     }));
     try {
-      await json(endpoint, { action: "render" });
+      await json(endpoint, { action: "render", ...(kind ? { kind } : {}) });
       await refresh();
-      setMessage("Fresh preview jobs queued. Old previews stay hidden until the new versions are ready.");
+      setMessage(kind
+        ? `Fresh ${target} preview queued. The other finished preview has not been changed.`
+        : "Fresh preview jobs queued. Old previews stay hidden until the new versions are ready.");
     } catch (e) {
       try { await refresh(); } catch { setState(current => ({ ...current, renders: previousRenders })); }
       setError(e instanceof Error ? e.message : "Preview could not be queued.");
@@ -183,7 +186,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
   const publishByKind = new Map(state.publishes.map(publish => [publish.kind, publish]));
   return <div className="space-y-6">
     <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer.</p></div>{activeRenders.length ? <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering()}>{busy ? "Stopping…" : "Stop rendering"}</button> : <button type="button" className={button} disabled={busy} onClick={() => void generate()}>{busy ? "Queuing…" : hasReadyPreview ? "Regenerate previews" : "Generate previews"}</button>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer. You can regenerate both together here, or update just Highlights or just Full match from its own preview card below.</p></div>{activeRenders.length ? <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering()}>{busy ? "Stopping…" : "Stop rendering"}</button> : <button type="button" className={button} disabled={busy} onClick={() => void generate()}>{busy ? "Queuing…" : hasReadyPreview ? "Regenerate all previews" : "Generate all previews"}</button>}</div>
       {message ? <p role="status" className="mt-4 text-sm text-emerald-100">{message}</p> : null}{error ? <p role="alert" className="mt-4 text-sm text-red-200">{error}</p> : null}
     </section>
     <div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
@@ -225,6 +228,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
           </div>
         </div> : null}
         {!render ? <p className="mt-3 text-sm text-white/50">No preview generated yet.</p> : null}
+        {(!render || !renderActive(render)) ? <div className="mt-4"><button type="button" className={button} disabled={busy || activeRenders.length > 0} onClick={() => void generate(kind)}>{busy ? "Queuing…" : render?.state === "READY" ? `Regenerate ${kindLabel(kind)} only` : `Generate ${kindLabel(kind)} only`}</button></div> : null}
       </section>;
     })}</div>
     <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
