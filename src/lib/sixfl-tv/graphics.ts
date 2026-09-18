@@ -64,9 +64,9 @@ function scorerLinesForTeam(scorers: string[] | undefined, teamName: string) {
 }
 
 function broadcastCodeForTeam(team: SixflTvGraphicTeam) {
-  const saved = String(team.broadcastCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const saved = String(team.broadcastCode || "").toUpperCase().replace(/[^A-Z0-9&]/g, "");
   if (saved.length === 3) return saved;
-  const fallback = team.name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const fallback = team.name.toUpperCase().replace(/[^A-Z0-9&]/g, "");
   return (fallback.slice(0, 3) || "SIX").padEnd(3, "X");
 }
 
