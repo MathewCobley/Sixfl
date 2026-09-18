@@ -33,8 +33,11 @@ test("Fixtures owns all match cards and direct footage management", () => {
   assert.match(fixtures, /FormListboxField/);
   assert.match(fixtures, /name="league"/);
   assert.match(fixtures, /All leagues/);
+  assert.match(fixtures, /f\."sixflTvRecorded" = true/);
   assert.match(fixtures, /f\."leagueId" =/);
+  assert.match(fixtures, /border-emerald-400\/45/);
   assert.match(fixtures, /border-red-400\/45/);
+  assert.match(fixtures, /bg-emerald-400\/80/);
   assert.match(fixtures, /bg-red-400\/70/);
   assert.match(fixtures, /"Live"/);
   assert.match(fixtures, /"Not live"/);
