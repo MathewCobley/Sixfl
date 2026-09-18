@@ -230,6 +230,23 @@ function readyAsset(rows: FootageAsset[], kind: string) {
   return rows.filter(asset => asset.kind === kind && asset.state === "READY").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] || null;
 }
 
+export async function cancelRenders(fixtureId: string, actor: string, kind?: SixflTvRenderKind) {
+  await studioFixture(fixtureId);
+  if (kind && kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
+  const reason = "Stopped by SIXFL admin.";
+  const rows = kind
+    ? await prisma.$queryRaw<RenderJobRow[]>`
+        UPDATE "SixflTvRenderJob"
+        SET "state"='FAILED',"error"=${reason},"busyUntil"=NULL,"leaseToken"=NULL,"completedAt"=NOW(),"updatedAt"=NOW()
+        WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state" IN ('QUEUED','PROCESSING')
+        RETURNING *`
+    : await prisma.$queryRaw<RenderJobRow[]>`
+        UPDATE "SixflTvRenderJob"
+        SET "state"='FAILED',"error"=${reason},"busyUntil"=NULL,"leaseToken"=NULL,"completedAt"=NOW(),"updatedAt"=NOW()
+        WHERE "fixtureId"=${fixtureId} AND "state" IN ('QUEUED','PROCESSING')
+        RETURNING *`;
+  return { stopped: rows.map(renderDto), actor: safeText(actor, 120) || "admin" };
+}
 export async function requestRenders(fixtureId: string, actor: string) {
   const fixture = await studioFixture(fixtureId);
   if (!fixture.result) throw new StudioError("Enter the final result before generating SIXFL TV previews.", 409);
