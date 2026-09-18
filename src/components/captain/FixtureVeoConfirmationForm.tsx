@@ -51,11 +51,7 @@ function FilmingStatus({ offer }: { offer: FixtureVeoOffer | null }) {
       : ['FAILED', 'CANCELLED'].includes(offer.bookingState ?? '')
         ? '📹 This recording is unavailable.'
         : offer.bookingState === 'PLANNED' || offer.requestStatus === 'ACCEPTED'
-          ? `📹 This match is confirmed for filming.${
-              offer.agreedPence === 500
-                ? ' An older £5 Veo agreement may still appear in Team payments; new SIXFL TV Priority bookings are free.'
-                : ' There is no SIXFL TV Priority fee.'
-            }`
+          ? '📹 This match is confirmed for filming.'
           : 'SIXFL TV Priority is earned automatically from your team score. There is no opt-in or extra filming fee.';
 
   return (
