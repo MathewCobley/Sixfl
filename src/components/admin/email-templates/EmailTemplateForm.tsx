@@ -35,7 +35,7 @@ const INTEREST_TYPE_OPTIONS:Array<{value:InterestTypeValue;label:string;descript
   {value:"REFEREE",label:"Referee",description:"Best for referee enquiry follow-up."},
 ];
 const TOKENS=[
-  "{{firstName}}","{{fullName}}","{{teamName}}","{{teamContextLine}}","{{squadActivationUrl}}","{{opponentName}}","{{leagueName}}","{{leagueDisplayName}}","{{fixtureName}}","{{kickoffLabel}}","{{kickoffDateTime}}","{{fixturesList}}","{{amount}}","{{claimCode}}","{{claimLink}}","{{captainDashboardUrl}}","{{captainFixturesUrl}}","{{signInUrl}}","{{claimUrl}}","{{pendingCaptainNotice}}","{{fixtureUrl}}","{{fixturesUrl}}","{{paymentUrl}}","{{area}}","{{preferredNight}}","{{link}}","{{yesResponseUrl}}","{{noResponseUrl}}","{{cupName}}","{{cupFormat}}","{{matchFee}}","{{venueNote}}","{{scheduleNote}}","{{responseDeadline}}","{{cta}}",
+  "{{firstName}}","{{fullName}}","{{teamName}}","{{sixflTvPriorityScore}}","{{teamContextLine}}","{{squadActivationUrl}}","{{opponentName}}","{{leagueName}}","{{leagueDisplayName}}","{{fixtureName}}","{{kickoffLabel}}","{{kickoffDateTime}}","{{fixturesList}}","{{amount}}","{{claimCode}}","{{claimLink}}","{{captainDashboardUrl}}","{{captainFixturesUrl}}","{{signInUrl}}","{{claimUrl}}","{{pendingCaptainNotice}}","{{fixtureUrl}}","{{fixturesUrl}}","{{paymentUrl}}","{{area}}","{{preferredNight}}","{{link}}","{{yesResponseUrl}}","{{noResponseUrl}}","{{cupName}}","{{cupFormat}}","{{matchFee}}","{{venueNote}}","{{scheduleNote}}","{{responseDeadline}}","{{cta}}",
 ] as const;
 const CUP_RESPONSE_BLOCK=[
   "SIXFL_POLL_OPTIONS_START",
@@ -64,7 +64,7 @@ function previewReplace(text:string){
     noUrl:"https://www.sixfl.co.uk/team-move/preview?answer=NO",
   });
   return withMoveResponse
-  .replaceAll("{{firstName}}","Jordan").replaceAll("{{fullName}}","Jordan Smith").replaceAll("{{teamName}}","Rossett Nomads")
+  .replaceAll("{{firstName}}","Jordan").replaceAll("{{fullName}}","Jordan Smith").replaceAll("{{teamName}}","Rossett Nomads").replaceAll("{{sixflTvPriorityScore}}","86")
   .replaceAll("{{teamContextLine}}","You’ve been added to the Rossett Nomads squad that plays on a Tuesday night at Rossett Sports Centre.")
   .replaceAll("{{squadActivationUrl}}","https://www.sixfl.co.uk/squad/activate/demo-token").replaceAll("{{opponentName}}","Rossett Vets")
   .replaceAll("{{leagueName}}","Rossett Mens Tuesday").replaceAll("{{leagueDisplayName}}","Rossett Mens Tuesday — Spring 2026")
