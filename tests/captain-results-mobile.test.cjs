@@ -31,6 +31,7 @@ function harness() {
       fixture: { findMany: async () => [data.fixture] },
       matchResult: { findUnique: async () => ({ ...data.fixture.result, fixture: data.fixture }) },
       matchResultTeamMeta: { upsert: async args => { writes.push(args); } },
+      $executeRaw: async () => 1,
     } },
     '@/lib/requireCaptain': { requireCaptain: async () => { if (!authorised) throw new Error('Not authorised'); return { user: { id: 'captain' } }; } },
     '@/lib/playerMatchPerformances': { getMatchPerformances: async () => data.performances, replaceMatchPerformances: async args => { writes.push(args); } },
