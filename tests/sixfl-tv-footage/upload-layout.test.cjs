@@ -16,6 +16,10 @@ test('upload queue is owned by persistent authenticated admin layout, not a fixt
   assert.match(provider, /queue\.stop\(\)/);
   assert.match(uploader, /queue\.enqueue\(/);
   assert.match(uploader, />Upload another match<\/Link>/);
+  assert.match(uploader, /className="sr-only"/);
+  assert.match(uploader, /Nothing selected yet/);
+  assert.match(uploader, /Change selected clips/);
+  assert.match(uploader, /Choose file to resume/);
   assert.match(queue, /now - lastUiUpdate >= 250/);
   assert.doesNotMatch(uploader, /new XMLHttpRequest|async function upload\(/);
   for (const source of [provider, uploader, queue]) assert.doesNotMatch(source, /MutationObserver|document\.querySelector|queueNotification|sendEmail\(|spawn\(/);

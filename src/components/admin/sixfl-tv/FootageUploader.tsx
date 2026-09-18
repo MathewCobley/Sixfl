@@ -102,12 +102,21 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
     finally { running.current = false; setBusy(false); await refresh().catch(() => undefined); }
   }
   function picker(kind: FootageKind, help: string) {
-    return <label className="block rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+    const selected = selection.filter(item => item.kind === kind);
+    return <label className="block cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <span className="block text-lg font-semibold text-white">{labels[kind]}</span>
       <span className="mt-2 block text-sm leading-6 text-white/60">{help} MP4 only; up to {sizeLabel(FOOTAGE_LIMITS[kind])} per file.</span>
       <input aria-label={`Choose ${labels[kind].toLowerCase()}`} type="file" accept="video/mp4,.mp4" multiple={kind === "CLIP"} disabled={busy || !state.configured}
-        className="mt-4 block w-full min-w-0 text-sm text-white/75 file:mr-3 file:rounded-xl file:border-0 file:bg-emerald-400 file:px-4 file:py-3 file:font-semibold file:text-black"
+        className="sr-only"
         onChange={event => { choose(event.currentTarget.files, kind); event.currentTarget.value = ""; }} />
+      <span className="mt-4 flex flex-wrap items-center gap-3">
+        <span className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black">
+          {selected.length ? (kind === "CLIP" ? "Change selected clips" : "Change selected file") : (kind === "CLIP" ? "Choose clips" : "Choose file")}
+        </span>
+        <span className={`min-w-0 break-words text-sm ${selected.length ? "font-semibold text-emerald-200" : "text-white/45"}`}>
+          {selected.length ? selected.map(item => item.file.name).join(" · ") : "Nothing selected yet"}
+        </span>
+      </span>
     </label>;
   }
   function rows(assets: Asset[]) {
@@ -121,9 +130,11 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
           <button type="button" className={button} disabled={mutationBusy} onClick={() => setRemoveTarget(asset)}>{asset.state === "DELETING" ? "Continue removal" : "Remove"}</button>
         </div>
       </div>
-      {asset.state === "UPLOADING" ? <label className="block text-sm text-white/70">Resume: choose the same MP4 file
-        <input aria-label={`Resume ${asset.filename}`} type="file" accept="video/mp4,.mp4" disabled={busy} className="mt-2 block max-w-full"
-          onChange={event => { choose(event.currentTarget.files, asset.kind, asset); event.currentTarget.value = ""; }} /></label> : null}
+      {asset.state === "UPLOADING" ? <label className="block cursor-pointer text-sm text-white/70">Resume: choose the same MP4 file
+        <input aria-label={`Resume ${asset.filename}`} type="file" accept="video/mp4,.mp4" disabled={busy} className="sr-only"
+          onChange={event => { choose(event.currentTarget.files, asset.kind, asset); event.currentTarget.value = ""; }} />
+        <span className="mt-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-black">Choose file to resume</span>
+      </label> : null}
     </div>);
   }
   const progress = active ? Math.min(100, Math.round(active.uploadedBytes / active.sizeBytes * 100)) : 0;
