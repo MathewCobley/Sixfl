@@ -279,10 +279,8 @@ export default async function CaptainTeamLayout({
     notFound();
   }
 
-  const [unreadMessageCount, priorityScore] = await Promise.all([
-    getCaptainUnreadMessageCount(teamid),
-    getSixflTvPriorityScore(teamid),
-  ]);
+  const unreadMessageCount = await getCaptainUnreadMessageCount(teamid);
+  const priorityScore = await getSixflTvPriorityScore(teamid);
 
   const displayCompetition = team.league?.competition ?? null;
   const displayLeague = displayCompetition?.currentLeague ?? team.league;
