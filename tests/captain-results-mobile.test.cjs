@@ -115,10 +115,20 @@ if (require.main === module) {
       assert.equal(h.writes.length, 0, scenario);
     }
   });
-  test('empty squads stay disabled and no-results filters remain available', async () => {
-    const h = harness(); h.data.team.members = [];
-    assert.match(renderToStaticMarkup(await h.page()), /No squad players are available/);
-    assert.match(renderToStaticMarkup(await h.page()), /disabled=""/);
+  test('teams without a real squad are clearly told to add players before match reporting', async () => {
+    const h = harness();
+    h.data.team.members = [h.data.team.members[0]];
+    const html = renderToStaticMarkup(await h.page());
+    assert.match(html, /Squad required for match reporting/);
+    assert.match(html, /Add your squad before completing this match report/);
+    assert.match(html, /Squad setup needed/);
+    assert.match(html, /\/captain\/team\/team-a\/captain-squad#add-player/);
+    assert.doesNotMatch(html, /name="scorerGoals_player-0"/);
+    assert.doesNotMatch(html, />Save match details</);
+
+    h.data.team.members = [];
+    const emptyHtml = renderToStaticMarkup(await h.page());
+    assert.match(emptyHtml, /no registered squad players/);
     assert.match(renderToStaticMarkup(await h.page({ q: 'no-such-team-or-player' })), /No results matched/);
   });
   test('every tenth from 1 to 10 reaches the saved rating payload exactly, including 9.2', async () => {
