@@ -69,7 +69,7 @@ test('captains and admins see the same score', () => {
   assert.doesNotMatch(captainConfirmationPage, /FixtureVeoConfirmationForm|CaptainFixtureConfirmation|readFixtureVeoOffer|confirmFixtureWithVeoAction/);
   assert.match(captainConfirmationPage, /<form action=\{confirmFixtureAction\}/);
   assert.match(captainConfirmationPage, /Yes — we can play/);
-  assert.match(captainConfirmationPage, /No — we cannot play/);
+  assert.match(captainConfirmationPage, /markFixtureUnavailableAction/);
 });
 
 test('legacy £5 pilot fees are retired without leaving fee UI or double-credit paths', () => {
