@@ -635,7 +635,7 @@ export default async function AdminTeamPage({
 
           {sp.error === "invalid_broadcast_code" ? (
             <div className="text-red-300">
-              Broadcast code must be exactly three letters or numbers.
+              Team short name must be exactly three letters, numbers or & characters.
             </div>
           ) : null}
 
@@ -750,7 +750,7 @@ export default async function AdminTeamPage({
 
               <div className="space-y-2">
                 <label htmlFor="broadcastCode" className="text-sm text-white/60">
-                  Broadcast abbreviation
+                  Team short name
                 </label>
                 <input
                   id="broadcastCode"
@@ -758,14 +758,15 @@ export default async function AdminTeamPage({
                   type="text"
                   inputMode="text"
                   maxLength={3}
-                  pattern="[A-Za-z0-9]{3}"
+                  pattern="[A-Za-z0-9&]{3}"
                   defaultValue={team.broadcastCode ?? defaultTeamBroadcastCode(team.name)}
                   className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 font-mono uppercase tracking-[0.18em] text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
                 />
                 <div className="text-xs leading-5 text-white/50">
                   Used in the compact SIXFL TV score graphic. It is automatically
-                  filled from the first three letters of the team name, but you can
-                  change it — for example <span className="font-mono text-white/70">W5W</span>.
+                  filled from the team name, but you can change it — for example
+                  <span className="font-mono text-white/70"> W5W</span> or
+                  <span className="font-mono text-white/70"> A&amp;B</span>.
                 </div>
               </div>
 
