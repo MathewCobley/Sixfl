@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvGoalOfMonthCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, createSixflTvWatermark, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, createSixflTvWatermark, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 
@@ -20,7 +20,7 @@ const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
 const TITLE_SECONDS = 4;
 const LINEUP_SECONDS = 5;
-const RESULT_SECONDS = 6;
+const LEAGUE_TABLE_SECONDS = 5;
 const GOAL_OF_MONTH_END_SECONDS = 5;
 const SWIPE_FRAMES = 12;
 const SWIPE_FPS = 30;
@@ -363,13 +363,19 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
     reportProgress(7, "Creating broadcast graphics");
-    const titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
+    const titlePng = path.join(dir, "title.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
+    const leagueTopPng = path.join(dir, "league-table-top.png"), leagueBottomPng = path.join(dir, "league-table-bottom.png");
     const lineupPng = path.join(dir, "lineup.png"), footageOverlayPng = path.join(dir, job.kind === "HIGHLIGHTS" ? "score-bug.png" : "watermark.png");
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
-    await writeFile(resultPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "FULL_TIME", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(goalOfMonthPng, await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }));
-    const lineupBytes = await createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() });
+    const [lineupBytes, leagueTopBytes, leagueBottomBytes] = await Promise.all([
+      createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
+      createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }),
+      createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }),
+    ]);
     if (lineupBytes) await writeFile(lineupPng, lineupBytes);
+    if (leagueTopBytes) await writeFile(leagueTopPng, leagueTopBytes);
+    if (leagueBottomBytes) await writeFile(leagueBottomPng, leagueBottomBytes);
     await writeFile(footageOverlayPng, job.kind === "HIGHLIGHTS" ? await createSixflTvScoreBug({ fixture: metadata.fixture, siteUrl: siteUrl() }) : await createSixflTvWatermark({ siteUrl: siteUrl() }));
     reportProgress(10, "Preparing video segments");
     const segments: string[] = [];
@@ -415,16 +421,28 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       segments.push(normal);
     }
     if (swipe) segments.push(swipe);
-    reportProgress(84, "Adding final match card");
-    const result = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(resultPng, result, RESULT_SECONDS); segments.push(result);
+    reportProgress(84, "Adding Goal of the Month card");
     const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-    reportProgress(88, "Adding Goal of the Month card");
     await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
+
+    if (leagueTopBytes) {
+      if (swipe) segments.push(swipe);
+      reportProgress(87, "Adding top-half league table");
+      const leagueTop = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      await cardVideo(leagueTopPng, leagueTop, LEAGUE_TABLE_SECONDS); segments.push(leagueTop);
+    }
+    if (leagueBottomBytes) {
+      if (swipe) segments.push(swipe);
+      reportProgress(89, "Adding bottom-half league table");
+      const leagueBottom = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      await cardVideo(leagueBottomPng, leagueBottom, LEAGUE_TABLE_SECONDS); segments.push(leagueBottom);
+    }
+
     for (const input of outro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length + 1 : 0} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} goalOfMonthBeforeOutro=1 outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length + 1 + (leagueTopBytes ? 1 : 0) + (leagueBottomBytes ? 1 : 0) : 0} resultCard=0 goalOfMonthAfterFootage=1 leagueTableTop=${leagueTopBytes ? 1 : 0} leagueTableBottom=${leagueBottomBytes ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
