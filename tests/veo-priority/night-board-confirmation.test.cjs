@@ -36,6 +36,10 @@ test('retirement migration voids only the dedicated £5 Veo pilot fee and credit
   assert.match(retirement, /status = 'VOID'/);
   assert.match(retirement, /COALESCE\(pt\.reference, ''\) <> 'TEAM_CREDIT'/);
   assert.match(retirement, /DELETE FROM "TeamCreditLedgerEntry"/);
+  assert.match(retirement, /DROP TRIGGER IF EXISTS "sixfl_veo_receipt_credit"/);
+  assert.match(retirement, /DROP TRIGGER IF EXISTS "sixfl_veo_void_guard"/);
+  assert.match(retirement, /DROP TRIGGER IF EXISTS "sixfl_veo_void_credit"/);
+  assert.match(retirement, /CREATE OR REPLACE FUNCTION sixfl_cancel_veo_with_fixture/);
   assert.doesNotMatch(retirement, /DELETE FROM "PaymentCharge"|TRUNCATE|DROP TABLE/);
 });
 
@@ -45,11 +49,9 @@ test('confirmed Night Board booking is visibly locked instead of silently untick
   assert.match(route, /league SIXFL TV Priority page/);
 });
 
-test('Night Board only shows Veo Priority for a team still in that fixture', () => {
-  assert.match(
-    nightBoardPriority,
-    /r\."teamId" = f\."homeTeamId" OR r\."teamId" = f\."awayTeamId"/,
-  );
+test('retired captain Veo requests no longer appear on Night Board', () => {
+  assert.match(nightBoardPriority, /return \[\]/);
+  assert.doesNotMatch(nightBoardPriority, /FROM "VeoFixtureRequest"/);
 });
 
 test('Veo admin shows audited captain choice history', () => {
