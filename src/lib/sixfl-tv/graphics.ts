@@ -38,12 +38,20 @@ function fit(value: string, max = 34) {
 }
 
 let sixflTvLogoPromise: Promise<Buffer> | null = null;
+let sixflPredictorLogoPromise: Promise<Buffer> | null = null;
 async function sixflTvLogo() {
   if (!sixflTvLogoPromise) sixflTvLogoPromise = (async () => {
     const source = await readFile(path.join(process.cwd(), "public", "Sixfl-tv.png"));
     return sharp(source).png().trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
   })();
   return sixflTvLogoPromise;
+}
+async function sixflPredictorLogo() {
+  if (!sixflPredictorLogoPromise) sixflPredictorLogoPromise = (async () => {
+    const source = await readFile(path.join(process.cwd(), "public", "logos", "sixfl-ai-predictor.png"));
+    return sharp(source).png().trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+  })();
+  return sixflPredictorLogoPromise;
 }
 function logoImage(buffer: Buffer, x: number, y: number, width: number, height: number, opacity = 1) {
   return `<image href="data:image/png;base64,${buffer.toString("base64")}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}"/>`;
@@ -248,15 +256,16 @@ export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFi
   const first = (input.fixture.firstTeamLineup || []).slice(0, 12);
   const second = (input.fixture.secondTeamLineup || []).slice(0, 12);
   if (!first.length && !second.length) return null;
-  const sixflTvLogoBytes = await sixflTvLogo();
+  const [sixflTvLogoBytes, predictorLogoBytes] = await Promise.all([sixflTvLogo(), sixflPredictorLogo()]);
   const rows = Math.max(first.length, second.length, 1);
   const startY = 420, rowGap = Math.min(50, Math.floor(450 / rows));
   const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
   const predictor = input.fixture.predictor;
   const predictorPanel = predictor
-    ? `<g><rect x="705" y="250" width="510" height="112" rx="24" fill="#020805" fill-opacity="0.82" stroke="#34d399" stroke-width="3"/>
-        <text x="960" y="289" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="900" letter-spacing="4" fill="#a7f3d0">SIXFL PREDICTOR · PRE-MATCH</text>
-        <text x="960" y="342" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="48" font-weight="900" fill="#ffffff">${predictor.firstTeamScore} <tspan fill="#34d399">–</tspan> ${predictor.secondTeamScore}</text></g>`
+    ? `<g><rect x="700" y="242" width="520" height="126" rx="24" fill="#020805" fill-opacity="0.82" stroke="#34d399" stroke-width="3"/>
+        ${logoImage(predictorLogoBytes, 770, 252, 380, 62)}
+        <text x="960" y="326" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="800" letter-spacing="3" fill="#a7f3d0">PRE-MATCH PREDICTION</text>
+        <text x="960" y="365" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="44" font-weight="900" fill="#ffffff">${predictor.firstTeamScore} <tspan fill="#34d399">–</tspan> ${predictor.secondTeamScore}</text></g>`
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
