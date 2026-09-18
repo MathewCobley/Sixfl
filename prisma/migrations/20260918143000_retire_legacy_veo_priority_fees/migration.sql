@@ -120,7 +120,7 @@ DROP FUNCTION IF EXISTS sixfl_sync_void_veo_credit(TEXT);
 
 -- Keep automatic filming cancellation when a fixture itself is cancelled or
 -- postponed, but remove the former PaymentCharge mutation from that trigger.
-CREATE OR REPLACE FUNCTION sixfl_cancel_veo_with_fixture() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE OR REPLACE FUNCTION sixfl_cancel_veo_with_fixture() RETURNS trigger LANGUAGE plpgsql AS $veo$
 BEGIN
   IF NEW.status::text IN ('CANCELLED','POSTPONED') THEN
     UPDATE "VeoMatchBooking"
@@ -136,7 +136,8 @@ BEGIN
     WHERE "fixtureId"=NEW.id AND status IN ('REQUESTED','ACCEPTED');
   END IF;
   RETURN NULL;
-END $;
+END
+$veo$;
 
 UPDATE "PaymentCharge"
 SET
