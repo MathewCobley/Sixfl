@@ -11,8 +11,12 @@ test('upload queue is owned by persistent authenticated admin layout, not a fixt
   assert.doesNotMatch(page, /<FootageUploadProvider/);
   assert.match(page, /fixtureLabel=/);
   assert.match(provider, /useState\(\(\) => new FootageUploadQueue\(\)\)/);
+  assert.match(provider, /href="\/admin\/sixfl-tv\/fixtures"/);
+  assert.match(provider, />Another match<\/Link>/);
   assert.match(provider, /queue\.stop\(\)/);
   assert.match(uploader, /queue\.enqueue\(/);
+  assert.match(uploader, />Upload another match<\/Link>/);
+  assert.match(queue, /now - lastUiUpdate >= 250/);
   assert.doesNotMatch(uploader, /new XMLHttpRequest|async function upload\(/);
   for (const source of [provider, uploader, queue]) assert.doesNotMatch(source, /MutationObserver|document\.querySelector|queueNotification|sendEmail\(|spawn\(/);
   assert.doesNotMatch(uploader, /not connected yet|Keep this page open while uploading/);
