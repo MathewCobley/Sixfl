@@ -41,15 +41,55 @@ async function readThisWeekVeoStatus(leagueId: string, teamId: string): Promise<
   };
 }
 
-const statusText = {
-  ON_TIME: 'On time',
-  LATE: 'Late',
-  UNPAID: 'Unpaid',
-  NOT_REQUIRED: 'Not required',
-  MISSING: 'Missing',
-  NOT_FAIR_TO_SCORE: 'Not scored',
-  INCOMPLETE: 'Incomplete',
-} as const;
+function ScoreLine({
+  label,
+  points,
+  maxPoints,
+}: {
+  label: string;
+  points: number;
+  maxPoints: number;
+}) {
+  const full = points === maxPoints;
+  const partial = points > 0 && points < maxPoints;
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden="true"
+          className={full ? "text-emerald-300" : partial ? "text-amber-300" : "text-red-300"}
+        >
+          {full ? '✓' : partial ? '!' : '✕'}
+        </span>
+        <span className="text-xs font-medium text-white/80">{label}</span>
+      </div>
+      <span className={`shrink-0 text-xs font-bold ${full ? "text-emerald-200" : partial ? "text-amber-200" : "text-red-200"}`}>
+        {points}/{maxPoints}
+      </span>
+    </div>
+  );
+}
+
+function paymentLabel(status: string) {
+  if (status === 'ON_TIME') return 'Paid on time';
+  if (status === 'LATE') return 'Paid late';
+  if (status === 'UNPAID') return 'Payment overdue';
+  return 'No payment penalty';
+}
+
+function confirmationLabel(status: string) {
+  if (status === 'ON_TIME') return 'Fixture confirmed on time';
+  if (status === 'LATE') return 'Fixture confirmed late';
+  if (status === 'MISSING') return 'Fixture confirmation missed';
+  return 'Confirmation not counted against you';
+}
+
+function matchCardLabel(status: string) {
+  if (status === 'ON_TIME') return 'Match card completed on time';
+  if (status === 'LATE') return 'Match card completed late';
+  return 'Match card not completed';
+}
 
 export default async function CaptainVeoPriorityCard({
   teamId,
@@ -114,17 +154,62 @@ export default async function CaptainVeoPriorityCard({
         <details className="rounded-2xl border border-white/10 bg-black/20 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-white/85">See recent score breakdown</summary>
           <div className="mt-4 space-y-3">
-            {score.matches.map((match) => (
-              <div key={match.fixtureId} className="rounded-xl border border-white/10 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <strong className="text-sm">vs {match.opponentName}</strong>
-                  <span className="text-sm font-bold">{match.points}/20</span>
+            {score.matches.map((match) => {
+              const pointsMissed = Math.max(0, 20 - match.points);
+
+              return (
+                <div key={match.fixtureId} className="rounded-xl border border-white/10 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-sm">vs {match.opponentName}</strong>
+                    <div className="text-right">
+                      <div className="text-sm font-bold">{match.points}/20</div>
+                      <div className="text-[11px] text-white/45">
+                        {pointsMissed === 0 ? 'Full points' : `${pointsMissed} point${pointsMissed === 1 ? '' : 's'} missed`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <ScoreLine
+                      label={matchCardLabel(match.matchCardStatus)}
+                      points={match.matchCardPoints}
+                      maxPoints={8}
+                    />
+                    <ScoreLine
+                      label={paymentLabel(match.paymentStatus)}
+                      points={match.paymentPoints}
+                      maxPoints={6}
+                    />
+                    <ScoreLine
+                      label={confirmationLabel(match.confirmationStatus)}
+                      points={match.confirmationPoints}
+                      maxPoints={4}
+                    />
+                    <ScoreLine
+                      label={match.assistsPoints === 1 ? 'Assists bonus completed' : 'Assists bonus not earned'}
+                      points={match.assistsPoints}
+                      maxPoints={1}
+                    />
+                    <ScoreLine
+                      label={match.ratingsPoints === 1 ? 'Player ratings completed' : 'Player ratings bonus not earned'}
+                      points={match.ratingsPoints}
+                      maxPoints={1}
+                    />
+                  </div>
+
+                  {match.matchCardStatus === 'INCOMPLETE' ? (
+                    <div className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">
+                      <strong>What was missing?</strong> The core match card was incomplete. Save the players who played,
+                      goalscorers and Player of the Match by <strong>6pm the following day</strong>.
+                    </div>
+                  ) : match.matchCardStatus === 'LATE' ? (
+                    <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
+                      <strong>Why were points lost?</strong> The match card was completed after the 6pm deadline, so it earned half of the available match-card points.
+                    </div>
+                  ) : null}
                 </div>
-                <p className="mt-2 text-xs leading-5 text-white/55">
-                  Match card {match.matchCardPoints}/8 ({statusText[match.matchCardStatus]}) · Payment {match.paymentPoints}/6 ({statusText[match.paymentStatus]}) · Confirmation {match.confirmationPoints}/4 ({statusText[match.confirmationStatus]}) · Assists {match.assistsPoints}/1 · Ratings {match.ratingsPoints}/1
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </details>
       ) : (
