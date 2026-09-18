@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { checkFootageOrigin, readFootageJson } from "@/lib/sixfl-tv/footage";
 import { FootageError, footageId } from "@/lib/sixfl-tv/footage-policy";
-import { requestRenders, saveThumbnail, StudioError, studioState, type SixflTvRenderKind } from "@/lib/sixfl-tv/studio";
+import { cancelRenders, requestRenders, saveThumbnail, StudioError, studioState, type SixflTvRenderKind } from "@/lib/sixfl-tv/studio";
 import { queueYoutubePublish } from "@/lib/sixfl-tv/youtube";
 
 export const runtime = "nodejs";
@@ -28,6 +28,10 @@ export async function POST(request: Request, context: Context) {
     const actor = user?.id || session?.user?.email || "development-admin";
     if (data.action === "render") {
       return NextResponse.json(await requestRenders(fixtureId, actor), { status: 202, headers });
+    }
+    if (data.action === "cancel-render") {
+      const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
+      return NextResponse.json(await cancelRenders(fixtureId, actor, kind), { headers });
     }
     if (data.action === "thumbnail") {
       const kind = String(data.kind || "") as SixflTvRenderKind;

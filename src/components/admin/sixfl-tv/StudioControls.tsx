@@ -21,6 +21,10 @@ function sizeLabel(bytes: number | null) {
 }
 function kindLabel(kind: Kind) { return kind === "HIGHLIGHTS" ? "Highlights" : "Full match"; }
 const button = "inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40";
+const stopButton = "inline-flex min-h-11 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40";
+function renderActive(render: Render) { return render.state === "QUEUED" || render.state === "PROCESSING"; }
+function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
+function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
 function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
@@ -103,7 +107,8 @@ function PublishEditor({ fixtureId, kind, render, thumbnail, publish, connected,
 export default function StudioControls({ fixtureId, initial }: { fixtureId: string; initial: State }) {
   const [state, setState] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
   const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
-  const active = useMemo(() => state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING") || state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING"), [state.renders, state.publishes]);
+  const activeRenders = useMemo(() => state.renders.filter(renderActive), [state.renders]);
+  const active = useMemo(() => activeRenders.length > 0 || state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING"), [activeRenders, state.publishes]);
   async function refresh() { setState(await json<State>(endpoint)); }
   useEffect(() => {
     if (!active) return;
@@ -111,7 +116,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
     return () => window.clearInterval(timer);
   }, [active, endpoint]);
   async function generate() {
-    if (busy || state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING")) return;
+    if (busy || activeRenders.length > 0) return;
     setBusy(true); setError(""); setMessage("Queuing private video previews…");
     try {
       await json(endpoint, { action: "render" });
@@ -119,20 +124,30 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
     } catch (e) { setError(e instanceof Error ? e.message : "Preview could not be queued."); }
     finally { setBusy(false); }
   }
+  async function stopRendering(kind?: Kind) {
+    if (busy) return;
+    setBusy(true); setError(""); setMessage(kind ? `Stopping ${kindLabel(kind).toLowerCase()} render…` : "Stopping active renders…");
+    try {
+      const result = await json<{ stopped: Render[] }>(endpoint, { action: "cancel-render", ...(kind ? { kind } : {}) });
+      await refresh();
+      setMessage(result.stopped.length ? "Rendering stopped. Uploaded source footage and any earlier finished preview are unchanged." : "No active render was found to stop.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Rendering could not be stopped."); }
+    finally { setBusy(false); }
+  }
   const renderByKind = new Map(state.renders.map(render => [render.kind, render]));
   const thumbByKind = new Map(state.thumbnails.map(thumb => [thumb.kind, thumb]));
   const publishByKind = new Map(state.publishes.map(publish => [publish.kind, publish]));
   return <div className="space-y-6">
     <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer.</p></div><button type="button" className={button} disabled={busy || state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING")} onClick={() => void generate()}>{state.renders.some(render => render.state === "QUEUED" || render.state === "PROCESSING") ? "Rendering…" : "Generate / refresh previews"}</button></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer.</p></div>{activeRenders.length ? <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering()}>{busy ? "Stopping…" : "Stop rendering"}</button> : <button type="button" className={button} disabled={busy} onClick={() => void generate()}>{busy ? "Queuing…" : "Generate / refresh previews"}</button>}</div>
       {message ? <p role="status" className="mt-4 text-sm text-emerald-100">{message}</p> : null}{error ? <p role="alert" className="mt-4 text-sm text-red-200">{error}</p> : null}
     </section>
     <div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
       const render = renderByKind.get(kind);
-      return <section key={kind} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} preview</h3><span className="text-xs text-white/50">{render ? render.state : "Not generated"}</span></div>
+      return <section key={kind} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} preview</h3><span className="text-xs text-white/50">{renderStateLabel(render)}</span></div>
         {render?.state === "READY" ? <><video controls preload="metadata" playsInline src={`${endpoint}/render/${encodeURIComponent(render.id)}`} className="mt-4 aspect-video w-full rounded-xl bg-black"/><div className="mt-3 flex flex-wrap gap-2"><a className={button} href={`${endpoint}/render/${encodeURIComponent(render.id)}?download=1`}>Download preview</a><span className="self-center text-xs text-white/45">{sizeLabel(render.sizeBytes)}{render.durationMs ? ` · ${Math.round(render.durationMs / 1000)} sec` : ""}</span></div></> : null}
-        {render?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{render.error || "Rendering failed. Generate previews again after checking the source files."}</p> : null}
-        {render && (render.state === "QUEUED" || render.state === "PROCESSING") ? <p className="mt-3 text-sm text-white/60">{render.state === "QUEUED" ? "Waiting for the video worker." : "Rendering privately. Original match sound is retained."}</p> : null}
+        {renderStopped(render) ? <p role="status" className="mt-3 text-sm text-amber-100">Rendering stopped. Your uploaded footage is unchanged; you can generate a fresh preview whenever you are ready.</p> : render?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{render.error || "Rendering failed. Generate previews again after checking the source files."}</p> : null}
+        {render && renderActive(render) ? <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-sm text-white/60">{render.state === "QUEUED" ? "Waiting for the video worker." : "Rendering privately. Original match sound is retained."}</p><button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering(kind)}>{busy ? "Stopping…" : `Stop ${kindLabel(kind).toLowerCase()}`}</button></div> : null}
         {!render ? <p className="mt-3 text-sm text-white/50">No preview generated yet.</p> : null}
       </section>;
     })}</div>
