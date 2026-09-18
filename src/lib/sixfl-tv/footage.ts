@@ -10,6 +10,7 @@ type FootageReader = Pick<Prisma.TransactionClient, "$queryRaw">;
 export type FootageAsset = {
   id: string; fixtureId: string | null; kind: FootageKind; filename: string;
   sizeBytes: bigint; lastModified: bigint; partCount: number; position: number;
+  clipNumber: number | null; posterObjectKey: string | null; posterSizeBytes: number | null;
   state: "UPLOADING" | "READY" | "DELETING" | "DELETED";
   leaseToken: string | null; busyUntil: Date | null; createdAt: Date;
 };
@@ -65,6 +66,7 @@ export async function footageFixture(fixtureId: string) {
 function dto(asset: FootageAsset) {
   return { id: asset.id, kind: asset.kind, filename: asset.filename, sizeBytes: Number(asset.sizeBytes),
     lastModified: Number(asset.lastModified), partCount: asset.partCount, position: asset.position,
+    clipNumber: asset.clipNumber, posterReady: Boolean(asset.posterObjectKey && asset.posterSizeBytes),
     state: asset.state, shared: asset.fixtureId === null };
 }
 export async function footageAsset(fixtureId: string | null, assetId: string, tx: FootageReader = prisma, lock = false) {
@@ -121,9 +123,16 @@ export async function beginFootage(fixtureId: string | null, actor: string, data
     const usage = await tx.$queryRaw<{ bytes: bigint }[]>`SELECT COALESCE(SUM("sizeBytes"),0)::bigint AS bytes FROM "SixflTvFootageAsset" WHERE "state" <> 'DELETED'`;
     if (Number(usage[0].bytes) + spec.sizeBytes > FOOTAGE_STORAGE_LIMIT_BYTES) throw new FootageError("The 100 GiB footage-library limit would be exceeded. Remove files you no longer need first.", 409);
     const position = assets.reduce((max, a) => Math.max(max, a.position + 1), 0);
+    const clipNumber = spec.kind === "CLIP"
+      ? Number((await tx.$queryRaw<Array<{ nextClipNumber: number }>>`
+          SELECT (COALESCE(MAX("clipNumber"), 0) + 1)::int AS "nextClipNumber"
+          FROM "SixflTvFootageAsset"
+          WHERE "fixtureId" = ${scope} AND "kind" = 'CLIP'
+        `)[0]?.nextClipNumber ?? 1)
+      : null;
     const rows = await tx.$queryRaw<FootageAsset[]>`
-      INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","sizeBytes","lastModified","partCount","position","createdByActor")
-      VALUES (${randomUUID()},${scope},${spec.kind},${spec.filename},${spec.sizeBytes},${spec.lastModified},${spec.partCount},${position},${actor}) RETURNING *`;
+      INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","sizeBytes","lastModified","partCount","position","clipNumber","createdByActor")
+      VALUES (${randomUUID()},${scope},${spec.kind},${spec.filename},${spec.sizeBytes},${spec.lastModified},${spec.partCount},${position},${clipNumber},${actor}) RETURNING *`;
     return { asset: dto(rows[0]), reused: false };
   });
 }
@@ -187,6 +196,11 @@ export async function removeFootage(fixtureId: string | null, assetId: string, c
       WHERE i."assetId"=${assetId} AND j."state" IN ('QUEUED','PROCESSING')
       LIMIT 1`;
     if (active[0]) throw new FootageError("This source is being used by an active SIXFL TV render. Wait for the preview to finish before removing it.", 409);
+    const nominated = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "GoalOfMonthCandidate"
+      WHERE "clipAssetId"=${assetId} AND "status"='ACTIVE'
+      LIMIT 1`;
+    if (nominated[0]) throw new FootageError("This clip is being used by Goal of the Month. Remove the nomination first before deleting the source clip.", 409);
     await tx.$executeRaw`UPDATE "SixflTvFootageAsset" SET "state"='DELETING',"updatedAt"=NOW() WHERE "id"=${assetId}`;
   });
   // Bounded batches allow large removals to be retried without a long web request.
