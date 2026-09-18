@@ -11,7 +11,7 @@ test('fixture confirmation is owned by the native pre-Veo fixture page again', (
   assert.match(source, /async function confirmFixtureAction\(formData: FormData\)/);
   assert.match(source, /<form action=\{confirmFixtureAction\}/);
   assert.match(source, /Yes — we can play/);
-  assert.match(source, /No — we cannot play/);
+  assert.match(source, /markFixtureUnavailableAction/);
   assert.match(source, /grid gap-3 sm:grid-cols-2/);
 
   assert.doesNotMatch(source, /CaptainFixtureConfirmation/);
