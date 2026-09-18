@@ -13,6 +13,7 @@ import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
 const POLL_MS = 5000;
+const RENDER_HEARTBEAT_MS = 5000;
 const renderSignals = new AsyncLocalStorage<AbortSignal>();
 const shutdown = new AbortController();
 const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
@@ -285,7 +286,7 @@ async function processJob(job: Job) {
       if (changed !== 1) controller.abort(new Error("Render ownership expired."));
     } catch { controller.abort(new Error("Render ownership could not be renewed.")); }
     finally { refreshing = false; }
-  }, 30000);
+  }, RENDER_HEARTBEAT_MS);
   heartbeat.unref();
   try { await renderSignals.run(controller.signal, async () => {
     await db.$transaction(tx => ownLease(tx, job));
