@@ -66,20 +66,19 @@ UPDATE "VeoPriorityRequest"
 SET status = 'DECLINED', "reviewedAt" = COALESCE("reviewedAt", CURRENT_TIMESTAMP)
 WHERE status = 'PENDING';
 
--- Editable launch email. This migration creates the template only; it does not queue or send mail.
-INSERT INTO "NotificationTemplate" (
-  "id", "key", "name", "description", "kind", "channel", "audience", "subject", "body",
+-- Editable launch email. This migration creates the Campaign Email template only; it does not queue or send mail.
+INSERT INTO "EmailTemplate" (
+  "id", "key", "name", "description", "audience", "interestType", "subject", "body",
   "ctaLabel", "ctaUrlKey", "isActive", "createdAt", "updatedAt"
 ) VALUES (
   'sixfl-tv-priority-launch-email',
   'sixfl-tv-priority-launch-email',
   'SIXFL TV Priority — earned score launch',
-  'Launch email explaining the free score-based recorded-pitch priority system. Created only; send remains an explicit admin action.',
-  'CAMPAIGN',
-  'EMAIL',
+  'Launch email explaining the free score-based recorded-pitch priority system. Includes each team’s current SIXFL TV Priority Score when sent through Team or League Communications.',
   'TEAM',
+  NULL,
   'SIXFL TV Priority is changing — no more extra fee 📹',
-  E'Hi {{firstName}},\n\nWe are changing the way SIXFL TV Priority works — and we are scrapping the extra Veo Priority fee.\n\nFrom now on, recorded-pitch priority is earned by teams that help SIXFL run match nights smoothly and keep match information up to date. Every team will have a SIXFL TV Priority Score out of 100, visible in your SIXFL account.\n\nHOW THE SCORE WORKS\n\nYour score is based on your last five completed fixtures, with up to 20 points available per match:\n\n• Payment on time — 10 points. Late payment earns only 2 points.\n• Fixture confirmed by the 72-hour deadline — 4 points.\n• Core match card completed by 6pm the day after the match — 4 points. This means players who played, goalscorers and Player of the Match.\n• Assists recorded — 1 bonus point.\n• Player ratings completed — 1 bonus point.\n\nTeams need at least 60/100 and must regularly complete their core match cards to qualify for recorded-pitch priority. New teams start with a provisional score while they build their first five-match history.\n\nWHAT THIS MEANS\n\nWhen filming spaces are limited, priority will be given to eligible teams with the strongest scores. A high score does not guarantee every match will be recorded, because camera capacity is limited, but teams that consistently confirm, pay and complete their match details will be favoured.\n\nIf a team repeatedly pays late, confirms late or leaves match cards incomplete, its score will fall and it may stop receiving recorded-pitch priority. The score can recover as soon as the team starts completing things on time again.\n\nThere is no extra SIXFL TV Priority fee.\n\nThe match-card deadline is 6pm the day after your fixture so we can finish match reports, player statistics, graphics and SIXFL TV content promptly.\n\nYou will be able to see your score and recent points breakdown in your SIXFL team account, so the system is transparent and you can always see what has affected it.\n\nThanks,\nThe SIXFL Team',
+  E'Hi {{firstName}},\n\nWe are changing the way SIXFL TV Priority works — and we are scrapping the extra Veo Priority fee.\n\nFrom now on, recorded-pitch priority is earned by teams that help SIXFL run match nights smoothly and keep match information up to date.\n\nYOUR CURRENT SCORE\n\nYour current SIXFL TV Priority Score is **{{sixflTvPriorityScore}}/100**. You can see the same score in your SIXFL team account, together with your recent match-by-match breakdown.\n\nHOW THE SCORE WORKS\n\nYour score is based on your last five completed fixtures, with up to 20 points available per match:\n\n• Payment on time — 10 points. Late payment earns only 2 points.\n• Fixture confirmed by the 72-hour deadline — 4 points.\n• Core match card completed by 6pm the day after the match — 4 points. This means players who played, goalscorers and Player of the Match.\n• Assists recorded — 1 bonus point.\n• Player ratings completed — 1 bonus point.\n\nTeams need at least 60/100 and must regularly complete their core match cards to qualify for recorded-pitch priority. New teams start with a provisional score while they build their first five-match history.\n\nWHAT THIS MEANS\n\nWhen filming spaces are limited, priority will be given to eligible teams with the strongest scores. A high score does not guarantee every match will be recorded, because camera capacity is limited, but teams that consistently confirm, pay and complete their match details will be favoured.\n\nIf a team repeatedly pays late, confirms late or leaves match cards incomplete, its score will fall and it may stop receiving recorded-pitch priority. The score can recover as soon as the team starts completing things on time again.\n\nThere is no extra SIXFL TV Priority fee.\n\nThe match-card deadline is 6pm the day after your fixture so we can finish match reports, player statistics, graphics and SIXFL TV content promptly.\n\nThanks,\nThe SIXFL Team',
   NULL,
   NULL,
   TRUE,
