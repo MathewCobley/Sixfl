@@ -26,7 +26,7 @@ function loader(mocks={}) {
  return load;
 }
 function example(){
- const matches=Array.from({length:6},(_,i)=>({fixtureId:`f-${i}`,teamA:`Example ${i+1} FC`,teamB:i>3?'Example Stand-ins':`Example ${i+1} United`,scoreA:i%3+1,scoreB:2,scorers:[],playersOfMatch:[]}));
+ const matches=Array.from({length:6},(_,i)=>({fixtureId:`f-${i}`,teamA:`Example ${i+1} FC`,teamB:i>3?'Example Stand-ins':`Example ${i+1} United`,scoreA:i%3+1,scoreB:2,scorers:i===0?[{team:'Example 1 FC',name:'Alex Striker',goals:2},{team:'Example 1 United',name:'Sam Forward',goals:1}]:[],playersOfMatch:[]}));
  const source={leagueId:'league-a',leagueName:'Example Tuesday League',area:'Example',matchDate:'2026-09-08',matches,pendingFixtures:0,omittedFixtures:0,warnings:[],skippedFixtures:[{privateReason:'PRIVATE_OMISSION'}],privateNote:'PRIVATE_NOTE',contactEmail:'SECRET@example.test'};
  const content={title:'Stand-ins sign off a six-match night in style',introduction:'Six matches brought a busy evening of SIXFL football, with Example Stand-ins taking part in the final two games.',matches:matches.map((m,i)=>({fixtureId:m.fixtureId,paragraph:`${m.teamA} finished ${m.scoreA}–${m.scoreB} against ${m.teamB}. Both sides contributed to the recorded score in this example round-up.`})),closing:'The full results and league table are available on the league page.'};
  const identities=matches.map((m,i)=>({id:m.fixtureId,homeTeam:{id:`a-${i}`,name:m.teamA,logoUrl:null},awayTeam:{id:i>3?'stand-in':`b-${i}`,name:m.teamB,logoUrl:null}}));
@@ -44,6 +44,7 @@ test('public snapshot is an explicit allowlist, correctly links both replacement
  const Article=loader()('src/components/news/NewsArticle.tsx').default;
  const html=renderToStaticMarkup(React.createElement(Article,{news,shareUrl:'https://www.sixfl.co.uk/leagues/example/news/2026-09-08'}));
  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>not executable/);assert.match(html,/id="match-f-5"/);assert.match(html,/Jump to match/);
+ assert.match(html,/list-disc/);assert.match(html,/Alex Striker/);assert.match(html,/×2/);assert.match(html,/Sam Forward/);assert.doesNotMatch(html,/Recorded scorers:/);
  const dir=path.join(root,'.tmp/league-news');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'sample.json'),JSON.stringify({...news,article:a}));
 });
 test('photo settings reject private paths, traversal, unsafe URLs and missing alternative text',()=>{
