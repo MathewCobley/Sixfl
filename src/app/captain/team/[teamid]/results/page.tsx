@@ -523,6 +523,8 @@ export default async function CaptainResultsPage({
 
   if (!team) notFound();
 
+  const squadNeedsSetup = team.members.length <= 1;
+
   const fixtures = await prisma.fixture.findMany({
     where: {
       OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
@@ -771,8 +773,17 @@ export default async function CaptainResultsPage({
                     <p className="mt-2 text-sm text-white/65">
                       Your opponent: {row.opponent}
                     </p>
-                    <a href={`#edit-match-${row.fixture.result!.id}`} className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-emerald-400/30 px-4 py-2 text-sm font-semibold text-emerald-100 xl:hidden">
-                      Add scorers & match details
+                    <a
+                      href={
+                        squadNeedsSetup
+                          ? `/captain/team/${team.id}/captain-squad#add-player`
+                          : `#edit-match-${row.fixture.result!.id}`
+                      }
+                      className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-emerald-400/30 px-4 py-2 text-sm font-semibold text-emerald-100 xl:hidden"
+                    >
+                      {squadNeedsSetup
+                        ? "Add your squad to use match reporting"
+                        : "Add scorers & match details"}
                     </a>
                     <OverturnedResultNotice overturn={row.fixture.result?.overturn} homeName={row.fixture.homeTeam.name} awayName={row.fixture.awayTeam.name}/>
                   </div>
@@ -926,51 +937,81 @@ export default async function CaptainResultsPage({
                         Tick the players who actually played, then add goals, optional assists and an optional rating. The full registered squad is shown so late replacements can be recorded correctly. Maximum 9 players per fixture.
                       </p>
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65">
-                      {row.hasSelectedPlayers ? "Full squad · selected players pre-ticked" : "Full squad"}
-                    </span>
-                  </div>
-
-                  <MatchDetailsPlayerFields
-                    goalsFor={row.playedGoalsFor}
-                    players={row.matchPlayers.map((player) => {
-                      const contribution = getContributionForPlayer(row.contributions, player);
-                      const performance = performanceByMemberId.get(player.id);
-                      return {
-                        ...player,
-                        played: performance
-                          ? performance.played
-                          : player.isSelectedForFixture || Boolean(contribution) || selectedPomMemberId === player.id,
-                        goals: contribution?.goals ?? 0,
-                        assists: contribution?.assists ?? 0,
-                        rating: performance?.rating ?? null,
-                      };
-                    })}
-                  />
-
-                  <div className="mt-5">
-                    <FormListboxField
-                      name="playerOfMatchTeamMemberId"
-                      label="Player of the Match"
-                      value={selectedPomMemberId}
-                      options={playerOfMatchOptions}
-                      placeholder="Choose from squad"
-                      disabled={row.matchPlayers.length === 0}
-                    />
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm text-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played. No more than 9 players can be recorded for the fixture.
-                    </span>
-                    <button
-                      type="submit"
-                      disabled={row.matchPlayers.length === 0}
-                      className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    <span
+                      className={
+                        squadNeedsSetup
+                          ? "rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-100"
+                          : "rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65"
+                      }
                     >
-                      Save match details
-                    </button>
+                      {squadNeedsSetup
+                        ? "Squad setup needed"
+                        : row.hasSelectedPlayers
+                          ? "Full squad · selected players pre-ticked"
+                          : "Full squad"}
+                    </span>
                   </div>
+
+                  {squadNeedsSetup ? (
+                    <div className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
+                        Squad required for match reporting
+                      </p>
+                      <h5 className="mt-2 text-lg font-semibold text-white">
+                        Add your squad before completing this match report
+                      </h5>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/80">
+                        SIXFL currently only has {team.members.length === 1 ? "one registered squad member" : "no registered squad players"} for {team.name}. Add the rest of your squad first so you can select who played and record scorers, assists, ratings and Player of the Match correctly.
+                      </p>
+                      <a
+                        href={`/captain/team/${team.id}/captain-squad#add-player`}
+                        className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/15 px-4 py-2.5 text-sm font-semibold text-amber-50 transition hover:bg-amber-300/20"
+                      >
+                        Add your squad
+                      </a>
+                    </div>
+                  ) : (
+                    <>
+                      <MatchDetailsPlayerFields
+                        goalsFor={row.playedGoalsFor}
+                        players={row.matchPlayers.map((player) => {
+                          const contribution = getContributionForPlayer(row.contributions, player);
+                          const performance = performanceByMemberId.get(player.id);
+                          return {
+                            ...player,
+                            played: performance
+                              ? performance.played
+                              : player.isSelectedForFixture || Boolean(contribution) || selectedPomMemberId === player.id,
+                            goals: contribution?.goals ?? 0,
+                            assists: contribution?.assists ?? 0,
+                            rating: performance?.rating ?? null,
+                          };
+                        })}
+                      />
+
+                      <div className="mt-5">
+                        <FormListboxField
+                          name="playerOfMatchTeamMemberId"
+                          label="Player of the Match"
+                          value={selectedPomMemberId}
+                          options={playerOfMatchOptions}
+                          placeholder="Choose from squad"
+                        />
+                      </div>
+
+                      <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm text-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played. No more than 9 players can be recorded for the fixture.
+                        </span>
+                        <button
+                          type="submit"
+                          className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/20"
+                        >
+                          Save match details
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </form>
               </div>
             </section>

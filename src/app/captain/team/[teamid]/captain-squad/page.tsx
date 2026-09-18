@@ -691,7 +691,7 @@ export default async function CaptainSquadViewPage({
 
         <div className="space-y-6">
           {canCaptainAddPlayers ? (
-            <section className="rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.04] p-6">
+            <section id="add-player" className="scroll-mt-6 rounded-3xl border border-emerald-400/15 bg-emerald-500/[0.04] p-6">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/70">
                 Add player
               </p>
@@ -745,7 +745,7 @@ export default async function CaptainSquadViewPage({
               </form>
             </section>
           ) : (
-            <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 text-sm text-amber-100/80">
+            <section id="add-player" className="scroll-mt-6 rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6 text-sm text-amber-100/80">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 SIXFL-managed team
               </p>
