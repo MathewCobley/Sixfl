@@ -54,7 +54,8 @@ async function getFixtures(query: string, leagueId: string) {
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
     LEFT JOIN "Venue" v ON v."id" = f."venueId"
-    WHERE (${leagueFilter}::text IS NULL OR f."leagueId" = ${leagueFilter})
+    WHERE f."sixflTvRecorded" = true
+      AND (${leagueFilter}::text IS NULL OR f."leagueId" = ${leagueFilter})
       AND (${search}::text IS NULL
         OR l."name" ILIKE ${search}
         OR home."name" ILIKE ${search}
@@ -164,17 +165,24 @@ export default async function SixflTvFixturesPage({
         const saved = parseSixflTvVideoValue(fixture.sixflTvUrl);
         const videos = getSixflTvVideos(fixture.sixflTvUrl);
         const context = [fixture.leagueName, fixture.leagueSeason, fixture.venueName].filter(Boolean).join(" · ");
-        return <article key={fixture.id} className="relative overflow-hidden rounded-2xl border border-red-400/45 bg-[linear-gradient(110deg,rgba(127,29,29,0.24),rgba(69,10,10,0.14)_45%,rgba(0,0,0,0.15))] p-5 pl-6 shadow-[0_20px_55px_rgba(69,10,10,0.28)] ring-1 ring-red-950/50">
-          <span aria-hidden="true" className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-red-400/70" />
+        const isLive = videos.length > 0;
+        return <article key={fixture.id} className={isLive
+          ? "relative overflow-hidden rounded-2xl border border-emerald-400/45 bg-[linear-gradient(110deg,rgba(6,78,59,0.28),rgba(6,95,70,0.16)_45%,rgba(0,0,0,0.15))] p-5 pl-6 shadow-[0_20px_55px_rgba(6,78,59,0.25)] ring-1 ring-emerald-950/50"
+          : "relative overflow-hidden rounded-2xl border border-red-400/45 bg-[linear-gradient(110deg,rgba(127,29,29,0.24),rgba(69,10,10,0.14)_45%,rgba(0,0,0,0.15))] p-5 pl-6 shadow-[0_20px_55px_rgba(69,10,10,0.28)] ring-1 ring-red-950/50"
+        }>
+          <span aria-hidden="true" className={isLive
+            ? "absolute inset-y-4 left-0 w-1 rounded-r-full bg-emerald-400/80"
+            : "absolute inset-y-4 left-0 w-1 rounded-r-full bg-red-400/70"
+          } />
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold text-white">{fixture.homeTeamName} vs {fixture.awayTeamName}</h2>
-                <span className={videos.length
+                <span className={isLive
                   ? "rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-200"
                   : "rounded-full border border-red-400/35 bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-200"
                 }>
-                  {videos.length ? "Live" : "Not live"}
+                  {isLive ? "Live" : "Not live"}
                 </span>
                 {videos.length ? <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-semibold text-fuchsia-100">{videos.length} video{videos.length === 1 ? "" : "s"}</span> : null}
               </div>
