@@ -28,7 +28,7 @@ export default function NewsCard({ news, teamId, featured = false }: { news: Pub
         <div className="relative z-10 flex w-full items-end justify-between gap-5 p-5 sm:p-6">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.26em] text-emerald-300">SIXFL</p>
-            <p className="mt-1 text-3xl font-black uppercase tracking-[-0.04em] sm:text-4xl">Weekly News</p>
+            <p className="mt-1 text-3xl font-black uppercase tracking-[-0.04em] sm:text-4xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} News` : "Matchnight News"}</p>
           </div>
           <div className="shrink-0 rounded-2xl border border-white/10 bg-black/55 px-4 py-3 text-center backdrop-blur-sm">
             <p className="text-2xl font-black text-emerald-300">{a.matches.length}</p>
@@ -55,7 +55,7 @@ export default function NewsCard({ news, teamId, featured = false }: { news: Pub
         <p className="mt-4 line-clamp-3 break-words text-sm leading-7 text-white/65 sm:text-base">{a.introduction}</p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Link href={url} className="inline-flex min-h-11 items-center rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-black text-black transition hover:bg-emerald-300">Read this week&apos;s full report →</Link>
+          <Link href={url} className="inline-flex min-h-11 items-center rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-black text-black transition hover:bg-emerald-300">{news.matchweekNumber ? `Read Matchweek ${news.matchweekNumber} report` : "Read full report"} →</Link>
           <Link href={`/leagues/${news.leagueSlug}/results`} className="inline-flex min-h-11 items-center rounded-full border border-white/12 px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:border-white/20 hover:text-white">Results</Link>
         </div>
 
