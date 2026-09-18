@@ -45,6 +45,9 @@ async function loadWorker(db, objects, uploadHook) {
     '../src/lib/goal-of-month/calendar': {
       monthlyCycle: () => ({ latestClosedMonth: '2026-08' }),
     },
+    '../src/lib/sixfl-tv/youtube-metadata': {
+      sixflTvYoutubeDefaults: (_fixture, kind) => ({ title: kind === 'HIGHLIGHTS' ? 'Highlights title' : 'Full match title', description: 'Automatic description' }),
+    },
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
       uploadRailwayObject: async ({ key, body }) => { if (uploadHook) await uploadHook(key, body); objects.set(key, Buffer.from(body)); },
