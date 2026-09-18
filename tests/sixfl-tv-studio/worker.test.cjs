@@ -19,14 +19,18 @@ async function loadWorker(db, objects, uploadHook) {
     title: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#2563eb' } }).png().toBuffer(),
     result: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#dc2626' } }).png().toBuffer(),
     goal: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#c026d3' } }).png().toBuffer(),
-    scoreBug: await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="620" height="146" rx="22" fill="#ffff00" fill-opacity="0.95"/></svg>')).png().toBuffer(),
+    lineup: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#7c3aed' } }).png().toBuffer(),
+    watermark: await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="1540" y="38" width="320" height="102" fill="#ffffff" fill-opacity="0.5"/></svg>')).png().toBuffer(),
+    scoreBug: await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="690" height="92" rx="14" fill="#ffff00" fill-opacity="0.95"/></svg>')).png().toBuffer(),
   };
   const mocks = {
     '@prisma/client': { PrismaClient: class { constructor() { return db; } } },
     '../src/lib/sixfl-tv/graphics': {
       createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title,
       createSixflTvGoalOfMonthCard: async () => cards.goal,
+      createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvScoreBug: async () => cards.scoreBug,
+      createSixflTvWatermark: async () => cards.watermark,
     },
     '../src/lib/sixfl-tv/videos': {},
     '../src/lib/storage/railway-s3': {
@@ -87,7 +91,7 @@ function memoryDb() {
   return db;
 }
 function addJob(db, id = randomUUID(), leaseToken = randomUUID()) {
-  const job = { id, fixtureId: 'test-fixture', kind: 'HIGHLIGHTS', leaseToken, metadataJson: { fixture: { firstTeam: { name: 'Test A' }, secondTeam: { name: 'Test B' } }, label: 'TEST' } };
+  const job = { id, fixtureId: 'test-fixture', kind: 'HIGHLIGHTS', leaseToken, metadataJson: { fixture: { firstTeam: { name: 'Test A', score: 4 }, secondTeam: { name: 'Test B', score: 2 }, scorers: ['Test A: Player One x2', 'Test B: Player Two'], firstTeamLineup: ['Player One (C)', 'Keeper A (GK)'], secondTeamLineup: ['Player Two', 'Keeper B (GK)'] }, label: 'TEST' } };
   db.jobs.set(id, { ...job, state: 'PROCESSING', active: true }); return job;
 }
 async function temp(t) { const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-worker-test-')); t.after(() => fs.rm(dir, { recursive: true, force: true })); return dir; }
@@ -175,12 +179,12 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   await fs.writeFile(result, Buffer.concat(parts.map(p => { assert.equal(sha(objects.get(p.objectKey)), p.sha256); return objects.get(p.objectKey); })));
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920); assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
-  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 15.0);
-  const introFrame = await w.run('ffmpeg', ['-ss', '0.8', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const titleFrame = await w.run('ffmpeg', ['-ss', '2.5', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const resultFrame = await w.run('ffmpeg', ['-ss', '6.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const goalFrame = await w.run('ffmpeg', ['-ss', '13.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  assert.equal(new Set([introFrame,titleFrame,resultFrame,goalFrame]).size,4,'Generated intro, match title, full-time score and Goal of the Month end card must all survive assembly');
+  assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 20.0);
+  const titleFrame = await w.run('ffmpeg', ['-ss', '1.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const lineupFrame = await w.run('ffmpeg', ['-ss', '5.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const resultFrame = await w.run('ffmpeg', ['-ss', '10.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const goalFrame = await w.run('ffmpeg', ['-ss', '17.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  assert.equal(new Set([titleFrame,lineupFrame,resultFrame,goalFrame]).size,4,'Scored match card, matchday squad, full-time score/scorers and Goal of the Month end card must all survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });
