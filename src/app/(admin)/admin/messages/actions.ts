@@ -192,8 +192,8 @@ export async function stopProspectChasingFromThreadAction(formData: FormData) {
       return { ok: false as const, reason: "prospect_not_stoppable" };
     }
 
-    const originalTeamId = prospect.teamId ?? target.teamId;
-    if (prospect.teamId && prospect.teamId !== target.teamId) {
+    const originalTeamId = prospect.teamId;
+    if (!prospect.teamId || prospect.teamId !== target.teamId) {
       return { ok: false as const, reason: "player_not_linked" };
     }
 
