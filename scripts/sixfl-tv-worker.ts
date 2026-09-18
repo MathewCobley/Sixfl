@@ -10,6 +10,7 @@ import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixfl
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
+import { sixflTvGoalClipPosterKey } from "../src/lib/sixfl-tv/goal-clip-poster";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -271,6 +272,18 @@ async function saveThumbnailBackground(fixtureId: string, candidate: PosterCandi
   return true;
 }
 
+async function saveGoalClipPoster(assetId: string, candidate: PosterCandidate | null) {
+  if (!candidate) return false;
+  await uploadRailwayObject({
+    key: sixflTvGoalClipPosterKey(assetId),
+    body: candidate.bytes,
+    contentType: "image/jpeg",
+    signal: operationSignal(30000),
+  });
+  return true;
+}
+
+
 async function cardVideo(png: string, target: string, seconds = 3) {
   await run("ffmpeg", ["-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(seconds), "-shortest",
     "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p",
@@ -450,16 +463,29 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const collectPosterFor = (contentIndex: number) =>
       job.kind === "HIGHLIGHTS" ? contentIndex < 2 : !existingPoster && contentIndex === 0;
 
-    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string, posterLabel?: string) => {
+    const normaliseInput = async (
+      input: Input,
+      source: string,
+      normal: string,
+      overlay: string | undefined,
+      label: string,
+      posterLabel?: string,
+      goalClipPosterAssetId?: string,
+    ) => {
       const mediaBytes = Math.max(1, Number(input.sizeBytes));
       const mediaStartBytes = completedMediaBytes;
       const progressFor = (fraction: number) =>
         12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
-      if (posterLabel) {
-        const candidate = await sourcePosterCandidate(source, dir, posterLabel);
-        if (candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
+      if (posterLabel || goalClipPosterAssetId) {
+        const candidate = await sourcePosterCandidate(source, dir, posterLabel || `goal-clip-${goalClipPosterAssetId}`);
+        if (goalClipPosterAssetId) {
+          await saveGoalClipPoster(goalClipPosterAssetId, candidate).catch(error =>
+            console.warn(`Could not save Goal of the Month poster for ${goalClipPosterAssetId}: ${safeError(error)}`),
+          );
+        }
+        if (posterLabel && candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
       }
       reportProgress(progressFor(0.02), label);
       await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
@@ -502,6 +528,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
         clipOverlay,
         job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
         collectPosterFor(index) ? `${job.kind.toLowerCase()}-${index + 1}` : undefined,
+        job.kind === "HIGHLIGHTS" ? input.assetId : undefined,
       );
       segments.push(normal);
     }
