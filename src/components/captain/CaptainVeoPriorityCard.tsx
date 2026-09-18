@@ -90,9 +90,9 @@ export default async function CaptainVeoPriorityCard({
 
       <div className="grid gap-3 sm:grid-cols-5">
         {[
-          ['10', 'Payment', 'Late = 2'],
+          ['8', 'Match card', 'By 6pm next day'],
+          ['6', 'Payment', 'Late = 2'],
           ['4', 'Confirmation', '72h deadline'],
-          ['4', 'Match card', 'By 6pm next day'],
           ['1', 'Assists', 'Bonus'],
           ['1', 'Ratings', 'Bonus'],
         ].map(([points, label, help]) => (
@@ -121,7 +121,7 @@ export default async function CaptainVeoPriorityCard({
                   <span className="text-sm font-bold">{match.points}/20</span>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-white/55">
-                  Payment {match.paymentPoints}/10 ({statusText[match.paymentStatus]}) · Confirmation {match.confirmationPoints}/4 ({statusText[match.confirmationStatus]}) · Match card {match.matchCardPoints}/4 ({statusText[match.matchCardStatus]}) · Assists {match.assistsPoints}/1 · Ratings {match.ratingsPoints}/1
+                  Match card {match.matchCardPoints}/8 ({statusText[match.matchCardStatus]}) · Payment {match.paymentPoints}/6 ({statusText[match.paymentStatus]}) · Confirmation {match.confirmationPoints}/4 ({statusText[match.confirmationStatus]}) · Assists {match.assistsPoints}/1 · Ratings {match.ratingsPoints}/1
                 </p>
               </div>
             ))}
