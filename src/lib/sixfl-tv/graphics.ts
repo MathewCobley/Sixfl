@@ -11,6 +11,7 @@ export type SixflTvGraphicFixture = {
   leagueName: string;
   kickoffLabel: string;
   kickoffIso?: string;
+  matchweekNumber?: number | null;
   firstTeam: SixflTvGraphicTeam;
   secondTeam: SixflTvGraphicTeam;
   scorers?: string[];
@@ -259,7 +260,9 @@ export async function createSixflTvThumbnail(input: {
   const headlineOne = words.slice(0, split).join(" ");
   const headlineTwo = words.slice(split).join(" ");
   const league = fit(input.strapline || input.fixture.leagueName.replaceAll("·", "•"), 58);
-  const date = input.fixture.kickoffLabel;
+  const footerLabel = Number.isInteger(input.fixture.matchweekNumber)
+    ? `MATCHWEEK NO. ${input.fixture.matchweekNumber}`
+    : input.fixture.kickoffLabel;
   const scorebarX = isHighlights ? 34 : 1280 - 34 - 450;
 
   const background = input.backgroundImage?.length
@@ -344,9 +347,9 @@ export async function createSixflTvThumbnail(input: {
     thumbnailTextPng({ text: headlineOne, width: 760, height: 96, fontSize: 82, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: headlineTwo || " ", width: 840, height: 96, fontSize: 82, bold: true, fill: accent }),
     thumbnailTextPng({ text: league, width: 760, height: 36, fontSize: 22, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: date, width: 430, height: 36, fontSize: 22, bold: true, fill: "#d1d5db", align: "right" }),
+    thumbnailTextPng({ text: footerLabel, width: 430, height: 36, fontSize: 22, bold: true, fill: accent, align: "right", letterSpacing: 1.1 }),
   ];
-  const [scoreText, headlineOneText, headlineTwoText, leagueText, dateText] = await Promise.all(textJobs);
+  const [scoreText, headlineOneText, headlineTwoText, leagueText, footerText] = await Promise.all(textJobs);
 
   const composites: sharp.OverlayOptions[] = [
     { input: Buffer.from(overlaySvg), left: 0, top: 0 },
@@ -354,7 +357,7 @@ export async function createSixflTvThumbnail(input: {
     { input: headlineOneText, left: 42, top: 438 },
     { input: headlineTwoText, left: 42, top: 518 },
     { input: leagueText, left: 44, top: 620 },
-    { input: dateText, left: 802, top: 650 },
+    { input: footerText, left: 802, top: 650 },
   ];
 
   return (background ? sharp(background) : sharp({ create: { width: 1280, height: 720, channels: 3, background: "#020504" } }))
@@ -402,9 +405,10 @@ export async function createSixflTvVideoCard(input: {
     <text x="1570" y="710" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
     ${formRun(input.fixture.secondTeamForm, 1700, 735, "end")}
 
-    <text x="960" y="870" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
-    <text x="960" y="922" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
-    ${input.fixture.decisionNote ? `<text x="960" y="944" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="24" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
+    <text x="960" y="858" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
+    ${Number.isInteger(input.fixture.matchweekNumber) ? `<text x="960" y="908" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="26" font-weight="900" letter-spacing="2.5" fill="#34d399">MATCHWEEK NO. ${input.fixture.matchweekNumber}</text>` : ""}
+    <text x="960" y="${Number.isInteger(input.fixture.matchweekNumber) ? 952 : 922}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="26" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
+    ${input.fixture.decisionNote ? `<text x="960" y="982" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="22" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
