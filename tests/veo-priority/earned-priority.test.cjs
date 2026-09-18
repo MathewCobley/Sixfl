@@ -47,6 +47,10 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /\['8', 'Match card'/);
   assert.match(captainCard, /\['6', 'Payment'/);
   assert.match(captainCard, /Late = 2/);
+  assert.match(captainCard, /Match card not completed/);
+  assert.match(captainCard, /What was missing\?/);
+  assert.match(captainCard, /points missed/);
+  assert.match(captainCard, /players who played/);
   assert.match(captainCard, /60\/100/);
   assert.doesNotMatch(captainForm, /£5 extra for the whole team/);
   assert.match(captainForm, /earned automatically/);
