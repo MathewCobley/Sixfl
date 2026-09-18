@@ -20,7 +20,32 @@ function loadAuto() {
 
   new Function("require", "module", "exports", code)((id) => {
     if (id === "node:crypto") return require(id);
-    if (id === "@/lib/datetime/london") return require(path.join(root, "src/lib/datetime/london.ts"));
+    if (id === "@/lib/datetime/london") {
+      const parts = (value) => Object.fromEntries(
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/London",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).formatToParts(value).filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]),
+      );
+      return {
+        getLondonMinutesSinceMidnight(value) {
+          const p = parts(value);
+          return p.hour * 60 + p.minute;
+        },
+        toLondonDateInputValue(value) {
+          const p = parts(value);
+          return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+        },
+        parseLondonDateTime() {
+          throw new Error("Not used by the timing contract");
+        },
+      };
+    }
     if (id === "@/lib/prisma") return { prisma: {} };
     if (id === "@/lib/league-news/manage") return { publishNewsAutomatically: async () => ({ automaticPublished: true }) };
     if (id === "./facts") return { getReportSource: async () => null, sourceHash: () => "" };
