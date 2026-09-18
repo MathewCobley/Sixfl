@@ -439,7 +439,59 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string; fix
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
-export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string }) {
+export async function createGoalOfMonthNominationThumbnail(input: {
+  siteUrl: string;
+  clipNumber: number;
+  scorerName: string | null;
+  teamName: string;
+  opponentName: string;
+  leagueName: string;
+  backgroundImage?: Buffer | null;
+}) {
+  const [sixflTvLogoBytes, fontCss] = await Promise.all([
+    sixflTvLogo(input.siteUrl),
+    embeddedFontStyle(input.siteUrl),
+  ]);
+  const scorer = fit(input.scorerName || input.teamName, 34);
+  const match = fit(`${input.teamName} v ${input.opponentName}`, 50);
+  const league = fit(input.leagueName, 52);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+    <defs>
+      <linearGradient id="fallback" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07140f"/><stop offset="1" stop-color="#020504"/></linearGradient>
+      <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.5" stop-color="#000" stop-opacity="0.34"/><stop offset="1" stop-color="#000" stop-opacity="0.92"/></linearGradient>
+      <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.75"/></filter>
+    </defs>
+    ${fontCss}
+    ${input.backgroundImage?.length ? "" : '<rect width="1280" height="720" fill="url(#fallback)"/>'}
+    <rect width="1280" height="720" fill="url(#shade)"/>
+    <rect x="44" y="40" width="310" height="48" rx="24" fill="#d946ef" fill-opacity="0.92"/>
+    <text x="199" y="72" text-anchor="middle" font-size="20" font-weight="900" letter-spacing="2" fill="#ffffff">GOAL OF THE MONTH</text>
+    ${logoImage(sixflTvLogoBytes, 988, 34, 236, 76)}
+    <g filter="url(#shadow)">
+      <rect x="48" y="442" width="168" height="56" rx="28" fill="#020805" fill-opacity="0.88" stroke="#34d399" stroke-width="2"/>
+      <text x="132" y="478" text-anchor="middle" font-size="25" font-weight="900" fill="#6ee7b7">CLIP ${input.clipNumber}</text>
+      <text x="48" y="555" font-size="58" font-weight="900" fill="#ffffff">${xml(scorer)}</text>
+      <text x="50" y="606" font-size="28" font-weight="750" fill="#d1fae5">${xml(match)}</text>
+      <text x="50" y="650" font-size="22" font-weight="650" fill="#cbd5e1">${xml(league)}</text>
+    </g>
+    <rect x="48" y="681" width="540" height="6" rx="3" fill="#34d399"/>
+  </svg>`;
+  if (!input.backgroundImage?.length) {
+    return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  }
+  const background = await sharp(input.backgroundImage)
+    .rotate()
+    .resize(1280, 720, { fit: "cover", position: "centre" })
+    .modulate({ brightness: 0.82, saturation: 1.06 })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+  return sharp(background)
+    .composite([{ input: Buffer.from(svg) }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string; clipNumber?: number | null }) {
   const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
@@ -452,6 +504,9 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
   const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
   const footageLabel = input.kind === "HIGHLIGHTS" ? "Match highlights" : "Full match";
+  const clipLabel = input.kind === "HIGHLIGHTS" && Number.isInteger(input.clipNumber)
+    ? `Clip ${input.clipNumber}`
+    : null;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -479,6 +534,7 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
     <g transform="translate(54 146)">
       <rect width="190" height="38" rx="19" fill="#020805" fill-opacity="0.76" stroke="#2dd4bf" stroke-opacity="0.5"/>
       <text x="95" y="26" text-anchor="middle" font-size="18" font-weight="800" fill="#d1fae5">${xml(footageLabel)}</text>
+      ${clipLabel ? `<g transform="translate(198 5)"><rect width="82" height="28" rx="14" fill="#020805" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.24"/><text x="41" y="20" text-anchor="middle" font-size="14" font-weight="800" fill="#ffffff">${xml(clipLabel)}</text></g>` : ""}
     </g>
     ${logoImage(sixflTvLogoBytes, 1585, 34, 275, 88, 0.94)}
   </svg>`;
