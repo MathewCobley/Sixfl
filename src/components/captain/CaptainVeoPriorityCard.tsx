@@ -128,6 +128,13 @@ export default async function CaptainVeoPriorityCard({
         does not guarantee a camera slot.
       </p>
 
+      <div>
+        <h3 className="text-sm font-semibold text-white">Available points per match</h3>
+        <p className="mt-1 text-xs leading-5 text-white/55">
+          Each completed match is worth up to 20 points. Your overall SIXFL TV Priority Score is based on your last five completed matches.
+        </p>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-5">
         {[
           ['8', 'Match card', 'By 6pm next day'],
