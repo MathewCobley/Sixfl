@@ -1,8 +1,9 @@
 import Link from 'next/link';
+
+import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScoreBadge';
 import { prisma } from '@/lib/prisma';
 import { requireCaptain } from '@/lib/requireCaptain';
-import { readVeoOffer } from '@/lib/veo/priority-requests';
-import { StopFutureVeoForm } from './FixtureVeoConfirmationForm';
+import { getSixflTvPriorityScore } from '@/lib/sixfl-tv/priority-score';
 
 type ThisWeekVeoStatus = {
   hasMatchThisWeek: boolean;
@@ -40,61 +41,111 @@ async function readThisWeekVeoStatus(leagueId: string, teamId: string): Promise<
   };
 }
 
-export default async function CaptainVeoPriorityCard({teamId,leagueId}:{teamId:string;leagueId:string|null}) {
-  const access=await requireCaptain(teamId);
-  const offer=await readVeoOffer(leagueId,teamId);
-  if(!offer||!leagueId)return null;
+const statusText = {
+  ON_TIME: 'On time',
+  LATE: 'Late',
+  UNPAID: 'Unpaid',
+  NOT_REQUIRED: 'Not required',
+  MISSING: 'Missing',
+  NOT_FAIR_TO_SCORE: 'Not scored',
+  INCOMPLETE: 'Incomplete',
+} as const;
 
-  const weekStatus=await readThisWeekVeoStatus(leagueId,teamId);
-  const preview=access.accessMode!=='captain'||access.isAdmin||!access.isCaptain||!access.user?.id;
-  const notFilmedThisWeek=weekStatus.hasMatchThisWeek&&!weekStatus.veoBooked;
-  const filmedThisWeek=weekStatus.hasMatchThisWeek&&weekStatus.veoBooked;
+export default async function CaptainVeoPriorityCard({
+  teamId,
+  leagueId,
+}: {
+  teamId: string;
+  leagueId: string | null;
+}) {
+  await requireCaptain(teamId);
+  if (!leagueId) return null;
 
-  return <div className="space-y-3">
-    {preview&&<aside aria-label="Veo preview notice" className="rounded-xl border border-amber-300/20 p-3 text-sm text-amber-100">Preview only — showing the captain’s options. No preferences can be changed here.</aside>}
-    <section aria-label="Veo Priority" className="space-y-4 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 sm:p-6">
-      <p className="text-xs font-bold uppercase tracking-widest text-fuchsia-200">📹 SIXFL TV · Veo Priority</p>
-      <h2 className="text-xl font-bold text-white">
-        {notFilmedThisWeek
-          ? 'Your match isn’t being recorded this week.'
-          : filmedThisWeek
-            ? 'Your match is scheduled to be recorded this week.'
-            : offer.priority
-              ? 'Veo Priority is your saved preference'
-              : 'Would you like your match filmed?'}
-      </h2>
+  const [score, weekStatus] = await Promise.all([
+    getSixflTvPriorityScore(teamId),
+    readThisWeekVeoStatus(leagueId, teamId),
+  ]);
 
-      {notFilmedThisWeek ? (
-        <>
-          <p className="max-w-3xl text-sm leading-6 text-white/80">
-            {offer.priority
-              ? <>Your <strong>Veo Priority</strong> preference is already on for future fixtures. Filming spaces are limited, so Priority improves your chance of being selected next week but does not guarantee a recording.</>
-              : <>If you’d like the chance to have next week’s match recorded, open your upcoming fixture and choose a <strong>Veo Priority</strong> option. Filming spaces are limited, so Priority improves your chance of being selected but does not guarantee a recording.</>}
-          </p>
-          <p className="text-xs leading-5 text-white/65">
-            Veo Priority is <strong>£5 extra for the whole team</strong> only if SIXFL accepts the filming request and a usable recording is available. No filming space or no usable recording means no extra charge.
-          </p>
-        </>
-      ) : filmedThisWeek ? (
-        <>
-          <p className="max-w-3xl text-sm leading-6 text-white/80">
-            Your team currently has a Veo filming slot for this week. You can still review your Veo Priority choice for future fixtures from the fixtures page.
-          </p>
-          <p className="text-xs leading-5 text-white/65">A £5 Veo charge only applies where a Priority request was accepted and a usable recording is available.</p>
-        </>
+  return (
+    <section aria-label="SIXFL TV Priority" className="space-y-5 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 text-white sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-fuchsia-200">📹 SIXFL TV Priority</p>
+          <h2 className="mt-2 text-xl font-bold">
+            {weekStatus.veoBooked
+              ? 'Your match is scheduled to be recorded this week.'
+              : score.qualifies
+                ? 'Your team currently qualifies for recorded-pitch priority.'
+                : 'Improve your score to regain recorded-pitch priority.'}
+          </h2>
+        </div>
+        <SixflTvPriorityScoreBadge score={score} />
+      </div>
+
+      <p className="max-w-3xl text-sm leading-6 text-white/80">
+        SIXFL TV Priority is <strong>free</strong>. Recorded pitches are prioritised for teams that confirm fixtures,
+        pay on time and complete their match reports. A qualifying score improves your chance of being filmed but
+        does not guarantee a camera slot.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-5">
+        {[
+          ['10', 'Payment', 'Late = 2'],
+          ['4', 'Confirmation', '72h deadline'],
+          ['4', 'Match card', 'By 6pm next day'],
+          ['1', 'Assists', 'Bonus'],
+          ['1', 'Ratings', 'Bonus'],
+        ].map(([points, label, help]) => (
+          <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-lg font-bold">{points} pts</div>
+            <div className="text-xs font-semibold text-white/80">{label}</div>
+            <div className="mt-1 text-[11px] text-white/45">{help}</div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs leading-5 text-white/55">
+        The score is based on your last five completed fixtures. You need at least <strong>60/100</strong> and
+        core match cards completed in at least 60% of scored fixtures. Scores are provisional until five fixtures
+        have been recorded.
+      </p>
+
+      {score.matches.length ? (
+        <details className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white/85">See recent score breakdown</summary>
+          <div className="mt-4 space-y-3">
+            {score.matches.map((match) => (
+              <div key={match.fixtureId} className="rounded-xl border border-white/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong className="text-sm">vs {match.opponentName}</strong>
+                  <span className="text-sm font-bold">{match.points}/20</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-white/55">
+                  Payment {match.paymentPoints}/10 ({statusText[match.paymentStatus]}) · Confirmation {match.confirmationPoints}/4 ({statusText[match.confirmationStatus]}) · Match card {match.matchCardPoints}/4 ({statusText[match.matchCardStatus]}) · Assists {match.assistsPoints}/1 · Ratings {match.ratingsPoints}/1
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
       ) : (
-        <>
-          <p className="max-w-3xl text-sm leading-6 text-white/80">Open your fixture and choose <strong>Just this match</strong> or <strong>This and future matches</strong> when you confirm your team can play. It is <strong>£5 extra for the whole team</strong> if your request is accepted and a usable recording is available. No filming space or no usable recording means no extra charge.</p>
-          <p className="text-xs leading-5 text-white/65">Veo is optional and filming spaces are limited. Match footage may be published publicly on SIXFL TV/YouTube.</p>
-        </>
+        <p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/65">
+          New team: your score starts provisionally at 100/100 and will become history-based as completed fixtures are added.
+        </p>
       )}
 
-      {offer.priority&&!notFilmedThisWeek&&<p className="text-sm text-fuchsia-100">Your preference is selected automatically next time you confirm. You can skip one match without switching it off.</p>}
-      {offer.request?.status==='PENDING'&&<p className="text-sm text-amber-100">Your earlier ongoing-Priority request is still awaiting SIXFL review. You can request a specific fixture in the meantime.</p>}
-      <Link href={`/captain/team/${teamId}/fixtures`} className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 px-4 py-3 text-sm font-semibold text-white hover:bg-fuchsia-400/10">
-        {notFilmedThisWeek?'View Veo Priority options':'Open fixtures and choose Veo'}
-      </Link>
-      {offer.priority&&<StopFutureVeoForm teamId={teamId} leagueId={leagueId} preview={preview}/>}
+      <div className="flex flex-wrap gap-3">
+        <Link href={`/captain/team/${teamId}/results`} className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-400/10">
+          Complete match reports
+        </Link>
+        <Link href={`/captain/team/${teamId}/payments`} className="inline-flex min-h-11 items-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/5">
+          Check payments
+        </Link>
+        {weekStatus.hasMatchThisWeek ? (
+          <Link href={`/captain/team/${teamId}/fixtures`} className="inline-flex min-h-11 items-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/5">
+            Check fixture confirmation
+          </Link>
+        ) : null}
+      </div>
     </section>
-  </div>;
+  );
 }

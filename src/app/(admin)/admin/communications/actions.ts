@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
@@ -28,6 +29,7 @@ const COMMON_COMMUNICATION_TOKENS = [
   "name",
   "fullName",
   "teamName",
+  "sixflTvPriorityScore",
   "leagueName",
   "signupUrl",
   "link",
@@ -60,6 +62,7 @@ function buildCommunicationVariables(input: {
   teamName: string;
   leagueName: string | null;
   ctaUrl?: string | null;
+  sixflTvPriorityScore?: number | null;
 }): CommunicationVariables {
   const name = input.displayName?.trim() || input.teamName || "there";
   return {
@@ -67,6 +70,7 @@ function buildCommunicationVariables(input: {
     name,
     fullName: name,
     teamName: input.teamName,
+    sixflTvPriorityScore: input.sixflTvPriorityScore ?? "",
     leagueName: input.leagueName ?? "",
     signupUrl: "https://www.sixfl.co.uk/register-interest",
     link: input.ctaUrl?.trim() || "",
@@ -149,6 +153,7 @@ async function getTeamCommunicationRecipientContext(input: {
   ctaUrl?: string | null;
 }): Promise<CommunicationRecipientContext> {
   const { teamId, recipientType, recipientId } = input;
+  const priorityScore = await getSixflTvPriorityScore(teamId);
 
   if (recipientType === "teamMember" && recipientId) {
     const member = await prisma.teamMember.findFirst({
@@ -202,6 +207,7 @@ async function getTeamCommunicationRecipientContext(input: {
         teamName: member.team.name,
         leagueName,
         ctaUrl: input.ctaUrl,
+        sixflTvPriorityScore: priorityScore.score,
       }),
       metadata: {
         recipientType: "teamMember",
@@ -263,6 +269,7 @@ async function getTeamCommunicationRecipientContext(input: {
         teamName: prospect.team.name,
         leagueName,
         ctaUrl: input.ctaUrl,
+        sixflTvPriorityScore: priorityScore.score,
       }),
       metadata: {
         recipientType: "prospect",
@@ -287,6 +294,7 @@ async function getTeamCommunicationRecipientContext(input: {
       teamName: snapshot.teamName,
       leagueName: snapshot.leagueName,
       ctaUrl: input.ctaUrl,
+      sixflTvPriorityScore: priorityScore.score,
     }),
     metadata: { recipientType: "team" },
   };
@@ -432,11 +440,13 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
 
   const displayName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
   const leagueName = getLeagueName(prospect.team.league) || null;
+  const priorityScore = await getSixflTvPriorityScore(teamId);
   const variables = buildCommunicationVariables({
     displayName: displayName || prospect.firstName,
     teamName: prospect.team.name,
     leagueName,
     ctaUrl,
+    sixflTvPriorityScore: priorityScore.score,
   });
 
   const recipient = await upsertNotificationRecipient({

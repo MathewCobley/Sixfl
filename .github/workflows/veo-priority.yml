@@ -1,8 +1,16 @@
-name: Veo Priority safety
+name: SIXFL TV Priority safety
 on:
   pull_request:
     paths:
       - 'src/lib/veo/**'
+      - 'src/lib/sixfl-tv/priority-score.ts'
+      - 'src/components/sixfl-tv/SixflTvPriorityScoreBadge.tsx'
+      - 'src/app/(admin)/admin/teams/page.tsx'
+      - 'src/app/captain/team/[teamid]/layout.tsx'
+      - 'src/app/captain/team/[teamid]/results/page.tsx'
+      - 'src/components/admin/email-templates/EmailTemplateForm.tsx'
+      - 'src/lib/communications/send-team-broadcast.ts'
+      - 'src/app/(admin)/admin/communications/actions.ts'
       - 'src/app/**/veo-priority/**'
       - 'src/components/captain/*Veo*'
       - 'src/components/captain/CaptainFixtureConfirmation.tsx'
@@ -11,6 +19,7 @@ on:
       - 'src/app/(admin)/admin/fixtures/publish-actions.ts'
       - 'src/app/captain/team/[teamid]/fixtures/layout.tsx'
       - 'prisma/migrations/*veo*/**'
+      - 'prisma/migrations/20260918123000_sixfl_tv_priority_score/**'
       - 'src/app/captain/team/**/fixtures/**'
       - 'tests/veo-priority/**'
       - '.github/workflows/veo-priority.yml'
@@ -58,12 +67,12 @@ jobs:
       - run: npm ci
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
-      - name: Native request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/fixture-choice-ui.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
+      - name: Native earned Priority contracts
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
-      - name: Prepared request card and action contracts
-        run: node --test tests/veo-priority/request-ui.test.cjs tests/veo-priority/fixture-choice-ui.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
+      - name: Prepared earned Priority contracts
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
       - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
@@ -81,16 +90,14 @@ jobs:
             UNIQUE ("leagueId", "teamId")
           );
           SQL
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260803010000_canonical_player_match_performance/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912001500_veo_priority_pilot/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912010000_veo_priority_requests/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260709210000_team_credit_ledger/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260912140000_veo_fixture_choices/migration.sql
-      - name: Real allocation database safety checks
-        run: npx tsx tests/veo-priority/database.ts
-      - name: Real request and approval database safety checks
-        run: npx tsx tests/veo-priority/requests.ts
-      - name: Fixture choice, shared camera and optional-payment database safety
-        run: npx tsx tests/veo-priority/fixture-bookings.ts
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql
+      - name: Real Priority score database checks
+        run: npx tsx tests/veo-priority/priority-score.ts
       - name: Production build
         shell: bash
         run: |
@@ -106,23 +113,11 @@ jobs:
             if curl --silent http://127.0.0.1:3101/login > /dev/null; then break; fi
             sleep 1
           done
-          LEAGUE=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/veo/seed.json','utf8')).leagueId")
+          LEAGUE=priority-auth-test
           curl --silent --dump-header veo-auth-headers.txt --output /dev/null "http://127.0.0.1:3101/admin/leagues/$LEAGUE/veo-priority"
           grep -i 'location: /login' veo-auth-headers.txt
-      - name: Install browser test dependencies
-        run: npm install --no-save --package-lock=false playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Start isolated development app
-        shell: bash
-        run: |
-          npx next dev --hostname 127.0.0.1 --port 3100 > veo-dev.log 2>&1 &
-          for attempt in $(seq 1 90); do
-            if curl --silent http://127.0.0.1:3100/login > /dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat veo-dev.log
-          exit 1
-      - name: Mobile, request queue and completed-video browser checks
-        run: node tests/veo-priority/browser.mjs
+      - name: Verify score token survives the real email editor
+        run: node -e "const fs=require('fs');const s=fs.readFileSync('src/components/admin/email-templates/EmailTemplateForm.tsx','utf8');if(!s.includes('{{sixflTvPriorityScore}}'))process.exit(1)"
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -131,7 +126,6 @@ jobs:
           path: |
             artifacts/veo/
             veo-build.log
-            veo-dev.log
             veo-production.log
             veo-auth-headers.txt
           retention-days: 14

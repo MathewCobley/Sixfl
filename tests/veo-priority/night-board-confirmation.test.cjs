@@ -16,18 +16,17 @@ test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
   assert.match(route, /confirmNightBoardVeoFixture/);
   assert.match(route, /veoBookingConfirmed/);
   assert.match(helper, /INSERT INTO "VeoMatchBooking"/);
-  assert.match(helper, /status = 'ACCEPTED'/);
+  assert.match(helper, /INSERT INTO "VeoMatchBooking"/);
   assert.match(helper, /"sixflTvRecorded" = true/);
   assert.match(helper, /maximum/);
 });
 
-test('accepted Veo Priority is charged as soon as Night Board confirms filming', () => {
+test('new Night Board bookings do not create a Priority fee', () => {
   assert.match(helper, /ensureAcceptedVeoCharges/);
-  assert.match(helper, /paymentCharge\.create/);
-  assert.match(helper, /amountPence: 500/);
-  assert.match(helper, /dueDate: fixture\.kickoffAt/);
-  assert.match(helper, /chargeTiming: 'booking_confirmation'/);
-  assert.match(helper, /If the recording fails, this charge is voided and any payment received is returned to team credit/);
+  assert.match(helper, /Paid Veo Priority has been retired/);
+  assert.match(helper, /noPriorityFees: true/);
+  assert.doesNotMatch(helper, /paymentCharge\.create/);
+  assert.doesNotMatch(helper, /amountPence: 500/);
   assert.match(helper, /initial\.bookingState === 'PLANNED'/);
 });
 
@@ -45,9 +44,9 @@ test('already-confirmed Veo requests get a one-time safe £5 backfill', () => {
 });
 
 test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
-  assert.match(toggle, /captain choice locked/);
+  assert.match(toggle, /score-based priority/);
   assert.match(toggle, /disabled=\{loading \|\| saving \|\| locked\}/);
-  assert.match(route, /Cancel it from the league Veo Priority page/);
+  assert.match(route, /league SIXFL TV Priority page/);
 });
 
 test('Night Board only shows Veo Priority for a team still in that fixture', () => {

@@ -17,6 +17,7 @@ import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectE
 import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
 import ManagedSquadEditLinks from "@/components/captain/ManagedSquadEditLinks";
+import SixflTvPriorityScoreBadge from "@/components/sixfl-tv/SixflTvPriorityScoreBadge";
 import PendingActivationDeleteLinks from "@/components/captain/PendingActivationDeleteLinks";
 import PendingActivationReturnLinks from "@/components/captain/PendingActivationReturnLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
@@ -24,6 +25,7 @@ import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjur
 import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
+import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
 
 const captainMobileStyles = String.raw`
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
@@ -278,6 +280,7 @@ export default async function CaptainTeamLayout({
   }
 
   const unreadMessageCount = await getCaptainUnreadMessageCount(teamid);
+  const priorityScore = await getSixflTvPriorityScore(teamid);
 
   const displayCompetition = team.league?.competition ?? null;
   const displayLeague = displayCompetition?.currentLeague ?? team.league;
@@ -461,6 +464,14 @@ export default async function CaptainTeamLayout({
                     {displaySeason ? ` · ${displaySeason}` : ""}
                     {displayIsLive ? " · Current live season" : ""}
                   </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <SixflTvPriorityScoreBadge score={priorityScore} />
+                    <span className="text-xs text-white/45">
+                      {priorityScore.qualifies
+                        ? "Eligible for recorded-pitch priority"
+                        : "Improve confirmations, payments and match reports to regain priority"}
+                    </span>
+                  </div>
                 </div>
               </div>
 

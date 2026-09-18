@@ -12,22 +12,29 @@ export default async function FixtureVeoNightPanel({leagueId,date}:{leagueId:str
  FROM "VeoMatchBooking" b JOIN "Fixture" f ON f.id=b."fixtureId" JOIN "Team" h ON h.id=b."homeTeamId" JOIN "Team" a ON a.id=b."awayTeamId"
  WHERE (b."leagueId"=${leagueId} OR b."cameraKey"=${preview?.cameraKey??''})
  AND to_char(b."kickoffAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London','YYYY-MM-DD')=${date} ORDER BY b."kickoffAt",b."fixtureId"`;
- return <section aria-label="Fixture Veo requests" className="space-y-5 rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/5 p-5 sm:p-6">
-  <h2 className="text-xl font-bold">Fixture requests and filming decisions</h2>
-  <p className="text-sm leading-6 text-white/70">Captains choose one match or a remembered preference when confirming attendance. Both options have equal priority. Selecting SIXFL TV on the Night Board now confirms that fixture immediately and locks the captain choice. You can still use the full-evening confirmation below when you want SIXFL to allocate the proposed camera schedule automatically.</p>
+ return <section aria-label="SIXFL TV Priority filming plan" className="space-y-5 rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/5 p-5 sm:p-6">
+  <h2 className="text-xl font-bold">Score-based filming plan</h2>
+  <p className="text-sm leading-6 text-white/70">Recorded-pitch priority is now earned automatically. Teams build a score through on-time payment, fixture confirmation and completing match reports. Selecting SIXFL TV on the Night Board confirms the filming decision; the full-evening action below can allocate the strongest eligible fixtures automatically.</p>
   <form method="get" className="flex flex-wrap items-end gap-3"><label className="block text-sm">Match date (UK)<input type="date" name="date" required defaultValue={date} className="mt-2 block min-h-11 rounded-xl border border-white/20 bg-black/20 p-3"/></label><button className="min-h-11 rounded-xl border border-white/20 p-3">Show requests</button></form>
   {error&&<p role="alert" className="text-sm text-amber-100">{error}</p>}
-  {preview&&!preview.settings.enabled&&<p className="text-sm text-white/65">Veo is off. Existing accepted bookings remain visible; no new request is accepted.</p>}
+  {preview&&!preview.settings.enabled&&<p className="text-sm text-white/65">SIXFL TV recorded-pitch priority is off. Existing accepted bookings remain visible.</p>}
   {preview?.cameraKey&&<>
-   <p className="text-sm text-fuchsia-100">One camera · maximum {preview.settings.maxMatches} filmed matches across all leagues sharing this pitch this evening · {preview.choices.length} new bookings proposed.</p>
-   <div className="space-y-3">{preview.fixtures.filter(f=>f.requestRows.length>0&&!f.bookingState).map(f=>{
+   <p className="text-sm text-fuchsia-100">One camera · maximum {preview.settings.maxMatches} filmed matches across all leagues sharing this pitch this evening · {preview.choices.length} score-based bookings proposed.</p>
+   <div className="space-y-3">{preview.fixtures.filter(f=>!f.bookingState).map(f=>{
      const chosen=preview!.choices.find(c=>c.fixtureId===f.id);
-     return <div key={f.id} className="space-y-2 rounded-xl border border-white/15 p-4"><h3 className="font-semibold">{time(f.kickoffAt)} · {f.homeName} vs {f.awayName}</h3><p className="text-sm text-white/70">{chosen?`Proposed Veo pitch: ${chosen.pitch}${chosen.swapWithId?' — pitch swap only':''}`:f.locked?'Existing arrangement is protected; no new booking.':'No camera slot proposed. No new Veo charge.'}</p>{f.requestRows.map(r=><p key={r.teamId} className="text-sm text-white/65">{r.teamId===f.homeTeamId?f.homeName:f.awayName}: {r.status==='REQUESTED'?r.choice==='ONGOING'?'Requested · remembered preference':'Requested · this match only':r.status==='NONE'?'No Priority requested':r.status==='UNAVAILABLE'?'No space available':r.status}</p>)}</div>;
+     return <div key={f.id} className="space-y-2 rounded-xl border border-white/15 p-4">
+       <h3 className="font-semibold">{time(f.kickoffAt)} · {f.homeName} vs {f.awayName}</h3>
+       <p className="text-sm text-white/70">{chosen?`Proposed camera pitch: ${chosen.pitch}${chosen.swapWithId?' — pitch swap only':''}`:f.locked?'Existing arrangement is protected; no new booking.':'No camera slot proposed.'}</p>
+       <div className="grid gap-2 text-sm text-white/65 sm:grid-cols-2">
+         <p>{f.homeName}: <strong>{f.homePriorityScore ?? 0}/100</strong>{f.homePriority?' · eligible & confirmed':' · no active priority'}</p>
+         <p>{f.awayName}: <strong>{f.awayPriorityScore ?? 0}/100</strong>{f.awayPriority?' · eligible & confirmed':' · no active priority'}</p>
+       </div>
+     </div>;
    })}</div>
    <FinaliseChoicesForm leagueId={leagueId} date={date} fingerprint={preview.fingerprint} count={preview.choices.length}/>
   </>}
-  <div className="space-y-3"><h3 className="font-semibold">Accepted bookings and recordings</h3>{bookings.map(b=><div key={b.fixtureId} className="space-y-3 rounded-xl border border-white/15 p-4"><h4 className="font-semibold">{time(b.kickoffAt)} · {b.homeName} vs {b.awayName}</h4><p className="text-sm text-white/70">Pitch {b.pitch} · {b.state==='PLANNED'?'Filming confirmed — not billed yet':b.state==='READY'?'Recording ready — Veo charges added':'Closed — no Veo charge due'} · {b.paying} accepted £5 request{b.paying===1?'':'s'}</p>{b.url&&<a href={b.url} target="_blank" rel="noopener noreferrer" className="text-sm text-fuchsia-100 underline">Watch recording</a>}{['PLANNED','READY'].includes(b.state)&&<RecordingOutcomeForm leagueId={b.leagueId} fixtureId={b.fixtureId} ready={b.state==='READY'} completed={b.status==='COMPLETED'}/>}</div>)}{!bookings.length&&<p className="text-sm text-white/60">No accepted filming bookings on this date.</p>}</div>
+  <div className="space-y-3"><h3 className="font-semibold">Accepted bookings and recordings</h3>{bookings.map(b=><div key={b.fixtureId} className="space-y-3 rounded-xl border border-white/15 p-4"><h4 className="font-semibold">{time(b.kickoffAt)} · {b.homeName} vs {b.awayName}</h4><p className="text-sm text-white/70">Pitch {b.pitch} · {b.state==='PLANNED'?'Filming confirmed — no new Priority fee':b.state==='READY'?'Recording ready':'Closed'}{b.paying>0?` · ${b.paying} historic £5 agreement${b.paying===1?'':'s'}`:''}</p>{b.url&&<a href={b.url} target="_blank" rel="noopener noreferrer" className="text-sm text-fuchsia-100 underline">Watch recording</a>}{['PLANNED','READY'].includes(b.state)&&<RecordingOutcomeForm leagueId={b.leagueId} fixtureId={b.fixtureId} ready={b.state==='READY'} completed={b.status==='COMPLETED'}/>}</div>)}{!bookings.length&&<p className="text-sm text-white/60">No accepted filming bookings on this date.</p>}</div>
   <VeoChoiceHistory leagueId={leagueId}/>
-  <p className="text-xs leading-5 text-white/55">After a completed match, confirm the usable recording to create each agreed £5 as a separate Team payments line. Failed recordings are not billed. If a billed recording proves unusable, closing it voids the Veo charge and credits only money actually received. One-off requests and remembered preferences never stack two charges.</p>
+  <p className="text-xs leading-5 text-white/55">New SIXFL TV Priority bookings are free. Older accepted £5 agreements remain visible for audit and keep their existing cancellation/refund protection, but no new filming charge is created.</p>
  </section>;
 }

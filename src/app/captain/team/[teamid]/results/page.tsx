@@ -381,6 +381,34 @@ async function saveTeamMatchDetails(formData: FormData) {
       }),
     ]);
 
+    const priorityCoreComplete =
+      performanceRows.length > 0 &&
+      goalsRecorded === goalsExpected &&
+      Boolean(playerOfMatchName);
+    const priorityAssistsComplete = goalsExpected === 0 || assistsRecorded > 0;
+    const priorityRatingsComplete =
+      performanceRows.length > 0 &&
+      performanceRows.every((row) => row.rating !== null);
+
+    await prisma.$executeRaw`
+      UPDATE "MatchResultTeamMeta"
+      SET
+        "priorityCoreCompletedAt" = CASE
+          WHEN ${priorityCoreComplete} THEN COALESCE("priorityCoreCompletedAt", NOW())
+          ELSE "priorityCoreCompletedAt"
+        END,
+        "priorityAssistsCompletedAt" = CASE
+          WHEN ${priorityAssistsComplete} THEN COALESCE("priorityAssistsCompletedAt", NOW())
+          ELSE "priorityAssistsCompletedAt"
+        END,
+        "priorityRatingsCompletedAt" = CASE
+          WHEN ${priorityRatingsComplete} THEN COALESCE("priorityRatingsCompletedAt", NOW())
+          ELSE "priorityRatingsCompletedAt"
+        END
+      WHERE "matchResultId" = ${resultId} AND "teamId" = ${teamid}
+    `;
+
+    revalidatePath(`/captain/team/${teamid}`, "layout");
     revalidatePath(`/captain/team/${teamid}`);
     revalidatePath(`/captain/team/${teamid}/results`);
     revalidatePath(`/captain/team/${teamid}/captain-squad`);

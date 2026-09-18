@@ -104,8 +104,8 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
         const accepted = payload?.acceptedVeoRequests ?? 0;
         setMessage(
           accepted > 0
-            ? `Veo booking confirmed · ${accepted} Priority request${accepted === 1 ? "" : "s"} accepted · captain choice locked`
-            : "Veo booking confirmed · captain choice locked",
+            ? `Veo booking confirmed · ${accepted} historic request${accepted === 1 ? "" : "s"} preserved`
+            : "SIXFL TV booking confirmed · score-based priority",
         );
       } else {
         setMessage(nextChecked ? "Selected for SIXFL TV" : "Not selected for SIXFL TV");
@@ -143,7 +143,7 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
           ? "Loading status…"
           : saving
             ? "Saving and confirming Veo booking…"
-            : message || (locked ? "Confirmed · captain can no longer change this match" : checked ? "Selected for SIXFL TV" : "Not selected")}
+            : message || (locked ? "Confirmed for filming · no Priority fee" : checked ? "Selected for SIXFL TV" : "Not selected")}
       </div>
       {checked && !bookingConfirmed && !loading && !saving ? (
         <button

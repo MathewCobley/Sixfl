@@ -80,23 +80,8 @@ export async function readVeoOffer(leagueId: string | null, teamId: string, db: 
   `;
   return { priority: await enabled(db, leagueId, teamId), request: requests[0] ?? null };
 }
-export async function requestVeoPriority(input: { leagueId: string; teamId: string; actorId: string; agreed: boolean; termsVersion: string }) {
-  if (!input.agreed || input.termsVersion !== VEO_REQUEST_TERMS) throw new VeoRequestError('Please agree to the £5 allocated-match supplement before requesting Priority.');
-  return transaction(async db => {
-    const { leagueId, teamId, actorId } = input;
-    await lockTeam(db, leagueId, teamId);
-    await assertCaptain(db, teamId, actorId);
-    const offer = await readVeoOffer(leagueId, teamId, db);
-    if (!offer) throw new VeoRequestError('Veo Priority is not currently available for this team in this league.');
-    if (offer.priority) return 'ON' as const;
-    if (offer.request?.status === 'PENDING') return 'PENDING' as const;
-    if (offer.request?.status === 'DECLINED') throw new VeoRequestError('Your request was not approved. Please contact SIXFL to discuss it.');
-    const id = randomUUID();
-    await db.$executeRaw`INSERT INTO "VeoPriorityRequest" (id, "leagueId", "teamId", "requestedBy", "supplementPence", "termsVersion")
-      VALUES (${id}, ${leagueId}, ${teamId}, ${actorId}, ${VEO_SUPPLEMENT_PENCE}, ${VEO_REQUEST_TERMS})`;
-    await audit(db, leagueId, teamId, actorId, { kind: 'captain_priority_request', requestId: id, supplementPence: VEO_SUPPLEMENT_PENCE, termsVersion: VEO_REQUEST_TERMS, agreed: true });
-    return 'PENDING' as const;
-  });
+export async function requestVeoPriority(_input: { leagueId: string; teamId: string; actorId: string; agreed: boolean; termsVersion: string }) {
+  throw new VeoRequestError('Paid Veo Priority has ended. SIXFL TV Priority is now free and earned automatically from your team score.');
 }
 /** Reused by the existing admin toggle so manual approval cannot leave a request pending. */
 export async function approvePendingVeoRequests(db: Db, leagueId: string, teamId: string, actorId: string) {
@@ -106,6 +91,7 @@ export async function approvePendingVeoRequests(db: Db, leagueId: string, teamId
 export async function reviewVeoPriorityRequest(input: { leagueId: string; requestId: string; actorId: string; decision: 'APPROVED' | 'DECLINED' }) {
   validId(input.requestId);
   if (!['APPROVED', 'DECLINED'].includes(input.decision)) throw new VeoRequestError('Choose Approve or Decline.');
+  if (input.decision === 'APPROVED') throw new VeoRequestError('Paid Veo Priority has ended. Team priority is now calculated automatically from the SIXFL TV Priority Score.');
   return transaction(async db => {
     await assertAdmin(db, input.actorId);
     const rows = await db.$queryRaw<VeoRequest[]>`SELECT * FROM "VeoPriorityRequest" WHERE id = ${input.requestId} AND "leagueId" = ${input.leagueId}`;

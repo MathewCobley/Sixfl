@@ -10,13 +10,14 @@ function fixture(id, minutes, pitch = '1', overrides = {}) {
 test('disabled means no allocation, even with missing configuration', () => {
   assert.deepEqual(allocateVeoNight([fixture('a', 0)], { ...settings, enabled: false, pitch: '' }), []);
 });
-test('£40/£45 matrix is independent for each team; free stays free', () => {
+test('earned SIXFL TV Priority never adds a new filming fee', () => {
   for (const priority of [false, true]) for (const allocated of [false, true]) {
     const q = veoFee(4000, priority, allocated);
-    assert.equal(q.totalPence, priority && allocated ? 4500 : 4000);
+    assert.equal(q.supplementPence, 0);
+    assert.equal(q.totalPence, 4000);
     assert.equal(veoFee(0, priority, allocated).totalPence, 0);
   }
-  assert.equal(veoFee(3700, true, true).totalPence, 4200);
+  assert.equal(veoFee(3700, true, true).totalPence, 3700);
   for (const amount of [-1, 0.5, NaN, Infinity]) assert.throws(() => veoFee(amount, true, true));
 });
 test('normalises historic pitch labels without inventing a pitch', () => {
@@ -29,6 +30,13 @@ test('prefers Priority-v-Priority at the same time without changing input', () =
   const before = structuredClone(matches);
   assert.deepEqual(allocateVeoNight(matches, settings), [{ fixtureId: 'b', swapWithId: 'a', pitch: '1' }]);
   assert.deepEqual(matches, before);
+});
+test('higher earned score wins between equally eligible fixtures', () => {
+  const matches = [
+    fixture('a', 0, '1', { homePriority: true, homePriorityScore: 62 }),
+    fixture('b', 0, '2', { homePriority: true, homePriorityScore: 94 }),
+  ];
+  assert.equal(allocateVeoNight(matches, settings)[0].fixtureId, 'b');
 });
 test('fewer past filmed games wins between equally prioritised matches', () => {
   const matches = [fixture('a', 0, '1', { homePriority: true }), fixture('b', 0, '2', { homePriority: true })];

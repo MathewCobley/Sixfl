@@ -4,6 +4,7 @@ export type VeoFixture = {
   id: string; kickoffMs: number; durationMinutes: number; venueId: string | null;
   pitch: string | null; homeTeamId: string; awayTeamId: string;
   homePriority: boolean; awayPriority: boolean; locked: boolean; eligible: boolean;
+  homePriorityScore?: number; awayPriorityScore?: number;
   filmed: boolean;
 };
 export type VeoHistory = Record<string, { count: number; lastMs: number }>;
@@ -14,8 +15,9 @@ export function normaliseVeoPitch(value: string | null): string {
 }
 export function veoFee(basePence: number, priority: boolean, allocated: boolean) {
   if (!Number.isSafeInteger(basePence) || basePence < 0) throw new Error('Invalid base match fee.');
-  // Explicit free matches remain free, including replacement/promotional fixtures.
-  const supplementPence = priority && allocated && basePence > 0 ? VEO_SUPPLEMENT_PENCE : 0;
+  // SIXFL TV Priority is now earned through team reliability rather than bought.
+  // Keep this helper for legacy snapshot callers, but never add a new filming supplement.
+  const supplementPence = 0;
   if (!Number.isSafeInteger(basePence + supplementPence)) throw new Error('Invalid total match fee.');
   return { basePence, supplementPence, totalPence: basePence + supplementPence };
 }
@@ -29,11 +31,20 @@ function compareScore(a: number[], b: number[]) {
 }
 function rank(f: VeoFixture, history: VeoHistory): number[] {
   const ids = [f.homeTeamId, f.awayTeamId];
-  const priorityIds = ids.filter((_, i) => i === 0 ? f.homePriority : f.awayPriority);
+  const priorityFlags = [f.homePriority, f.awayPriority];
+  const priorityScores = [f.homePriorityScore ?? 0, f.awayPriorityScore ?? 0];
+  const priorityIds = ids.filter((_, i) => priorityFlags[i]);
+  const qualifyingScores = priorityScores.filter((_, i) => priorityFlags[i]);
   const fairIds = priorityIds.length ? priorityIds : ids;
-  return [priorityIds.length, priorityIds.length === 2 ? 1 : 0, 1,
+  return [
+    priorityIds.length,
+    priorityIds.length === 2 ? 1 : 0,
+    qualifyingScores.reduce((sum, value) => sum + value, 0),
+    qualifyingScores.length ? Math.min(...qualifyingScores) : 0,
+    1,
     -fairIds.reduce((sum, id) => sum + (history[id]?.count ?? 0), 0),
-    -fairIds.reduce((sum, id) => sum + (history[id]?.lastMs ?? 0), 0)];
+    -fairIds.reduce((sum, id) => sum + (history[id]?.lastMs ?? 0), 0),
+  ];
 }
 /** One call represents ONE London calendar night. Published/billed fixtures are never moved. */
 export function allocateVeoNight(fixtures: VeoFixture[], settings: VeoSettings, history: VeoHistory = {}): VeoChoice[] {
@@ -63,7 +74,7 @@ export function allocateVeoNight(fixtures: VeoFixture[], settings: VeoSettings, 
     - (b.anchor.kickoffMs + b.anchor.durationMinutes * 60000) || a.fixture.id.localeCompare(b.fixture.id));
   // Capacity-limited weighted interval scheduling, not a greedy choice that can lose two slots.
   type Plan = { score: number[]; picks: Ranked[] };
-  const zero = (): Plan => ({ score: [0, 0, 0, 0, 0], picks: [] });
+  const zero = (): Plan => ({ score: [0, 0, 0, 0, 0, 0, 0], picks: [] });
   const dp: Plan[][] = Array.from({ length: options.length + 1 }, () => Array.from({ length: capacity + 1 }, zero));
   for (let i = 1; i <= options.length; i++) {
     const option = options[i - 1];

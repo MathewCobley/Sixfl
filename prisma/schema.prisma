@@ -566,6 +566,9 @@ model MatchResultTeamMeta {
   scorers           Json?
   goalsRecorded     Int      @default(0)
   playerOfMatchName String?
+  priorityCoreCompletedAt    DateTime?
+  priorityAssistsCompletedAt DateTime?
+  priorityRatingsCompletedAt DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

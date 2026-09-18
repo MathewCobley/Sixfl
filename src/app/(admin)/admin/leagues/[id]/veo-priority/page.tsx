@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
+import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScoreBadge';
+import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
 import { londonVeoDate, previewVeoNight, quoteVeoFixture, readVeoNight, readVeoSettings, readVeoSnapshots, readVeoTeams, validVeoDate, VeoAllocationError } from '@/lib/veo/service';
-import { saveVeoSettings, setVeoTeamPriority, saveVeoVideo } from './actions';
+import { saveVeoSettings, saveVeoVideo } from './actions';
 import FixtureVeoNightPanel from './FixtureVeoNightPanel';
 import SubmitButton from './SubmitButton';
 
@@ -34,6 +36,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     `,
     readVeoNight(id, date),
   ]);
+  const priorityScores = await getSixflTvPriorityScores(teams.map(team => team.id));
   let choices: Awaited<ReturnType<typeof previewVeoNight>>['choices'] = [];
   let previewError = '';
   try { if (!settings.confirmAtFixture) choices = (await previewVeoNight(id, date)).choices; }
@@ -58,8 +61,8 @@ export default async function VeoPriorityPage({ params, searchParams }: {
 
   return <div className="mx-auto max-w-7xl space-y-6 text-white">
     <header className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">Veo Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
-      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Priority teams pay their normal match fee plus £5 only when allocated to a Veo match. Other teams keep their normal fee, even when filmed. Free matches stay free.</p>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">SIXFL TV Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
+      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Recorded-pitch priority is free and earned from each team’s SIXFL TV Priority Score. On-time payments carry the most weight, with confirmation and match-report completion also rewarded.</p>
     </header>
     {query.saved && <p role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">Saved. No existing fixtures or charges were recalculated.</p>}
     {query.error && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-4">{query.error.slice(0, 500)}</p>}
@@ -67,38 +70,45 @@ export default async function VeoPriorityPage({ params, searchParams }: {
       <h2 className="text-xl font-semibold">League settings</h2>
       <form action={saveVeoSettings.bind(null, id)} className="space-y-5">
         <input type="hidden" name="date" value={date} /><input type="hidden" name="revision" value={settings.revision} />
-        <label className="flex min-h-11 items-center gap-3"><input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-5 w-5" />Enable Veo Priority choices at fixture confirmation</label>
+        <label className="flex min-h-11 items-center gap-3"><input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-5 w-5" />Enable SIXFL TV recorded-pitch priority</label>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="space-y-2"><span className="block text-sm text-white/70">Veo pitch label</span><input name="pitch" defaultValue={settings.pitch} maxLength={40} placeholder="For example: Pitch 1" className={input} /></label>
           <label className="space-y-2"><span className="block text-sm text-white/70">Maximum filmed matches per night</span><input name="maxMatches" type="number" min={1} max={12} step={1} required defaultValue={settings.maxMatches} className={input} /></label>
         </div>
         <fieldset className="space-y-2"><legend className="mb-2 text-sm text-white/70">Veo venue</legend>{venueOptions.map(v => <label key={v.id ?? 'none'} className="flex min-h-11 items-center gap-3"><input type="radio" name="venueId" value={v.id ?? ''} defaultChecked={v.id === settings.venueId || (venueOptions.length === 1 && settings.revision === 0)} />{v.name}</label>)}</fieldset>
-        <p className="text-sm leading-6 text-white/60">Default capacity: three filmed matches for the shared camera evening, not three per division. Requests with two paying teams take priority, then filming history breaks ties. Only pitches swap; opponents and kick-off times stay unchanged. Earlier Veo agreements and existing match payments are protected.</p>
+        <p className="text-sm leading-6 text-white/60">Default capacity: three filmed matches for the shared camera evening, not three per division. Fixtures with two eligible high-scoring teams are preferred, then score and previous filming history break ties. A team must also confirm the current fixture before its score can earn priority. Only pitches swap; opponents and kick-off times stay unchanged.</p>
         <SubmitButton>Save league settings</SubmitButton>
       </form>
     </section>
     <section className={panel}>
-      <h2 className="text-xl font-semibold">Team Priority</h2>
-      <p className="text-sm leading-6 text-white/60">These switches save a preference for future fixture confirmations. A saved preference is not a camera booking. Captains can skip a match, and you accept each available filming slot after confirmation. Existing bookings and base payments remain unchanged.</p>
-      <div className="divide-y divide-white/10">{teams.map(team => <div key={team.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link><p className="mt-1 text-sm text-white/60">{team.teamMode === 'STANDARD' ? `Normal fee ${money(team.standardMatchFeePence ?? 4000)} · Priority ${team.priority ? 'ON' : 'OFF'}` : 'Managed team — Priority not available'}</p></div>
-        {team.teamMode === 'STANDARD' && <form action={setVeoTeamPriority.bind(null, id)} className="flex flex-wrap items-center gap-3 sm:max-w-md">
-          <input type="hidden" name="date" value={date} /><input type="hidden" name="teamId" value={team.id} /><input type="hidden" name="previous" value={team.priority ? '1' : '0'} /><input type="hidden" name="enabled" value={team.priority ? '0' : '1'} />
-          {!team.priority && <label className="flex items-start gap-2 text-xs leading-5 text-white/70"><input type="checkbox" name="agreed" required className="mt-1" />Captain has agreed to the £5 filmed-match supplement</label>}
-          <SubmitButton>{team.priority ? 'Switch Priority off' : 'Switch Priority on'}</SubmitButton>
-        </form>}
-      </div>)}{!teams.length && <p className="py-3 text-white/60">No teams are currently linked to this league or its upcoming fixtures.</p>}</div>
+      <h2 className="text-xl font-semibold">Team Priority scores</h2>
+      <p className="text-sm leading-6 text-white/60">
+        Scores use each team’s last five completed fixtures: payment 10 points, confirmation 4, core match card 4, assists bonus 1 and ratings bonus 1. Late payment earns only 2/10. Teams need at least 60/100 and must complete the core match card in at least 60% of the scored fixtures to qualify. New teams are shown as provisional.
+      </p>
+      <div className="divide-y divide-white/10">{teams.map(team => {
+        const score = priorityScores.get(team.id);
+        return <div key={team.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link>
+            <p className="mt-1 text-sm text-white/60">
+              {score?.qualifies ? 'Eligible for recorded-pitch priority' : 'Not currently eligible for recorded-pitch priority'}
+              {score ? ` · Core cards ${score.coreCompletedMatches}/${score.matchesCount || 0}` : ''}
+            </p>
+          </div>
+          {score ? <SixflTvPriorityScoreBadge score={score} /> : null}
+        </div>;
+      })}{!teams.length && <p className="py-3 text-white/60">No teams are currently linked to this league or its upcoming fixtures.</p>}</div>
     </section>
     {settings.confirmAtFixture && <FixtureVeoNightPanel leagueId={id} date={date} />}
     {(!settings.confirmAtFixture || snapshots.length > 0) && <section className={panel}>
       <h2 className="text-xl font-semibold">Earlier Veo agreements and publication preview</h2>
       <form method="get" className="flex flex-wrap items-end gap-3"><label className="space-y-2"><span className="block text-sm text-white/70">Match date (UK time)</span><input name="date" type="date" required defaultValue={date} className={input} /></label><button className="min-h-11 rounded-xl border border-white/20 px-4 py-2">Show night</button></form>
-      <p className="text-sm leading-6 text-white/60">This preview does not save anything. Use the normal Publish fixtures action for the whole league night, without a division filter. Allocation and the £5 price snapshots are saved together with publication. Settings can change the preview until then.</p>
-      {!settings.enabled && <p className="rounded-xl bg-white/5 p-4 text-sm">Veo is off. No new allocations or supplements will be added. Existing saved agreements remain visible below.</p>}
+      <p className="text-sm leading-6 text-white/60">This legacy publication preview does not save anything. New SIXFL TV Priority allocations do not add a filming fee. Existing historic Veo agreements remain protected.</p>
+      {!settings.enabled && <p className="rounded-xl bg-white/5 p-4 text-sm">SIXFL TV recorded-pitch priority is off. Existing saved agreements remain visible below.</p>}
       {previewError && <p role="alert" className="rounded-xl border border-amber-400/30 p-4 text-amber-100">{previewError}</p>}
-      <div className="grid gap-3 sm:grid-cols-3">{[[String(allocatedCount), 'TV matches: saved + preview'], [String(missed.length), 'Priority teams not allocated'], [money(supplement), 'Veo supplement value: saved + preview']].map(([value, label]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="text-2xl font-semibold">{value}</div><p className="mt-1 text-xs leading-5 text-white/60">{label}</p></div>)}</div>
-      <p className="text-xs leading-5 text-white/50">Supplement value is the original agreement or preview, not cash received. Payment corrections and refunds are tracked in Payments. A TV allocation is a filming plan, not confirmation that footage has been uploaded.</p>
-      {missed.length > 0 && <p className="text-sm leading-6 text-amber-100">Not allocated: {missed.join(', ')}. No new Veo supplement is added for these teams.</p>}
+      <div className="grid gap-3 sm:grid-cols-3">{[[String(allocatedCount), 'TV matches: saved + preview'], [String(missed.length), 'Priority teams not allocated'], [money(supplement), 'Historic Veo supplement value']].map(([value, label]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="text-2xl font-semibold">{value}</div><p className="mt-1 text-xs leading-5 text-white/60">{label}</p></div>)}</div>
+      <p className="text-xs leading-5 text-white/50">Any non-zero supplement shown here is from an older saved Veo agreement. New SIXFL TV Priority allocations are free. A TV allocation is a filming plan, not confirmation that footage has been uploaded.</p>
+      {missed.length > 0 && <p className="text-sm leading-6 text-amber-100">Not allocated: {missed.join(', ')}. Recorded-pitch priority is not guaranteed even when a team qualifies.</p>}
       <div className="space-y-3">{fixtures.map(f => {
         const saved = savedById.get(f.id); const choice = choices.find(c => c.fixtureId === f.id);
         const displaced = choices.find(c => c.swapWithId === f.id);
