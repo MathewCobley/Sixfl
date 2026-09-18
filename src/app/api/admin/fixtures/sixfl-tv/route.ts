@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "This match is a confirmed Veo booking. Cancel it from the league Veo Priority page rather than unticking it on the Night Board.",
+            "This match is a confirmed Veo booking. Cancel it from the league SIXFL TV Priority page rather than unticking it on the Night Board.",
         },
         { status: 409 },
       );
