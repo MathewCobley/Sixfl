@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { checkFootageOrigin, readFootageJson } from "@/lib/sixfl-tv/footage";
 import { FootageError, footageId } from "@/lib/sixfl-tv/footage-policy";
 import { cancelRenders, requestRenders, saveThumbnail, StudioError, studioState, type SixflTvRenderKind } from "@/lib/sixfl-tv/studio";
-import { queueYoutubePublish } from "@/lib/sixfl-tv/youtube";
+import { queueYoutubePublish, syncPublishedYoutubeThumbnail } from "@/lib/sixfl-tv/youtube";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +35,9 @@ export async function POST(request: Request, context: Context) {
     }
     if (data.action === "thumbnail") {
       const kind = String(data.kind || "") as SixflTvRenderKind;
-      return NextResponse.json(await saveThumbnail(fixtureId, kind, actor, data), { headers });
+      const saved = await saveThumbnail(fixtureId, kind, actor, data);
+      const youtube = await syncPublishedYoutubeThumbnail(fixtureId, kind);
+      return NextResponse.json({ ...saved, youtubeThumbnailSynced: youtube.synced }, { headers });
     }
     if (data.action === "publish") {
       if (data.confirmed !== true) throw new StudioError("Confirm that you have reviewed this video and thumbnail before uploading it to YouTube.", 409);
