@@ -143,7 +143,7 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
           ? "Loading status…"
           : saving
             ? "Saving and confirming Veo booking…"
-            : message || (locked ? "Confirmed for filming · no Priority fee" : checked ? "Selected for SIXFL TV" : "Not selected")}
+            : message || (locked ? "Confirmed for filming" : checked ? "Selected for SIXFL TV" : "Not selected")}
       </div>
       {checked && !bookingConfirmed && !loading && !saving ? (
         <button
