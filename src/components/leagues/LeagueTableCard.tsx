@@ -52,6 +52,19 @@ function getFormBadgeClasses(result: LeagueFormResult) {
   }
 }
 
+function movementDisplay(value: LeagueTableRow["movement"]) {
+  switch (value) {
+    case "UP":
+      return { symbol: "↑", label: "Up", className: "text-emerald-300" };
+    case "DOWN":
+      return { symbol: "↓", label: "Down", className: "text-red-300" };
+    case "SAME":
+      return { symbol: "→", label: "No change", className: "text-white/45" };
+    default:
+      return { symbol: "•", label: "No previous position", className: "text-white/25" };
+  }
+}
+
 function formatOrdinal(value: number) {
   const mod10 = value % 10;
   const mod100 = value % 100;
@@ -127,8 +140,9 @@ export default function LeagueTableCard({
       ) : (
         <div className="lg:overflow-x-auto">
           <div className="lg:min-w-[1240px]">
-            <div className="hidden grid-cols-[72px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
+            <div className="hidden grid-cols-[72px_56px_minmax(280px,2fr)_170px_72px_72px_72px_72px_84px_84px_84px_92px] gap-4 border-b border-white/10 bg-white/[0.02] px-8 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 lg:grid">
               <div>Pos</div>
+              <div className="text-center">Move</div>
               <div>Team</div>
               <div>Form</div>
               <div className="text-center">P</div>
@@ -146,6 +160,7 @@ export default function LeagueTableCard({
                 const isTop = index === 0;
                 const isCurrentTeam = Boolean(currentTeamId && row.teamId === currentTeamId);
                 const logoUrl = normaliseLogoUrl(row.teamLogoUrl);
+                const movement = movementDisplay(row.movement);
 
                 const mobileTopStats = [
                   { label: "P", value: row.played },
@@ -179,7 +194,14 @@ export default function LeagueTableCard({
                               : "border-white/10 bg-white/[0.04] text-white/70",
                           ].join(" ")}
                         >
-                          {index + 1}
+                          <span>{index + 1}</span>
+                        </div>
+                        <div
+                          className={`mt-1 flex h-8 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-lg font-black ${movement.className}`}
+                          title={movement.label}
+                          aria-label={movement.label}
+                        >
+                          {movement.symbol}
                         </div>
 
                         <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
@@ -288,6 +310,10 @@ export default function LeagueTableCard({
                         >
                           {index + 1}
                         </div>
+                      </div>
+
+                      <div className={`text-center text-xl font-black ${movement.className}`} title={movement.label} aria-label={movement.label}>
+                        {movement.symbol}
                       </div>
 
                       <div className="flex min-w-0 items-center gap-4">
