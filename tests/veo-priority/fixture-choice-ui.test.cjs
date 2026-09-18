@@ -26,7 +26,8 @@ test('the native Yes action retains confirmation history used by the Priority sc
 
   assert.match(source, /allowLateConfirmation: true/);
   assert.match(source, /status: "CONFIRMED"/);
-  assert.match(source, /confirmedAt: new Date\(\)/);
+  assert.match(source, /const confirmedAt = existing\?\.confirmedAt \?\? new Date\(\)/);
+  assert.match(source, /confirmedAt,/);
   assert.match(source, /confirmedByUserId: access\.user\?\.id \?\? null/);
   assert.match(source, /revalidateFixtureConfirmationPaths\(teamid\)/);
   assert.match(source, /saved: "confirmed"/);
