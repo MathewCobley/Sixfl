@@ -81,6 +81,7 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       const sql=fs.readFileSync(migration,'utf8');
       for(const statement of sql.split(';').map(x=>x.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
     }
+    await db.$executeRawUnsafe('ALTER TABLE "SixflTvFootageAsset" ADD COLUMN "clipNumber" INTEGER');
     let asset;
     const bytes=Buffer.alloc(policy.FOOTAGE_PART_BYTES+73); bytes.write('ftyp',4);bytes[bytes.length-1]=201;
     await t.test('begin requires real fixture and reserves one duplicate-safe manifest, even without result or badges',async()=>{
