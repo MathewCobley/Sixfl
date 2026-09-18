@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvGoalOfMonthCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, createSixflTvWatermark, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createSixflTvGoalOfMonthCard, createSixflTvLineupCard, createSixflTvPredictorCard, createSixflTvScoreBug, createSixflTvVideoCard, createSixflTvWatermark, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 
@@ -19,6 +19,7 @@ const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
 const TITLE_SECONDS = 4;
 const LINEUP_SECONDS = 5;
+const PREDICTOR_SECONDS = 4;
 const RESULT_SECONDS = 6;
 const GOAL_OF_MONTH_END_SECONDS = 5;
 const SWIPE_FRAMES = 12;
@@ -303,12 +304,14 @@ async function renderJob(job: Job) {
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
     const titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
-    const lineupPng = path.join(dir, "lineup.png"), footageOverlayPng = path.join(dir, job.kind === "HIGHLIGHTS" ? "score-bug.png" : "watermark.png");
+    const lineupPng = path.join(dir, "lineup.png"), predictorPng = path.join(dir, "predictor.png"), footageOverlayPng = path.join(dir, job.kind === "HIGHLIGHTS" ? "score-bug.png" : "watermark.png");
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(resultPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "FULL_TIME", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(goalOfMonthPng, await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl() }));
     const lineupBytes = await createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() });
+    const predictorBytes = await createSixflTvPredictorCard({ fixture: metadata.fixture, siteUrl: siteUrl() });
     if (lineupBytes) await writeFile(lineupPng, lineupBytes);
+    if (predictorBytes) await writeFile(predictorPng, predictorBytes);
     await writeFile(footageOverlayPng, job.kind === "HIGHLIGHTS" ? await createSixflTvScoreBug({ fixture: metadata.fixture, siteUrl: siteUrl() }) : await createSixflTvWatermark({ siteUrl: siteUrl() }));
     const segments: string[] = [];
     const intro = inputs.filter(input => input.role === "INTRO"), content = inputs.filter(input => input.role === "CONTENT"), outro = inputs.filter(input => input.role === "OUTRO");
@@ -320,6 +323,9 @@ async function renderJob(job: Job) {
     const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
     if (lineupBytes) {
       const lineup = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(lineupPng, lineup, LINEUP_SECONDS); segments.push(lineup);
+    }
+    if (predictorBytes) {
+      const predictor = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(predictorPng, predictor, PREDICTOR_SECONDS); segments.push(predictor);
     }
     const swipe = content.length > 1 ? path.join(dir, "normalised", "swipe.mp4") : null;
     if (swipe) await swipeVideo(dir, swipe);
@@ -336,7 +342,7 @@ async function renderJob(job: Job) {
     }
     const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
     await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} content=${content.length} swipeTransitions=${Math.max(0, content.length - 1)} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} outro=${outro.length} goalOfMonthEndCard=1 footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorCard=${predictorBytes ? 1 : 0} content=${content.length} swipeTransitions=${Math.max(0, content.length - 1)} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} outro=${outro.length} goalOfMonthEndCard=1 footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
