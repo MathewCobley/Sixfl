@@ -41,6 +41,7 @@ function rank(f: VeoFixture, history: VeoHistory): number[] {
     priorityIds.length === 2 ? 1 : 0,
     qualifyingScores.reduce((sum, value) => sum + value, 0),
     qualifyingScores.length ? Math.min(...qualifyingScores) : 0,
+    1,
     -fairIds.reduce((sum, id) => sum + (history[id]?.count ?? 0), 0),
     -fairIds.reduce((sum, id) => sum + (history[id]?.lastMs ?? 0), 0),
   ];
@@ -73,7 +74,7 @@ export function allocateVeoNight(fixtures: VeoFixture[], settings: VeoSettings, 
     - (b.anchor.kickoffMs + b.anchor.durationMinutes * 60000) || a.fixture.id.localeCompare(b.fixture.id));
   // Capacity-limited weighted interval scheduling, not a greedy choice that can lose two slots.
   type Plan = { score: number[]; picks: Ranked[] };
-  const zero = (): Plan => ({ score: [0, 0, 0, 0, 0, 0], picks: [] });
+  const zero = (): Plan => ({ score: [0, 0, 0, 0, 0, 0, 0], picks: [] });
   const dp: Plan[][] = Array.from({ length: options.length + 1 }, () => Array.from({ length: capacity + 1 }, zero));
   for (let i = 1; i <= options.length; i++) {
     const option = options[i - 1];
