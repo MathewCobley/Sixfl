@@ -379,13 +379,14 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     let completedMediaBytes = 0;
     const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string) => {
       const mediaBytes = Math.max(1, Number(input.sizeBytes));
+      const mediaStartBytes = completedMediaBytes;
       const progressFor = (fraction: number) =>
-        12 + ((completedMediaBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
+        12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
       reportProgress(progressFor(0.02), label);
       await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
-      completedMediaBytes += mediaBytes;
+      completedMediaBytes = mediaStartBytes + mediaBytes;
       reportProgress(progressFor(1), label);
     };
     let segmentIndex = 0;
