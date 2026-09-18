@@ -18,6 +18,8 @@ async function loadWorker(db, objects, uploadHook) {
     intro: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#10b981' } }).png().toBuffer(),
     title: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#2563eb' } }).png().toBuffer(),
     result: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#dc2626' } }).png().toBuffer(),
+    tableTop: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#0891b2' } }).png().toBuffer(),
+    tableBottom: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#0f766e' } }).png().toBuffer(),
     goal: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#c026d3' } }).png().toBuffer(),
     lineup: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#7c3aed' } }).png().toBuffer(),
     predictor: await sharp({ create: { width: 320, height: 180, channels: 3, background: '#f59e0b' } }).png().toBuffer(),
@@ -29,6 +31,7 @@ async function loadWorker(db, objects, uploadHook) {
     '../src/lib/sixfl-tv/graphics': {
       createSixflTvVideoCard: async ({ mode, label }) => mode === 'FULL_TIME' ? cards.result : label === 'SIXFL TV' ? cards.intro : cards.title,
       createSixflTvGoalOfMonthCard: async () => cards.goal,
+      createSixflTvLeagueTableCard: async ({ fixture, page }) => fixture.leagueTable?.rows?.length ? (page === 'TOP' ? cards.tableTop : cards.tableBottom) : null,
       createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvPredictorCard: async ({ fixture }) => fixture.predictor ? cards.predictor : null,
       createSixflTvScoreBug: async () => cards.scoreBug,
@@ -108,7 +111,12 @@ function memoryDb() {
   return db;
 }
 function addJob(db, id = randomUUID(), leaseToken = randomUUID()) {
-  const job = { id, fixtureId: 'test-fixture', kind: 'HIGHLIGHTS', leaseToken, metadataJson: { fixture: { firstTeam: { name: 'Test A', score: 4 }, secondTeam: { name: 'Test B', score: 2 }, scorers: ['Test A: Player One x2', 'Test B: Player Two'], firstTeamLineup: ['Player One (C)', 'Keeper A (GK)'], secondTeamLineup: ['Player Two', 'Keeper B (GK)'], predictor: { firstTeamScore: 3, secondTeamScore: 2, headline: 'Test A edged' } }, label: 'TEST' } };
+  const job = { id, fixtureId: 'test-fixture', kind: 'HIGHLIGHTS', leaseToken, metadataJson: { fixture: { firstTeam: { name: 'Test A', score: 4 }, secondTeam: { name: 'Test B', score: 2 }, scorers: ['Test A: Player One x2', 'Test B: Player Two'], firstTeamLineup: ['Player One (C)', 'Keeper A (GK)'], secondTeamLineup: ['Player Two', 'Keeper B (GK)'], predictor: { firstTeamScore: 3, secondTeamScore: 2, headline: 'Test A edged' }, leagueTable: { title: 'Test League', rows: [
+    { position: 1, teamId: 'a', teamName: 'Test A', played: 4, goalDifference: 7, points: 10 },
+    { position: 2, teamId: 'b', teamName: 'Test B', played: 4, goalDifference: 3, points: 8 },
+    { position: 3, teamId: 'c', teamName: 'Test C', played: 4, goalDifference: 1, points: 7 },
+    { position: 4, teamId: 'd', teamName: 'Test D', played: 4, goalDifference: -1, points: 4 },
+  ] } }, label: 'TEST' } };
   db.jobs.set(id, { ...job, state: 'PROCESSING', active: true }); return job;
 }
 async function temp(t) { const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-worker-test-')); t.after(() => fs.rm(dir, { recursive: true, force: true })); return dir; }
@@ -202,11 +210,12 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   const firstSwipeFrame = await w.run('ffmpeg', ['-ss', '9.15', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const footageFrame = await w.run('ffmpeg', ['-ss', '9.55', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const finalSwipeFrame = await w.run('ffmpeg', ['-ss', '9.95', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const resultFrame = await w.run('ffmpeg', ['-ss', '11.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const goalFrame = await w.run('ffmpeg', ['-ss', '17.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const goalFrame = await w.run('ffmpeg', ['-ss', '12.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const topTableFrame = await w.run('ffmpeg', ['-ss', '17.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const bottomTableFrame = await w.run('ffmpeg', ['-ss', '22.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   assert.notEqual(firstSwipeFrame,footageFrame,'A transition must appear before the first content frame');
   assert.notEqual(finalSwipeFrame,footageFrame,'A transition must appear after the final content frame');
-  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,resultFrame,goalFrame]).size,5,'Title, lineup with predictor, footage, full-time result and Goal of the Month card must all survive assembly');
+  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,goalFrame,topTableFrame,bottomTableFrame]).size,6,'Title, lineup with predictor, footage, Goal of the Month and both league-table halves must survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });
