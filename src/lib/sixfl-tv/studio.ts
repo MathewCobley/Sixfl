@@ -6,6 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 import { getLeagueStandings } from "@/lib/standings";
 import { sixflTvThumbnailBackgroundKey } from "./thumbnail-background";
+import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
 const SIXFL_TV_RENDER_VERSION = 15;
@@ -25,7 +26,7 @@ type ThumbnailRow = {
 };
 type PublishRow = {
   id: string; kind: SixflTvRenderKind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
-  title: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null;
+  title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null;
   error: string | null; createdAt: Date; completedAt: Date | null;
 };
 type Contribution = { name?: unknown; goals?: unknown };
@@ -107,7 +108,7 @@ function thumbnailDto(row: ThumbnailRow) {
     updatedAt: row.updatedAt.toISOString() };
 }
 function publishDto(row: PublishRow) {
-  return { id: row.id, kind: row.kind, state: row.state, title: row.title, privacyStatus: row.privacyStatus,
+  return { id: row.id, kind: row.kind, state: row.state, title: row.title, description: row.description, privacyStatus: row.privacyStatus,
     youtubeVideoId: row.youtubeVideoId, youtubeUrl: row.youtubeUrl, error: row.error,
     createdAt: row.createdAt.toISOString(), completedAt: row.completedAt?.toISOString() || null };
 }
@@ -298,12 +299,12 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
 async function latestRows<T>(sql: Prisma.Sql) { return prisma.$queryRaw<T[]>(sql); }
 
 export async function studioState(fixtureId: string) {
-  await studioFixture(fixtureId);
+  const fixture = await studioFixture(fixtureId);
   const [jobs, thumbs, connection, publishes, activeQueue] = await Promise.all([
     latestRows<RenderJobRow>(Prisma.sql`SELECT DISTINCT ON ("kind") * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
     latestRows<ThumbnailRow>(Prisma.sql`SELECT * FROM "SixflTvThumbnail" WHERE "fixtureId"=${fixtureId} ORDER BY "kind"`),
     prisma.$queryRaw<{ channelId: string | null; channelTitle: string | null; connectedAt: Date }[]>`SELECT "channelId","channelTitle","connectedAt" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`,
-    latestRows<PublishRow>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
+    latestRows<PublishRow>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","description","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
     prisma.$queryRaw<Array<{ id: string; state: "QUEUED" | "PROCESSING" }>>`
       SELECT "id","state"
       FROM "SixflTvRenderJob"
@@ -321,6 +322,10 @@ export async function studioState(fixtureId: string) {
   return {
     renders: jobs.map(row => renderDto(row, row.state === "QUEUED" || row.state === "PROCESSING" ? queueAheadById.get(row.id) ?? null : null)), thumbnails: thumbs.map(thumbnailDto), publishes: publishes.map(publishDto),
     youtube: { configured: youtubeConfigured, connected: Boolean(connection[0]), channelId: connection[0]?.channelId || null, channelTitle: connection[0]?.channelTitle || null },
+    youtubeDefaults: {
+      HIGHLIGHTS: sixflTvYoutubeDefaults(fixture, "HIGHLIGHTS"),
+      FULL_MATCH: sixflTvYoutubeDefaults(fixture, "FULL_MATCH"),
+    },
   };
 }
 

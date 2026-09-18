@@ -261,7 +261,7 @@ export async function createSixflTvThumbnail(input: {
   const headlineTwo = words.slice(split).join(" ");
   const league = fit(input.strapline || input.fixture.leagueName.replaceAll("·", "•"), 58);
   const footerLabel = Number.isInteger(input.fixture.matchweekNumber)
-    ? `MATCHWEEK NO. ${input.fixture.matchweekNumber}`
+    ? `MATCHWEEK ${input.fixture.matchweekNumber}`
     : input.fixture.kickoffLabel;
   const scorebarX = isHighlights ? 34 : 1280 - 34 - 450;
 
@@ -406,7 +406,7 @@ export async function createSixflTvVideoCard(input: {
     ${formRun(input.fixture.secondTeamForm, 1700, 735, "end")}
 
     <text x="960" y="858" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="34" font-weight="700" fill="#a7f3d0">${xml(fit(input.fixture.leagueName, 56))}</text>
-    ${Number.isInteger(input.fixture.matchweekNumber) ? `<text x="960" y="908" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="26" font-weight="900" letter-spacing="2.5" fill="#34d399">MATCHWEEK NO. ${input.fixture.matchweekNumber}</text>` : ""}
+    ${Number.isInteger(input.fixture.matchweekNumber) ? `<text x="960" y="908" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="26" font-weight="900" letter-spacing="2.5" fill="#34d399">MATCHWEEK ${input.fixture.matchweekNumber}</text>` : ""}
     <text x="960" y="${Number.isInteger(input.fixture.matchweekNumber) ? 952 : 922}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="26" font-weight="600" fill="#d1d5db">${xml(input.fixture.kickoffLabel)}</text>
     ${input.fixture.decisionNote ? `<text x="960" y="982" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="22" font-weight="700" fill="#fcd34d">${xml(fit(input.fixture.decisionNote, 90))}</text>` : ""}
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>

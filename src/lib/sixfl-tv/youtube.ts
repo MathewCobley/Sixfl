@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { StudioError, studioFixture, type SixflTvRenderKind } from "./studio";
+import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
 const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const YOUTUBE_READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
@@ -126,37 +127,9 @@ export async function queueYoutubePublish(fixtureId: string, kind: SixflTvRender
   const thumb = await prisma.$queryRaw<{ objectKey: string }[]>`SELECT "objectKey" FROM "SixflTvThumbnail" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind}`;
   if (!thumb[0]) throw new StudioError(`Save the ${kind === "HIGHLIGHTS" ? "highlights" : "full-match"} thumbnail first.`, 409);
 
-  const videoLabel = kind === "HIGHLIGHTS" ? "Match Highlights" : "Full Match";
-  const shortDate = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "Europe/London",
-  }).format(fixture.kickoffAt).replace("Sept", "Sep");
-  const fullDate = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "Europe/London",
-  }).format(fixture.kickoffAt);
-  const scoreline = fixture.result
-    ? `${fixture.homeTeam.name} ${fixture.result.homeScore}–${fixture.result.awayScore} ${fixture.awayTeam.name}`
-    : `${fixture.homeTeam.name} v ${fixture.awayTeam.name}`;
-  const leagueLabel = [fixture.league.name, fixture.league.season].filter(Boolean).join(" · ");
-  const titleDefault = `${scoreline} | ${videoLabel} | ${shortDate} | SIXFL`;
-  const descriptionDefault = [
-    scoreline,
-    videoLabel,
-    "",
-    `League: ${leagueLabel}`,
-    `Match date: ${fullDate}`,
-    "",
-    "Goal of the Month: https://sixfl.co.uk/goal-of-the-month",
-    "SIXFL: https://sixfl.co.uk",
-  ].join("\n");
-  const title = cleanTitle(data.title || titleDefault, 100);
-  const description = cleanDescription(data.description || descriptionDefault, 5000);
+  const defaults = sixflTvYoutubeDefaults(fixture, kind);
+  const title = cleanTitle(data.title || defaults.title, 100);
+  const description = cleanDescription(data.description || defaults.description, 5000);
   if (!title) throw new StudioError("Add a YouTube title.");
 
   const active = await prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state" IN ('QUEUED','PROCESSING') LIMIT 1`;
