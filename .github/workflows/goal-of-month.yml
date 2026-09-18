@@ -11,6 +11,11 @@ on:
       - 'scripts/apply-goal-of-week.cjs'
       - 'scripts/check-critical-feature-contracts.mjs'
       - 'prisma/migrations/20260907153000_goal_of_month/**'
+      - 'prisma/migrations/20260918181000_goal_of_month_clip_assets/**'
+      - 'src/lib/sixfl-tv/goal-clip-poster.ts'
+      - 'src/lib/sixfl-tv/graphics.ts'
+      - 'src/lib/sixfl-tv/footage.ts'
+      - 'scripts/sixfl-tv-worker.ts'
       - 'tests/goal-of-month*'
       - '.github/workflows/goal-of-month.yml'
   pull_request:
@@ -23,6 +28,11 @@ on:
       - 'scripts/apply-goal-of-week.cjs'
       - 'scripts/check-critical-feature-contracts.mjs'
       - 'prisma/migrations/20260907153000_goal_of_month/**'
+      - 'prisma/migrations/20260918181000_goal_of_month_clip_assets/**'
+      - 'src/lib/sixfl-tv/goal-clip-poster.ts'
+      - 'src/lib/sixfl-tv/graphics.ts'
+      - 'src/lib/sixfl-tv/footage.ts'
+      - 'scripts/sixfl-tv-worker.ts'
       - 'tests/goal-of-month*'
       - '.github/workflows/goal-of-month.yml'
   workflow_dispatch:
