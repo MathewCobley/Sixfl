@@ -29,6 +29,12 @@ const fixtureData = (id) => ({
   id, kickoffAt:new Date('2026-09-17T19:00:00Z'), status:'COMPLETED',
   league:{name:'Northallerton Wednesday',season:'Autumn 2026'},
   homeTeam:{id:'team-a',name:'Town Hall 6s',logoUrl:null}, awayTeam:{id:'team-b',name:'Ballerz FC',logoUrl:null},
+  selections:[
+    {selectionStatus:'SELECTED',isCaptain:true,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:00:00Z'),teamMember:{teamId:'team-a',user:{name:'Alex One'}}},
+    {selectionStatus:'SELECTED',isCaptain:false,isGoalkeeper:true,createdAt:new Date('2026-09-17T18:01:00Z'),teamMember:{teamId:'team-a',user:{name:'Sam Keeper'}}},
+    {selectionStatus:'SELECTED',isCaptain:false,isGoalkeeper:true,createdAt:new Date('2026-09-17T18:02:00Z'),teamMember:{teamId:'team-b',user:{name:'Chris Three'}}},
+    {selectionStatus:'NOT_SELECTED',isCaptain:false,isGoalkeeper:false,createdAt:new Date('2026-09-17T18:03:00Z'),teamMember:{teamId:'team-b',user:{name:'Not Playing'}}},
+  ],
   result:id==='no-result'?null:{id:'result-1',homeScore:4,awayScore:2,isDisputed:id==='disputed',overturn:null,teamMetadata:[
     {teamId:'team-a',scorers:[{name:'Alex One',goals:2,assists:0},{name:'Sam Two',goals:1,assists:1}],goalsRecorded:3},
     {teamId:'team-b',scorers:[{name:'Chris Three',goals:1,assists:0}],goalsRecorded:1},
@@ -42,11 +48,13 @@ test('fixture graphics generate deterministic YouTube and video-card PNG shapes'
   const card=await graphics.createSixflTvVideoCard({fixture,mode:'FULL_TIME',label:'MATCH HIGHLIGHTS',siteUrl:'https://sixfl.co.uk'});
   const goal=await graphics.createSixflTvGoalOfMonthCard({siteUrl:'https://www.sixfl.co.uk'});
   const scoreBug=await graphics.createSixflTvScoreBug({fixture});
-  const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata();
+  const lineup=await graphics.createSixflTvLineupCard({fixture:{...fixture,firstTeamLineup:['Alex One (C)','Sam Keeper (GK)'],secondTeamLineup:['Chris Three (GK)']}});
+  const tm=await sharp(thumb).metadata(), cm=await sharp(card).metadata(), gm=await sharp(goal).metadata(), sm=await sharp(scoreBug).metadata(), lm=await sharp(lineup).metadata();
   assert.equal(tm.format,'png');assert.equal(tm.width,1280);assert.equal(tm.height,720);
   assert.equal(cm.format,'png');assert.equal(cm.width,1920);assert.equal(cm.height,1080);
   assert.equal(gm.format,'png');assert.equal(gm.width,1920);assert.equal(gm.height,1080);
   assert.equal(sm.format,'png');assert.equal(sm.width,1920);assert.equal(sm.height,1080);
+  assert.equal(lm.format,'png');assert.equal(lm.width,1920);assert.equal(lm.height,1080);
 });
 
 test('studio queues saved sources in editing order and requires confirmed result', async t=>{
@@ -71,10 +79,11 @@ test('studio queues saved sources in editing order and requires confirmed result
     const first=await studio.requestRenders('match-a','admin');assert.equal(first.renders.length,2);
     const second=await studio.requestRenders('match-a','admin');assert.deepEqual(second.renders.map(x=>x.id).sort(),first.renders.map(x=>x.id).sort());
     const jobs=await db.$queryRaw`SELECT "id","kind","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind"`;assert.equal(jobs.length,2);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===5),'Renderer version must invalidate old finished previews after editing changes');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===6),'Renderer version must invalidate old finished previews after editing changes');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);
+    assert.deepEqual(graphic.firstTeamLineup,['Alex One (C)','Sam Keeper (GK)']);assert.deepEqual(graphic.secondTeamLineup,['Chris Three (GK)']);
     const beforePreviewObjects=objects.size;
     const preview=await studio.thumbnailPreviewResponse('match-a','HIGHLIGHTS',{headline:'LIVE PREVIEW',strapline:'Week 4',showScore:'true'});
     assert.equal(preview.status,200);assert.match(preview.headers.get('content-type'),/png/);assert.equal(objects.size,beforePreviewObjects,'Live preview must not save or replace thumbnail storage');
@@ -98,7 +107,7 @@ test('studio source keeps publishing explicit, private and isolated from custome
   const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const thumbRoute=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/thumbnail/[kind]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
   assert.match(ui,/Approve & upload privately to YouTube/);assert.match(ui,/Live preview/);assert.match(ui,/preview: "1"/);assert.match(thumbRoute,/thumbnailPreviewResponse/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
-  assert.match(worker,/swipeVideo/);assert.match(worker,/generatedIntro/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/scoreBug=\$\{scoreBugPng/);
+  assert.match(worker,/swipeVideo/);assert.match(worker,/LINEUP_SECONDS/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/createSixflTvLineupCard/);assert.match(worker,/footageOverlay=\$\{job\.kind/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
