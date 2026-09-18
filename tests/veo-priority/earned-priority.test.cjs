@@ -14,6 +14,7 @@ const templateForm = fs.readFileSync('src/components/admin/email-templates/Email
 const broadcast = fs.readFileSync('src/lib/communications/send-team-broadcast.ts', 'utf8');
 const communicationActions = fs.readFileSync('src/app/(admin)/admin/communications/actions.ts', 'utf8');
 const migration = fs.readFileSync('prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql', 'utf8');
+const weightMigration = fs.readFileSync('prisma/migrations/20260918140000_sixfl_tv_priority_weight_tuning/migration.sql', 'utf8');
 
 test('Priority score makes the match card the largest factor while keeping late payment costly', () => {
   assert.match(score, /paymentPoints = 6/);
@@ -60,6 +61,8 @@ test('email builder exposes and team broadcasts resolve the current score', () =
   assert.match(communicationActions, /sixflTvPriorityScore: priorityScore\.score/);
   assert.match(migration, /INSERT INTO "EmailTemplate"/);
   assert.match(migration, /Your current SIXFL TV Priority Score is \*\*\{\{sixflTvPriorityScore\}\}\/100\*\*/);
+  assert.match(weightMigration, /Payment on time — 6 points\. Late payment earns only 2 points\./);
+  assert.match(weightMigration, /Core match card completed by 6pm the day after the match — 8 points\./);
   assert.doesNotMatch(migration, /INSERT INTO "NotificationTemplate"[\s\S]*sixfl-tv-priority-launch-email/);
 });
 
