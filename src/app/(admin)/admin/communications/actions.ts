@@ -294,6 +294,7 @@ async function getTeamCommunicationRecipientContext(input: {
       teamName: snapshot.teamName,
       leagueName: snapshot.leagueName,
       ctaUrl: input.ctaUrl,
+      sixflTvPriorityScore: priorityScore.score,
     }),
     metadata: { recipientType: "team" },
   };
