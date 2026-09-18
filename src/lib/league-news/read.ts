@@ -19,7 +19,11 @@ export async function listPublishedNews(input: { leagueId?: string; teamId?: str
   const rows = await prisma.$queryRaw<PublicRow[]>(Prisma.sql`
     SELECT n."id", l."slug" AS "leagueSlug", n."snapshot", n."publishedAt", n."publishedUpdatedAt" AS "updatedAt",
       (
-        SELECT CASE WHEN COUNT(DISTINCT f."round")=1 THEN MIN(f."round") ELSE NULL END
+        SELECT CASE
+          WHEN COUNT(DISTINCT NULLIF(to_jsonb(f)->>'round','')::int)=1
+          THEN MIN(NULLIF(to_jsonb(f)->>'round','')::int)
+          ELSE NULL
+        END
         FROM "Fixture" f
         WHERE f."leagueId"=n."leagueId"
           AND f."publishedAt" IS NOT NULL
@@ -38,7 +42,11 @@ export async function getPublishedNews(slug: string, date: string): Promise<Publ
   const rows = await prisma.$queryRaw<PublicRow[]>`
     SELECT n."id", l."slug" AS "leagueSlug", n."snapshot", n."publishedAt", n."publishedUpdatedAt" AS "updatedAt",
       (
-        SELECT CASE WHEN COUNT(DISTINCT f."round")=1 THEN MIN(f."round") ELSE NULL END
+        SELECT CASE
+          WHEN COUNT(DISTINCT NULLIF(to_jsonb(f)->>'round','')::int)=1
+          THEN MIN(NULLIF(to_jsonb(f)->>'round','')::int)
+          ELSE NULL
+        END
         FROM "Fixture" f
         WHERE f."leagueId"=n."leagueId"
           AND f."publishedAt" IS NOT NULL
