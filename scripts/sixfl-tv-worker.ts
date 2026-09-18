@@ -307,9 +307,9 @@ async function renderJob(job: Job) {
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(resultPng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "FULL_TIME", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(goalOfMonthPng, await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl() }));
-    const lineupBytes = await createSixflTvLineupCard({ fixture: metadata.fixture });
+    const lineupBytes = await createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() });
     if (lineupBytes) await writeFile(lineupPng, lineupBytes);
-    await writeFile(footageOverlayPng, job.kind === "HIGHLIGHTS" ? await createSixflTvScoreBug({ fixture: metadata.fixture }) : await createSixflTvWatermark());
+    await writeFile(footageOverlayPng, job.kind === "HIGHLIGHTS" ? await createSixflTvScoreBug({ fixture: metadata.fixture, siteUrl: siteUrl() }) : await createSixflTvWatermark({ siteUrl: siteUrl() }));
     const segments: string[] = [];
     const intro = inputs.filter(input => input.role === "INTRO"), content = inputs.filter(input => input.role === "CONTENT"), outro = inputs.filter(input => input.role === "OUTRO");
     let segmentIndex = 0;
