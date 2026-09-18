@@ -89,7 +89,7 @@ async function embeddedFontStyle(siteUrl: string) {
     sixflFont(siteUrl, "/fonts/Inter-Bold.ttf"),
   ]);
   return `<style><![CDATA[
-    @font-face { font-family: 'SIXFLInter'; src: url(data:font/ttf;base64,${regular.toString("base64")}) format('truetype'); font-weight: 400 600; font-style: normal; }
+    @font-face { font-family: 'SIXFLInter'; src: url(data:font/ttf;base64,${regular.toString("base64")}) format('truetype'); font-weight: 400; font-style: normal; }
     @font-face { font-family: 'SIXFLInter'; src: url(data:font/ttf;base64,${bold.toString("base64")}) format('truetype'); font-weight: 700 900; font-style: normal; }
     text { font-family: 'SIXFLInter','DejaVu Sans',sans-serif; }
   ]]></style>`;
@@ -198,7 +198,7 @@ export async function createSixflTvThumbnail(input: {
         <rect x="485" y="326" width="310" height="164" rx="28" fill="#020806" fill-opacity="0.90" stroke="${accent}" stroke-width="3"/>
         <rect x="590" y="303" width="100" height="42" rx="21" fill="${accent}"/>
         <text x="640" y="332" text-anchor="middle" font-size="20" font-weight="900" fill="#06120d" letter-spacing="2">FT</text>
-        <text x="640" y="435" text-anchor="middle" font-size="104" font-weight="900" fill="#ffffff">${firstScore}<tspan fill="${accent}" dx="14" dy="-7">-</tspan><tspan fill="#ffffff" dx="14" dy="7">${secondScore}</tspan></text>
+        <text x="640" y="435" text-anchor="middle" font-size="104" font-weight="900" fill="#ffffff">${firstScore}<tspan fill="${accent}"> - </tspan>${secondScore}</text>
       </g>`
     : `<g filter="url(#scoreShadow)"><rect x="520" y="340" width="240" height="130" rx="26" fill="#020806" fill-opacity="0.90" stroke="${accent}" stroke-width="3"/><text x="640" y="425" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">VS</text></g>`;
 
