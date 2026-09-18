@@ -136,12 +136,12 @@ export default async function SixflTvFixturesPage({
     {sp.saved ? <p role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">SIXFL TV fixture updated.</p> : null}
     {sp.error === "invalid-url" ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100">Enter valid video links.</p> : null}
 
-    <section className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10">
+    <section className="space-y-4">
       {fixtures.length ? fixtures.map(fixture => {
         const saved = parseSixflTvVideoValue(fixture.sixflTvUrl);
         const videos = getSixflTvVideos(fixture.sixflTvUrl);
         const context = [fixture.leagueName, fixture.leagueSeason, fixture.venueName].filter(Boolean).join(" · ");
-        return <article key={fixture.id} className="p-5">
+        return <article key={fixture.id} className="rounded-2xl border border-red-400/25 bg-red-500/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -182,7 +182,7 @@ export default async function SixflTvFixturesPage({
             </div>
           </div>
         </article>;
-      }) : <p className="p-6 text-white/60">No matching fixtures.</p>}
+      }) : <p className="rounded-2xl border border-white/10 p-6 text-white/60">No matching fixtures.</p>}
     </section>
   </div>;
 }
