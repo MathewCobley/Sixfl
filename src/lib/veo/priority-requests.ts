@@ -67,17 +67,13 @@ async function assertAdmin(db: Db, actorId: string) {
   const rows = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE id = ${actorId} AND role::text = 'ADMIN'`;
   if (!rows.length) throw new VeoRequestError('Administrator access is required to review this request.');
 }
-async function enabled(db: Db, leagueId: string, teamId: string) {
-  const rows = await db.$queryRaw<{ enabled: boolean }[]>`SELECT enabled FROM "VeoTeamPriority" WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId}`;
-  return rows[0]?.enabled === true;
-}
 export async function readVeoOffer(leagueId: string | null, teamId: string, db: Db = prisma): Promise<VeoOffer | null> {
   if (!leagueId || !await eligibleTeam(db, leagueId, teamId)) return null;
   const requests = await db.$queryRaw<VeoRequest[]>`
     SELECT * FROM "VeoPriorityRequest" WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId}
-    ORDER BY (status = 'PENDING') DESC, "requestedAt" DESC, id DESC LIMIT 1
+    ORDER BY "requestedAt" DESC, id DESC LIMIT 1
   `;
-  return { priority: await enabled(db, leagueId, teamId), request: requests[0] ?? null };
+  return { priority: false, request: requests[0] ?? null };
 }
 export async function requestVeoPriority(_input: { leagueId: string; teamId: string; actorId: string; agreed: boolean; termsVersion: string }) {
   throw new VeoRequestError('Paid Veo Priority has ended. SIXFL TV Priority is now free and earned automatically from your team score.');
@@ -108,13 +104,9 @@ export async function reviewVeoPriorityRequest(input: { leagueId: string; reques
     return request.teamId;
   });
 }
-export async function pendingVeoRequests(leagueId: string) {
-  return prisma.$queryRaw<(VeoRequest & { teamName: string })[]>`
-    SELECT r.*, t.name AS "teamName" FROM "VeoPriorityRequest" r JOIN "Team" t ON t.id = r."teamId"
-    WHERE r."leagueId" = ${leagueId} AND r.status = 'PENDING' ORDER BY r."requestedAt", r.id
-  `;
+export async function pendingVeoRequests(_leagueId: string) {
+  return [] as Array<VeoRequest & { teamName: string }>;
 }
-export async function pendingVeoRequestCount(leagueId: string): Promise<number> {
-  const rows = await prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(*)::integer AS count FROM "VeoPriorityRequest" WHERE "leagueId" = ${leagueId} AND status = 'PENDING'`;
-  return rows[0]?.count ?? 0;
+export async function pendingVeoRequestCount(_leagueId: string): Promise<number> {
+  return 0;
 }
