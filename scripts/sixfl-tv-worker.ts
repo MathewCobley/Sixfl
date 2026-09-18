@@ -47,7 +47,16 @@ type PublishJob = {
   title: string; description: string; privacyStatus: "private"; resumableUrl: string | null; uploadedBytes: bigint;
   youtubeVideoId: string | null; youtubeUrl: string | null;
 };
-type Metadata = { fixture: SixflTvGraphicFixture; label: string; contentAssetIds: string[]; renderVersion?: number };
+type Metadata = {
+  fixture: SixflTvGraphicFixture;
+  label: string;
+  contentAssetIds: string[];
+  renderVersion?: number;
+  progressPercent?: number;
+  progressLabel?: string;
+};
+type FfmpegProgress = { durationSeconds: number; onFraction: (fraction: number) => void };
+type RenderProgressReporter = (percent: number, label: string) => void;
 
 function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function safeError(error: unknown) {
@@ -61,16 +70,34 @@ function required(name: string) {
   return value;
 }
 
-async function run(bin: string, args: string[], capture = false, timeoutMs = bin === "ffprobe" ? 60000 : MAX_RENDER_MS) {
+async function run(
+  bin: string,
+  args: string[],
+  capture = false,
+  timeoutMs = bin === "ffprobe" ? 60000 : MAX_RENDER_MS,
+  progress?: FfmpegProgress,
+) {
   const signal = operationSignal(timeoutMs);
   signal.throwIfAborted();
   // Media inputs must stay local. Bound decoder, filter and encoder threads.
+  // FFmpeg's machine-readable progress stream lets the admin UI show genuine
+  // movement through long full-match encodes instead of a fake timer.
   const command = bin === "ffmpeg"
-    ? ["-nostdin", "-protocol_whitelist", "file,pipe", "-threads", "2", "-filter_threads", "1", "-filter_complex_threads", "1", ...args.slice(0, -1), "-threads", "2", args.at(-1)!]
+    ? [
+        "-nostdin",
+        "-protocol_whitelist", "file,pipe",
+        "-threads", "2",
+        "-filter_threads", "1",
+        "-filter_complex_threads", "1",
+        ...(progress ? ["-progress", "pipe:2", "-nostats"] : []),
+        ...args.slice(0, -1),
+        "-threads", "2",
+        args.at(-1)!,
+      ]
     : bin === "ffprobe" ? ["-protocol_whitelist", "file,pipe", ...args] : args;
   return new Promise<string>((resolve, reject) => {
     const child = spawn(bin, command, { stdio: ["ignore", capture ? "pipe" : "ignore", "pipe"] });
-    let stdout = "", stderr = "", failure: Error | undefined;
+    let stdout = "", stderr = "", progressBuffer = "", failure: Error | undefined;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const abort = () => {
       failure = new Error("Video operation was cancelled or exceeded its time limit.");
@@ -80,7 +107,24 @@ async function run(bin: string, args: string[], capture = false, timeoutMs = bin
     };
     signal.addEventListener("abort", abort, { once: true });
     child.stdout?.on("data", chunk => { stdout = (stdout + String(chunk)).slice(-65536); });
-    child.stderr?.on("data", chunk => { stderr = (stderr + String(chunk)).slice(-65536); });
+    child.stderr?.on("data", chunk => {
+      const text = String(chunk);
+      stderr = (stderr + text).slice(-65536);
+      if (bin !== "ffmpeg" || !progress) return;
+      progressBuffer += text;
+      const rows = progressBuffer.split(/\r?\n/);
+      progressBuffer = rows.pop() || "";
+      for (const row of rows) {
+        if (row.startsWith("out_time_us=")) {
+          const micros = Number(row.slice("out_time_us=".length));
+          if (Number.isFinite(micros) && progress.durationSeconds > 0) {
+            progress.onFraction(Math.max(0, Math.min(0.995, micros / 1_000_000 / progress.durationSeconds)));
+          }
+        } else if (row.trim() === "progress=end") {
+          progress.onFraction(1);
+        }
+      }
+    });
     child.on("error", error => { failure = error; });
     // Wait for the process and pipes to close before deleting its temporary files.
     child.on("close", code => {
@@ -193,8 +237,9 @@ async function swipeVideo(dir: string, target: string) {
     "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function normaliseVideo(source: string, target: string, scoreBug?: string) {
+async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
+  const ffmpegProgress = onProgress ? { durationSeconds: seconds, onFraction: onProgress } : undefined;
   const fadeOutStart = Math.max(0, seconds - 0.18).toFixed(3);
   const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p`;
   const fade = `fade=t=in:st=0:d=0.18,fade=t=out:st=${fadeOutStart}:d=0.18`;
@@ -204,7 +249,7 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string)
     if (audio) {
       await run("ffmpeg", ["-y", "-i", source, "-loop", "1", "-i", scoreBug, "-filter_complex", videoFilter,
         "-map", "[v]", "-map", "0:a:0", "-af", audioFilter, "-t", String(seconds), "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target], false, MAX_RENDER_MS, ffmpegProgress);
     } else {
       await run("ffmpeg", ["-y", "-i", source, "-loop", "1", "-i", scoreBug, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
         "-filter_complex", videoFilter, "-map", "[v]", "-map", "2:a:0", "-t", String(seconds), "-shortest",
@@ -268,7 +313,8 @@ async function finishOutput(job: Job, proof: OutputProof, durationMs: number) {
       const expected = proof.parts[index];
       return !expected || !part.stored || part.partNumber !== index || part.sizeBytes !== expected.sizeBytes || part.sha256 !== expected.sha256 || part.objectKey !== expected.objectKey;
     }) || rows.reduce((sum, part) => sum + part.sizeBytes, 0) !== proof.sizeBytes) throw new Error("Render verification failed; no finished preview was published.");
-    const changed = await tx.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='READY',"outputSizeBytes"=${proof.sizeBytes},"partCount"=${proof.partCount},"durationMs"=${durationMs},"completedAt"=NOW(),"busyUntil"=NULL,"leaseToken"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
+    const readyProgress = JSON.stringify({ progressPercent: 100, progressLabel: "Ready" });
+    const changed = await tx.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='READY',"outputSizeBytes"=${proof.sizeBytes},"partCount"=${proof.partCount},"durationMs"=${durationMs},"completedAt"=NOW(),"busyUntil"=NULL,"leaseToken"=NULL,"updatedAt"=NOW(),"error"=NULL,"metadataJson"="metadataJson" || ${readyProgress}::jsonb WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
     if (changed !== 1) throw new Error("Render ownership expired before completion.");
   });
 }
@@ -277,11 +323,22 @@ async function processJob(job: Job) {
   const timer = setTimeout(() => controller.abort(new Error("Render time limit reached.")), MAX_RENDER_MS);
   timer.unref();
   let refreshing = false;
+  let progressPercent = 3;
+  let progressLabel = "Starting render";
+  const reportProgress: RenderProgressReporter = (percent, label) => {
+    if (!Number.isFinite(percent)) return;
+    progressPercent = Math.max(progressPercent, Math.max(1, Math.min(99, Math.round(percent))));
+    progressLabel = safeError(label).slice(0, 80);
+  };
+  const saveHeartbeat = async () => {
+    const progressJson = JSON.stringify({ progressPercent, progressLabel });
+    return db.$executeRaw`UPDATE "SixflTvRenderJob" SET "busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW(),"metadataJson"="metadataJson" || ${progressJson}::jsonb WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
+  };
   const heartbeat = setInterval(async () => {
     if (refreshing || controller.signal.aborted) return;
     refreshing = true;
     try {
-      const changed = await db.$executeRaw`UPDATE "SixflTvRenderJob" SET "busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id} AND "leaseToken"=${job.leaseToken} AND "state"='PROCESSING' AND "busyUntil">NOW()`;
+      const changed = await saveHeartbeat();
       if (changed !== 1) controller.abort(new Error("Render ownership expired."));
     } catch { controller.abort(new Error("Render ownership could not be renewed.")); }
     finally { refreshing = false; }
@@ -289,20 +346,23 @@ async function processJob(job: Job) {
   heartbeat.unref();
   try { await renderSignals.run(controller.signal, async () => {
     await db.$transaction(tx => ownLease(tx, job));
-    await renderJob(job);
+    await saveHeartbeat();
+    await renderJob(job, reportProgress);
   }); }
   finally { clearTimeout(timer); clearInterval(heartbeat); }
 }
 
-async function renderJob(job: Job) {
+async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
   const metadata = job.metadataJson as unknown as Metadata;
   if (!metadata?.fixture?.firstTeam?.name || !metadata?.fixture?.secondTeam?.name) throw new Error("Render metadata is incomplete.");
+  reportProgress(5, "Loading source footage");
   const inputs = await loadInputs(job.id);
   if (inputs.reduce((sum, input) => sum + input.sizeBytes, 0n) > 12n * 1024n ** 3n) throw new Error("Selected source footage exceeds the 12 GiB processing limit.");
   if (!inputs.some(input => input.role === "CONTENT")) throw new Error("No content source is attached to this render job.");
   const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-tv-${job.id}-`));
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
+    reportProgress(7, "Creating broadcast graphics");
     const titlePng = path.join(dir, "title.png"), resultPng = path.join(dir, "result.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
     const lineupPng = path.join(dir, "lineup.png"), footageOverlayPng = path.join(dir, job.kind === "HIGHLIGHTS" ? "score-bug.png" : "watermark.png");
     await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
@@ -311,12 +371,28 @@ async function renderJob(job: Job) {
     const lineupBytes = await createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() });
     if (lineupBytes) await writeFile(lineupPng, lineupBytes);
     await writeFile(footageOverlayPng, job.kind === "HIGHLIGHTS" ? await createSixflTvScoreBug({ fixture: metadata.fixture, siteUrl: siteUrl() }) : await createSixflTvWatermark({ siteUrl: siteUrl() }));
+    reportProgress(10, "Preparing video segments");
     const segments: string[] = [];
     const intro = inputs.filter(input => input.role === "INTRO"), content = inputs.filter(input => input.role === "CONTENT"), outro = inputs.filter(input => input.role === "OUTRO");
+    const mediaInputs = [...intro, ...content, ...outro];
+    const totalMediaBytes = Math.max(1, mediaInputs.reduce((sum, input) => sum + Number(input.sizeBytes), 0));
+    let completedMediaBytes = 0;
+    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string) => {
+      const mediaBytes = Math.max(1, Number(input.sizeBytes));
+      const mediaStartBytes = completedMediaBytes;
+      const progressFor = (fraction: number) =>
+        12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
+      reportProgress(progressFor(0), `Preparing ${label}`);
+      await reconstructAsset(input, source);
+      reportProgress(progressFor(0.02), label);
+      await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
+      completedMediaBytes = mediaStartBytes + mediaBytes;
+      reportProgress(progressFor(1), label);
+    };
     let segmentIndex = 0;
     for (const input of intro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-      await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
+      await normaliseInput(input, source, normal, undefined, "Rendering intro"); segments.push(normal);
     }
     const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
     if (lineupBytes) {
@@ -328,23 +404,36 @@ async function renderJob(job: Job) {
       if (index > 0 && swipe) segments.push(swipe);
       const input = content[index];
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-      await reconstructAsset(input, source); await normaliseVideo(source, normal, footageOverlayPng); segments.push(normal);
+      await normaliseInput(
+        input,
+        source,
+        normal,
+        footageOverlayPng,
+        job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
+      );
+      segments.push(normal);
     }
     if (swipe) segments.push(swipe);
+    reportProgress(84, "Adding final match card");
     const result = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(resultPng, result, RESULT_SECONDS); segments.push(result);
     for (const input of outro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-      await reconstructAsset(input, source); await normaliseVideo(source, normal); segments.push(normal);
+      await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
     const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+    reportProgress(88, "Adding Goal of the Month card");
     await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
     console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length : 0} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} outro=${outro.length} goalOfMonthEndCard=1 footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
+    reportProgress(92, "Assembling finished video");
     await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
+    reportProgress(95, "Verifying finished video");
     const durationMs = Math.round((await durationSeconds(output)) * 1000);
+    reportProgress(97, "Saving preview");
     const stored = await storeOutput(job, output);
+    reportProgress(99, "Finalising preview");
     await finishOutput(job, stored, durationMs);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);

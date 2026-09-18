@@ -76,16 +76,31 @@ function memoryDb() {
         part.stored = true; return 1;
       }
       if (sql.includes('SET "state"=\'READY\'')) {
-        const job = jobs.get(v[3]);
-        if (!job || job.leaseToken !== v[4] || job.state !== 'PROCESSING' || !job.active) return 0;
-        Object.assign(job, { state: 'READY', outputSizeBytes: v[0], partCount: v[1], durationMs: v[2], leaseToken: null }); return 1;
+        const hasProgressMetadata = sql.includes('"metadataJson"="metadataJson"');
+        const offset = hasProgressMetadata ? 1 : 0;
+        const job = jobs.get(v[3 + offset]);
+        if (!job || job.leaseToken !== v[4 + offset] || job.state !== 'PROCESSING' || !job.active) return 0;
+        Object.assign(job, {
+          state: 'READY',
+          outputSizeBytes: v[offset],
+          partCount: v[1 + offset],
+          durationMs: v[2 + offset],
+          leaseToken: null,
+          ...(hasProgressMetadata ? { metadataJson: { ...job.metadataJson, ...JSON.parse(v[0]) } } : {}),
+        });
+        return 1;
       }
       if (sql.includes('SET "state"=\'FAILED\'')) {
         const job = jobs.get(v[1]); if (!job || job.leaseToken !== v[2] || job.state !== 'PROCESSING') return 0;
         Object.assign(job, { state: 'FAILED', error: v[0], leaseToken: null }); return 1;
       }
       if (sql.includes('SET "busyUntil"')) {
-        const job = jobs.get(v[0]); return job?.leaseToken === v[1] && job.state === 'PROCESSING' && job.active ? 1 : 0;
+        const hasProgressMetadata = sql.includes('"metadataJson"="metadataJson"');
+        const offset = hasProgressMetadata ? 1 : 0;
+        const job = jobs.get(v[offset]);
+        if (!job || job.leaseToken !== v[1 + offset] || job.state !== 'PROCESSING' || !job.active) return 0;
+        if (hasProgressMetadata) job.metadataJson = { ...job.metadataJson, ...JSON.parse(v[0]) };
+        return 1;
       }
       throw new Error('Unexpected test update: ' + sql);
     },
@@ -176,7 +191,7 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   await w.run('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=25', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '0.4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', source]);
   const bytes = await fs.readFile(source), sourcePart = { partNumber: 0, objectKey: 'source', sizeBytes: bytes.length, sha256: sha(bytes), stored: true };
   objects.set('source', bytes); db.sources.set('asset', [sourcePart]); db.inputs.set(job.id, [{ assetId: 'asset', role: 'CONTENT', position: 0, filename: 'input.mp4', partCount: 1, sizeBytes: BigInt(bytes.length), state: 'READY' }]);
-  await w.processJob(job); const finished = db.jobs.get(job.id); assert.equal(finished.state, 'READY');
+  await w.processJob(job); const finished = db.jobs.get(job.id); assert.equal(finished.state, 'READY'); assert.ok(Number(finished.metadataJson.progressPercent) >= 1, 'worker should persist progress while rendering');
   const result = path.join(dir, 'finished.mp4'), parts = [...db.parts.values()].sort((a,b) => a.partNumber-b.partNumber);
   await fs.writeFile(result, Buffer.concat(parts.map(p => { assert.equal(sha(objects.get(p.objectKey)), p.sha256); return objects.get(p.objectKey); })));
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
