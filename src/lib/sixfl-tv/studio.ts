@@ -8,7 +8,7 @@ import { getLeagueStandings } from "@/lib/standings";
 import { sixflTvThumbnailBackgroundKey } from "./thumbnail-background";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 14;
+const SIXFL_TV_RENDER_VERSION = 15;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -159,7 +159,7 @@ async function storedPredictorScore(fixtureId: string) {
 
 export async function studioFixture(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: {
-    id: true, kickoffAt: true, status: true,
+    id: true, kickoffAt: true, status: true, round: true,
     league: { select: { id: true, name: true, season: true } },
     homeTeam: { select: { id: true, name: true, logoUrl: true, broadcastCode: true } },
     awayTeam: { select: { id: true, name: true, logoUrl: true, broadcastCode: true } },
@@ -281,6 +281,7 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
     kickoffIso: fixture.kickoffAt.toISOString(),
+    matchweekNumber: fixture.round ?? null,
     firstTeam: { name: fixture.homeTeam.name, logoUrl: fixture.homeTeam.logoUrl, broadcastCode: fixture.homeTeam.broadcastCode, score: result?.homeScore ?? null },
     secondTeam: { name: fixture.awayTeam.name, logoUrl: fixture.awayTeam.logoUrl, broadcastCode: fixture.awayTeam.broadcastCode, score: result?.awayScore ?? null },
     scorers,
