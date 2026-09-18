@@ -26,7 +26,7 @@ function overlaps(input: { kickoffAt: Date; durationMinutes: number }, other: Ac
   return start < otherEnd && otherStart < end;
 }
 
-async function ensureAcceptedVeoCharges() {
+async function ensureAcceptedVeoCharges(..._args: unknown[]) {
   // Paid Veo Priority has been retired. Existing historic charges stay as recorded,
   // but confirming or completing a new filming slot must never create another one.
   return 0;
