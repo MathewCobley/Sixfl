@@ -47,7 +47,7 @@ type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; st
 type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type PublishJob = {
   id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; renderJobId: string; thumbnailObjectKey: string;
-  title: string; description: string; privacyStatus: "private"; resumableUrl: string | null; uploadedBytes: bigint;
+  title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; resumableUrl: string | null; uploadedBytes: bigint;
   youtubeVideoId: string | null; youtubeUrl: string | null;
 };
 type Metadata = {
@@ -593,7 +593,7 @@ async function startYoutubeResumable(job: PublishJob, accessToken: string, total
   const response = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(total), "X-Upload-Content-Type": "video/mp4" },
-    body: JSON.stringify({ snippet: { title: job.title, description: job.description, categoryId: "17" }, status: { privacyStatus: "private" } }),
+    body: JSON.stringify({ snippet: { title: job.title, description: job.description, categoryId: "17" }, status: { privacyStatus: job.privacyStatus } }),
     signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) {
@@ -722,7 +722,7 @@ async function main() {
     }
     const publish = await claimPublishJob().catch(error => { console.error("YouTube claim failed", safeError(error)); return null; });
     if (publish) {
-      try { await processPublish(publish); console.log(`Published ${publish.kind} ${publish.id} privately to YouTube`); }
+      try { await processPublish(publish); console.log(`Published ${publish.kind} ${publish.id} to YouTube as ${publish.privacyStatus}`); }
       catch (error) {
         const message = safeError(error); console.error(`YouTube publish ${publish.id} failed`, message);
         await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='FAILED',"error"=${message},"busyUntil"=NULL,"updatedAt"=NOW() WHERE "id"=${publish.id}`.catch(() => undefined);
