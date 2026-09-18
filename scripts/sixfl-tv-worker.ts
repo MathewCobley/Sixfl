@@ -1,5 +1,5 @@
 import { createDecipheriv, createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -9,6 +9,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
+import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -216,6 +217,60 @@ async function reconstructAsset(input: Input, target: string) {
   } finally { await handle.close(); }
 }
 
+type PosterCandidate = { bytes: Buffer; score: number; source: string };
+
+async function sourcePosterCandidate(source: string, dir: string, label: string): Promise<PosterCandidate | null> {
+  try {
+    const seconds = await durationSeconds(source);
+    const fractions = seconds < 2 ? [0.5] : [0.3, 0.5, 0.7];
+    let best: PosterCandidate | null = null;
+    for (let index = 0; index < fractions.length; index++) {
+      checkAbort();
+      const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), seconds * fractions[index]));
+      const target = path.join(dir, `poster-${label}-${index}.jpg`);
+      await run("ffmpeg", [
+        "-y", "-ss", at.toFixed(3), "-i", source, "-frames:v", "1",
+        "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
+        "-q:v", "2", target,
+      ], false, 120000);
+      const bytes = await readFile(target);
+      const stats = await sharp(bytes).resize(320, 180, { fit: "cover" }).greyscale().stats();
+      const mean = stats.channels[0]?.mean ?? 128;
+      const brightnessPenalty = mean < 24 ? (24 - mean) * 0.18 : mean > 235 ? (mean - 235) * 0.18 : 0;
+      const score = Number(stats.entropy || 0) * 6 + Number(stats.sharpness || 0) * 0.15 - brightnessPenalty;
+      if (!best || score > best.score) best = { bytes, score, source: label };
+    }
+    return best;
+  } catch (error) {
+    console.warn(`Could not choose a thumbnail frame from ${label}: ${safeError(error)}`);
+    return null;
+  }
+}
+
+async function thumbnailBackgroundExists(fixtureId: string) {
+  try {
+    const response = await fetchRailwayObject({
+      key: sixflTvThumbnailBackgroundKey(fixtureId),
+      signal: operationSignal(15000),
+    });
+    await response.body?.cancel().catch(() => undefined);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function saveThumbnailBackground(fixtureId: string, candidate: PosterCandidate | null) {
+  if (!candidate) return false;
+  await uploadRailwayObject({
+    key: sixflTvThumbnailBackgroundKey(fixtureId),
+    body: candidate.bytes,
+    contentType: "image/jpeg",
+    signal: operationSignal(30000),
+  });
+  return true;
+}
+
 async function cardVideo(png: string, target: string, seconds = 3) {
   await run("ffmpeg", ["-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(seconds), "-shortest",
     "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p",
@@ -390,13 +445,22 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const mediaInputs = [...intro, ...content, ...outro];
     const totalMediaBytes = Math.max(1, mediaInputs.reduce((sum, input) => sum + Number(input.sizeBytes), 0));
     let completedMediaBytes = 0;
-    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string) => {
+    let bestPoster: PosterCandidate | null = null;
+    const existingPoster = job.kind === "FULL_MATCH" ? await thumbnailBackgroundExists(job.fixtureId) : false;
+    const collectPosterFor = (contentIndex: number) =>
+      job.kind === "HIGHLIGHTS" ? contentIndex < 2 : !existingPoster && contentIndex === 0;
+
+    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string, posterLabel?: string) => {
       const mediaBytes = Math.max(1, Number(input.sizeBytes));
       const mediaStartBytes = completedMediaBytes;
       const progressFor = (fraction: number) =>
         12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
+      if (posterLabel) {
+        const candidate = await sourcePosterCandidate(source, dir, posterLabel);
+        if (candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
+      }
       reportProgress(progressFor(0.02), label);
       await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
       completedMediaBytes = mediaStartBytes + mediaBytes;
@@ -426,8 +490,15 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
         normal,
         footageOverlayPng,
         job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
+        collectPosterFor(index) ? `${job.kind.toLowerCase()}-${index + 1}` : undefined,
       );
       segments.push(normal);
+    }
+    if (bestPoster) {
+      reportProgress(83, "Choosing thumbnail action frame");
+      await saveThumbnailBackground(job.fixtureId, bestPoster).catch(error =>
+        console.warn(`Could not save thumbnail action frame: ${safeError(error)}`),
+      );
     }
     if (swipe) segments.push(swipe);
     reportProgress(84, "Adding Goal of the Month card");
@@ -458,7 +529,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} slowSwipeSeconds=${(SWIPE_FRAMES / SWIPE_FPS).toFixed(1)} resultCard=0 goalOfMonthAfterFootage=1 relevantTopHalf=${leagueTopBytes && showTopHalf ? 1 : 0} relevantBottomHalf=${leagueBottomBytes && showBottomHalf ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+match-highlights" : "FT+full-match"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} slowSwipeSeconds=${(SWIPE_FRAMES / SWIPE_FPS).toFixed(1)} resultCard=0 goalOfMonthAfterFootage=1 relevantTopHalf=${leagueTopBytes && showTopHalf ? 1 : 0} relevantBottomHalf=${leagueBottomBytes && showBottomHalf ? 1 : 0} outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+match-highlights" : "FT+full-match"} thumbnailFrame=${bestPoster ? bestPoster.source : existingPoster ? "existing" : "fallback"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
