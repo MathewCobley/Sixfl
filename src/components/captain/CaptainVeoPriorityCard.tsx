@@ -140,8 +140,8 @@ export default async function CaptainVeoPriorityCard({
           ['8', 'Match card', 'By 6pm next day'],
           ['6', 'Payment', 'Late = 2'],
           ['4', 'Confirmation', '72h deadline'],
-          ['1', 'Assists', 'Bonus'],
-          ['1', 'Ratings', 'Bonus'],
+          ['1', 'Assists', 'Bonus · by 6pm next day'],
+          ['1', 'Ratings', 'Bonus · by 6pm next day'],
         ].map(([points, label, help]) => (
           <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-lg font-bold">{points} pts</div>
@@ -193,12 +193,12 @@ export default async function CaptainVeoPriorityCard({
                       maxPoints={4}
                     />
                     <ScoreLine
-                      label={match.assistsPoints === 1 ? 'Assists bonus completed' : 'Assists bonus not earned'}
+                      label={match.assistsPoints === 1 ? 'Assists bonus completed by 6pm' : 'Assists bonus not earned by 6pm'}
                       points={match.assistsPoints}
                       maxPoints={1}
                     />
                     <ScoreLine
-                      label={match.ratingsPoints === 1 ? 'Player ratings completed' : 'Player ratings bonus not earned'}
+                      label={match.ratingsPoints === 1 ? 'Player ratings bonus completed by 6pm' : 'Player ratings bonus not earned by 6pm'}
                       points={match.ratingsPoints}
                       maxPoints={1}
                     />
