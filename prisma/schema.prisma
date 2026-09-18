@@ -214,8 +214,9 @@ enum TeamMoveConfirmationStatus {
 model Team {
   id        String  @id @default(cuid())
   name      String
-  claimCode String  @unique
-  logoUrl   String?
+  claimCode     String  @unique
+  logoUrl       String?
+  broadcastCode String?
 
   teamMode           TeamMode @default(STANDARD)
   isRecruiting       Boolean  @default(false)

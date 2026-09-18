@@ -32,6 +32,7 @@ import TeamMatchReportBadge from "@/components/admin/teams/TeamMatchReportBadge"
 import { getAdminTeamMatchReportActivity } from "@/lib/admin/team-match-report-activity";
 import TeamEmailForm from "@/components/admin/teams/TeamEmailForm";
 import PrimaryContactMemberSelector from "@/components/admin/teams/PrimaryContactMemberSelector";
+import { defaultTeamBroadcastCode } from "@/lib/teams/broadcast-code";
 
 function formatDispatchStatus(status: NotificationDispatchStatus) {
   switch (status) {
@@ -637,6 +638,12 @@ export default async function AdminTeamPage({
             <div className="text-red-300">Team name is required.</div>
           ) : null}
 
+          {sp.error === "invalid_broadcast_code" ? (
+            <div className="text-red-300">
+              Broadcast code must be exactly three letters or numbers.
+            </div>
+          ) : null}
+
           {sp.composeError === "missing_subject" ? (
             <div className="text-red-300">Email subject is required.</div>
           ) : null}
@@ -743,6 +750,27 @@ export default async function AdminTeamPage({
                 <div className="text-xs text-white/50">
                   This updates the public team name, admin listings, and team
                   messaging label.
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="broadcastCode" className="text-sm text-white/60">
+                  Broadcast abbreviation
+                </label>
+                <input
+                  id="broadcastCode"
+                  name="broadcastCode"
+                  type="text"
+                  inputMode="text"
+                  maxLength={3}
+                  pattern="[A-Za-z0-9]{3}"
+                  defaultValue={team.broadcastCode ?? defaultTeamBroadcastCode(team.name)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 font-mono uppercase tracking-[0.18em] text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                />
+                <div className="text-xs leading-5 text-white/50">
+                  Used in the compact SIXFL TV score graphic. It is automatically
+                  filled from the first three letters of the team name, but you can
+                  change it — for example <span className="font-mono text-white/70">W5W</span>.
                 </div>
               </div>
 

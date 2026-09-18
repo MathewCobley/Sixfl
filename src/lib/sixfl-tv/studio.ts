@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 9;
+const SIXFL_TV_RENDER_VERSION = 10;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -137,8 +137,8 @@ export async function studioFixture(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: {
     id: true, kickoffAt: true, status: true,
     league: { select: { id: true, name: true, season: true } },
-    homeTeam: { select: { id: true, name: true, logoUrl: true } },
-    awayTeam: { select: { id: true, name: true, logoUrl: true } },
+    homeTeam: { select: { id: true, name: true, logoUrl: true, broadcastCode: true } },
+    awayTeam: { select: { id: true, name: true, logoUrl: true, broadcastCode: true } },
     selections: { select: { selectionStatus: true, isCaptain: true, isGoalkeeper: true, createdAt: true,
       teamMember: { select: { teamId: true, user: { select: { name: true } } } },
     } },
@@ -227,8 +227,8 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
     kickoffIso: fixture.kickoffAt.toISOString(),
-    firstTeam: { name: fixture.homeTeam.name, logoUrl: fixture.homeTeam.logoUrl, score: result?.homeScore ?? null },
-    secondTeam: { name: fixture.awayTeam.name, logoUrl: fixture.awayTeam.logoUrl, score: result?.awayScore ?? null },
+    firstTeam: { name: fixture.homeTeam.name, logoUrl: fixture.homeTeam.logoUrl, broadcastCode: fixture.homeTeam.broadcastCode, score: result?.homeScore ?? null },
+    secondTeam: { name: fixture.awayTeam.name, logoUrl: fixture.awayTeam.logoUrl, broadcastCode: fixture.awayTeam.broadcastCode, score: result?.awayScore ?? null },
     scorers,
     firstTeamLineup: lineup(fixture.homeTeam.id),
     secondTeamLineup: lineup(fixture.awayTeam.id),

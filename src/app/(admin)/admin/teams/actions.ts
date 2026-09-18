@@ -27,6 +27,7 @@ import {
 import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { logDirectOutboundMessage } from "@/lib/communications/log-direct-message";
+import { defaultTeamBroadcastCode, isValidTeamBroadcastCode, normaliseTeamBroadcastCode } from "@/lib/teams/broadcast-code";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const PROSPECT_JOIN_CTA_LABEL = "Register as a Player";
@@ -276,6 +277,7 @@ export async function createTeamAction(formData: FormData) {
   const name = getTrimmedValue(formData.get("name"));
   const leagueIdRaw = getTrimmedValue(formData.get("leagueId"));
   const logoUrlRaw = getTrimmedValue(formData.get("logoUrl"));
+  const broadcastCode = defaultTeamBroadcastCode(name);
   const latestKickoffTime = parseLatestKickoffTime(
     formData.get("latestKickoffTime"),
   );
@@ -306,6 +308,7 @@ export async function createTeamAction(formData: FormData) {
       claimCode,
       leagueId,
       logoUrl,
+      broadcastCode,
       latestKickoffTime,
       contactName,
       contactEmail,
@@ -333,6 +336,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
   const name = getTrimmedValue(formData.get("name"));
   const leagueIdRaw = getTrimmedValue(formData.get("leagueId"));
   const logoUrlRaw = getTrimmedValue(formData.get("logoUrl"));
+  const broadcastCode = normaliseTeamBroadcastCode(formData.get("broadcastCode"), name);
   const latestKickoffTime = parseLatestKickoffTime(
     formData.get("latestKickoffTime"),
   );
@@ -365,6 +369,10 @@ export async function updateTeamDetailsAction(formData: FormData) {
     redirect(`/admin/teams/${id}?error=missing_name`);
   }
 
+  if (!isValidTeamBroadcastCode(broadcastCode)) {
+    redirect(`/admin/teams/${id}?error=invalid_broadcast_code`);
+  }
+
   const leagueId = leagueIdRaw || null;
   const logoUrl = logoUrlRaw || null;
 
@@ -374,6 +382,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
       name,
       leagueId,
       logoUrl,
+      broadcastCode,
       latestKickoffTime,
       teamMode,
       isRecruiting,

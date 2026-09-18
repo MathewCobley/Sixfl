@@ -199,11 +199,14 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 20.0);
   const titleFrame = await w.run('ffmpeg', ['-ss', '1.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const lineupFrame = await w.run('ffmpeg', ['-ss', '5.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const footageFrame = await w.run('ffmpeg', ['-ss', '9.15', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  const swipeFrame = await w.run('ffmpeg', ['-ss', '9.55', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const firstSwipeFrame = await w.run('ffmpeg', ['-ss', '9.15', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const footageFrame = await w.run('ffmpeg', ['-ss', '9.55', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
+  const finalSwipeFrame = await w.run('ffmpeg', ['-ss', '9.95', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const resultFrame = await w.run('ffmpeg', ['-ss', '11.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const goalFrame = await w.run('ffmpeg', ['-ss', '17.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
-  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,swipeFrame,resultFrame,goalFrame]).size,6,'Title, lineup with predictor, footage, final swipe, full-time result and Goal of the Month end card must all survive assembly');
+  assert.notEqual(firstSwipeFrame,footageFrame,'A transition must appear before the first content frame');
+  assert.notEqual(finalSwipeFrame,footageFrame,'A transition must appear after the final content frame');
+  assert.equal(new Set([titleFrame,lineupFrame,footageFrame,resultFrame,goalFrame]).size,5,'Title, lineup with predictor, footage, full-time result and Goal of the Month card must all survive assembly');
   await w.run('ffmpeg', ['-v', 'error', '-i', result, '-f', 'null', '-']);
   assert.deepEqual(objects.get('source'), bytes, 'original footage must remain unchanged');
 });
