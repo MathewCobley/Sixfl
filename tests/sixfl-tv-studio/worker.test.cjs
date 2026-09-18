@@ -35,6 +35,7 @@ async function loadWorker(db, objects, uploadHook) {
       createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvPredictorCard: async ({ fixture }) => fixture.predictor ? cards.predictor : null,
       createSixflTvScoreBug: async ({ kind }) => kind === 'FULL_MATCH' ? cards.watermark : cards.scoreBug,
+      createSixflTvThumbnail: async () => Buffer.from('thumbnail'),
       createSixflTvWatermark: async () => { throw new Error('Full match must use the labelled scorebug, not the legacy watermark'); },
     },
     '../src/lib/sixfl-tv/videos': {},
@@ -43,6 +44,9 @@ async function loadWorker(db, objects, uploadHook) {
     },
     '../src/lib/goal-of-month/calendar': {
       monthlyCycle: () => ({ latestClosedMonth: '2026-08' }),
+    },
+    '../src/lib/sixfl-tv/youtube-metadata': {
+      sixflTvYoutubeDefaults: (_fixture, kind) => ({ title: kind === 'HIGHLIGHTS' ? 'Highlights title' : 'Full match title', description: 'Automatic description' }),
     },
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),

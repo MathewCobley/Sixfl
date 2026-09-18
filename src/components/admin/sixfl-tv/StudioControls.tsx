@@ -111,8 +111,8 @@ function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defau
     <div className="mt-4 grid gap-3">
       <label className="text-sm text-white/70">YouTube title <span className="text-white/40">(optional)</span><input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="Automatic title" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <label className="text-sm text-white/70">Description <span className="text-white/40">(optional)</span><textarea value={description} maxLength={5000} rows={4} onChange={e => setDescription(e.target.value)} placeholder="Automatic description" className="mt-1 block w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
-      <p className="text-xs leading-5 text-amber-100/75">Approval saves the thumbnail exactly as shown in the live preview, then publishes it with the finished video directly as <strong>Public</strong> on YouTube. The first SIXFL TV video published each UK calendar day notifies subscribers; later uploads that day publish normally without another subscriber notification.</p>
-      <button type="button" className={button} disabled={!connected || !ready || active || sending || busy} onClick={() => void approve()}>{sending ? "Approving…" : active ? "Upload in progress…" : "Approve & publish publicly to YouTube"}</button>
+      <p className="text-xs leading-5 text-amber-100/75">Ready SIXFL TV videos now publish automatically as <strong>Public</strong> on YouTube once the confirmed result, finished render and thumbnail are ready. The first SIXFL TV video published each UK calendar day notifies subscribers; later uploads that day publish normally without another subscriber notification. Use the button below only as a manual fallback or retry.</p>
+      <button type="button" className={button} disabled={!connected || !ready || active || sending || busy} onClick={() => void approve()}>{sending ? "Queuing…" : active ? "Upload in progress…" : "Publish / retry now"}</button>
       {!render || render.state !== "READY" ? <p className="text-xs text-white/45">Generate and review the finished {kindLabel(kind).toLowerCase()} preview first.</p> : !thumbnailDraft.headline.trim() ? <p className="text-xs text-white/45">Add the thumbnail headline first.</p> : !connected ? <p className="text-xs text-white/45">Connect the SIXFL YouTube channel first.</p> : null}
       {error ? <p role="alert" className="text-sm text-red-200">{error}</p> : null}
     </div>
@@ -141,9 +141,10 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
   async function refresh() { setState(await json<State>(endpoint)); }
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 5000);
+    const publishingOnly = activeRenders.length === 0 && state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING");
+    const timer = window.setInterval(() => void refresh().catch(() => undefined), publishingOnly ? 15000 : 5000);
     return () => window.clearInterval(timer);
-  }, [active, endpoint]);
+  }, [active, activeRenders.length, endpoint, state.publishes]);
   async function generate() {
     if (busy || activeRenders.length > 0) return;
     const previousRenders = state.renders;
