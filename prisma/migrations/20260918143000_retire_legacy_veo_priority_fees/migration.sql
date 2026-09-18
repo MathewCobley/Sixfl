@@ -107,6 +107,37 @@ WHERE id IN (
     AND (pc.id LIKE 'veo_%' OR pc.id LIKE 'veo_backfill_%')
 );
 
+-- Remove all database-level payment wiring installed by the paid Veo pilot.
+-- The camera-booking tables remain because they are still used for free SIXFL TV
+-- allocation and recording state.
+DROP TRIGGER IF EXISTS "sixfl_veo_receipt_credit" ON "PaymentTransaction";
+DROP TRIGGER IF EXISTS "sixfl_veo_void_guard" ON "PaymentCharge";
+DROP TRIGGER IF EXISTS "sixfl_veo_void_credit" ON "PaymentCharge";
+DROP FUNCTION IF EXISTS sixfl_veo_receipt_credit();
+DROP FUNCTION IF EXISTS sixfl_veo_void_guard();
+DROP FUNCTION IF EXISTS sixfl_veo_void_credit();
+DROP FUNCTION IF EXISTS sixfl_sync_void_veo_credit(TEXT);
+
+-- Keep automatic filming cancellation when a fixture itself is cancelled or
+-- postponed, but remove the former PaymentCharge mutation from that trigger.
+CREATE OR REPLACE FUNCTION sixfl_cancel_veo_with_fixture() RETURNS trigger LANGUAGE plpgsql AS $
+BEGIN
+  IF NEW.status::text IN ('CANCELLED','POSTPONED') THEN
+    UPDATE "VeoMatchBooking"
+    SET state='CANCELLED',
+        "updatedAt"=NOW(),
+        "recordingNote"='Fixture cancelled or postponed.'
+    WHERE "fixtureId"=NEW.id AND state IN ('PLANNED','READY');
+
+    UPDATE "VeoFixtureRequest"
+    SET status='CANCELLED',
+        "agreedPence"=0,
+        revision=revision+1
+    WHERE "fixtureId"=NEW.id AND status IN ('REQUESTED','ACCEPTED');
+  END IF;
+  RETURN NULL;
+END $;
+
 UPDATE "PaymentCharge"
 SET
   status = 'VOID',
