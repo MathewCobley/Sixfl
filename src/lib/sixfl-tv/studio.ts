@@ -350,7 +350,8 @@ export async function cancelRenders(fixtureId: string, actor: string, kind?: Six
         RETURNING *`;
   return { stopped: rows.map(renderDto), actor: safeText(actor, 120) || "admin" };
 }
-export async function requestRenders(fixtureId: string, actor: string) {
+export async function requestRenders(fixtureId: string, actor: string, kind?: SixflTvRenderKind) {
+  if (kind && kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
   const fixture = await studioFixture(fixtureId);
   if (!fixture.result) throw new StudioError("Enter the final result before generating SIXFL TV previews.", 409);
   if (fixture.result.isDisputed) throw new StudioError("This result is disputed. Resolve it before generating result-branded videos.", 409);
@@ -369,9 +370,14 @@ export async function requestRenders(fixtureId: string, actor: string) {
   if (clips.length) specs.push({ kind: "HIGHLIGHTS", content: clips });
   else if (readyHighlights) specs.push({ kind: "HIGHLIGHTS", content: [readyHighlights] });
   if (fullMatch) specs.push({ kind: "FULL_MATCH", content: [fullMatch] });
-  if (!specs.length) throw new StudioError("Upload at least one completed highlight clip, ready-made highlights video, or full match first.", 409);
+  const requestedSpecs = kind ? specs.filter(spec => spec.kind === kind) : specs;
+  if (!requestedSpecs.length) {
+    if (kind === "HIGHLIGHTS") throw new StudioError("Upload at least one completed highlight clip or ready-made highlights video first.", 409);
+    if (kind === "FULL_MATCH") throw new StudioError("Upload a completed full match first.", 409);
+    throw new StudioError("Upload at least one completed highlight clip, ready-made highlights video, or full match first.", 409);
+  }
   const created: Array<ReturnType<typeof renderDto>> = [];
-  for (const spec of specs) {
+  for (const spec of requestedSpecs) {
     const ordered = [...(intro ? [intro] : []), ...spec.content, ...(outro ? [outro] : [])];
     const metadata = {
       renderVersion: SIXFL_TV_RENDER_VERSION,
