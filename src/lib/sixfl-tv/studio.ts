@@ -258,7 +258,7 @@ export async function thumbnailPreviewResponse(fixtureId: string, kind: SixflTvR
   if (!headline) throw new StudioError("Add a thumbnail headline.");
   const showScore = data.showScore !== false && data.showScore !== "false" && data.showScore !== "0";
   const graphic = await studioGraphicFixture(fixtureId);
-  const bytes = await createSixflTvThumbnail({ fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
   if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
   return new Response(new Uint8Array(bytes), { headers: {
     "Content-Type": "image/png",
@@ -279,7 +279,7 @@ export async function saveThumbnail(fixtureId: string, kind: SixflTvRenderKind, 
   if (!headline) throw new StudioError("Add a thumbnail headline.");
   const showScore = data.showScore !== false;
   const graphic = await studioGraphicFixture(fixtureId);
-  const bytes = await createSixflTvThumbnail({ fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
   if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
   const digest = sha(bytes), key = `sixfl-tv-thumbnail/v1/${fixtureId}/${kind.toLowerCase()}/${randomUUID()}-${digest}.png`;
   await uploadRailwayObject({ key, body: bytes, contentType: "image/png", signal: AbortSignal.timeout(30000) });
