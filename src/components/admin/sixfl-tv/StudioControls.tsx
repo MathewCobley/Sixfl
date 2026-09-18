@@ -5,8 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 type Kind = "HIGHLIGHTS" | "FULL_MATCH";
 type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string; queueAhead: number | null };
 type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: boolean; sizeBytes: number; updatedAt: string };
-type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
-type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null } };
+type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
+type YoutubeDefaults = { title: string; description: string };
+type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null }; youtubeDefaults: Record<Kind, YoutubeDefaults> };
 
 async function json<T>(url: string, body?: Record<string, unknown>) {
   const response = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" } : { cache: "no-store" });
@@ -74,9 +75,9 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onSav
   </section>;
 }
 
-function PublishEditor({ fixtureId, kind, render, thumbnail, publish, connected, busy, onRefresh }: { fixtureId: string; kind: Kind; render?: Render; thumbnail?: Thumbnail; publish?: Publish; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+function PublishEditor({ fixtureId, kind, render, thumbnail, publish, defaults, connected, busy, onRefresh }: { fixtureId: string; kind: Kind; render?: Render; thumbnail?: Thumbnail; publish?: Publish; defaults: YoutubeDefaults; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
+  const [title, setTitle] = useState(publish?.title || defaults.title);
+  const [description, setDescription] = useState(publish?.description || defaults.description);
   const [sending, setSending] = useState(false), [error, setError] = useState("");
   const ready = render?.state === "READY" && Boolean(thumbnail);
   const active = publish?.state === "QUEUED" || publish?.state === "PROCESSING";
@@ -95,8 +96,8 @@ function PublishEditor({ fixtureId, kind, render, thumbnail, publish, connected,
     {publish?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{publish.error || "YouTube upload failed. Review the error before approving another attempt."}</p> : null}
     {active ? <p className="mt-3 text-sm text-white/60">{publish?.state === "QUEUED" ? "Waiting for the worker." : "Publishing the approved video and thumbnail publicly on YouTube."}</p> : null}
     <div className="mt-4 grid gap-3">
-      <label className="text-sm text-white/70">YouTube title <span className="text-white/40">(optional)</span><input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="Automatic: teams, score, video type, match date and SIXFL" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
-      <label className="text-sm text-white/70">Description <span className="text-white/40">(optional)</span><textarea value={description} maxLength={5000} rows={4} onChange={e => setDescription(e.target.value)} placeholder="Automatic: score, league, match date, Goal of the Month link and SIXFL" className="mt-1 block w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
+      <label className="text-sm text-white/70">YouTube title <span className="text-white/40">(optional)</span><input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="Automatic title" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
+      <label className="text-sm text-white/70">Description <span className="text-white/40">(optional)</span><textarea value={description} maxLength={5000} rows={4} onChange={e => setDescription(e.target.value)} placeholder="Automatic description" className="mt-1 block w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <p className="text-xs leading-5 text-amber-100/75">Approval publishes the current finished preview with its saved thumbnail directly as <strong>Public</strong> on YouTube. Subscriber notifications remain disabled by the uploader.</p>
       <button type="button" className={button} disabled={!connected || !ready || active || sending || busy} onClick={() => void approve()}>{sending ? "Approving…" : active ? "Upload in progress…" : "Approve & publish publicly to YouTube"}</button>
       {!render || render.state !== "READY" ? <p className="text-xs text-white/45">Generate and review the finished {kindLabel(kind).toLowerCase()} preview first.</p> : !thumbnail ? <p className="text-xs text-white/45">Save the matching thumbnail first.</p> : !connected ? <p className="text-xs text-white/45">Connect the SIXFL YouTube channel first.</p> : null}
@@ -212,6 +213,6 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       />;
     })}</div></div>
     <section className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60"><strong className="text-white/85">YouTube connection</strong><br/>{state.youtube.connected ? <>Connected{state.youtube.channelTitle ? ` to ${state.youtube.channelTitle}` : ""}. Every video still needs separate approval below.</> : state.youtube.configured ? <>The shared SIXFL YouTube connection is not authorised yet. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Manage YouTube from SIXFL TV</a>.</> : <>Google OAuth credentials are not configured yet. Preview generation and thumbnail editing still work without Google. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Open SIXFL TV setup</a>.</>}</section>
-    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnail={thumbByKind.get(kind)} publish={publishByKind.get(kind)} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
+    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnail={thumbByKind.get(kind)} publish={publishByKind.get(kind)} defaults={state.youtubeDefaults[kind]} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
   </div>;
 }
