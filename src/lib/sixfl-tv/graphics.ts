@@ -227,7 +227,7 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
 
 
 export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
-  const [sixflTvLogoBytes] = await Promise.all([sixflTvLogo()]);
+  const sixflTvLogoBytes = await sixflTvLogo(input.siteUrl);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
