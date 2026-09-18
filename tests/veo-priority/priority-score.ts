@@ -178,12 +178,12 @@ async function main() {
 
   assert.equal(score.matchesCount, 5);
   assert.equal(score.provisional, false);
-  assert.equal(score.score, 92, "one late payment should lose 8 of the 100 available points");
+  assert.equal(score.score, 96, "one late payment should lose 4 of the 100 available points");
   assert.equal(score.qualifies, true);
   assert.equal(score.coreCompletedMatches, 5);
-  assert.equal(score.matches.reduce((sum, match) => sum + match.paymentPoints, 0), 42);
+  assert.equal(score.matches.reduce((sum, match) => sum + match.paymentPoints, 0), 26);
   assert.equal(score.matches.reduce((sum, match) => sum + match.confirmationPoints, 0), 20);
-  assert.equal(score.matches.reduce((sum, match) => sum + match.matchCardPoints, 0), 20);
+  assert.equal(score.matches.reduce((sum, match) => sum + match.matchCardPoints, 0), 40);
   assert.equal(score.matches.reduce((sum, match) => sum + match.assistsPoints, 0), 5);
   assert.equal(score.matches.reduce((sum, match) => sum + match.ratingsPoints, 0), 5);
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
