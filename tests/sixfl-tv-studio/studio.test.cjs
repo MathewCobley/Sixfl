@@ -69,9 +69,9 @@ test('studio queues saved sources in editing order and requires confirmed result
   ];
   const mockDb={
     $queryRaw:async(strings,...values)=>{
-      const sql=strings.join('?');
+      const sql=Array.isArray(strings)?strings.join('?'):Array.isArray(strings?.strings)?strings.strings.join('?'):String(strings);
       if(sql.includes('FROM "FixtureAiPrediction"'))return [{predictedHomeScore:3,predictedAwayScore:2,headline:'Town Hall 6s edged'}];
-      return db.$queryRaw(strings,...values);
+      return Array.isArray(strings)?db.$queryRaw(strings,...values):db.$queryRaw(strings);
     },
     $executeRaw:db.$executeRaw.bind(db),$transaction:fn=>db.$transaction(fn),
     fixture:{findUnique:async({where})=>fixtureData(where.id),findMany:async()=>priorFixtures},
