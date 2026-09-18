@@ -1,3 +1,58 @@
+-- Stable evidence timestamps keep an on-time completion on-time even if a captain
+-- later corrects a name, rating or scorer.
+ALTER TABLE "MatchResultTeamMeta"
+  ADD COLUMN IF NOT EXISTS "priorityCoreCompletedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "priorityAssistsCompletedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "priorityRatingsCompletedAt" TIMESTAMP(3);
+
+-- Best-effort historic backfill from the evidence already stored. Going forward
+-- the captain save action records the first moment each requirement becomes complete.
+UPDATE "MatchResultTeamMeta" m
+SET "priorityCoreCompletedAt" = m."updatedAt"
+FROM "MatchResult" r
+JOIN "Fixture" f ON f.id = r."fixtureId"
+WHERE m."matchResultId" = r.id
+  AND m."priorityCoreCompletedAt" IS NULL
+  AND COALESCE(trim(m."playerOfMatchName"), '') <> ''
+  AND m."goalsRecorded" = CASE WHEN m."teamId" = f."homeTeamId" THEN r."homeScore" ELSE r."awayScore" END
+  AND EXISTS (
+    SELECT 1 FROM "PlayerMatchPerformance" p
+    WHERE p."matchResultId" = m."matchResultId"
+      AND p."teamId" = m."teamId"
+      AND p.played
+      AND p."appearanceRecorded"
+  );
+
+UPDATE "MatchResultTeamMeta" m
+SET "priorityAssistsCompletedAt" = m."updatedAt"
+FROM "MatchResult" r
+JOIN "Fixture" f ON f.id = r."fixtureId"
+WHERE m."matchResultId" = r.id
+  AND m."priorityAssistsCompletedAt" IS NULL
+  AND (
+    (CASE WHEN m."teamId" = f."homeTeamId" THEN r."homeScore" ELSE r."awayScore" END) = 0
+    OR EXISTS (
+      SELECT 1 FROM "PlayerMatchPerformance" p
+      WHERE p."matchResultId" = m."matchResultId"
+        AND p."teamId" = m."teamId"
+        AND p.played
+        AND p.assists > 0
+    )
+  );
+
+UPDATE "MatchResultTeamMeta" m
+SET "priorityRatingsCompletedAt" = ratings."completedAt"
+FROM (
+  SELECT "matchResultId", "teamId", MAX("updatedAt") AS "completedAt"
+  FROM "PlayerMatchPerformance"
+  WHERE played AND "appearanceRecorded"
+  GROUP BY "matchResultId", "teamId"
+  HAVING COUNT(*) > 0 AND COUNT(rating) = COUNT(*)
+) ratings
+WHERE m."matchResultId" = ratings."matchResultId"
+  AND m."teamId" = ratings."teamId"
+  AND m."priorityRatingsCompletedAt" IS NULL;
+
 -- Retire future paid Veo Priority preferences without rewriting historic accepted bookings or charges.
 UPDATE "VeoTeamPriority"
 SET enabled = FALSE, "updatedAt" = CURRENT_TIMESTAMP
