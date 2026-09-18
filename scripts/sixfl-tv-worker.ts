@@ -6,11 +6,12 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
 import { monthlyCycle } from "../src/lib/goal-of-month/calendar";
+import { sixflTvYoutubeDefaults } from "../src/lib/sixfl-tv/youtube-metadata";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -752,6 +753,160 @@ async function processPublish(job: PublishJob) {
   await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='READY',"youtubeVideoId"=${videoId},"youtubeUrl"=${youtubeUrl},"uploadedBytes"=(SELECT "outputSizeBytes" FROM "SixflTvRenderJob" WHERE "id"=${job.renderJobId}),"completedAt"=NOW(),"busyUntil"=NULL,"updatedAt"=NOW(),"error"=NULL WHERE "id"=${job.id}`;
 }
 
+type AutoPublishCandidate = {
+  renderJobId: string;
+  fixtureId: string;
+  kind: "HIGHLIGHTS" | "FULL_MATCH";
+  metadataJson: Prisma.JsonValue;
+  kickoffAt: Date;
+  leagueName: string;
+  leagueSeason: string | null;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number;
+  awayScore: number;
+};
+type AutoThumbnailRow = {
+  headline: string;
+  strapline: string;
+  showScore: boolean;
+  objectKey: string;
+};
+
+async function autoThumbnailForPublish(candidate: AutoPublishCandidate) {
+  const existing = await db.$queryRaw<AutoThumbnailRow[]>(Prisma.sql`
+    SELECT "headline","strapline","showScore","objectKey"
+    FROM "SixflTvThumbnail"
+    WHERE "fixtureId"=${candidate.fixtureId} AND "kind"=${candidate.kind}
+    LIMIT 1
+  `);
+  const metadata = candidate.metadataJson as unknown as Metadata;
+  if (!metadata?.fixture?.firstTeam?.name || !metadata?.fixture?.secondTeam?.name) {
+    throw new Error("Automatic YouTube publishing cannot create a thumbnail because render metadata is incomplete.");
+  }
+  const headline = existing[0]?.headline || (candidate.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH");
+  const strapline = existing[0]?.strapline || candidate.leagueName;
+  const showScore = existing[0]?.showScore ?? true;
+  const backgroundResponse = await fetchRailwayObject({
+    key: sixflTvThumbnailBackgroundKey(candidate.fixtureId),
+    signal: AbortSignal.timeout(30000),
+  }).catch(() => null);
+  const backgroundImage = backgroundResponse?.ok ? Buffer.from(await backgroundResponse.arrayBuffer()) : null;
+  const bytes = await createSixflTvThumbnail({
+    kind: candidate.kind,
+    fixture: metadata.fixture,
+    headline,
+    strapline,
+    showScore,
+    siteUrl: siteUrl(),
+    backgroundImage,
+  });
+  if (!bytes.length || bytes.length > 50 * 1024 * 1024) throw new Error("Automatic YouTube thumbnail size is invalid.");
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const objectKey = `sixfl-tv-thumbnail/v1/${candidate.fixtureId}/${candidate.kind.toLowerCase()}/${randomUUID()}-${digest}.png`;
+  await uploadRailwayObject({ key: objectKey, body: bytes, contentType: "image/png", signal: AbortSignal.timeout(30000) });
+  const oldKey = existing[0]?.objectKey || null;
+  try {
+    await db.$executeRaw`
+      INSERT INTO "SixflTvThumbnail" ("fixtureId","kind","headline","strapline","showScore","objectKey","sha256","sizeBytes","updatedByActor")
+      VALUES (${candidate.fixtureId},${candidate.kind},${headline},${strapline},${showScore},${objectKey},${digest},${bytes.length},'automatic-youtube-publish')
+      ON CONFLICT ("fixtureId","kind") DO UPDATE SET
+        "headline"=EXCLUDED."headline",
+        "strapline"=EXCLUDED."strapline",
+        "showScore"=EXCLUDED."showScore",
+        "objectKey"=EXCLUDED."objectKey",
+        "sha256"=EXCLUDED."sha256",
+        "sizeBytes"=EXCLUDED."sizeBytes",
+        "updatedByActor"=EXCLUDED."updatedByActor",
+        "updatedAt"=NOW()
+    `;
+  } catch (error) {
+    await deleteRailwayObject(objectKey, AbortSignal.timeout(15000)).catch(() => undefined);
+    throw error;
+  }
+  if (oldKey && oldKey !== objectKey) await deleteRailwayObject(oldKey, AbortSignal.timeout(15000)).catch(() => undefined);
+  return objectKey;
+}
+
+async function queueAutomaticYoutubePublish() {
+  const connection = await db.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "SixflTvYoutubeConnection" WHERE "id"='primary' LIMIT 1
+  `;
+  if (!connection[0]) return false;
+
+  const rows = await db.$queryRaw<AutoPublishCandidate[]>(Prisma.sql`
+    WITH latest_ready AS (
+      SELECT DISTINCT ON (r."fixtureId", r."kind")
+        r."id" AS "renderJobId",
+        r."fixtureId",
+        r."kind",
+        r."metadataJson",
+        r."createdAt"
+      FROM "SixflTvRenderJob" r
+      WHERE r."state"='READY'
+        AND r."createdAt" >= NOW() - INTERVAL '7 days'
+      ORDER BY r."fixtureId", r."kind", r."createdAt" DESC, r."id" DESC
+    )
+    SELECT
+      r."renderJobId",
+      r."fixtureId",
+      r."kind",
+      r."metadataJson",
+      f."kickoffAt",
+      l."name" AS "leagueName",
+      l."season" AS "leagueSeason",
+      home."name" AS "homeTeamName",
+      away."name" AS "awayTeamName",
+      mr."homeScore",
+      mr."awayScore"
+    FROM latest_ready r
+    JOIN "Fixture" f ON f."id"=r."fixtureId"
+    JOIN "League" l ON l."id"=f."leagueId"
+    JOIN "Team" home ON home."id"=f."homeTeamId"
+    JOIN "Team" away ON away."id"=f."awayTeamId"
+    JOIN "MatchResult" mr ON mr."fixtureId"=f."id"
+    WHERE mr."isDisputed"=FALSE
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "SixflTvYoutubePublish" p
+        WHERE p."fixtureId"=r."fixtureId" AND p."kind"=r."kind"
+      )
+    ORDER BY r."createdAt"
+    LIMIT 1
+  `);
+  const candidate = rows[0];
+  if (!candidate) return false;
+
+  const thumbnailObjectKey = await autoThumbnailForPublish(candidate);
+  const defaults = sixflTvYoutubeDefaults({
+    kickoffAt: candidate.kickoffAt,
+    league: { name: candidate.leagueName, season: candidate.leagueSeason },
+    homeTeam: { name: candidate.homeTeamName },
+    awayTeam: { name: candidate.awayTeamName },
+    result: { homeScore: candidate.homeScore, awayScore: candidate.awayScore },
+  }, candidate.kind);
+
+  await db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424424)::text`;
+    const existing = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "SixflTvYoutubePublish"
+      WHERE "fixtureId"=${candidate.fixtureId} AND "kind"=${candidate.kind}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    if (existing[0]) return;
+    await tx.$executeRaw`
+      INSERT INTO "SixflTvYoutubePublish"
+        ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor")
+      VALUES
+        (${randomUUID()},${candidate.fixtureId},${candidate.kind},${candidate.renderJobId},${thumbnailObjectKey},${defaults.title},${defaults.description},'public','automatic-youtube-publish')
+    `;
+  });
+  console.log(`Automatically queued ${candidate.kind} for fixture ${candidate.fixtureId} to public YouTube.`);
+  return true;
+}
+
 type RetentionAsset = { id: string; fixtureId: string; filename: string; kind: string };
 type RetentionPart = { assetId: string; partNumber: number; objectKey: string };
 
@@ -840,6 +995,7 @@ async function main() {
       }
       continue;
     }
+    await queueAutomaticYoutubePublish().catch(error => console.error("Automatic YouTube queue failed", safeError(error)));
     const publish = await claimPublishJob().catch(error => { console.error("YouTube claim failed", safeError(error)); return null; });
     if (publish) {
       try { await processPublish(publish); console.log(`Published ${publish.kind} ${publish.id} to YouTube as ${publish.privacyStatus}`); }
@@ -871,7 +1027,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
