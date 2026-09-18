@@ -197,6 +197,6 @@ test('studio source keeps publishing explicit, public and isolated from customer
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);assert.match(youtube,/syncPublishedYoutubeThumbnail/);assert.match(youtube,/thumbnails\/set/);
   const notificationMigration=fs.readFileSync('prisma/migrations/20260918190000_sixfl_tv_daily_subscriber_notification/migration.sql','utf8');
   assert.match(notificationMigration,/notifySubscribers/);assert.match(notificationMigration,/notificationDay/);assert.match(notificationMigration,/UNIQUE INDEX/);
-  assert.match(ui,/first SIXFL TV video published each UK calendar day notifies subscribers/);assert.match(ui,/saves the thumbnail exactly as shown in the live preview/);
+  assert.match(ui,/first SIXFL TV video published each UK calendar day notifies subscribers/);assert.match(ui,/publish automatically as/);assert.match(ui,/manual fallback or retry/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
 });
