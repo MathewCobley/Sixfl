@@ -275,8 +275,10 @@ export async function requestRenders(fixtureId: string, actor: string) {
     const fingerprint = sha(JSON.stringify({ kind: spec.kind, assets: ordered.map(asset => asset.id), metadata }));
     const row = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424421)::text`;
-      const ready = await tx.$queryRaw<RenderJobRow[]>`SELECT * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} AND "kind"=${spec.kind} AND "sourceFingerprint"=${fingerprint} AND "state"='READY' ORDER BY "createdAt" DESC LIMIT 1`;
-      if (ready[0]) return ready[0];
+      // An explicit Generate / Regenerate request always creates a fresh job once
+      // the previous job has finished. Reusing an older READY row made the old
+      // video remain visible, which made it impossible for an admin to tell
+      // whether a new render had actually completed.
       const active = await tx.$queryRaw<RenderJobRow[]>`SELECT * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} AND "kind"=${spec.kind} AND "state" IN ('QUEUED','PROCESSING') FOR UPDATE`;
       if (active[0]) {
         if (active[0].sourceFingerprint === fingerprint) return active[0];
