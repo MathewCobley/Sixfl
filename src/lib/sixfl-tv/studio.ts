@@ -73,10 +73,11 @@ function renderProgress(row: RenderJobRow) {
     progressLabel: savedLabel || "Render stopped",
   };
 }
-function renderDto(row: RenderJobRow) {
+function renderDto(row: RenderJobRow, queueAhead: number | null = null) {
   const progress = renderProgress(row);
   return { id: row.id, kind: row.kind, state: row.state, createdAt: row.createdAt.toISOString(), completedAt: row.completedAt?.toISOString() || null,
     error: row.error, sizeBytes: row.outputSizeBytes == null ? null : Number(row.outputSizeBytes), durationMs: row.durationMs,
+    queueAhead,
     ...progress };
 }
 function thumbnailDto(row: ThumbnailRow) {
@@ -274,15 +275,27 @@ async function latestRows<T>(sql: Prisma.Sql) { return prisma.$queryRaw<T[]>(sql
 
 export async function studioState(fixtureId: string) {
   await studioFixture(fixtureId);
-  const [jobs, thumbs, connection, publishes] = await Promise.all([
+  const [jobs, thumbs, connection, publishes, activeQueue] = await Promise.all([
     latestRows<RenderJobRow>(Prisma.sql`SELECT DISTINCT ON ("kind") * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
     latestRows<ThumbnailRow>(Prisma.sql`SELECT * FROM "SixflTvThumbnail" WHERE "fixtureId"=${fixtureId} ORDER BY "kind"`),
     prisma.$queryRaw<{ channelId: string | null; channelTitle: string | null; connectedAt: Date }[]>`SELECT "channelId","channelTitle","connectedAt" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`,
     latestRows<PublishRow>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`),
+    prisma.$queryRaw<Array<{ id: string; state: "QUEUED" | "PROCESSING" }>>`
+      SELECT "id","state"
+      FROM "SixflTvRenderJob"
+      WHERE "state" IN ('QUEUED','PROCESSING')
+      ORDER BY CASE WHEN "state"='PROCESSING' THEN 0 ELSE 1 END, "createdAt","id"
+    `,
   ]);
+  const queueAheadById = new Map<string, number>();
+  let ahead = 0;
+  for (const row of activeQueue) {
+    queueAheadById.set(row.id, row.state === "PROCESSING" ? 0 : ahead);
+    ahead += 1;
+  }
   const youtubeConfigured = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "SIXFL_TV_TOKEN_KEY"].every(name => Boolean(process.env[name]?.trim()));
   return {
-    renders: jobs.map(renderDto), thumbnails: thumbs.map(thumbnailDto), publishes: publishes.map(publishDto),
+    renders: jobs.map(row => renderDto(row, row.state === "QUEUED" || row.state === "PROCESSING" ? queueAheadById.get(row.id) ?? null : null)), thumbnails: thumbs.map(thumbnailDto), publishes: publishes.map(publishDto),
     youtube: { configured: youtubeConfigured, connected: Boolean(connection[0]), channelId: connection[0]?.channelId || null, channelTitle: connection[0]?.channelTitle || null },
   };
 }

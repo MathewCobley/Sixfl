@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Kind = "HIGHLIGHTS" | "FULL_MATCH";
-type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string };
+type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string; queueAhead: number | null };
 type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: boolean; sizeBytes: number; updatedAt: string };
 type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
 type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null } };
@@ -181,7 +181,17 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-white/45">{render.state === "QUEUED" ? "Waiting to start." : "Rendering privately. Original match sound is retained."}</p>
+            <p className="text-xs text-white/45">
+              {render.state === "QUEUED"
+                ? render.queueAhead === 0
+                  ? "Next to start."
+                  : render.queueAhead === 1
+                    ? "1 render ahead in the queue."
+                    : typeof render.queueAhead === "number"
+                      ? `${render.queueAhead} renders ahead in the queue.`
+                      : "Waiting to start."
+                : "Rendering privately. Original match sound is retained."}
+            </p>
             <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering(kind)}>{busy ? "Stopping…" : `Stop ${kindLabel(kind).toLowerCase()}`}</button>
           </div>
         </div> : null}

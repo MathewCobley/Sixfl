@@ -18,6 +18,8 @@ const renderSignals = new AsyncLocalStorage<AbortSignal>();
 const shutdown = new AbortController();
 const MAX_RENDER_MS = 2 * 60 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 16 * 1024 ** 3;
+const FFMPEG_THREADS = 8;
+const FFMPEG_FILTER_THREADS = 2;
 const TITLE_SECONDS = 4;
 const LINEUP_SECONDS = 5;
 const LEAGUE_TABLE_SECONDS = 5;
@@ -86,12 +88,12 @@ async function run(
     ? [
         "-nostdin",
         "-protocol_whitelist", "file,pipe",
-        "-threads", "2",
-        "-filter_threads", "1",
-        "-filter_complex_threads", "1",
+        "-threads", String(FFMPEG_THREADS),
+        "-filter_threads", String(FFMPEG_FILTER_THREADS),
+        "-filter_complex_threads", String(FFMPEG_FILTER_THREADS),
         ...(progress ? ["-progress", "pipe:2", "-nostats"] : []),
         ...args.slice(0, -1),
-        "-threads", "2",
+        "-threads", String(FFMPEG_THREADS),
         args.at(-1)!,
       ]
     : bin === "ffprobe" ? ["-protocol_whitelist", "file,pipe", ...args] : args;
@@ -150,8 +152,13 @@ async function hasAudio(file: string) {
 
 async function claimJob() {
   return db.$transaction(async tx => {
+    // Serialize claims across rolling deployments or accidental duplicate workers.
+    // SIXFL TV deliberately encodes one video at a time; everything else stays FIFO.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424422)::text`;
     await tx.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='QUEUED',"leaseToken"=NULL,"busyUntil"=NULL,"updatedAt"=NOW(),"error"='Recovered after an interrupted worker.' WHERE "state"='PROCESSING' AND "busyUntil" < NOW()`;
-    const jobs = await tx.$queryRaw<Job[]>`SELECT "id","fixtureId","kind","metadataJson","leaseToken" FROM "SixflTvRenderJob" WHERE "state"='QUEUED' ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1`;
+    const active = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvRenderJob" WHERE "state"='PROCESSING' AND "busyUntil">NOW() ORDER BY "startedAt","createdAt","id" LIMIT 1 FOR UPDATE`;
+    if (active[0]) return null;
+    const jobs = await tx.$queryRaw<Job[]>`SELECT "id","fixtureId","kind","metadataJson","leaseToken" FROM "SixflTvRenderJob" WHERE "state"='QUEUED' ORDER BY "createdAt","id" FOR UPDATE SKIP LOCKED LIMIT 1`;
     if (!jobs[0]) return null;
     const lease = randomUUID();
     await tx.$executeRaw`UPDATE "SixflTvRenderJob" SET "state"='PROCESSING',"leaseToken"=${lease},"busyUntil"=NOW()+INTERVAL '12 minutes',"startedAt"=COALESCE("startedAt",NOW()),"updatedAt"=NOW(),"error"=NULL WHERE "id"=${jobs[0].id}`;
