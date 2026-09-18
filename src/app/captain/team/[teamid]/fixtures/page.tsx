@@ -301,8 +301,8 @@ async function confirmFixtureAction(formData: FormData) {
   const access = await requireCaptain(teamid);
 
   try {
-    // A late Yes is still useful operationally, but the original confirmedAt is
-    // what the SIXFL TV Priority score uses to decide whether it was on time.
+    // A late Yes is still useful operationally, but preserve the original
+    // confirmation timestamp so historical on-time/late scoring stays accurate.
     await getConfirmableFixture(fixtureId, teamid, {
       allowLateConfirmation: true,
     });
