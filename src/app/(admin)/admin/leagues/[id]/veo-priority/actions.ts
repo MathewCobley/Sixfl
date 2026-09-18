@@ -6,8 +6,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
-import { readVeoSettings, readVeoTeams, VeoAllocationError, validVeoDate } from '@/lib/veo/service';
-import { approvePendingVeoRequests } from '@/lib/veo/priority-requests';
+import { readVeoSettings, VeoAllocationError, validVeoDate } from '@/lib/veo/service';
 
 function back(leagueId: string, form: FormData, error?: string) {
   const query = new URLSearchParams(error ? { error } : { saved: '1' });
