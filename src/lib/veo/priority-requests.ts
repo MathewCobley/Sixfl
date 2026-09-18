@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { VEO_SUPPLEMENT_PENCE } from './allocator';
 
 export const VEO_REQUEST_TERMS = 'veo-priority-v1';
 export type VeoRequestStatus = 'PENDING' | 'APPROVED' | 'DECLINED';
@@ -68,24 +67,20 @@ async function assertAdmin(db: Db, actorId: string) {
   const rows = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE id = ${actorId} AND role::text = 'ADMIN'`;
   if (!rows.length) throw new VeoRequestError('Administrator access is required to review this request.');
 }
-async function enabled(db: Db, leagueId: string, teamId: string) {
-  const rows = await db.$queryRaw<{ enabled: boolean }[]>`SELECT enabled FROM "VeoTeamPriority" WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId}`;
-  return rows[0]?.enabled === true;
-}
 export async function readVeoOffer(leagueId: string | null, teamId: string, db: Db = prisma): Promise<VeoOffer | null> {
   if (!leagueId || !await eligibleTeam(db, leagueId, teamId)) return null;
   const requests = await db.$queryRaw<VeoRequest[]>`
     SELECT * FROM "VeoPriorityRequest" WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId}
-    ORDER BY (status = 'PENDING') DESC, "requestedAt" DESC, id DESC LIMIT 1
+    ORDER BY "requestedAt" DESC, id DESC LIMIT 1
   `;
-  return { priority: await enabled(db, leagueId, teamId), request: requests[0] ?? null };
+  return { priority: false, request: requests[0] ?? null };
 }
 export async function requestVeoPriority(_input: { leagueId: string; teamId: string; actorId: string; agreed: boolean; termsVersion: string }) {
   throw new VeoRequestError('Paid Veo Priority has ended. SIXFL TV Priority is now free and earned automatically from your team score.');
 }
-/** Reused by the existing admin toggle so manual approval cannot leave a request pending. */
+/** Legacy compatibility only. Paid Priority requests can never be approved again. */
 export async function approvePendingVeoRequests(db: Db, leagueId: string, teamId: string, actorId: string) {
-  await db.$executeRaw`UPDATE "VeoPriorityRequest" SET status = 'APPROVED', "reviewedBy" = ${actorId}, "reviewedAt" = NOW()
+  await db.$executeRaw`UPDATE "VeoPriorityRequest" SET status = 'DECLINED', "reviewedBy" = ${actorId}, "reviewedAt" = NOW()
     WHERE "leagueId" = ${leagueId} AND "teamId" = ${teamId} AND status = 'PENDING'`;
 }
 export async function reviewVeoPriorityRequest(input: { leagueId: string; requestId: string; actorId: string; decision: 'APPROVED' | 'DECLINED' }) {
@@ -104,25 +99,14 @@ export async function reviewVeoPriorityRequest(input: { leagueId: string; reques
       if (current.status !== input.decision) throw new VeoRequestError('Another administrator has already reviewed this request. Refresh to see the decision.');
       return request.teamId; // Retried approval must not re-enable a subsequently disabled team.
     }
-    if (input.decision === 'APPROVED') {
-      if (current.supplementPence !== VEO_SUPPLEMENT_PENCE || current.termsVersion !== VEO_REQUEST_TERMS) throw new VeoRequestError('The saved agreement needs reviewing before Priority can be enabled.');
-      if (!await eligibleTeam(db, input.leagueId, request.teamId)) throw new VeoRequestError('This league is off or the team is no longer eligible. Do not approve this request.');
-      await db.$executeRaw`INSERT INTO "VeoTeamPriority" ("leagueId", "teamId", enabled, "updatedBy")
-        VALUES (${input.leagueId}, ${request.teamId}, true, ${input.actorId})
-        ON CONFLICT ("leagueId", "teamId") DO UPDATE SET enabled = true, "updatedAt" = NOW(), "updatedBy" = EXCLUDED."updatedBy"`;
-    }
     await db.$executeRaw`UPDATE "VeoPriorityRequest" SET status = ${input.decision}, "reviewedBy" = ${input.actorId}, "reviewedAt" = NOW() WHERE id = ${request.id}`;
     await audit(db, input.leagueId, request.teamId, input.actorId, { kind: 'captain_priority_review', requestId: request.id, decision: input.decision, requestedBy: request.requestedBy, supplementPence: request.supplementPence });
     return request.teamId;
   });
 }
-export async function pendingVeoRequests(leagueId: string) {
-  return prisma.$queryRaw<(VeoRequest & { teamName: string })[]>`
-    SELECT r.*, t.name AS "teamName" FROM "VeoPriorityRequest" r JOIN "Team" t ON t.id = r."teamId"
-    WHERE r."leagueId" = ${leagueId} AND r.status = 'PENDING' ORDER BY r."requestedAt", r.id
-  `;
+export async function pendingVeoRequests(_leagueId: string) {
+  return [] as Array<VeoRequest & { teamName: string }>;
 }
-export async function pendingVeoRequestCount(leagueId: string): Promise<number> {
-  const rows = await prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(*)::integer AS count FROM "VeoPriorityRequest" WHERE "leagueId" = ${leagueId} AND status = 'PENDING'`;
-  return rows[0]?.count ?? 0;
+export async function pendingVeoRequestCount(_leagueId: string): Promise<number> {
+  return 0;
 }

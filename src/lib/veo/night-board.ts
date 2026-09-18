@@ -26,18 +26,11 @@ function overlaps(input: { kickoffAt: Date; durationMinutes: number }, other: Ac
   return start < otherEnd && otherStart < end;
 }
 
-async function ensureAcceptedVeoCharges(..._args: unknown[]) {
-  // Paid Veo Priority has been retired. Existing historic charges stay as recorded,
-  // but confirming or completing a new filming slot must never create another one.
-  return 0;
-}
-
 /**
  * Night Board is the administrator's final filming decision. When Veo Priority is
  * enabled for the fixture league, selecting SIXFL TV must create the real booking
- * immediately. Recorded-pitch priority is earned from the SIXFL TV Priority score;
- * there is no filming supplement or captain opt-in. Existing historic Veo charges
- * remain untouched, but this flow never creates a new one.
+ * immediately. Recorded-pitch priority is earned from the SIXFL TV Priority score.
+ * There is no filming supplement, paid request or captain opt-in.
  *
  * Leagues without confirmation-time Veo keep the older plain SIXFL TV flag flow.
  */
@@ -93,7 +86,6 @@ export async function confirmNightBoardVeoFixture(input: {
     }
     if (initial.bookingState) {
       if (initial.bookingState === 'PLANNED' || initial.bookingState === 'READY') {
-        await ensureAcceptedVeoCharges(db, initial);
         return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
       }
       throw new VeoBookingError('This Veo booking has already been closed and cannot be re-opened from the Night Board.');
@@ -127,7 +119,6 @@ export async function confirmNightBoardVeoFixture(input: {
       );
     }
     if (target.bookingState === 'PLANNED' || target.bookingState === 'READY') {
-      await ensureAcceptedVeoCharges(db, target);
       return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
     }
 
@@ -188,14 +179,12 @@ export async function confirmNightBoardVeoFixture(input: {
       WHERE "fixtureId" = ${target.id} AND status = 'REQUESTED'
     `;
 
-    const chargesCreated = await ensureAcceptedVeoCharges(db, target);
     const details = JSON.stringify({
       kind: 'night_board_veo_confirmed',
       fixtureId: target.id,
       date,
       cameraKey: preview.cameraKey,
       acceptedRequests,
-      chargesCreated,
       priorityModel: 'SIXFL_TV_SCORE',
       noPriorityFees: true,
       swappedPitch: anchor.id !== target.id,

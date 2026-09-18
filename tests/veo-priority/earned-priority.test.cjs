@@ -15,6 +15,12 @@ const broadcast = fs.readFileSync('src/lib/communications/send-team-broadcast.ts
 const communicationActions = fs.readFileSync('src/app/(admin)/admin/communications/actions.ts', 'utf8');
 const migration = fs.readFileSync('prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql', 'utf8');
 const weightMigration = fs.readFileSync('prisma/migrations/20260918140000_sixfl_tv_priority_weight_tuning/migration.sql', 'utf8');
+const feeRetirementMigration = fs.readFileSync('prisma/migrations/20260918143000_retire_legacy_veo_priority_fees/migration.sql', 'utf8');
+const priorityRequests = fs.readFileSync('src/lib/veo/priority-requests.ts', 'utf8');
+const adminPriorityPage = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/page.tsx', 'utf8');
+const adminNightPanel = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/FixtureVeoNightPanel.tsx', 'utf8');
+const captainBookings = fs.readFileSync('src/components/captain/CaptainVeoBookings.tsx', 'utf8');
+const captainFixtures = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/layout.tsx', 'utf8');
 
 test('Priority score makes the match card the largest factor while keeping late payment costly', () => {
   assert.match(score, /paymentPoints = 6/);
@@ -28,15 +34,20 @@ test('Priority score makes the match card the largest factor while keeping late 
   assert.match(score, /SIXFL_TV_PRIORITY_MIN_SCORE = 60/);
 });
 
-test('new Priority allocation is score based and free', () => {
+test('new Priority allocation is score based and permanently free', () => {
   assert.match(allocator, /homePriorityScore/);
   assert.match(allocator, /qualifyingScores\.reduce/);
   assert.match(allocator, /const supplementPence = 0/);
+  assert.doesNotMatch(allocator, /VEO_SUPPLEMENT_PENCE/);
   assert.match(bookings, /getSixflTvPriorityScores/);
   assert.match(bookings, /homePriorityScore:homeScore\?\.score\?\?0/);
   assert.match(bookings, /priorityModel:'SIXFL_TV_SCORE'/);
   assert.match(nightBoard, /noPriorityFees: true/);
-  assert.doesNotMatch(nightBoard, /paymentCharge\.create/);
+  assert.doesNotMatch(nightBoard, /paymentCharge\.create|ensureAcceptedVeoCharges|amountPence:\s*500/);
+  assert.doesNotMatch(bookings, /paymentCharge\.create|UPDATE "PaymentCharge"/);
+  assert.match(priorityRequests, /Paid Veo Priority has ended/);
+  assert.match(priorityRequests, /SET status = 'DECLINED'/);
+  assert.doesNotMatch(priorityRequests, /SET status = 'APPROVED'/);
 });
 
 test('captains and admins see the same score', () => {
@@ -57,6 +68,20 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /60\/100/);
   assert.doesNotMatch(captainForm, /£5 extra for the whole team/);
   assert.match(captainForm, /earned automatically/);
+});
+
+test('legacy £5 pilot fees are retired without leaving fee UI or double-credit paths', () => {
+  for (const source of [adminPriorityPage, adminNightPanel, captainBookings, captainFixtures, captainForm]) {
+    assert.doesNotMatch(source, /historic £5|older Veo Priority|Veo supplement value|agreedPence === 500|View Team payments/);
+  }
+  assert.match(feeRetirementMigration, /title LIKE 'Veo Priority — %'/);
+  assert.match(feeRetirementMigration, /"amountPence" = 500/);
+  assert.match(feeRetirementMigration, /'CREDIT_ADDED'::"TeamCreditLedgerEntryType"/);
+  assert.match(feeRetirementMigration, /COALESCE\(pt\.reference, ''\) <> 'TEAM_CREDIT'/);
+  assert.match(feeRetirementMigration, /status = 'VOID'/);
+  assert.match(feeRetirementMigration, /"agreedPence" = 0/);
+  assert.match(feeRetirementMigration, /DELETE FROM "TeamCreditLedgerEntry"/);
+  assert.doesNotMatch(feeRetirementMigration, /DELETE FROM "PaymentCharge"|TRUNCATE|DROP TABLE/);
 });
 
 test('email builder exposes and team broadcasts resolve the current score', () => {
