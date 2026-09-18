@@ -26,7 +26,18 @@ type PublishRow = {
   error: string | null; createdAt: Date; completedAt: Date | null;
 };
 type Contribution = { name?: unknown; goals?: unknown };
-type PriorFormFixture = {\n  homeTeamId: string;\n  awayTeamId: string;\n  kickoffAt: Date;\n  result: { homeScore: number; awayScore: number } | null;\n};\ntype StoredPredictorScoreRow = {\n  predictedHomeScore: number | null;\n  predictedAwayScore: number | null;\n  headline: string | null;\n};\n\n
+type PriorFormFixture = {
+  homeTeamId: string;
+  awayTeamId: string;
+  kickoffAt: Date;
+  result: { homeScore: number; awayScore: number } | null;
+};
+type StoredPredictorScoreRow = {
+  predictedHomeScore: number | null;
+  predictedAwayScore: number | null;
+  headline: string | null;
+};
+
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://sixfl.co.uk").replace(/\/+$/, "");
 }
