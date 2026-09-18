@@ -10,7 +10,7 @@ export function defaultTeamBroadcastCode(name: string) {
 export function normaliseTeamBroadcastCode(value: unknown, teamName: string) {
   const compact = String(value ?? "")
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+    .replace(/[^A-Z0-9&]/g, "");
   return compact ? compact.slice(0, 3) : defaultTeamBroadcastCode(teamName);
 }
 
