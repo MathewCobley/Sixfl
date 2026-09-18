@@ -3,12 +3,12 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { resolveTeamFixtureFeePence } from '@/lib/payments/fixture-fee-policy';
 import { allocateVeoNight, normaliseVeoPitch, type VeoFixture, type VeoHistory } from './allocator';
-import { readVeoSettings, londonVeoDate, validVeoDate } from './service';
+import { readVeoSettings, validVeoDate } from './service';
 import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
-import { VEO_FIXTURE_TERMS, parseVeoFixtureChoice, veoCameraKey, veoVersion, validateVeoVideo, type VeoFixtureChoice } from './fixture-policy';
+import { veoCameraKey, veoVersion, validateVeoVideo, type VeoFixtureChoice } from './fixture-policy';
 
 export class VeoBookingError extends Error {}
-type Db = Pick<typeof prisma, '$queryRaw'|'$executeRaw'|'fixture'|'paymentCharge'>;
+type Db = Pick<typeof prisma, '$queryRaw'|'$executeRaw'|'fixture'>;
 type RequestRow = { fixtureId: string; teamId: string; leagueId: string; choice: VeoFixtureChoice; status: string; actorId: string; termsVersion: string; homeTeamId: string; awayTeamId: string; kickoffAt: Date; revision: number; chargeId: string|null; basePence: number|null; agreedPence: number|null };
 type MatchRow = { homeName:string; awayName:string; id: string; leagueId: string; homeTeamId: string; awayTeamId: string; kickoffAt: Date; publishedAt: Date|null; venueId: string|null; pitch: string|null; status: string; legacy: boolean; bookingState: string|null; placeholder: boolean };
 export type FixtureVeoOffer = { available: boolean; reason: string|null; defaultChoice: VeoFixtureChoice; preference: boolean; requestStatus: string|null; bookingState: string|null; agreedPence: number|null; version: string; maxMatches: number; videoUrl?: string|null };
