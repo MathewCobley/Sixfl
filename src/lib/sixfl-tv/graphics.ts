@@ -162,3 +162,26 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
+
+
+export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture }) {
+  const firstScore = input.fixture.firstTeam.score;
+  const secondScore = input.fixture.secondTeam.score;
+  if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
+  const firstName = fit(input.fixture.firstTeam.name, 24);
+  const secondName = fit(input.fixture.secondTeam.name, 24);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <g transform="translate(54 46)">
+      <rect width="620" height="146" rx="22" fill="#020805" fill-opacity="0.90" stroke="#34d399" stroke-width="3"/>
+      <rect x="0" y="0" width="88" height="146" rx="22" fill="#10b981"/>
+      <text x="44" y="84" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="900" fill="#02140d">FT</text>
+      <text x="120" y="55" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#ffffff">${xml(firstName)}</text>
+      <text x="120" y="112" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#ffffff">${xml(secondName)}</text>
+      <text x="565" y="57" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="900" fill="#ffffff">${firstScore}</text>
+      <text x="565" y="114" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="900" fill="#ffffff">${secondScore}</text>
+      <line x1="108" y1="73" x2="586" y2="73" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+      <text x="606" y="89" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="800" letter-spacing="2.5" fill="#6ee7b7">SIXFL TV</text>
+    </g>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
