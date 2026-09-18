@@ -599,7 +599,7 @@ export async function createSixflTvLeagueTableCard(input: {
     <text x="1450" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">GD</text>
     <text x="1640" y="344" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="2" fill="#94a3b8">PTS</text>
     ${tableRows}
-    <text x="960" y="988" text-anchor="middle" font-size="23" font-weight="600" fill="#d1d5db">Table updated after this match</text>
+    <text x="960" y="988" text-anchor="middle" font-size="23" font-weight="600" fill="#d1d5db">Current League Standings</text>
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
