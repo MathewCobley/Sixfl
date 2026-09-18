@@ -26,8 +26,10 @@ export async function listPublishedNews(input: { leagueId?: string; teamId?: str
         END
         FROM "Fixture" f
         WHERE f."leagueId"=n."leagueId"
-          AND f."publishedAt" IS NOT NULL
-          AND (f."kickoffAt" AT TIME ZONE 'Europe/London')::date = n."matchDate"::date
+          AND f."id" IN (
+            SELECT match->>'fixtureId'
+            FROM jsonb_array_elements(n."snapshot"->'matches') AS match
+          )
       )::int AS "matchweekNumber"
     FROM "LeagueNewsArticle" n JOIN "League" l ON l."id"=n."leagueId"
     WHERE n."status"='PUBLISHED' AND n."snapshot" IS NOT NULL
@@ -49,8 +51,10 @@ export async function getPublishedNews(slug: string, date: string): Promise<Publ
         END
         FROM "Fixture" f
         WHERE f."leagueId"=n."leagueId"
-          AND f."publishedAt" IS NOT NULL
-          AND (f."kickoffAt" AT TIME ZONE 'Europe/London')::date = n."matchDate"::date
+          AND f."id" IN (
+            SELECT match->>'fixtureId'
+            FROM jsonb_array_elements(n."snapshot"->'matches') AS match
+          )
       )::int AS "matchweekNumber"
     FROM "LeagueNewsArticle" n JOIN "League" l ON l."id"=n."leagueId"
     WHERE l."slug"=${slug} AND n."matchDate"=${date} AND n."status"='PUBLISHED' AND n."snapshot" IS NOT NULL LIMIT 1
