@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { fetchRailwayObject } from "@/lib/storage/railway-s3";
 import { StudioError, studioFixture, type SixflTvRenderKind } from "./studio";
 import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
@@ -161,6 +162,47 @@ export async function queueYoutubePublish(fixtureId: string, kind: SixflTvRender
     VALUES (${id},${fixtureId},${kind},${render[0].id},${thumb[0].objectKey},${title},${description},'public',${actor})`;
   return { id, kind, state: "QUEUED", privacyStatus: "public", resumed: false };
 }
+export async function syncPublishedYoutubeThumbnail(fixtureId: string, kind: SixflTvRenderKind) {
+  const rows = await prisma.$queryRaw<Array<{ youtubeVideoId: string | null; objectKey: string | null }>>(Prisma.sql`
+    SELECT p."youtubeVideoId", t."objectKey"
+    FROM "SixflTvYoutubePublish" p
+    LEFT JOIN "SixflTvThumbnail" t ON t."fixtureId"=p."fixtureId" AND t."kind"=p."kind"
+    WHERE p."fixtureId"=${fixtureId}
+      AND p."kind"=${kind}
+      AND p."state"='READY'
+      AND p."youtubeVideoId" IS NOT NULL
+    ORDER BY p."completedAt" DESC NULLS LAST, p."createdAt" DESC
+    LIMIT 1
+  `);
+  const published = rows[0];
+  if (!published?.youtubeVideoId || !published.objectKey) return { synced: false };
+
+  const stored = await fetchRailwayObject({ key: published.objectKey, signal: AbortSignal.timeout(30000) });
+  if (!stored.ok) throw new StudioError("Saved thumbnail storage is unavailable.", 503);
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  if (!bytes.length || bytes.length > 50 * 1024 * 1024) throw new StudioError("Saved thumbnail size is invalid.", 500);
+
+  const accessToken = await youtubeAccessToken();
+  const url = new URL("https://www.googleapis.com/upload/youtube/v3/thumbnails/set");
+  url.searchParams.set("videoId", published.youtubeVideoId);
+  url.searchParams.set("uploadType", "media");
+  const upload = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "image/png",
+      "Content-Length": String(bytes.length),
+    },
+    body: bytes,
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!upload.ok) {
+    const detail = await upload.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new StudioError(detail.error?.message || `YouTube thumbnail update failed (${upload.status}).`, 502);
+  }
+  return { synced: true, videoId: published.youtubeVideoId };
+}
+
 export async function youtubePublishState(fixtureId: string) {
   const rows = await prisma.$queryRaw<PublishRow[]>(Prisma.sql`SELECT DISTINCT ON ("kind") "id","kind","state","title","privacyStatus","youtubeVideoId","youtubeUrl","error","createdAt","completedAt" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} ORDER BY "kind","createdAt" DESC,"id" DESC`);
   return rows.map(row => ({ id: row.id, kind: row.kind, state: row.state, title: row.title, privacyStatus: row.privacyStatus, youtubeVideoId: row.youtubeVideoId, youtubeUrl: row.youtubeUrl, error: row.error, createdAt: row.createdAt.toISOString(), completedAt: row.completedAt?.toISOString() || null }));
