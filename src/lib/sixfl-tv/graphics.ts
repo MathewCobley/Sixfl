@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import sharp from "sharp";
 
 export type SixflTvGraphicTeam = {
@@ -28,6 +30,18 @@ function fit(value: string, max = 34) {
   const trimmed = value.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
+let sixflTvLogoPromise: Promise<Buffer> | null = null;
+async function sixflTvLogo() {
+  if (!sixflTvLogoPromise) sixflTvLogoPromise = (async () => {
+    const source = await readFile(path.join(process.cwd(), "public", "Sixfl-tv.png"));
+    return sharp(source).png().trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+  })();
+  return sixflTvLogoPromise;
+}
+function logoImage(buffer: Buffer, x: number, y: number, width: number, height: number, opacity = 1) {
+  return `<image href="data:image/png;base64,${buffer.toString("base64")}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}"/>`;
 }
 
 function resolveBadgeUrl(value: string | null | undefined, siteUrl: string) {
@@ -90,9 +104,10 @@ export async function createSixflTvThumbnail(input: {
   showScore: boolean;
   siteUrl: string;
 }) {
-  const [firstBadge, secondBadge] = await Promise.all([
+  const [firstBadge, secondBadge, sixflTvLogoBytes] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(),
   ]);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
@@ -101,7 +116,7 @@ export async function createSixflTvThumbnail(input: {
   const strapline = fit(input.strapline || input.fixture.leagueName, 54);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     ${stadiumBackground(1280, 720)}
-    <text x="640" y="78" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="800" letter-spacing="7" fill="#6ee7b7">SIXFL TV</text>
+    ${logoImage(sixflTvLogoBytes, 500, 28, 280, 90)}
     <text x="640" y="146" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="64" font-weight="900" fill="#ffffff">${xml(headline)}</text>
     <text x="640" y="188" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#d1fae5">${xml(strapline)}</text>
     <g filter="url(#shadow)">${badgeImage(firstBadge, 160, 238, 210, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 910, 238, 210, input.fixture.secondTeam.name)}</g>
@@ -121,16 +136,18 @@ export async function createSixflTvVideoCard(input: {
   label: string;
   siteUrl: string;
 }) {
-  const [firstBadge, secondBadge] = await Promise.all([
+  const [firstBadge, secondBadge, sixflTvLogoBytes] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(),
   ]);
   const scoreVisible = input.mode === "FULL_TIME" && Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
+  const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : input.label === "SIXFL TV" ? "6-A-SIDE FOOTBALL" : fit(input.label, 34);
   const scorerLine = (input.fixture.scorers || []).slice(0, 5).join(" · ");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
-    <text x="960" y="110" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="900" letter-spacing="10" fill="#6ee7b7">SIXFL TV</text>
-    <text x="960" y="205" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="900" fill="#ffffff">${xml(input.mode === "FULL_TIME" ? "FULL TIME" : fit(input.label, 34))}</text>
+    ${logoImage(sixflTvLogoBytes, 760, 34, 400, 128)}
+    <text x="960" y="235" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="900" fill="#ffffff">${xml(cardHeading)}</text>
     <g filter="url(#shadow)">${badgeImage(firstBadge, 240, 310, 300, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1380, 310, 300, input.fixture.secondTeam.name)}</g>
     <text x="390" y="700" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.firstTeam.name, 25))}</text>
     <text x="1530" y="700" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="900" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 25))}</text>
@@ -148,9 +165,10 @@ export async function createSixflTvVideoCard(input: {
 export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
   const destination = new URL("/goal-of-the-month", input.siteUrl);
   const displayUrl = `${destination.host.replace(/^www\./, "")}${destination.pathname}`;
+  const sixflTvLogoBytes = await sixflTvLogo();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
-    <text x="960" y="135" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="900" letter-spacing="11" fill="#6ee7b7">SIXFL TV</text>
+    ${logoImage(sixflTvLogoBytes, 760, 36, 400, 128)}
     <text x="960" y="300" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="92" font-weight="900" fill="#ffffff">GOAL OF THE MONTH</text>
     <text x="960" y="390" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="800" fill="#d1fae5">Think one of these deserves it?</text>
     <rect x="470" y="485" width="980" height="190" rx="34" fill="#020805" fill-opacity="0.72" stroke="#34d399" stroke-width="5"/>
@@ -165,6 +183,7 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
 
 
 export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture }) {
+  const [sixflTvLogoBytes] = await Promise.all([sixflTvLogo()]);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
@@ -172,16 +191,25 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const secondName = fit(input.fixture.secondTeam.name, 24);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <g transform="translate(54 46)">
-      <rect width="620" height="146" rx="22" fill="#020805" fill-opacity="0.90" stroke="#34d399" stroke-width="3"/>
-      <rect x="0" y="0" width="88" height="146" rx="22" fill="#10b981"/>
-      <text x="44" y="84" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="900" fill="#02140d">FT</text>
-      <text x="120" y="55" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#ffffff">${xml(firstName)}</text>
-      <text x="120" y="112" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="800" fill="#ffffff">${xml(secondName)}</text>
-      <text x="565" y="57" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="900" fill="#ffffff">${firstScore}</text>
-      <text x="565" y="114" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="900" fill="#ffffff">${secondScore}</text>
-      <line x1="108" y1="73" x2="586" y2="73" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
-      <text x="606" y="89" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="800" letter-spacing="2.5" fill="#6ee7b7">SIXFL TV</text>
+      <rect width="690" height="92" rx="14" fill="#020805" fill-opacity="0.88" stroke="#34d399" stroke-width="3"/>
+      <rect x="0" y="0" width="76" height="92" rx="14" fill="#10b981"/>
+      <text x="38" y="57" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="900" fill="#02140d">FT</text>
+      <text x="104" y="58" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xml(firstName)}</text>
+      <text x="322" y="58" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="900" fill="#ffffff">${firstScore}</text>
+      <text x="363" y="58" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="800" fill="#34d399">–</text>
+      <text x="404" y="58" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="900" fill="#ffffff">${secondScore}</text>
+      <text x="436" y="58" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xml(secondName)}</text>
     </g>
+    ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
+
+export async function createSixflTvWatermark() {
+  const sixflTvLogoBytes = await sixflTvLogo();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
