@@ -58,7 +58,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
   return <div className="mx-auto max-w-7xl space-y-6 text-white">
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">SIXFL TV Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
-      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Recorded-pitch priority is free and earned from each team’s SIXFL TV Priority Score. Completing the match card is the biggest part of the score, with on-time payment, confirmation, assists and ratings also rewarded.</p>
+      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Recorded-pitch priority is free and earned from each team’s SIXFL TV Priority Score. Completing the match card is the biggest part of the score, with on-time payment and confirmation also rewarded. Assists and ratings earn their bonus only when completed by 6pm the following day.</p>
     </header>
     {query.saved && <p role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">Saved. No existing fixtures or charges were recalculated.</p>}
     {query.error && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-4">{query.error.slice(0, 500)}</p>}
@@ -79,7 +79,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority scores</h2>
       <p className="text-sm leading-6 text-white/60">
-        Scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists bonus 1 and ratings bonus 1. Late payment earns only 2/6. Teams need at least 60/100 and must complete the core match card in at least 60% of the scored fixtures to qualify. New teams are shown as provisional.
+        Scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists bonus 1 (by 6pm next day) and ratings bonus 1 (by 6pm next day). Late payment earns only 2/6. Teams need at least 60/100 and must complete the core match card in at least 60% of the scored fixtures to qualify. New teams are shown as provisional.
       </p>
       <div className="divide-y divide-white/10">{teams.map(team => {
         const score = priorityScores.get(team.id);
