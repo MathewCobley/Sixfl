@@ -27,20 +27,19 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
   const [saving, setSaving] = useState(false), [error, setError] = useState("");
-  const [previewKey, setPreviewKey] = useState(0);
-  const version = current?.updatedAt ? encodeURIComponent(current.updatedAt) : "new";
+  const [previewFailed, setPreviewFailed] = useState(false);
   const previewSrc = useMemo(() => {
     const params = new URLSearchParams({
       preview: "1",
       headline,
       strapline,
       showScore: showScore ? "true" : "false",
-      v: String(previewKey),
     });
     return `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?${params.toString()}`;
-  }, [fixtureId, kind, headline, strapline, showScore, previewKey]);
+  }, [fixtureId, kind, headline, strapline, showScore]);
   const [debouncedPreviewSrc, setDebouncedPreviewSrc] = useState(previewSrc);
   useEffect(() => {
+    setPreviewFailed(false);
     const timer = window.setTimeout(() => setDebouncedPreviewSrc(previewSrc), 250);
     return () => window.clearTimeout(timer);
   }, [previewSrc]);
@@ -57,7 +56,7 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} thumbnail</h3>{current ? <span className="text-xs text-emerald-200">Saved</span> : <span className="text-xs text-white/45">Not saved yet</span>}</div>
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Live preview</span><span className="text-xs text-white/40">Updates as you type</span></div>
-      <img key={debouncedPreviewSrc} src={debouncedPreviewSrc} alt={`${kindLabel(kind)} live thumbnail preview`} className="aspect-video w-full rounded-xl border border-white/10 bg-black object-cover" onError={() => setPreviewKey(value => value + 1)} />
+      {previewFailed ? <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-white/10 bg-black/40 px-6 text-center text-sm text-white/50">Thumbnail preview is temporarily unavailable. Your saved thumbnail is unaffected.</div> : <img key={debouncedPreviewSrc} src={debouncedPreviewSrc} alt={`${kindLabel(kind)} live thumbnail preview`} className="aspect-video w-full rounded-xl border border-white/10 bg-black object-cover" onLoad={() => setPreviewFailed(false)} onError={() => setPreviewFailed(true)} />}
       {current ? <p className="mt-2 text-xs text-white/40">The preview above shows your current fields. Your saved thumbnail stays unchanged until you press Save thumbnail.</p> : <p className="mt-2 text-xs text-white/40">This is a preview only. Nothing is saved or sent to YouTube until you press Save thumbnail and later approve the video.</p>}
     </div>
     <div className="mt-4 grid gap-3">
