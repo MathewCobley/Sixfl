@@ -37,6 +37,9 @@ type MetaRow = {
   teamId: string;
   goalsRecorded: number;
   playerOfMatchName: string | null;
+  priorityCoreCompletedAt: Date | null;
+  priorityAssistsCompletedAt: Date | null;
+  priorityRatingsCompletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -241,7 +244,9 @@ export async function getSixflTvPriorityScores(
         AND "teamId" IN (${Prisma.join(uniqueTeamIds)})
     `),
     db.$queryRaw<MetaRow[]>(Prisma.sql`
-      SELECT "matchResultId", "teamId", "goalsRecorded", "playerOfMatchName", "createdAt", "updatedAt"
+      SELECT "matchResultId", "teamId", "goalsRecorded", "playerOfMatchName",
+        "priorityCoreCompletedAt", "priorityAssistsCompletedAt", "priorityRatingsCompletedAt",
+        "createdAt", "updatedAt"
       FROM "MatchResultTeamMeta"
       WHERE "matchResultId" IN (${Prisma.join(resultIds)})
         AND "teamId" IN (${Prisma.join(uniqueTeamIds)})
@@ -342,17 +347,17 @@ export async function getSixflTvPriorityScores(
 
     let matchCardPoints = 0;
     let matchCardStatus: SixflTvPriorityMatchScore["matchCardStatus"] = "INCOMPLETE";
-    if (coreComplete && meta!.updatedAt <= cardDeadline) {
+    if (coreComplete && meta!.priorityCoreCompletedAt && meta!.priorityCoreCompletedAt <= cardDeadline) {
       matchCardPoints = 4;
       matchCardStatus = "ON_TIME";
-    } else if (coreComplete) {
+    } else if (coreComplete && meta!.priorityCoreCompletedAt) {
       matchCardPoints = 2;
       matchCardStatus = "LATE";
     }
 
     const assistsCompleteOnTime =
       coreComplete &&
-      meta!.updatedAt <= cardDeadline &&
+      Boolean(meta!.priorityAssistsCompletedAt && meta!.priorityAssistsCompletedAt <= cardDeadline) &&
       (fixture.teamGoals === 0 || (performance?.assists ?? 0) > 0);
     const assistsPoints = assistsCompleteOnTime ? 1 : 0;
 
@@ -360,7 +365,7 @@ export async function getSixflTvPriorityScores(
       coreComplete &&
       appearanceCount > 0 &&
       (performance?.ratedCount ?? 0) === appearanceCount &&
-      Boolean(performance?.latestUpdatedAt && performance.latestUpdatedAt <= cardDeadline);
+      Boolean(meta!.priorityRatingsCompletedAt && meta!.priorityRatingsCompletedAt <= cardDeadline);
     const ratingsPoints = ratingsCompleteOnTime ? 1 : 0;
 
     const charge = chargeByKey.get(entryKey);
