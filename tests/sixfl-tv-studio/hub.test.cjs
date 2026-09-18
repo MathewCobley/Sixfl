@@ -36,6 +36,12 @@ test("Fixtures owns all match cards and direct footage management", () => {
   assert.match(fixtures, /f\."leagueId" =/);
   assert.match(fixtures, /border-red-400\/45/);
   assert.match(fixtures, /bg-red-400\/70/);
+  assert.match(fixtures, /"Live"/);
+  assert.match(fixtures, /"Not live"/);
+  assert.match(fixtures, /border-emerald-400\/35/);
+  assert.match(fixtures, /border-red-400\/35/);
+  assert.match(fixtures, /Video links & display/);
+  assert.doesNotMatch(fixtures, /fixture\.status\.toLowerCase\(\)/);
   assert.doesNotMatch(fixtures, /<select\b/);
   assert.doesNotMatch(fixtures, /getYoutubeConnectionStatus|sharedOnly|GoalOfWeekAdminPanel/);
 });
