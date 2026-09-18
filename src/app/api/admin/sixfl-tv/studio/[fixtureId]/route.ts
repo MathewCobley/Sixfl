@@ -27,7 +27,8 @@ export async function POST(request: Request, context: Context) {
     const fixtureId = footageId((await context.params).fixtureId), data = await readFootageJson(request);
     const actor = user?.id || session?.user?.email || "development-admin";
     if (data.action === "render") {
-      return NextResponse.json(await requestRenders(fixtureId, actor), { status: 202, headers });
+      const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
+      return NextResponse.json(await requestRenders(fixtureId, actor, kind), { status: 202, headers });
     }
     if (data.action === "cancel-render") {
       const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
