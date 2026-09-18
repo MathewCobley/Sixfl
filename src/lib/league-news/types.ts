@@ -14,7 +14,7 @@ export type NewsSnapshot = {
 };
 export type PublishedNews = {
   id: string; leagueSlug: string; publishedAt: string; updatedAt: string;
-  matchweekNumber: number | null;
+  matchweekNumber?: number | null;
   article: NewsSnapshot;
 };
 export type NewsPublicationState = {
