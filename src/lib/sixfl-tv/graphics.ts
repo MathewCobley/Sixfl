@@ -213,7 +213,6 @@ async function thumbnailTextPng(input: {
       height: input.height,
       align: input.align ?? "left",
       rgba: true,
-      dpi: 72,
     },
   }).png().toBuffer();
 }
