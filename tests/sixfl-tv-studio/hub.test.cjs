@@ -30,6 +30,13 @@ test("Fixtures owns all match cards and direct footage management", () => {
   assert.match(fixtures, /Upload \/ manage footage/);
   assert.match(fixtures, /\/admin\/sixfl-tv\/footage\/\$\{fixture\.id\}/);
   assert.match(fixtures, /LIMIT 200/);
+  assert.match(fixtures, /FormListboxField/);
+  assert.match(fixtures, /name="league"/);
+  assert.match(fixtures, /All leagues/);
+  assert.match(fixtures, /f\."leagueId" =/);
+  assert.match(fixtures, /border-red-400\/45/);
+  assert.match(fixtures, /bg-red-400\/70/);
+  assert.doesNotMatch(fixtures, /<select\b/);
   assert.doesNotMatch(fixtures, /getYoutubeConnectionStatus|sharedOnly|GoalOfWeekAdminPanel/);
 });
 

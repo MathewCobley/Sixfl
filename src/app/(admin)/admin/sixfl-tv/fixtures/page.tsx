@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
+import FormListboxField from "@/components/ui/FormListboxField";
 import {
   buildSixflTvVideoValue,
   getSixflTvVideos,
@@ -39,8 +40,9 @@ function formatKickoff(value: Date) {
   }).format(value);
 }
 
-async function getFixtures(query: string) {
+async function getFixtures(query: string, leagueId: string) {
   const search = query ? `%${query}%` : null;
+  const leagueFilter = leagueId || null;
   return prisma.$queryRaw<TvFixtureRow[]>(Prisma.sql`
     SELECT
       f."id", f."kickoffAt", f."status", f."sixflTvRecorded", f."sixflTvUrl",
@@ -52,10 +54,11 @@ async function getFixtures(query: string) {
     JOIN "Team" home ON home."id" = f."homeTeamId"
     JOIN "Team" away ON away."id" = f."awayTeamId"
     LEFT JOIN "Venue" v ON v."id" = f."venueId"
-    WHERE (${search}::text IS NULL
-      OR l."name" ILIKE ${search}
-      OR home."name" ILIKE ${search}
-      OR away."name" ILIKE ${search})
+    WHERE (${leagueFilter}::text IS NULL OR f."leagueId" = ${leagueFilter})
+      AND (${search}::text IS NULL
+        OR l."name" ILIKE ${search}
+        OR home."name" ILIKE ${search}
+        OR away."name" ILIKE ${search})
     ORDER BY f."kickoffAt" DESC
     LIMIT 200
   `);
@@ -109,12 +112,25 @@ async function saveSixflTvFixtureAction(formData: FormData) {
 export default async function SixflTvFixturesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; saved?: string; error?: string }>;
+  searchParams?: Promise<{ q?: string; league?: string; saved?: string; error?: string }>;
 }) {
   await requireAdmin();
   const sp = (await searchParams) ?? {};
   const query = String(sp.q ?? "").trim().slice(0, 100);
-  const fixtures = await getFixtures(query);
+  const requestedLeague = String(sp.league ?? "").trim().slice(0, 120);
+  const leagues = await prisma.league.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "desc" }],
+    select: { id: true, name: true, season: true, isActive: true },
+  });
+  const leagueId = leagues.some(league => league.id === requestedLeague) ? requestedLeague : "";
+  const fixtures = await getFixtures(query, leagueId);
+  const leagueOptions = [
+    { value: "", label: "All leagues" },
+    ...leagues.map(league => ({
+      value: league.id,
+      label: `${league.name}${league.season ? ` — ${league.season}` : ""}${league.isActive ? "" : " · inactive"}`,
+    })),
+  ];
 
   return <div className="space-y-6">
     <header>
@@ -125,12 +141,19 @@ export default async function SixflTvFixturesPage({
       </p>
     </header>
 
-    <form method="get" className="flex flex-col gap-3 sm:flex-row">
-      <label className="flex-1 text-sm text-white/70">
-        League or team
-        <input name="q" defaultValue={query} placeholder="e.g. Northallerton" className="mt-2 block w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-white" />
+    <form method="get" className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(260px,0.65fr)_auto] md:items-end">
+      <label className="block text-sm text-white/70">
+        Team or search term
+        <input name="q" defaultValue={query} placeholder="e.g. Northallerton" className="mt-2 block h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/15" />
       </label>
-      <button className="min-h-11 self-end rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-black" type="submit">Find fixtures</button>
+      <FormListboxField
+        name="league"
+        label="League"
+        value={leagueId}
+        options={leagueOptions}
+        placeholder="All leagues"
+      />
+      <button className="min-h-12 rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-black transition hover:bg-emerald-300" type="submit">Find fixtures</button>
     </form>
 
     {sp.saved ? <p role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">SIXFL TV fixture updated.</p> : null}
@@ -141,7 +164,8 @@ export default async function SixflTvFixturesPage({
         const saved = parseSixflTvVideoValue(fixture.sixflTvUrl);
         const videos = getSixflTvVideos(fixture.sixflTvUrl);
         const context = [fixture.leagueName, fixture.leagueSeason, fixture.venueName].filter(Boolean).join(" · ");
-        return <article key={fixture.id} className="rounded-2xl border border-red-400/25 bg-red-500/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
+        return <article key={fixture.id} className="relative overflow-hidden rounded-2xl border border-red-400/45 bg-[linear-gradient(110deg,rgba(127,29,29,0.24),rgba(69,10,10,0.14)_45%,rgba(0,0,0,0.15))] p-5 pl-6 shadow-[0_20px_55px_rgba(69,10,10,0.28)] ring-1 ring-red-950/50">
+          <span aria-hidden="true" className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-red-400/70" />
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
