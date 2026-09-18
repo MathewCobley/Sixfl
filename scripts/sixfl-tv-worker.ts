@@ -10,6 +10,7 @@ import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixfl
 import { fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
+import { sixflTvGoalClipPosterKey } from "../src/lib/sixfl-tv/goal-clip-poster";
 
 const db = new PrismaClient();
 const PART_BYTES = 8 * 1024 * 1024;
@@ -42,7 +43,7 @@ async function failJob(job: Job, message: string) {
 }
 
 type Job = { id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; metadataJson: Prisma.JsonValue; leaseToken: string | null };
-type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; partCount: number; sizeBytes: bigint; state: string };
+type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; kind: string; partCount: number; sizeBytes: bigint; state: string; clipNumber: number | null };
 type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type PublishJob = {
@@ -169,7 +170,7 @@ async function claimJob() {
 
 async function loadInputs(jobId: string) {
   return db.$queryRaw<Input[]>`
-    SELECT i."assetId",i."role",i."position",a."filename",a."partCount",a."sizeBytes",a."state"
+    SELECT i."assetId",i."role",i."position",a."filename",a."kind",a."partCount",a."sizeBytes",a."state",a."clipNumber"
     FROM "SixflTvRenderInput" i JOIN "SixflTvFootageAsset" a ON a."id"=i."assetId"
     WHERE i."jobId"=${jobId} ORDER BY i."position",i."assetId"`;
 }
@@ -264,6 +265,17 @@ async function saveThumbnailBackground(fixtureId: string, candidate: PosterCandi
   if (!candidate) return false;
   await uploadRailwayObject({
     key: sixflTvThumbnailBackgroundKey(fixtureId),
+    body: candidate.bytes,
+    contentType: "image/jpeg",
+    signal: operationSignal(30000),
+  });
+  return true;
+}
+
+async function saveGoalClipPoster(assetId: string, candidate: PosterCandidate | null) {
+  if (!candidate) return false;
+  await uploadRailwayObject({
+    key: sixflTvGoalClipPosterKey(assetId),
     body: candidate.bytes,
     contentType: "image/jpeg",
     signal: operationSignal(30000),
@@ -450,16 +462,29 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const collectPosterFor = (contentIndex: number) =>
       job.kind === "HIGHLIGHTS" ? contentIndex < 2 : !existingPoster && contentIndex === 0;
 
-    const normaliseInput = async (input: Input, source: string, normal: string, overlay: string | undefined, label: string, posterLabel?: string) => {
+    const normaliseInput = async (
+      input: Input,
+      source: string,
+      normal: string,
+      overlay: string | undefined,
+      label: string,
+      posterLabel?: string,
+      goalClipPosterAssetId?: string,
+    ) => {
       const mediaBytes = Math.max(1, Number(input.sizeBytes));
       const mediaStartBytes = completedMediaBytes;
       const progressFor = (fraction: number) =>
         12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
-      if (posterLabel) {
-        const candidate = await sourcePosterCandidate(source, dir, posterLabel);
-        if (candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
+      if (posterLabel || goalClipPosterAssetId) {
+        const candidate = await sourcePosterCandidate(source, dir, posterLabel || `goal-clip-${goalClipPosterAssetId}`);
+        if (goalClipPosterAssetId) {
+          await saveGoalClipPoster(goalClipPosterAssetId, candidate).catch(error =>
+            console.warn(`Could not save Goal of the Month poster for ${goalClipPosterAssetId}: ${safeError(error)}`),
+          );
+        }
+        if (posterLabel && candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
       }
       reportProgress(progressFor(0.02), label);
       await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
@@ -484,13 +509,26 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       if (index > 0 && swipe) segments.push(swipe);
       const input = content[index];
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      const numberedClip = job.kind === "HIGHLIGHTS" && input.kind === "CLIP";
+      const clipOverlay = numberedClip
+        ? path.join(dir, "normalised", `score-bug-clip-${input.clipNumber ?? index + 1}.png`)
+        : footageOverlayPng;
+      if (numberedClip) {
+        await writeFile(clipOverlay, await createSixflTvScoreBug({
+          fixture: metadata.fixture,
+          kind: job.kind,
+          siteUrl: siteUrl(),
+          clipNumber: input.clipNumber ?? index + 1,
+        }));
+      }
       await normaliseInput(
         input,
         source,
         normal,
-        footageOverlayPng,
+        clipOverlay,
         job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
         collectPosterFor(index) ? `${job.kind.toLowerCase()}-${index + 1}` : undefined,
+        numberedClip ? input.assetId : undefined,
       );
       segments.push(normal);
     }
