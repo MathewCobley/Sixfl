@@ -76,8 +76,14 @@ test('real private upload lifecycle, no live database or storage provider', asyn
   envNames.forEach(n=>process.env[n]='synthetic-test-only');
   try {
     await db.$executeRawUnsafe('CREATE TABLE "Fixture" ("id" TEXT PRIMARY KEY)');
+    await db.$executeRawUnsafe('CREATE TABLE "GoalOfMonthCandidate" ("id" TEXT PRIMARY KEY, "fixtureId" TEXT, "goalNumber" INTEGER, "status" TEXT NOT NULL DEFAULT \'ACTIVE\')');
     for(const id of ['match-a','match-b',...Array.from({length:14},(_,i)=>'quota-'+i)])await db.$executeRaw`INSERT INTO "Fixture" ("id") VALUES (${id})`;
-    for(const migration of ['prisma/migrations/20260917170000_sixfl_tv_footage_uploads/migration.sql','prisma/migrations/20260917213000_sixfl_tv_studio/migration.sql']){
+    for(const migration of [
+      'prisma/migrations/20260917170000_sixfl_tv_footage_uploads/migration.sql',
+      'prisma/migrations/20260917213000_sixfl_tv_studio/migration.sql',
+      'prisma/migrations/20260918182000_goal_of_month_saved_clips/migration.sql',
+      'prisma/migrations/20260918182500_goal_of_month_clip_candidates/migration.sql',
+    ]){
       const sql=fs.readFileSync(migration,'utf8');
       for(const statement of sql.split(';').map(x=>x.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
     }
@@ -129,11 +135,14 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       await assert.rejects(core.readFootageBytes(new Request('https://sixfl.co.uk/test',{method:'POST',body:Buffer.alloc(33)}),32),/too large/);
       await assert.rejects(core.readFootageJson(new Request('https://sixfl.co.uk/test',{method:'POST',body:'[]'})),/Invalid/);
     });
-    await t.test('clip order uses exact IDs and rejects stale or foreign lists',async()=>{
+    await t.test('clip numbers stay permanent when editing order changes',async()=>{
       const a=(await core.beginFootage('match-a','admin',spec('CLIP',24,'goal-a.mp4'))).asset;
       const b=(await core.beginFootage('match-a','admin',spec('CLIP',24,'goal-b.mp4'))).asset;
+      assert.equal(a.clipNumber,1);assert.equal(b.clipNumber,2);
       await core.reorderFootage('match-a',[b.id,a.id],[a.id,b.id]);
-      assert.deepEqual((await core.footageState('match-a')).assets.filter(x=>x.kind==='CLIP').map(x=>x.id),[b.id,a.id]);
+      const ordered=(await core.footageState('match-a')).assets.filter(x=>x.kind==='CLIP');
+      assert.deepEqual(ordered.map(x=>x.id),[b.id,a.id]);
+      assert.deepEqual(ordered.map(x=>x.clipNumber),[2,1],'Reordering must not renumber clips already referenced by Goal of the Month');
       await assert.rejects(core.reorderFootage('match-a',[a.id,b.id],[a.id,b.id]),/changed/);
       await assert.rejects(core.reorderFootage('match-b',[a.id,b.id],[]),/changed/);
     });
@@ -158,6 +167,14 @@ test('real private upload lifecycle, no live database or storage provider', asyn
       const parts=await core.footageParts(failed.id);assert.equal(parts.length,1);assert.equal(parts[0].stored,false);assert.ok(objects.has(parts[0].objectKey));
       await db.$executeRaw`UPDATE "SixflTvFootageAsset" SET "busyUntil"=NOW()-INTERVAL '1 minute' WHERE "id"=${failed.id}`;
       await core.removeFootage('match-b',failed.id,true);assert.equal(objects.has(parts[0].objectKey),false);
+    });
+    await t.test('active Goal of the Month nominees protect their source clip',async()=>{
+      const nominated=(await core.beginFootage('match-b','admin',spec('CLIP',24,'nominee.mp4'))).asset;
+      const content=Buffer.alloc(24);content.write('ftyp',4);await core.putFootagePart('match-b',nominated.id,0,content);await core.finishFootage('match-b',nominated.id);
+      await db.$executeRaw`INSERT INTO "GoalOfMonthCandidate" ("id","goalNumber","status","clipAssetId") VALUES ('nominee-candidate',NULL,'ACTIVE',${nominated.id})`;
+      await assert.rejects(core.removeFootage('match-b',nominated.id,true),/Goal of the Month/);
+      await db.$executeRaw`UPDATE "GoalOfMonthCandidate" SET "status"='REMOVED' WHERE "id"='nominee-candidate'`;
+      await core.removeFootage('match-b',nominated.id,true);
     });
     await t.test('active render inputs cannot be deleted',async()=>{
       const guarded=(await core.beginFootage('match-b','admin',spec('CLIP',24,'guarded.mp4'))).asset;
