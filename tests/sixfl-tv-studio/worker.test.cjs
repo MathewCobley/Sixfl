@@ -41,9 +41,13 @@ async function loadWorker(db, objects, uploadHook) {
     '../src/lib/sixfl-tv/thumbnail-background': {
       sixflTvThumbnailBackgroundKey: fixtureId => `sixfl-tv-thumbnail-background/v1/${fixtureId}/match-action.jpg`,
     },
+    '../src/lib/goal-of-month/calendar': {
+      monthlyCycle: () => ({ latestClosedMonth: '2026-08' }),
+    },
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
       uploadRailwayObject: async ({ key, body }) => { if (uploadHook) await uploadHook(key, body); objects.set(key, Buffer.from(body)); },
+      deleteRailwayObject: async key => { objects.delete(key); },
     },
   };
   const mod = { exports: {} };
