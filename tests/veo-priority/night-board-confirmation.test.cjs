@@ -35,7 +35,8 @@ test('retirement migration voids only the dedicated £5 Veo pilot fee and credit
   assert.match(retirement, /'CREDIT_ADDED'::"TeamCreditLedgerEntryType"/);
   assert.match(retirement, /status = 'VOID'/);
   assert.match(retirement, /COALESCE\(pt\.reference, ''\) <> 'TEAM_CREDIT'/);
-  assert.doesNotMatch(retirement, /DELETE FROM|TRUNCATE|DROP TABLE/);
+  assert.match(retirement, /DELETE FROM "TeamCreditLedgerEntry"/);
+  assert.doesNotMatch(retirement, /DELETE FROM "PaymentCharge"|TRUNCATE|DROP TABLE/);
 });
 
 test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
