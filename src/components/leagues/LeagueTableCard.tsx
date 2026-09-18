@@ -52,6 +52,19 @@ function getFormBadgeClasses(result: LeagueFormResult) {
   }
 }
 
+function movementDisplay(value: LeagueTableRow["movement"]) {
+  switch (value) {
+    case "UP":
+      return { symbol: "↑", label: "Up", className: "text-emerald-300" };
+    case "DOWN":
+      return { symbol: "↓", label: "Down", className: "text-red-300" };
+    case "SAME":
+      return { symbol: "→", label: "No change", className: "text-white/45" };
+    default:
+      return { symbol: "•", label: "No previous position", className: "text-white/25" };
+  }
+}
+
 function formatOrdinal(value: number) {
   const mod10 = value % 10;
   const mod100 = value % 100;
@@ -146,6 +159,7 @@ export default function LeagueTableCard({
                 const isTop = index === 0;
                 const isCurrentTeam = Boolean(currentTeamId && row.teamId === currentTeamId);
                 const logoUrl = normaliseLogoUrl(row.teamLogoUrl);
+                const movement = movementDisplay(row.movement);
 
                 const mobileTopStats = [
                   { label: "P", value: row.played },
@@ -179,7 +193,14 @@ export default function LeagueTableCard({
                               : "border-white/10 bg-white/[0.04] text-white/70",
                           ].join(" ")}
                         >
-                          {index + 1}
+                          <span>{index + 1}</span>
+                          <span
+                            className={`ml-1 text-base ${movement.className}`}
+                            title={movement.label}
+                            aria-label={movement.label}
+                          >
+                            {movement.symbol}
+                          </span>
                         </div>
 
                         <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
@@ -286,7 +307,14 @@ export default function LeagueTableCard({
                               : "border-white/10 bg-white/[0.04] text-white/70",
                           ].join(" ")}
                         >
-                          {index + 1}
+                          <span>{index + 1}</span>
+                          <span
+                            className={`ml-1 text-base ${movement.className}`}
+                            title={movement.label}
+                            aria-label={movement.label}
+                          >
+                            {movement.symbol}
+                          </span>
                         </div>
                       </div>
 
