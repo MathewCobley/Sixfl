@@ -35,6 +35,13 @@ function fit(value: string, max = 34) {
   return `${trimmed.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }
 
+function scorerTextForTeam(scorers: string[] | undefined, teamName: string) {
+  const prefix = `${teamName.trim()}:`;
+  const row = (scorers || []).find(value => value.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+  if (!row) return "";
+  return fit(row.trim().slice(prefix.length).trim(), 46);
+}
+
 const brandingCache = new Map<string, Promise<Buffer>>();
 async function brandingAsset(siteUrl: string, pathname: string) {
   const base = new URL(siteUrl);
@@ -325,23 +332,55 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string }) {
 
 
 export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
-  const [sixflTvLogoBytes, fontCss] = await Promise.all([sixflTvLogo(input.siteUrl), embeddedFontStyle(input.siteUrl)]);
+  const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
+    fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
+    fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(input.siteUrl),
+    embeddedFontStyle(input.siteUrl),
+  ]);
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
-  const firstName = fit(input.fixture.firstTeam.name, 24);
-  const secondName = fit(input.fixture.secondTeam.name, 24);
+  const firstName = fit(input.fixture.firstTeam.name, 22);
+  const secondName = fit(input.fixture.secondTeam.name, 22);
+  const firstScorers = scorerTextForTeam(input.fixture.scorers, input.fixture.firstTeam.name);
+  const secondScorers = scorerTextForTeam(input.fixture.scorers, input.fixture.secondTeam.name);
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs>
+      <filter id="scorebugShadow"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.58"/></filter>
+      <linearGradient id="scorebugBg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#03100b" stop-opacity="0.96"/>
+        <stop offset="1" stop-color="#010604" stop-opacity="0.94"/>
+      </linearGradient>
+    </defs>
     ${fontCss}
-    <g transform="translate(54 46)">
-      <rect width="690" height="92" rx="14" fill="#020805" fill-opacity="0.88" stroke="#34d399" stroke-width="3"/>
-      <rect x="0" y="0" width="76" height="92" rx="14" fill="#10b981"/>
-      <text x="38" y="57" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="24" font-weight="900" fill="#02140d">FT</text>
-      <text x="104" y="58" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xml(firstName)}</text>
-      <text x="322" y="58" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="38" font-weight="900" fill="#ffffff">${firstScore}</text>
-      <text x="363" y="58" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="25" font-weight="800" fill="#34d399">–</text>
-      <text x="404" y="58" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="38" font-weight="900" fill="#ffffff">${secondScore}</text>
-      <text x="436" y="58" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="27" font-weight="800" fill="#ffffff">${xml(secondName)}</text>
+    <g transform="translate(54 46)" filter="url(#scorebugShadow)">
+      <rect width="970" height="176" rx="22" fill="url(#scorebugBg)" stroke="#2dd4bf" stroke-width="3"/>
+      <rect x="18" y="18" width="68" height="42" rx="21" fill="#10b981"/>
+      <text x="52" y="47" text-anchor="middle" font-size="20" font-weight="900" fill="#02140d" letter-spacing="1.5">FT</text>
+
+      <g transform="translate(100 18)">
+        ${badgeImage(firstBadge, 0, 0, 104, input.fixture.firstTeam.name)}
+      </g>
+      <g transform="translate(766 18)">
+        ${badgeImage(secondBadge, 0, 0, 104, input.fixture.secondTeam.name)}
+      </g>
+
+      <text x="224" y="58" font-size="31" font-weight="900" fill="#ffffff">${xml(firstName)}</text>
+      <text x="746" y="58" text-anchor="end" font-size="31" font-weight="900" fill="#ffffff">${xml(secondName)}</text>
+
+      <rect x="399" y="20" width="172" height="92" rx="20" fill="#06150f" stroke="#10b981" stroke-width="2"/>
+      <text x="485" y="84" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">${firstScore}<tspan fill="#34d399"> - </tspan>${secondScore}</text>
+
+      <line x1="218" y1="82" x2="384" y2="82" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+      <line x1="586" y1="82" x2="752" y2="82" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+
+      ${firstScorers ? `<text x="224" y="119" font-size="18" font-weight="600" fill="#d1fae5">${xml(firstScorers)}</text>` : ""}
+      ${secondScorers ? `<text x="746" y="119" text-anchor="end" font-size="18" font-weight="600" fill="#d1fae5">${xml(secondScorers)}</text>` : ""}
+
+      <text x="224" y="149" font-size="14" font-weight="800" letter-spacing="2" fill="#6ee7b7">GOALSCORERS</text>
+      <text x="746" y="149" text-anchor="end" font-size="14" font-weight="800" letter-spacing="2" fill="#6ee7b7">GOALSCORERS</text>
     </g>
     ${logoImage(sixflTvLogoBytes, 1540, 38, 320, 102, 0.94)}
   </svg>`;
