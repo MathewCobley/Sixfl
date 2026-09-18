@@ -112,7 +112,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
   function rows(assets: Asset[]) {
     return assets.map((asset, index) => <div key={asset.id} className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><p className="break-words font-semibold text-white">{asset.kind === "CLIP" ? `${index + 1}. ` : ""}{asset.filename}</p>
+        <div className="min-w-0"><p className="break-words font-semibold text-white">{asset.kind === "CLIP" ? `Clip ${asset.clipNumber ?? index + 1} · ` : ""}{asset.filename}</p>
           <p className="mt-1 text-sm text-white/60">{labels[asset.kind]} · {sizeLabel(asset.sizeBytes)} · {asset.state === "READY" ? "Uploaded — private source" : asset.state === "DELETING" ? "Removal incomplete" : "Upload incomplete"}</p></div>
         <div className="flex flex-wrap gap-2">
           {asset.state === "READY" ? <><button type="button" className={button} onClick={() => setPreview(asset)}>Preview source</button><a className={button} href={`${mediaUrl(asset)}?download=1`}>Download source</a></> : null}
