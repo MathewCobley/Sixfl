@@ -25,13 +25,18 @@ function monthly({signedIn=true,verified=true,member=true,admin=false,captain=0}
     '@/lib/goal-of-month/community':{GoalAwardError,getMonthlyPageData:async id=>({nominations:[],viewerId:id}),nominateMonthlyGoal:async input=>{writes.push(input);return{candidateId:'goal'};},voteMonthlyGoal:async(...args)=>{writes.push(args);return{candidateId:args[1]};}},
   });return{route,writes};
 }
-const body={action:'nominate',fixtureId:'fixture-one',scoringTeamId:'team-one',goalNumber:1,userId:'another-person'};
+const body={action:'nominate',fixtureId:'fixture-one',scoringTeamId:'team-one',clipAssetId:'clip-one',userId:'another-person'};
 const request=(data=body,origin='https://sixfl.co.uk')=>new Request('https://sixfl.co.uk/api/goal-of-month/community',{method:'POST',headers:{'Content-Type':'application/json',origin},body:JSON.stringify(data)});
 test('anonymous viewing works, while anonymous and unverified requests cannot nominate',async()=>{
   for(const options of [{signedIn:false},{verified:false},{member:false}]){
     const h=monthly(options);const view=await h.route.GET();assert.equal(view.status,200);assert.equal((await view.json()).viewer.eligible,false);
     assert.equal((await h.route.POST(request())).status,403);assert.equal(h.writes.length,0);
   }
+});
+test('monthly clip nomination binds the exact saved clip instead of trusting a goal number',async()=>{
+  const h=monthly();const response=await h.route.POST(request());assert.equal(response.status,200);
+  assert.equal(h.writes[0].clipAssetId,'clip-one');assert.equal(h.writes[0].goalNumber,null);
+  assert.equal(h.writes[0].userId,'actual-user');
 });
 test('verified players and captains act only as the real signed-in user',async()=>{
   for(const options of [{},{member:false,captain:1},{verified:false,member:false,admin:true}]){
@@ -41,7 +46,7 @@ test('verified players and captains act only as the real signed-in user',async()
 });
 test('cross-site and malformed submissions are rejected before writes',async()=>{
   const h=monthly();assert.equal((await h.route.POST(request(body,'https://other.invalid'))).status,403);
-  for(const data of [null,[],{...body,fixtureId:'../wrong'},{...body,goalNumber:0},{action:'vote',candidateId:'../invalid'}])assert.equal((await h.route.POST(request(data))).status,400);
+  for(const data of [null,[],{...body,fixtureId:'../wrong'},{...body,clipAssetId:'../wrong'},{action:'vote',candidateId:'../invalid'}])assert.equal((await h.route.POST(request(data))).status,400);
   assert.equal(h.writes.length,0);
 });
 function weekly({closed=false}={}){
