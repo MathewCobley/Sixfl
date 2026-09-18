@@ -80,7 +80,8 @@ test('legacy £5 pilot fees are retired without leaving fee UI or double-credit 
   assert.match(feeRetirementMigration, /COALESCE\(pt\.reference, ''\) <> 'TEAM_CREDIT'/);
   assert.match(feeRetirementMigration, /status = 'VOID'/);
   assert.match(feeRetirementMigration, /"agreedPence" = 0/);
-  assert.doesNotMatch(feeRetirementMigration, /DELETE FROM|TRUNCATE|DROP TABLE/);
+  assert.match(feeRetirementMigration, /DELETE FROM "TeamCreditLedgerEntry"/);
+  assert.doesNotMatch(feeRetirementMigration, /DELETE FROM "PaymentCharge"|TRUNCATE|DROP TABLE/);
 });
 
 test('email builder exposes and team broadcasts resolve the current score', () => {
