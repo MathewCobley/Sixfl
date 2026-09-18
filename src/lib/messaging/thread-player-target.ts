@@ -164,13 +164,12 @@ export async function resolveThreadPlayerTarget(
       },
     });
 
-    const attached =
-      prospects.find((prospect) => Boolean(teamId && prospect.teamId === teamId)) ??
-      prospects[0] ??
-      null;
+    const attached = teamId
+      ? prospects.filter((prospect) => prospect.teamId === teamId)
+      : prospects;
 
-    if (attached) {
-      const target = prospectTarget(attached);
+    if (attached.length === 1) {
+      const target = prospectTarget(attached[0]);
       if (target) return target;
     }
   }
