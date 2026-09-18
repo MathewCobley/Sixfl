@@ -307,22 +307,30 @@ async function confirmFixtureAction(formData: FormData) {
       allowLateConfirmation: true,
     });
 
-    await prisma.fixtureCaptainConfirmation.upsert({
-      where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
-      update: {
-        status: "CONFIRMED",
-        note: null,
-        confirmedAt: new Date(),
-        issueRaisedAt: null,
-        confirmedByUserId: access.user?.id ?? null,
-      },
-      create: {
-        fixtureId,
-        teamId: teamid,
-        status: "CONFIRMED",
-        confirmedAt: new Date(),
-        confirmedByUserId: access.user?.id ?? null,
-      },
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.fixtureCaptainConfirmation.findUnique({
+        where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
+        select: { confirmedAt: true },
+      });
+      const confirmedAt = existing?.confirmedAt ?? new Date();
+
+      await tx.fixtureCaptainConfirmation.upsert({
+        where: { fixtureId_teamId: { fixtureId, teamId: teamid } },
+        update: {
+          status: "CONFIRMED",
+          note: null,
+          confirmedAt,
+          issueRaisedAt: null,
+          confirmedByUserId: access.user?.id ?? null,
+        },
+        create: {
+          fixtureId,
+          teamId: teamid,
+          status: "CONFIRMED",
+          confirmedAt,
+          confirmedByUserId: access.user?.id ?? null,
+        },
+      });
     });
 
     revalidateFixtureConfirmationPaths(teamid);
