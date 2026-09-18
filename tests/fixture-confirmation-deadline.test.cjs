@@ -131,7 +131,7 @@ test('restored confirmation box contains no Veo or SIXFL TV Priority controls', 
   const source = fs.readFileSync(PAGE, 'utf8');
   assert.match(source, /<form action=\{confirmFixtureAction\}/);
   assert.match(source, /Yes — we can play/);
-  assert.match(source, /No — we cannot play/);
+  assert.match(source, /markFixtureUnavailableAction/);
   assert.doesNotMatch(source, /CaptainFixtureConfirmation|FixtureVeoConfirmationForm|readFixtureVeoOffer|confirmFixtureWithVeoAction/);
 });
 
