@@ -964,7 +964,6 @@ export default async function CaptainResultsPage({
                         SIXFL currently only has {team.members.length === 1 ? "one registered squad member" : "no registered squad players"} for {team.name}. Add the rest of your squad first so you can select who played and record scorers, assists, ratings and Player of the Match correctly.
                       </p>
                       <a
-                        id="add-player"
                         href={`/captain/team/${team.id}/captain-squad#add-player`}
                         className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/15 px-4 py-2.5 text-sm font-semibold text-amber-50 transition hover:bg-amber-300/20"
                       >
