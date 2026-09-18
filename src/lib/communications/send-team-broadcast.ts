@@ -12,6 +12,7 @@ import {
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { prisma } from "@/lib/prisma";
+import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
@@ -284,7 +285,11 @@ export async function sendTeamBroadcastMessage(input: Input) {
     },
   });
 
-  const { recipient, snapshot } = await upsertTeamNotificationRecipient(team.id);
+  const [priorityScore, recipientResult] = await Promise.all([
+    getSixflTvPriorityScore(team.id),
+    upsertTeamNotificationRecipient(team.id),
+  ]);
+  const { recipient, snapshot } = recipientResult;
   const contactName = snapshot.primaryContact.name?.trim() || snapshot.teamName;
   const leagueName = team.league
     ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
@@ -295,6 +300,7 @@ export async function sendTeamBroadcastMessage(input: Input) {
     name: contactName,
     fullName: contactName,
     teamName: team.name,
+    sixflTvPriorityScore: priorityScore.score,
     leagueName,
     signupUrl: "https://www.sixfl.co.uk/register-interest",
     link: input.ctaUrl ?? "",
