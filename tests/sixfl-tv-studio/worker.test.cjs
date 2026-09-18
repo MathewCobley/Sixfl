@@ -157,7 +157,7 @@ test('highlight normalisation overlays a persistent scorebug without removing ma
   await fs.writeFile(bug, await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="620" height="146" fill="#ffff00"/></svg>')).png().toBuffer());
   await w.normaliseVideo(source, plain);
   await w.normaliseVideo(source, scored, bug);
-  const hash = async file => (await w.run('ffmpeg', ['-i', file, '-vf', "select='eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true))
+  const hash = async file => (await w.run('ffmpeg', ['-i', file, '-map', '0:v:0', '-vf', "select='eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true))
     .split('\n').find(line => /^[0-9]/.test(line))?.split(',').at(-1).trim();
   assert.notEqual(await hash(plain), await hash(scored), 'Scorebug must visibly alter the match-footage frame');
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', scored], true));
