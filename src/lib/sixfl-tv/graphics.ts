@@ -274,30 +274,74 @@ export async function createSixflTvThumbnail(input: {
         <stop offset="0.48" stop-color="#07120d"/>
         <stop offset="1" stop-color="#020504"/>
       </linearGradient>
-      <radialGradient id="centreGlow" cx="50%" cy="48%" r="62%">
-        <stop offset="0" stop-color="${accent}" stop-opacity="0.22"/>
-        <stop offset="0.55" stop-color="${accentDark}" stop-opacity="0.08"/>
+      <radialGradient id="centreGlow" cx="50%" cy="44%" r="68%">
+        <stop offset="0" stop-color="${accent}" stop-opacity="0.28"/>
+        <stop offset="0.5" stop-color="${accentDark}" stop-opacity="0.10"/>
         <stop offset="1" stop-color="#000000" stop-opacity="0"/>
       </radialGradient>
-      <radialGradient id="lightLeft" cx="0%" cy="0%" r="70%"><stop offset="0" stop-color="#ffffff" stop-opacity="0.72"/><stop offset="0.14" stop-color="#d1fae5" stop-opacity="0.28"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
-      <radialGradient id="lightRight" cx="100%" cy="0%" r="70%"><stop offset="0" stop-color="#ffffff" stop-opacity="0.72"/><stop offset="0.14" stop-color="#d1fae5" stop-opacity="0.28"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
-      <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.88"/></linearGradient>
+      <radialGradient id="lightLeft" cx="7%" cy="3%" r="76%"><stop offset="0" stop-color="#ffffff" stop-opacity="0.96"/><stop offset="0.08" stop-color="#f8fafc" stop-opacity="0.55"/><stop offset="0.26" stop-color="${accent}" stop-opacity="0.15"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+      <radialGradient id="lightRight" cx="93%" cy="3%" r="76%"><stop offset="0" stop-color="#ffffff" stop-opacity="0.96"/><stop offset="0.08" stop-color="#f8fafc" stop-opacity="0.55"/><stop offset="0.26" stop-color="${accent}" stop-opacity="0.15"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+      <linearGradient id="beamLeft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0.045"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="beamRight" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0.045"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="pitch" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a281d"/><stop offset="1" stop-color="#03110c"/></linearGradient>
+      <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.90"/></linearGradient>
+      <filter id="lightBloom"><feGaussianBlur stdDeviation="18"/></filter>
       <filter id="badgeGlow"><feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#000000" flood-opacity="0.75"/><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="${accent}" flood-opacity="0.26"/></filter>
       <filter id="scoreShadow"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.72"/></filter>
     </defs>
     <rect width="1280" height="720" fill="url(#thumbBg)"/>
     <rect width="1280" height="720" fill="url(#centreGlow)"/>
-    <rect width="520" height="430" fill="url(#lightLeft)"/>
-    <rect x="760" width="520" height="430" fill="url(#lightRight)"/>
-    <polygon points="0,0 420,0 180,720 0,720" fill="${accent}" opacity="0.055"/>
-    <polygon points="1280,0 1035,0 1165,720 1280,720" fill="${accent}" opacity="0.045"/>
-    <g opacity="0.30">
-      <circle cx="78" cy="70" r="9" fill="#ffffff"/><circle cx="108" cy="58" r="5" fill="#ffffff"/><circle cx="137" cy="74" r="7" fill="#ffffff"/>
-      <circle cx="1202" cy="70" r="9" fill="#ffffff"/><circle cx="1172" cy="58" r="5" fill="#ffffff"/><circle cx="1143" cy="74" r="7" fill="#ffffff"/>
+
+    <!-- Visible stadium floodlights and sweeping beams -->
+    <polygon points="0,0 128,0 510,515 270,515" fill="url(#beamLeft)"/>
+    <polygon points="1280,0 1152,0 770,515 1010,515" fill="url(#beamRight)"/>
+    <circle cx="76" cy="42" r="74" fill="#ffffff" fill-opacity="0.16" filter="url(#lightBloom)"/>
+    <circle cx="1204" cy="42" r="74" fill="#ffffff" fill-opacity="0.16" filter="url(#lightBloom)"/>
+    <rect width="590" height="405" fill="url(#lightLeft)"/>
+    <rect x="690" width="590" height="405" fill="url(#lightRight)"/>
+
+    <g opacity="0.94">
+      <path d="M34 228 L58 84 L64 84 L54 228 Z" fill="#1f2937"/>
+      <rect x="18" y="62" width="94" height="28" rx="4" fill="#334155" stroke="#94a3b8" stroke-opacity="0.55"/>
+      <g fill="#ffffff">
+        <circle cx="30" cy="72" r="4"/><circle cx="47" cy="72" r="4"/><circle cx="64" cy="72" r="4"/><circle cx="81" cy="72" r="4"/><circle cx="98" cy="72" r="4"/>
+        <circle cx="30" cy="82" r="4"/><circle cx="47" cy="82" r="4"/><circle cx="64" cy="82" r="4"/><circle cx="81" cy="82" r="4"/><circle cx="98" cy="82" r="4"/>
+      </g>
+      <path d="M1246 228 L1222 84 L1216 84 L1226 228 Z" fill="#1f2937"/>
+      <rect x="1168" y="62" width="94" height="28" rx="4" fill="#334155" stroke="#94a3b8" stroke-opacity="0.55"/>
+      <g fill="#ffffff">
+        <circle cx="1180" cy="72" r="4"/><circle cx="1197" cy="72" r="4"/><circle cx="1214" cy="72" r="4"/><circle cx="1231" cy="72" r="4"/><circle cx="1248" cy="72" r="4"/>
+        <circle cx="1180" cy="82" r="4"/><circle cx="1197" cy="82" r="4"/><circle cx="1214" cy="82" r="4"/><circle cx="1231" cy="82" r="4"/><circle cx="1248" cy="82" r="4"/>
+      </g>
     </g>
-    <path d="M0 555 Q250 485 490 520 T900 520 T1280 545 L1280 720 L0 720 Z" fill="#020403" opacity="0.86"/>
-    <path d="M0 600 L1280 600 M640 540 L640 720 M440 720 L560 560 M840 720 L720 560" stroke="#2dd4bf" stroke-opacity="0.12" stroke-width="3"/>
-    <rect y="615" width="1280" height="105" fill="url(#bottomFade)"/>
+
+    <!-- Stadium bowl / crowd -->
+    <path d="M0 370 Q175 302 362 318 Q640 252 918 318 Q1105 302 1280 370 L1280 520 Q1110 472 922 482 Q640 438 358 482 Q170 472 0 520 Z" fill="#07110d"/>
+    <path d="M0 388 Q180 328 366 340 Q640 286 914 340 Q1100 328 1280 388 L1280 454 Q1090 420 910 430 Q640 395 370 430 Q190 420 0 454 Z" fill="#0b1a14"/>
+    <path d="M0 397 Q185 342 370 352 Q640 306 910 352 Q1095 342 1280 397" fill="none" stroke="${accent}" stroke-opacity="0.28" stroke-width="4"/>
+    <g opacity="0.42" fill="#d1fae5">
+      ${Array.from({length: 36}, (_, i) => {
+        const x = 28 + i * 35;
+        const y = 392 + (i % 3) * 12;
+        return `<circle cx="${x}" cy="${y}" r="2.2"/>`;
+      }).join("")}
+      ${Array.from({length: 32}, (_, i) => {
+        const x = 70 + i * 38;
+        const y = 433 + ((i + 1) % 3) * 10;
+        return `<circle cx="${x}" cy="${y}" r="1.8"/>`;
+      }).join("")}
+    </g>
+
+    <!-- Perspective pitch -->
+    <path d="M245 720 L1035 720 L840 462 L440 462 Z" fill="url(#pitch)" stroke="#34d399" stroke-opacity="0.28" stroke-width="3"/>
+    <path d="M640 462 L640 720 M440 462 L245 720 M840 462 L1035 720" fill="none" stroke="#d1fae5" stroke-opacity="0.18" stroke-width="2"/>
+    <ellipse cx="640" cy="590" rx="94" ry="50" fill="none" stroke="#d1fae5" stroke-opacity="0.17" stroke-width="2"/>
+    <path d="M485 720 L515 630 L765 630 L795 720" fill="none" stroke="#d1fae5" stroke-opacity="0.15" stroke-width="2"/>
+    <path d="M540 462 L565 512 L715 512 L740 462" fill="none" stroke="#d1fae5" stroke-opacity="0.12" stroke-width="2"/>
+
+    <polygon points="0,0 420,0 180,720 0,720" fill="${accent}" opacity="0.035"/>
+    <polygon points="1280,0 1035,0 1165,720 1280,720" fill="${accent}" opacity="0.03"/>
+    <rect y="590" width="1280" height="130" fill="url(#bottomFade)"/>
     <rect x="56" y="44" width="178" height="40" rx="20" fill="${accent}"/>
     ${logoImage(sixflTvLogoBytes, 1000, 30, 224, 78)}
     <rect x="60" y="194" width="450" height="6" rx="3" fill="${accent}"/>
