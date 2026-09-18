@@ -4,9 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "@/lib/storage/railway-s3";
 import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
+import { getLeagueStandings } from "@/lib/standings";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 10;
+const SIXFL_TV_RENDER_VERSION = 11;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -164,7 +165,7 @@ export async function studioFixture(fixtureId: string) {
 
 export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGraphicFixture> {
   const fixture = await studioFixture(fixtureId);
-  const [priorFixtures, predictor] = await Promise.all([
+  const [priorFixtures, predictor, standings] = await Promise.all([
     prisma.fixture.findMany({
       where: {
         leagueId: fixture.league.id,
@@ -185,6 +186,7 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
       },
     }) as Promise<PriorFormFixture[]>,
     storedPredictorScore(fixtureId),
+    getLeagueStandings(fixture.league.id).catch(() => null),
   ]);
   const result = fixture.result;
   const scorers: string[] = [];
@@ -223,6 +225,34 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
     }
     return fallback;
   };
+  let leagueTable: SixflTvGraphicFixture["leagueTable"] = null;
+  if (standings) {
+    let tableRows = standings.rows;
+    let tableTitle = [standings.league.name, standings.league.season].filter(Boolean).join(" · ");
+    if (standings.hasDivisions) {
+      const relevantDivision = standings.divisions.find(division =>
+        division.rows.some(row => row.teamId === fixture.homeTeam.id || row.teamId === fixture.awayTeam.id),
+      );
+      if (relevantDivision?.rows.length) {
+        tableRows = relevantDivision.rows;
+        tableTitle = [standings.league.name, relevantDivision.name, standings.league.season].filter(Boolean).join(" · ");
+      }
+    }
+    if (tableRows.length) {
+      leagueTable = {
+        title: tableTitle,
+        rows: tableRows.map((row, index) => ({
+          position: index + 1,
+          teamId: row.teamId,
+          teamName: row.teamName,
+          played: row.played,
+          goalDifference: row.goalDifference,
+          points: row.points,
+        })),
+      };
+    }
+  }
+
   return {
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
@@ -235,6 +265,7 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
     firstTeamForm: recentFormFor(fixture.homeTeam.id, priorFixtures),
     secondTeamForm: recentFormFor(fixture.awayTeam.id, priorFixtures),
     predictor,
+    leagueTable,
     decisionNote: result?.overturn ? "Official competition decision — scorer list suppressed" : null,
   };
 }
