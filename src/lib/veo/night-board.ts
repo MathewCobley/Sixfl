@@ -121,6 +121,11 @@ export async function confirmNightBoardVeoFixture(input: {
     if (!preview.cameraKey) throw new VeoBookingError('Veo is not available for this league.');
     const target = preview.fixtures.find((fixture) => fixture.id === input.fixtureId);
     if (!target) throw new VeoBookingError('This fixture is not available in the Veo camera schedule.');
+    if (!target.eligible) {
+      throw new VeoBookingError(
+        `Neither team currently has active SIXFL TV Priority for this fixture. Scores: ${target.homeName} ${target.homePriorityScore ?? 0}/100 · ${target.awayName} ${target.awayPriorityScore ?? 0}/100. A qualifying team must also have confirmed the fixture.`,
+      );
+    }
     if (target.bookingState === 'PLANNED' || target.bookingState === 'READY') {
       await ensureAcceptedVeoCharges(db, target);
       return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
