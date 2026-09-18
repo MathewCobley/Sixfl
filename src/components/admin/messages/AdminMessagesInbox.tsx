@@ -53,6 +53,15 @@ type InboxThreadListItem = {
 type SelectedThread = {
   smsReplyPhone?: string | null;
   smsReplyActorId?: string;
+  linkedPlayer?: {
+    kind: "PROSPECT" | "MEMBER";
+    id: string;
+    teamId: string;
+    name: string;
+    status: string | null;
+    href: string;
+    canStopChasing: boolean;
+  } | null;
   id: string;
   channel: "SMS" | "EMAIL";
   status: "OPEN" | "ARCHIVED" | "CLOSED";

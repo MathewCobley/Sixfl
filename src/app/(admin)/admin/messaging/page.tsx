@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getAdminSmsReplyTarget } from "@/lib/messaging/admin-sms-reply";
+import { resolveThreadPlayerTarget } from "@/lib/messaging/thread-player-target";
 import {
   getAdminInboxSummary,
   getAdminInboxThreads,
@@ -205,7 +206,12 @@ export default async function AdminMessagesPage({
     selectedThread ??
     (threads.length > 0 ? await getMessageThreadById(threads[0].id) : null);
 
-  const smsReplyTarget = fallbackThread ? await getAdminSmsReplyTarget(fallbackThread) : null;
+  const [smsReplyTarget, linkedPlayer] = fallbackThread
+    ? await Promise.all([
+        getAdminSmsReplyTarget(fallbackThread),
+        resolveThreadPlayerTarget(fallbackThread),
+      ])
+    : [null, null];
 
   const prospectLauncherOptions = prospects.flatMap((prospect) => {
     if (!prospect.teamId || !prospect.team) return [];
@@ -421,6 +427,7 @@ export default async function AdminMessagesPage({
                   id: fallbackThread.id,
                   smsReplyPhone: smsReplyTarget?.phone ?? null,
                   smsReplyActorId: replyActor?.id ?? "",
+                  linkedPlayer,
                   channel: fallbackThread.channel ?? "SMS",
                   status: fallbackThread.status,
                   contactName: fallbackThread.contactName,

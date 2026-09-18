@@ -15,6 +15,7 @@ import {
   archiveMessageThreadAction,
   markMessageThreadReadAction,
   reopenMessageThreadAction,
+  stopProspectChasingFromThreadAction,
 } from "@/app/(admin)/admin/messages/actions";
 
 const ADMIN_MESSAGES_BASE_PATH = "/admin/messaging";
@@ -24,6 +25,15 @@ const TRAILING_URL_PUNCTUATION_REGEX = /[),.!?]+$/;
 type SelectedThread = {
   smsReplyPhone?: string | null;
   smsReplyActorId?: string;
+  linkedPlayer?: {
+    kind: "PROSPECT" | "MEMBER";
+    id: string;
+    teamId: string;
+    name: string;
+    status: string | null;
+    href: string;
+    canStopChasing: boolean;
+  } | null;
   id: string;
   channel: "SMS" | "EMAIL";
   status: "OPEN" | "ARCHIVED" | "CLOSED";
@@ -202,13 +212,14 @@ function formatPhone(value: string | null): string {
 
 function getThreadTitle(thread: NonNullable<SelectedThread>): string {
   return (
-    thread.team?.name ||
+    thread.linkedPlayer?.name ||
     thread.contactName ||
     thread.contactEmail ||
     thread.recipient?.displayName ||
     thread.recipient?.email ||
     thread.contactPhone ||
     thread.phoneNormalized ||
+    thread.team?.name ||
     "Unknown contact"
   );
 }
@@ -387,12 +398,32 @@ function getNotice(
           message:
             "The SMS reply could not be sent. Check Twilio settings and try again.",
         };
+      case "player_not_linked":
+        return {
+          tone: "error",
+          message: "SIXFL could not safely match this conversation to one player record. Open the team and check the contact details.",
+        };
+      case "prospect_not_stoppable":
+        return {
+          tone: "error",
+          message: "This player is already active or is no longer an open prospect, so SIXFL did not remove them automatically.",
+        };
       default:
         return {
           tone: "error",
           message: "Something went wrong. Please try again.",
         };
     }
+  }
+
+  if (searchParams.get("stopped") === "1") {
+    const cancelled = Number(searchParams.get("cancelled") ?? "0");
+    return {
+      tone: "success",
+      message: cancelled > 0
+        ? `Player marked not interested, removed from the active prospect list and ${cancelled} unsent chase${cancelled === 1 ? "" : "s"} cancelled.`
+        : "Player marked not interested, removed from the active prospect list and future recruitment chases stopped.",
+    };
   }
 
   if (searchParams.get("sent") === "1") {
@@ -446,11 +477,13 @@ function ActionButton({
   pendingLabel,
   disabled = false,
   className,
+  confirmText,
 }: {
   label: string;
   pendingLabel: string;
   disabled?: boolean;
   className: string;
+  confirmText?: string;
 }) {
   const { pending } = useFormStatus();
 
@@ -459,6 +492,11 @@ function ActionButton({
       type="submit"
       disabled={disabled || pending}
       className={className}
+      onClick={(event) => {
+        if (confirmText && !window.confirm(confirmText)) {
+          event.preventDefault();
+        }
+      }}
     >
       {pending ? pendingLabel : label}
     </button>
@@ -677,6 +715,29 @@ export default function AdminMessageThread({
                 >
                   Refresh
                 </Link>
+
+                {thread.linkedPlayer ? (
+                  <Link
+                    href={thread.linkedPlayer.href}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/15"
+                  >
+                    Open player
+                  </Link>
+                ) : null}
+
+                {thread.linkedPlayer?.kind === "PROSPECT" &&
+                thread.linkedPlayer.canStopChasing ? (
+                  <form action={stopProspectChasingFromThreadAction}>
+                    <input type="hidden" name="threadId" value={thread.id} />
+                    <input type="hidden" name="filter" value={selectedFilter} />
+                    <ActionButton
+                      label="Not interested — stop chasing"
+                      pendingLabel="Updating..."
+                      confirmText={`Mark ${thread.linkedPlayer.name} as not interested, remove them from ${thread.team?.name ?? "this team"}'s active prospect list, stop unsent recruitment chases and archive this conversation?`}
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-3 text-xs font-semibold text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </form>
+                ) : null}
 
                 {thread.team ? (
                   <Link
