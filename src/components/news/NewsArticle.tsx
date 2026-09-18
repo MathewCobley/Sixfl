@@ -35,7 +35,7 @@ export default function NewsArticle({
           <div className="relative z-10">
             <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-300">SIXFL matchnight</p>
             <div className="mt-7 max-w-sm leading-none">
-              <div className="text-5xl font-black uppercase tracking-[-0.06em] sm:text-6xl lg:text-7xl">Weekly</div>
+              <div className="text-5xl font-black uppercase tracking-[-0.06em] sm:text-6xl lg:text-7xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber}` : "Matchnight"}</div>
               <div className="mt-1 text-5xl font-black uppercase tracking-[-0.06em] text-transparent sm:text-6xl lg:text-7xl" style={{ WebkitTextStroke: '2px #34d399' }}>News</div>
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function NewsArticle({
         <section className="mt-10 border-y border-[#07130f]/10 py-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">In this week&apos;s report</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">{news.matchweekNumber ? `In Matchweek ${news.matchweekNumber}` : "In this matchnight report"}</p>
               <p className="mt-1 text-sm text-[#07130f]/50">Every result from the night, in one article.</p>
             </div>
             <Link href={`/leagues/${news.leagueSlug}/results`} className="text-sm font-bold text-emerald-700 hover:text-emerald-600">Full results →</Link>

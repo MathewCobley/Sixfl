@@ -40,10 +40,10 @@ test('public snapshot is an explicit allowlist, correctly links both replacement
  assert.doesNotMatch(JSON.stringify(a),/PRIVATE_|SECRET|skippedFixtures|sourceHash|model|actorId|contactEmail/);
  const safe=pure.readNewsSnapshot({...a,actorId:'PRIVATE_ACTOR',privateSource:source});assert.deepEqual(safe,a);
  assert.throws(()=>pure.buildNewsSnapshot(source,content,identities.slice(1),{coverUrl:''}),/teams changed/);
- const news={id:'article',leagueSlug:'example',publishedAt:'2026-09-09T12:00:00Z',updatedAt:'2026-09-09T12:00:00Z',article:{...a,title:'<script>not executable</script>'}};
+ const news={id:'article',leagueSlug:'example',publishedAt:'2026-09-09T12:00:00Z',updatedAt:'2026-09-09T12:00:00Z',matchweekNumber:4,article:{...a,title:'<script>not executable</script>'}};
  const Article=loader()('src/components/news/NewsArticle.tsx').default;
  const html=renderToStaticMarkup(React.createElement(Article,{news,shareUrl:'https://www.sixfl.co.uk/leagues/example/news/2026-09-08'}));
- assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>not executable/);assert.match(html,/id="match-f-5"/);assert.match(html,/Jump to match/);
+ assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>not executable/);assert.match(html,/Matchweek 4/);assert.match(html,/In Matchweek 4/);assert.doesNotMatch(html,/this week/i);assert.match(html,/id="match-f-5"/);assert.match(html,/Jump to match/);
  const dir=path.join(root,'.tmp/league-news');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'sample.json'),JSON.stringify({...news,article:a}));
 });
 test('photo settings reject private paths, traversal, unsafe URLs and missing alternative text',()=>{
@@ -93,6 +93,10 @@ test('shared news, publishing and discovery survive full source preparation with
  const read=f=>fs.readFileSync(path.join(root,f),'utf8');
  assert.match(read('src/components/leagues/LeagueQuickLinks.tsx'),/label: "League News"/);
  assert.match(read('src/components/news/LatestNews.tsx'),/api\/public\/league-news/);
+ assert.match(read('src/components/news/LatestNews.tsx'),/Matchweek/);
+ assert.doesNotMatch(read('src/components/news/LatestNews.tsx'),/This week&apos;s matchnight report/);
+ assert.match(read('src/lib/league-news/read.ts'),/matchweekNumber/);
+ assert.match(read('src/lib/league-news/read.ts'),/to_jsonb\(f\)->>'round'/);
  assert.doesNotMatch(read('src/components/news/LatestNews.tsx'),/querySelector|MutationObserver/);
  assert.match(read('src/components/admin/matchweek-reports/ReportEditor.tsx'),/<NewsPublishingControls/);
  assert.match(read('src/app/(admin)/admin/matchweek-reports/[slug]/preview/page.tsx'),/await requireAdmin\(\)/);
