@@ -38,6 +38,9 @@ async function loadWorker(db, objects, uploadHook) {
       createSixflTvWatermark: async () => { throw new Error('Full match must use the labelled scorebug, not the legacy watermark'); },
     },
     '../src/lib/sixfl-tv/videos': {},
+    '../src/lib/sixfl-tv/thumbnail-background': {
+      sixflTvThumbnailBackgroundKey: fixtureId => `sixfl-tv-thumbnail-background/v1/${fixtureId}/match-action.jpg`,
+    },
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
       uploadRailwayObject: async ({ key, body }) => { if (uploadHook) await uploadHook(key, body); objects.set(key, Buffer.from(body)); },
@@ -205,6 +208,10 @@ test('actual FFmpeg assembly reconstructs saved manifests and produces a decodab
   const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', result], true));
   assert.equal(meta.streams.find(s => s.codec_type === 'video').width, 1920); assert.equal(meta.streams.find(s => s.codec_type === 'video').height, 1080);
   assert.ok(meta.streams.some(s => s.codec_type === 'audio')); assert.ok(Number(meta.format.duration) >= 28.0);
+  const posterKey='sixfl-tv-thumbnail-background/v1/test-fixture/match-action.jpg';
+  assert.ok(objects.has(posterKey),'Highlights rendering must save a real action frame for the thumbnail');
+  const posterMeta=await sharp(objects.get(posterKey)).metadata();
+  assert.equal(posterMeta.format,'jpeg');assert.equal(posterMeta.width,1280);assert.equal(posterMeta.height,720);
   const titleFrame = await w.run('ffmpeg', ['-ss', '1.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const titleToLineupSwipe = await w.run('ffmpeg', ['-ss', '4.4', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);
   const lineupFrame = await w.run('ffmpeg', ['-ss', '6.0', '-i', result, '-frames:v', '1', '-f', 'md5', '-'], true);

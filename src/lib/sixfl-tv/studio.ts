@@ -5,9 +5,10 @@ import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "@/
 import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 import { getLeagueStandings } from "@/lib/standings";
+import { sixflTvThumbnailBackgroundKey } from "./thumbnail-background";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 13;
+const SIXFL_TV_RENDER_VERSION = 14;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -42,6 +43,27 @@ type StoredPredictorScoreRow = {
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://sixfl.co.uk").replace(/\/+$/, "");
+}
+async function storedThumbnailBackground(fixtureId: string) {
+  try {
+    const response = await fetchRailwayObject({
+      key: sixflTvThumbnailBackgroundKey(fixtureId),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > 12 * 1024 * 1024) {
+      await response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return bytes.length > 0 && bytes.length <= 12 * 1024 * 1024 ? bytes : null;
+  } catch {
+    return null;
+  }
 }
 function sha(value: string | Uint8Array) { return createHash("sha256").update(value).digest("hex"); }
 function safeText(value: unknown, max: number) {
@@ -388,8 +410,11 @@ export async function thumbnailPreviewResponse(fixtureId: string, kind: SixflTvR
   const strapline = safeText(data.strapline || fixture.league.name, 120);
   if (!headline) throw new StudioError("Add a thumbnail headline.");
   const showScore = data.showScore !== false && data.showScore !== "false" && data.showScore !== "0";
-  const graphic = await studioGraphicFixture(fixtureId);
-  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  const [graphic, backgroundImage] = await Promise.all([
+    studioGraphicFixture(fixtureId),
+    storedThumbnailBackground(fixtureId),
+  ]);
+  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl(), backgroundImage });
   if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
   return new Response(new Uint8Array(bytes), { headers: {
     "Content-Type": "image/png",
@@ -409,8 +434,11 @@ export async function saveThumbnail(fixtureId: string, kind: SixflTvRenderKind, 
   const strapline = safeText(data.strapline || existing[0]?.strapline || fixture.league.name, 120);
   if (!headline) throw new StudioError("Add a thumbnail headline.");
   const showScore = data.showScore !== false;
-  const graphic = await studioGraphicFixture(fixtureId);
-  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl() });
+  const [graphic, backgroundImage] = await Promise.all([
+    studioGraphicFixture(fixtureId),
+    storedThumbnailBackground(fixtureId),
+  ]);
+  const bytes = await createSixflTvThumbnail({ kind, fixture: graphic, headline, strapline, showScore, siteUrl: siteUrl(), backgroundImage });
   if (bytes.length > 50 * 1024 * 1024) throw new StudioError("Generated thumbnail is unexpectedly large.", 500);
   const digest = sha(bytes), key = `sixfl-tv-thumbnail/v1/${fixtureId}/${kind.toLowerCase()}/${randomUUID()}-${digest}.png`;
   await uploadRailwayObject({ key, body: bytes, contentType: "image/png", signal: AbortSignal.timeout(30000) });
