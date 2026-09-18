@@ -2,40 +2,50 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
-const page = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/page.tsx", "utf8");
+const root = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/page.tsx", "utf8");
 const layout = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/layout.tsx", "utf8");
+const fixtures = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/fixtures/page.tsx", "utf8");
+const settings = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/settings/page.tsx", "utf8");
+const weekly = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/goal-of-week/page.tsx", "utf8");
+const picker = fs.readFileSync("src/app/(admin)/admin/sixfl-tv/footage/page.tsx", "utf8");
 const studio = fs.readFileSync("src/components/admin/sixfl-tv/StudioControls.tsx", "utf8");
 const start = fs.readFileSync("src/app/api/admin/sixfl-tv/youtube/start/route.ts", "utf8");
 const youtube = fs.readFileSync("src/lib/sixfl-tv/youtube.ts", "utf8");
 
-test("main SIXFL TV page is the media hub", () => {
-  for (const text of [
-    "SIXFL TV control centre",
-    "Published videos",
-    "Upload & process matches",
-    "Goal of the Month",
-    "Goal of the Week",
-    "YouTube",
-    "Shared SIXFL TV branding",
-    "Intro and outro — upload once",
-  ]) assert.ok(page.includes(text), `missing hub text: ${text}`);
-
-  assert.match(page, /href="\/admin\/sixfl-tv\/footage"/);
-  assert.match(page, /href="\/admin\/sixfl-tv\/goal-of-month"/);
-  assert.match(page, /href="\/admin\/sixfl-tv\/goal-of-week\?legacy=1"/);
-  assert.match(page, /href="\/api\/admin\/sixfl-tv\/youtube\/start"/);
-  assert.match(page, /Check connection/);
-  assert.match(page, /checkYoutubeConnectionAction/);
-  assert.match(page, /Upload \/ manage footage/);
-  assert.match(page, /\/admin\/sixfl-tv\/footage\/\$\{fixture\.id\}/);
-  assert.match(page, /<FootageUploader initial=\{sharedFootage\} sharedOnly \/>/);
+test("SIXFL TV root and old picker both lead to Fixtures", () => {
+  assert.match(root, /redirect\("\/admin\/sixfl-tv\/fixtures"\)/);
+  assert.match(picker, /redirect\("\/admin\/sixfl-tv\/fixtures"\)/);
+  assert.doesNotMatch(root, /YouTube|Shared SIXFL TV branding|GoalOfWeekAdminPanel|FootageUploader/);
 });
 
-test("SIXFL TV navigation exposes the core tools on every media page", () => {
-  assert.match(layout, /SIXFL TV home/);
-  assert.match(layout, /Upload footage/);
-  assert.match(layout, /Goal of the Month/);
-  assert.match(layout, /Goal of the Week archive/);
+test("SIXFL TV navigation is tab-based", () => {
+  for (const label of ["Fixtures", "Goal of the Month", "Goal of the Week", "Settings"]) {
+    assert.ok(layout.includes(label), `missing tab: ${label}`);
+  }
+  assert.doesNotMatch(layout, /Upload footage|Published video links|SIXFL TV home/);
+});
+
+test("Fixtures owns all match cards and direct footage management", () => {
+  assert.match(fixtures, /<h1[^>]*>Fixtures<\/h1>/);
+  assert.match(fixtures, /Upload \/ manage footage/);
+  assert.match(fixtures, /\/admin\/sixfl-tv\/footage\/\$\{fixture\.id\}/);
+  assert.match(fixtures, /LIMIT 200/);
+  assert.doesNotMatch(fixtures, /getYoutubeConnectionStatus|sharedOnly|GoalOfWeekAdminPanel/);
+});
+
+test("Settings owns global YouTube and shared branding", () => {
+  for (const text of ["Settings", "YouTube", "Check connection", "Shared branding", "Intro and outro"]) {
+    assert.ok(settings.includes(text), `missing settings text: ${text}`);
+  }
+  assert.match(settings, /<FootageUploader initial=\{sharedFootage\} sharedOnly \/>/);
+  assert.match(settings, /href="\/api\/admin\/sixfl-tv\/youtube\/start"/);
+  assert.doesNotMatch(settings, /Upload \/ manage footage/);
+});
+
+test("Goal of the Week owns its editor and archive link", () => {
+  assert.match(weekly, /GoalOfWeekAdminPanel/);
+  assert.match(weekly, /Historical nominations & voting/);
+  assert.match(weekly, /legacy=1/);
 });
 
 test("YouTube connection is global rather than fixture-owned", () => {
@@ -44,9 +54,9 @@ test("YouTube connection is global rather than fixture-owned", () => {
   assert.match(start, /rawFixtureId/);
   assert.match(start, /rawFixtureId \? footageId\(rawFixtureId\) : null/);
   assert.match(studio, /Manage YouTube from SIXFL TV/);
+  assert.match(studio, /\/admin\/sixfl-tv\/settings/);
   assert.doesNotMatch(studio, /youtube\/start\?fixtureId/);
 });
-
 
 test("shared branding is no longer managed inside a fixture", () => {
   const uploader = fs.readFileSync("src/components/admin/sixfl-tv/FootageUploader.tsx", "utf8");

@@ -64,7 +64,7 @@ test("denied Google callback also returns to the public SIXFL page", async () =>
     const route = load();
     const response = await route.GET(new Request("http://localhost:8080/api/admin/sixfl-tv/youtube/callback?error=access_denied"));
     assert.equal(response.status, 302);
-    assert.match(response.url, /^https:\/\/www\.sixfl\.co\.uk\/admin\/sixfl-tv\?youtubeError=/);
+    assert.match(response.url, /^https:\/\/www\.sixfl\.co\.uk\/admin\/sixfl-tv\/settings\?youtubeError=/);
     assert.doesNotMatch(response.url, /localhost|railway\.internal/);
   } finally {
     if (prior === undefined) delete process.env.YOUTUBE_REDIRECT_URI;
@@ -72,7 +72,7 @@ test("denied Google callback also returns to the public SIXFL page", async () =>
   }
 });
 
-test("global YouTube authorisation returns to the SIXFL TV hub", async () => {
+test("global YouTube authorisation returns to SIXFL TV Settings", async () => {
   const prior = process.env.YOUTUBE_REDIRECT_URI;
   process.env.YOUTUBE_REDIRECT_URI = "https://www.sixfl.co.uk/api/admin/sixfl-tv/youtube/callback";
   try {
@@ -83,7 +83,7 @@ test("global YouTube authorisation returns to the SIXFL TV hub", async () => {
     });
     const response = await route.GET(new Request("http://localhost:8080/api/admin/sixfl-tv/youtube/callback?code=ok&state=ok"));
     assert.equal(response.status, 302);
-    assert.equal(response.url, "https://www.sixfl.co.uk/admin/sixfl-tv?youtube=connected");
+    assert.equal(response.url, "https://www.sixfl.co.uk/admin/sixfl-tv/settings?youtube=connected");
   } finally {
     if (prior === undefined) delete process.env.YOUTUBE_REDIRECT_URI;
     else process.env.YOUTUBE_REDIRECT_URI = prior;
