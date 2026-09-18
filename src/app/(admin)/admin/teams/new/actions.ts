@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { markTeamAsFixturePlaceholder } from "@/lib/teams/fixture-placeholders";
+import { defaultTeamBroadcastCode } from "@/lib/teams/broadcast-code";
 import { createTeamAction } from "../actions";
 
 export async function createTeamWithPlaceholderAction(formData: FormData) {
@@ -55,6 +56,7 @@ export async function createTeamWithPlaceholderAction(formData: FormData) {
       data: {
         name,
         claimCode: `TBC-${randomUUID().slice(0, 8).toUpperCase()}`,
+        broadcastCode: defaultTeamBroadcastCode(name),
         leagueId: null,
         logoUrl: null,
         latestKickoffTime: null,
