@@ -296,8 +296,8 @@ export async function createSixflTvVideoCard(input: {
     <g filter="url(#shadow)">${badgeImage(firstBadge, 220, 330, 260, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1440, 330, 260, input.fixture.secondTeam.name)}</g>
 
     ${scoreVisible ? `<text x="960" y="535" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="176" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score} <tspan fill="#34d399">–</tspan> ${input.fixture.secondTeam.score}</text>` : `<text x="960" y="520" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="92" font-weight="900" fill="#ffffff">VS</text>`}
-    ${firstScorers ? `<text x="760" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="22" font-weight="600" fill="#d1fae5">${xml(firstScorers)}</text>` : ""}
-    ${secondScorers ? `<text x="1160" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="22" font-weight="600" fill="#d1fae5">${xml(secondScorers)}</text>` : ""}
+    ${firstScorers ? `<text x="760" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="18" font-weight="600" fill="#d1fae5">${xml(firstScorers)}</text>` : ""}
+    ${secondScorers ? `<text x="1160" y="592" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="18" font-weight="600" fill="#d1fae5">${xml(secondScorers)}</text>` : ""}
 
     <text x="350" y="650" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="3" fill="#a7f3d0">RECENT FORM</text>
     ${formRun(input.fixture.firstTeamForm, 220, 675, "start")}
@@ -315,7 +315,7 @@ export async function createSixflTvVideoCard(input: {
 
 export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string; fixture: SixflTvGraphicFixture }) {
   const destination = new URL("/goal-of-the-month", input.siteUrl);
-  const displayUrl = `${destination.host.replace(/^www\\./, "")}${destination.pathname}`;
+  const displayUrl = `${destination.host.replace(/^www\./, "")}${destination.pathname}`;
   const sourceDate = input.fixture.kickoffIso ? new Date(input.fixture.kickoffIso) : new Date();
   const validDate = Number.isFinite(sourceDate.getTime()) ? sourceDate : new Date();
   const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" }).format(validDate);
@@ -347,8 +347,8 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const firstScore = input.fixture.firstTeam.score;
   const secondScore = input.fixture.secondTeam.score;
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
-  const firstName = fit(input.fixture.firstTeam.name, 20);
-  const secondName = fit(input.fixture.secondTeam.name, 20);
+  const firstName = fit(input.fixture.firstTeam.name, 17);
+  const secondName = fit(input.fixture.secondTeam.name, 17);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -367,8 +367,8 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
       <g transform="translate(108 18)">${badgeImage(firstBadge, 0, 0, 110, input.fixture.firstTeam.name)}</g>
       <g transform="translate(1062 18)">${badgeImage(secondBadge, 0, 0, 110, input.fixture.secondTeam.name)}</g>
 
-      <text x="250" y="88" font-size="34" font-weight="900" fill="#ffffff">${xml(firstName)}</text>
-      <text x="1032" y="88" text-anchor="end" font-size="34" font-weight="900" fill="#ffffff">${xml(secondName)}</text>
+      <text x="250" y="88" font-size="30" font-weight="900" fill="#ffffff">${xml(firstName)}</text>
+      <text x="1032" y="88" text-anchor="end" font-size="30" font-weight="900" fill="#ffffff">${xml(secondName)}</text>
 
       <line x1="250" y1="112" x2="520" y2="112" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
       <line x1="760" y1="112" x2="1032" y2="112" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
