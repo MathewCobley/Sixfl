@@ -7,8 +7,8 @@ const toggle = fs.readFileSync('src/components/admin/night-board/NightBoardSixfl
 const helper = fs.readFileSync('src/lib/veo/night-board.ts', 'utf8');
 const history = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/VeoChoiceHistory.tsx', 'utf8');
 const nightBoardPriority = fs.readFileSync('src/app/(admin)/admin/night-board/veo-priority-actions.ts', 'utf8');
-const backfill = fs.readFileSync(
-  'prisma/migrations/20260915003500_backfill_confirmed_veo_charges/migration.sql',
+const retirement = fs.readFileSync(
+  'prisma/migrations/20260918143000_retire_legacy_veo_priority_fees/migration.sql',
   'utf8',
 );
 
@@ -21,26 +21,21 @@ test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
   assert.match(helper, /maximum/);
 });
 
-test('new Night Board bookings do not create a Priority fee', () => {
-  assert.match(helper, /ensureAcceptedVeoCharges/);
-  assert.match(helper, /Paid Veo Priority has been retired/);
+test('Night Board contains no legacy Priority charge path', () => {
   assert.match(helper, /noPriorityFees: true/);
-  assert.doesNotMatch(helper, /paymentCharge\.create/);
-  assert.doesNotMatch(helper, /amountPence: 500/);
+  assert.doesNotMatch(helper, /ensureAcceptedVeoCharges|paymentCharge\.create|amountPence:\s*500/);
   assert.match(helper, /initial\.bookingState === 'PLANNED'/);
 });
 
-test('already-confirmed Veo requests get a one-time safe £5 backfill', () => {
-  assert.match(backfill, /r\.status::text = 'ACCEPTED'/);
-  assert.match(backfill, /r\."agreedPence" = 500/);
-  assert.match(backfill, /r\."chargeId" IS NULL/);
-  assert.match(backfill, /b\.state::text IN \('PLANNED', 'READY'\)/);
-  assert.match(backfill, /t\."teamMode"::text = 'STANDARD'/);
-  assert.match(backfill, /pc\.status::text <> 'VOID'/);
-  assert.match(backfill, /COALESCE\(pc\.description, ''\) LIKE/);
-  assert.match(backfill, /ON CONFLICT \(id\) DO NOTHING/);
-  assert.match(backfill, /SET "chargeId" = existing_charge_id/);
-  assert.doesNotMatch(backfill, /DELETE FROM|TRUNCATE|DROP TABLE/);
+test('retirement migration voids only the dedicated £5 Veo pilot fee and credits genuine receipts', () => {
+  assert.match(retirement, /"fixtureId" IS NULL/);
+  assert.match(retirement, /"amountPence" = 500/);
+  assert.match(retirement, /title LIKE 'Veo Priority — %'/);
+  assert.match(retirement, /id LIKE 'veo_%'/);
+  assert.match(retirement, /'CREDIT_ADDED'::"TeamCreditLedgerEntryType"/);
+  assert.match(retirement, /status = 'VOID'/);
+  assert.match(retirement, /COALESCE\(pt\.reference, ''\) <> 'TEAM_CREDIT'/);
+  assert.doesNotMatch(retirement, /DELETE FROM|TRUNCATE|DROP TABLE/);
 });
 
 test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
