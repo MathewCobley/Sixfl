@@ -26,7 +26,7 @@ function renderActive(render: Render) { return render.state === "QUEUED" || rend
 function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
 function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
-function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; onSaved: () => Promise<void> }) {
+function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
@@ -38,9 +38,10 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, onSaved }: { fixtureI
       headline,
       strapline,
       showScore: showScore ? "true" : "false",
+      renderRevision: renderRevision || "",
     });
     return `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}/thumbnail/${kind}?${params.toString()}`;
-  }, [fixtureId, kind, headline, strapline, showScore]);
+  }, [fixtureId, kind, headline, strapline, showScore, renderRevision]);
   const [debouncedPreviewSrc, setDebouncedPreviewSrc] = useState(previewSrc);
   useEffect(() => {
     setPreviewFailed(false);
@@ -198,7 +199,18 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         {!render ? <p className="mt-3 text-sm text-white/50">No preview generated yet.</p> : null}
       </section>;
     })}</div>
-    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <ThumbnailEditor key={`${kind}-${thumbByKind.get(kind)?.updatedAt || "new"}`} fixtureId={fixtureId} kind={kind} current={thumbByKind.get(kind)} busy={busy} onSaved={refresh} />)}</div></div>
+    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
+      const render = renderByKind.get(kind);
+      return <ThumbnailEditor
+        key={`${kind}-${thumbByKind.get(kind)?.updatedAt || "new"}-${render?.completedAt || render?.id || "no-render"}`}
+        fixtureId={fixtureId}
+        kind={kind}
+        current={thumbByKind.get(kind)}
+        busy={busy}
+        renderRevision={render?.completedAt || render?.id}
+        onSaved={refresh}
+      />;
+    })}</div></div>
     <section className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60"><strong className="text-white/85">YouTube connection</strong><br/>{state.youtube.connected ? <>Connected{state.youtube.channelTitle ? ` to ${state.youtube.channelTitle}` : ""}. Every video still needs separate approval below.</> : state.youtube.configured ? <>The shared SIXFL YouTube connection is not authorised yet. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Manage YouTube from SIXFL TV</a>.</> : <>Google OAuth credentials are not configured yet. Preview generation and thumbnail editing still work without Google. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Open SIXFL TV setup</a>.</>}</section>
     <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnail={thumbByKind.get(kind)} publish={publishByKind.get(kind)} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
   </div>;
