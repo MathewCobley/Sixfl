@@ -6,7 +6,7 @@ import { createSixflTvThumbnail, type SixflTvGraphicFixture } from "./graphics";
 import type { FootageAsset } from "./footage";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 5;
+const SIXFL_TV_RENDER_VERSION = 6;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -67,6 +67,9 @@ export async function studioFixture(fixtureId: string) {
     league: { select: { name: true, season: true } },
     homeTeam: { select: { id: true, name: true, logoUrl: true } },
     awayTeam: { select: { id: true, name: true, logoUrl: true } },
+    selections: { select: { selectionStatus: true, isCaptain: true, isGoalkeeper: true, createdAt: true,
+      teamMember: { select: { teamId: true, user: { select: { name: true } } } },
+    } },
     result: { select: { id: true, homeScore: true, awayScore: true, isDisputed: true,
       overturn: { select: { id: true, rulesBasis: true } },
       teamMetadata: { select: { teamId: true, scorers: true, goalsRecorded: true } },
@@ -88,12 +91,22 @@ export async function studioGraphicFixture(fixtureId: string): Promise<SixflTvGr
       scorers.push(`${teamName}: ${names.join(", ")}`);
     }
   }
+  const lineup = (teamId: string) => fixture.selections
+    .filter(selection => selection.teamMember.teamId === teamId && selection.selectionStatus !== "NOT_SELECTED" && Boolean(selection.teamMember.user.name?.trim()))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map(selection => {
+      const name = safeText(selection.teamMember.user.name, 60);
+      const suffix = [selection.isCaptain ? "C" : "", selection.isGoalkeeper ? "GK" : ""].filter(Boolean);
+      return suffix.length ? `${name} (${suffix.join(", ")})` : name;
+    });
   return {
     leagueName: [fixture.league.name, fixture.league.season].filter(Boolean).join(" · "),
     kickoffLabel: new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/London" }).format(fixture.kickoffAt),
     firstTeam: { name: fixture.homeTeam.name, logoUrl: fixture.homeTeam.logoUrl, score: result?.homeScore ?? null },
     secondTeam: { name: fixture.awayTeam.name, logoUrl: fixture.awayTeam.logoUrl, score: result?.awayScore ?? null },
     scorers,
+    firstTeamLineup: lineup(fixture.homeTeam.id),
+    secondTeamLineup: lineup(fixture.awayTeam.id),
     decisionNote: result?.overturn ? "Official competition decision — scorer list suppressed" : null,
   };
 }
