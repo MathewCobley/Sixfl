@@ -119,10 +119,11 @@ test('studio queues saved sources in editing order and requires confirmed result
 });
 
 test('studio source keeps publishing explicit, private and isolated from customer notifications',()=>{
-  const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const thumbRoute=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/thumbnail/[kind]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
+  const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');const graphics=fs.readFileSync('src/lib/sixfl-tv/graphics.ts','utf8');const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');const thumbRoute=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/thumbnail/[kind]/route.ts','utf8');const youtube=fs.readFileSync('src/lib/sixfl-tv/youtube.ts','utf8');
   assert.match(ui,/Approve & upload privately to YouTube/);assert.match(ui,/Live preview/);assert.match(ui,/preview: "1"/);assert.match(thumbRoute,/thumbnailPreviewResponse/);assert.doesNotMatch(ui,/<select\b|MutationObserver|document\.querySelector/);
   assert.match(api,/confirmed !== true/);assert.match(worker,/privacyStatus: "private"/);assert.match(worker,/notifySubscribers/);assert.match(worker,/thumbnails\/set/);assert.match(worker,/buildSixflTvVideoValue/);
   assert.match(worker,/swipeVideo/);assert.match(worker,/LINEUP_SECONDS/);assert.match(worker,/RESULT_SECONDS/);assert.match(worker,/GOAL_OF_MONTH_END_SECONDS/);assert.match(worker,/goalOfMonthEndCard=1/);assert.match(worker,/createSixflTvScoreBug/);assert.match(worker,/createSixflTvLineupCard/);assert.match(worker,/footageOverlay=\$\{job\.kind/);
+  assert.match(graphics,/public", "Sixfl-tv\.png"/);assert.doesNotMatch(graphics,/>SIXFL TV<\/text>/);assert.match(graphics,/RECENT FORM/);assert.match(graphics,/SIXFL PREDICTOR · PRE-MATCH/);
   for(const text of[worker,api,youtube])assert.doesNotMatch(text,/queueSixflTvFixtureUploadedEmailsOnce|queueNotification|sendEmail\(/);
   assert.match(youtube,/aes-256-gcm/);assert.match(youtube,/youtube\.upload/);assert.match(youtube,/access_type/);assert.match(youtube,/offline/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
