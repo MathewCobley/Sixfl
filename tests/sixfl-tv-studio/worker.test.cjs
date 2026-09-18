@@ -35,6 +35,7 @@ async function loadWorker(db, objects, uploadHook) {
       createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvPredictorCard: async ({ fixture }) => fixture.predictor ? cards.predictor : null,
       createSixflTvScoreBug: async ({ kind }) => kind === 'FULL_MATCH' ? cards.watermark : cards.scoreBug,
+      createSixflTvThumbnail: async () => Buffer.from('thumbnail'),
       createSixflTvWatermark: async () => { throw new Error('Full match must use the labelled scorebug, not the legacy watermark'); },
     },
     '../src/lib/sixfl-tv/videos': {},
