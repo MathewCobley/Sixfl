@@ -43,7 +43,6 @@ function loadPage({ hours = 48, status = null, note = null, provisional = false,
       dates.push(date.toISOString());
       return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'Europe/London' }).format(date);
     } },
-    '@/components/captain/CaptainFixtureConfirmation': ({ teamId, fixtureId, confirmed }) => h('button', { 'data-attendance-team': teamId, 'data-attendance-fixture': fixtureId, disabled: confirmed }, confirmed ? 'Team is confirmed' : 'Confirm our team can play'),
     '@/components/fixtures/OverturnedResultNotice': () => null,
     '@/components/fixtures/TeamShirt': () => null,
     '@/components/sixfl-tv/SixflTvFixtureBadge': () => null,
@@ -82,7 +81,7 @@ for (const hours of [72, 48, 1]) {
     assert.equal(summary.tone, 'red');
     assert.match(page.text, /Confirm your team at least 72 hours before kick-off/);
     assert.match(page.text, /Confirmation overdue — please confirm immediately/);
-    assert.match(page.html, /<button[^>]*data-attendance-fixture="example-fixture"[^>]*>Confirm our team can play<\/button>/);
+    assert.match(page.html, /<button[^>]*data-attendance-fixture="example-fixture"[^>]*>Yes — we can play<\/button>/);
     assert.doesNotMatch(page.html, /<button[^>]*data-attendance-fixture="example-fixture"[^>]*disabled/);
     assert.doesNotMatch(page.html, /name="(?:unavailableReason|note)"/);
     assert.match(page.html, /mailto:hello@sixfl.co.uk/);
@@ -128,6 +127,14 @@ test('existing late-change, kick-off, ownership and provisional server guards ar
   await assert.rejects(provisional.getConfirmableFixture('example-fixture', 'example-team', { allowLateConfirmation: true }), /provisional/);
   await loadPage({ hours: 96 }).getConfirmableFixture('example-fixture', 'example-team');
 });
+test('restored confirmation box contains no Veo or SIXFL TV Priority controls', () => {
+  const source = fs.readFileSync(PAGE, 'utf8');
+  assert.match(source, /<form action=\{confirmFixtureAction\}/);
+  assert.match(source, /Yes — we can play/);
+  assert.match(source, /No — we cannot play/);
+  assert.doesNotMatch(source, /CaptainFixtureConfirmation|FixtureVeoConfirmationForm|readFixtureVeoOffer|confirmFixtureWithVeoAction/);
+});
+
 test('neither page nor error copy advertises last-minute confirmation as the normal deadline', () => {
   const source = fs.readFileSync(PAGE, 'utf8');
   assert.doesNotMatch(source, /right up until kick-off|confirm yes at any time before kick-off|you can still confirm/i);
