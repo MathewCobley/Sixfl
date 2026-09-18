@@ -41,6 +41,9 @@ async function loadWorker(db, objects, uploadHook) {
     '../src/lib/sixfl-tv/thumbnail-background': {
       sixflTvThumbnailBackgroundKey: fixtureId => `sixfl-tv-thumbnail-background/v1/${fixtureId}/match-action.jpg`,
     },
+    '../src/lib/sixfl-tv/clip-poster': {
+      sixflTvClipPosterKey: assetId => `sixfl-tv-footage-poster/v1/${assetId}.jpg`,
+    },
     '../src/lib/storage/railway-s3': {
       fetchRailwayObject: async ({ key }) => objects.has(key) ? new Response(new Uint8Array(objects.get(key))) : new Response(null, { status: 404 }),
       uploadRailwayObject: async ({ key, body }) => { if (uploadHook) await uploadHook(key, body); objects.set(key, Buffer.from(body)); },
@@ -180,6 +183,20 @@ test('swipe transition is animated, full-HD and decodable', { timeout: 90000 }, 
   const hashes = await w.run('ffmpeg', ['-i', target, '-vf', "select='eq(n,0)+eq(n,5)+eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true);
   const md5s = hashes.split('\n').filter(line => /^[0-9]/.test(line)).map(line => line.split(',').at(-1).trim());
   assert.ok(new Set(md5s).size >= 2, 'Swipe frames must visibly change across the transition');
+});
+
+test('clip number badge stays deliberately small and separate from the scorebug', async t => {
+  const w = await loadWorker(memoryDb(), new Map()), dir = await temp(t);
+  const base = path.join(dir, 'base.png'), numbered = path.join(dir, 'numbered.png');
+  await fs.writeFile(base, await sharp({
+    create:{width:1920,height:1080,channels:4,background:{r:0,g:0,b:0,alpha:0}}
+  }).png().toBuffer());
+  await w.clipNumberOverlay(base, numbered, 7);
+  const meta = await sharp(await fs.readFile(numbered)).metadata();
+  assert.equal(meta.width,1920);assert.equal(meta.height,1080);
+  const source = await fs.readFile('scripts/sixfl-tv-worker.ts','utf8');
+  assert.match(source,/width="106" height="30"/);
+  assert.match(source,/>Clip \$\{clipNumber\}<\/text>/);
 });
 
 test('highlight normalisation overlays a persistent scorebug without removing match audio', { timeout: 90000 }, async t => {
