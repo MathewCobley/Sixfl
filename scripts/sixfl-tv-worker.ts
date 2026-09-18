@@ -42,7 +42,7 @@ async function failJob(job: Job, message: string) {
 }
 
 type Job = { id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; metadataJson: Prisma.JsonValue; leaseToken: string | null };
-type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; partCount: number; sizeBytes: bigint; state: string };
+type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; partCount: number; sizeBytes: bigint; state: string; clipNumber: number | null };
 type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type PublishJob = {
@@ -169,7 +169,7 @@ async function claimJob() {
 
 async function loadInputs(jobId: string) {
   return db.$queryRaw<Input[]>`
-    SELECT i."assetId",i."role",i."position",a."filename",a."partCount",a."sizeBytes",a."state"
+    SELECT i."assetId",i."role",i."position",a."filename",a."partCount",a."sizeBytes",a."state",a."clipNumber"
     FROM "SixflTvRenderInput" i JOIN "SixflTvFootageAsset" a ON a."id"=i."assetId"
     WHERE i."jobId"=${jobId} ORDER BY i."position",i."assetId"`;
 }
@@ -484,11 +484,22 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       if (index > 0 && swipe) segments.push(swipe);
       const input = content[index];
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+      const clipOverlay = job.kind === "HIGHLIGHTS"
+        ? path.join(dir, "normalised", `score-bug-clip-${input.clipNumber ?? index + 1}.png`)
+        : footageOverlayPng;
+      if (job.kind === "HIGHLIGHTS") {
+        await writeFile(clipOverlay, await createSixflTvScoreBug({
+          fixture: metadata.fixture,
+          kind: job.kind,
+          siteUrl: siteUrl(),
+          clipNumber: input.clipNumber ?? index + 1,
+        }));
+      }
       await normaliseInput(
         input,
         source,
         normal,
-        footageOverlayPng,
+        clipOverlay,
         job.kind === "FULL_MATCH" ? "Rendering full match" : `Rendering highlight clip ${index + 1} of ${content.length}`,
         collectPosterFor(index) ? `${job.kind.toLowerCase()}-${index + 1}` : undefined,
       );
