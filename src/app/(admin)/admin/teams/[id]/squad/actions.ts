@@ -37,6 +37,20 @@ function getSquadStatusValue(input: FormDataEntryValue | null): TeamMemberSquadS
   return String(input ?? "").trim().toUpperCase() === "INJURED" ? "INJURED" : "ACTIVE";
 }
 
+function getShirtNumberValue(input: FormDataEntryValue | null) {
+  const raw = String(input ?? "").trim();
+
+  if (!raw) return null;
+
+  const value = Number(raw);
+
+  if (!Number.isInteger(value) || value < 1 || value > 99) {
+    return Number.NaN;
+  }
+
+  return value;
+}
+
 function buildRedirect(teamId: string, query: string) {
   return `/admin/teams/${teamId}/squad${query}`;
 }
@@ -287,6 +301,54 @@ export async function updateAdminSquadMemberRoleAction(formData: FormData) {
   redirect(buildRedirect(teamId, "?saved=role-updated"));
 }
 
+export async function updateAdminSquadMemberShirtNumberAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = cleanText(formData.get("teamId"));
+  const membershipId = cleanText(formData.get("membershipId"));
+  const shirtNumber = getShirtNumberValue(formData.get("shirtNumber"));
+
+  if (!teamId || !membershipId) {
+    redirect("/admin/teams");
+  }
+
+  if (Number.isNaN(shirtNumber)) {
+    redirect(buildRedirect(teamId, "?error=Shirt%20number%20must%20be%20between%201%20and%2099."));
+  }
+
+  const membership = await prisma.teamMember.findFirst({
+    where: { id: membershipId, teamId },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    redirect(buildRedirect(teamId, "?error=Squad%20member%20not%20found."));
+  }
+
+  if (shirtNumber !== null) {
+    const duplicate = await prisma.teamMember.findFirst({
+      where: { teamId, shirtNumber, id: { not: membershipId } },
+      select: { id: true },
+    });
+
+    if (duplicate) {
+      redirect(buildRedirect(teamId, `?error=${encodeURIComponent(`Shirt number ${shirtNumber} is already in use by another player in this squad.`)}`));
+    }
+  }
+
+  await prisma.teamMember.update({
+    where: { id: membershipId },
+    data: { shirtNumber },
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/squad`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/captain-squad`);
+  revalidatePath(`/captain/team/${teamId}/squad`);
+
+  redirect(buildRedirect(teamId, "?saved=shirt-number-updated"));
+}
 export async function updateAdminSquadMemberStatusAction(formData: FormData) {
   await requireAdmin();
 
