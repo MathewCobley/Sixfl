@@ -141,9 +141,10 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
   async function refresh() { setState(await json<State>(endpoint)); }
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 5000);
+    const publishingOnly = activeRenders.length === 0 && state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING");
+    const timer = window.setInterval(() => void refresh().catch(() => undefined), publishingOnly ? 15000 : 5000);
     return () => window.clearInterval(timer);
-  }, [active, endpoint]);
+  }, [active, activeRenders.length, endpoint, state.publishes]);
   async function generate() {
     if (busy || activeRenders.length > 0) return;
     const previousRenders = state.renders;
