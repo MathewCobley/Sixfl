@@ -10,6 +10,7 @@ type FootageReader = Pick<Prisma.TransactionClient, "$queryRaw">;
 export type FootageAsset = {
   id: string; fixtureId: string | null; kind: FootageKind; filename: string;
   sizeBytes: bigint; lastModified: bigint; partCount: number; position: number;
+  clipNumber: number | null;
   state: "UPLOADING" | "READY" | "DELETING" | "DELETED";
   leaseToken: string | null; busyUntil: Date | null; createdAt: Date;
 };
@@ -65,6 +66,7 @@ export async function footageFixture(fixtureId: string) {
 function dto(asset: FootageAsset) {
   return { id: asset.id, kind: asset.kind, filename: asset.filename, sizeBytes: Number(asset.sizeBytes),
     lastModified: Number(asset.lastModified), partCount: asset.partCount, position: asset.position,
+    clipNumber: asset.clipNumber,
     state: asset.state, shared: asset.fixtureId === null };
 }
 export async function footageAsset(fixtureId: string | null, assetId: string, tx: FootageReader = prisma, lock = false) {
@@ -121,9 +123,16 @@ export async function beginFootage(fixtureId: string | null, actor: string, data
     const usage = await tx.$queryRaw<{ bytes: bigint }[]>`SELECT COALESCE(SUM("sizeBytes"),0)::bigint AS bytes FROM "SixflTvFootageAsset" WHERE "state" <> 'DELETED'`;
     if (Number(usage[0].bytes) + spec.sizeBytes > FOOTAGE_STORAGE_LIMIT_BYTES) throw new FootageError("The 100 GiB footage-library limit would be exceeded. Remove files you no longer need first.", 409);
     const position = assets.reduce((max, a) => Math.max(max, a.position + 1), 0);
+    const clipNumber = spec.kind === "CLIP" && scope
+      ? Number((await tx.$queryRaw<Array<{ nextClipNumber: number }>>`
+          SELECT COALESCE(MAX("clipNumber"), 0)::int + 1 AS "nextClipNumber"
+          FROM "SixflTvFootageAsset"
+          WHERE "fixtureId"=${scope} AND "kind"='CLIP'
+        `)[0]?.nextClipNumber ?? 1)
+      : null;
     const rows = await tx.$queryRaw<FootageAsset[]>`
-      INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","sizeBytes","lastModified","partCount","position","createdByActor")
-      VALUES (${randomUUID()},${scope},${spec.kind},${spec.filename},${spec.sizeBytes},${spec.lastModified},${spec.partCount},${position},${actor}) RETURNING *`;
+      INSERT INTO "SixflTvFootageAsset" ("id","fixtureId","kind","filename","sizeBytes","lastModified","partCount","position","clipNumber","createdByActor")
+      VALUES (${randomUUID()},${scope},${spec.kind},${spec.filename},${spec.sizeBytes},${spec.lastModified},${spec.partCount},${position},${clipNumber},${actor}) RETURNING *`;
     return { asset: dto(rows[0]), reused: false };
   });
 }
