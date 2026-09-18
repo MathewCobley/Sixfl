@@ -28,8 +28,6 @@ import {
 import ConfirmDeleteButton from "@/components/admin/ConfirmDeleteButton";
 import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
-import TeamMatchReportBadge from "@/components/admin/teams/TeamMatchReportBadge";
-import { getAdminTeamMatchReportActivity } from "@/lib/admin/team-match-report-activity";
 import TeamEmailForm from "@/components/admin/teams/TeamEmailForm";
 import PrimaryContactMemberSelector from "@/components/admin/teams/PrimaryContactMemberSelector";
 import { defaultTeamBroadcastCode } from "@/lib/teams/broadcast-code";
@@ -496,8 +494,6 @@ export default async function AdminTeamPage({
   const queuedChannel = sp.channel === "sms" ? "SMS" : "Email";
   const emailReplyConfigured = Boolean(process.env.EMAIL_REPLY_DOMAIN?.trim());
 
-  const matchReportActivity = await getAdminTeamMatchReportActivity([team.id]);
-
   const teamLeagueName = team.league
     ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
     : null;
@@ -543,7 +539,6 @@ export default async function AdminTeamPage({
 
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-3xl font-semibold text-white">{team.name}</h1>
-            <TeamMatchReportBadge activity={matchReportActivity.get(team.id)} />
           </div>
 
           <p className="text-sm text-white/60">
