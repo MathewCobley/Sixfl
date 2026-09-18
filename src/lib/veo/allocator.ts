@@ -1,5 +1,4 @@
 /** Pure, deterministic allocation. Only exchange pitches in the same venue/time slot. */
-export const VEO_SUPPLEMENT_PENCE = 500;
 export type VeoFixture = {
   id: string; kickoffMs: number; durationMinutes: number; venueId: string | null;
   pitch: string | null; homeTeamId: string; awayTeamId: string;
@@ -15,8 +14,7 @@ export function normaliseVeoPitch(value: string | null): string {
 }
 export function veoFee(basePence: number, priority: boolean, allocated: boolean) {
   if (!Number.isSafeInteger(basePence) || basePence < 0) throw new Error('Invalid base match fee.');
-  // SIXFL TV Priority is now earned through team reliability rather than bought.
-  // Keep this helper for legacy snapshot callers, but never add a new filming supplement.
+  // Legacy snapshot callers still expect fee arithmetic, but SIXFL TV Priority is permanently free.
   const supplementPence = 0;
   if (!Number.isSafeInteger(basePence + supplementPence)) throw new Error('Invalid total match fee.');
   return { basePence, supplementPence, totalPence: basePence + supplementPence };
