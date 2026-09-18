@@ -7,7 +7,7 @@ import type { FootageAsset } from "./footage";
 import { getLeagueStandings } from "@/lib/standings";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 12;
+const SIXFL_TV_RENDER_VERSION = 13;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }

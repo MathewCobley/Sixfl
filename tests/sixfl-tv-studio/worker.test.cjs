@@ -34,8 +34,8 @@ async function loadWorker(db, objects, uploadHook) {
       createSixflTvLeagueTableCard: async ({ fixture, page }) => fixture.leagueTable?.rows?.length ? (page === 'TOP' ? cards.tableTop : cards.tableBottom) : null,
       createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvPredictorCard: async ({ fixture }) => fixture.predictor ? cards.predictor : null,
-      createSixflTvScoreBug: async () => cards.scoreBug,
-      createSixflTvWatermark: async () => cards.watermark,
+      createSixflTvScoreBug: async ({ kind }) => kind === 'FULL_MATCH' ? cards.watermark : cards.scoreBug,
+      createSixflTvWatermark: async () => { throw new Error('Full match must use the labelled scorebug, not the legacy watermark'); },
     },
     '../src/lib/sixfl-tv/videos': {},
     '../src/lib/storage/railway-s3': {

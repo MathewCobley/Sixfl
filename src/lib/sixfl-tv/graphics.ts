@@ -470,7 +470,7 @@ export async function createSixflTvGoalOfMonthCard(input: { siteUrl: string; fix
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
-export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
+export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string }) {
   const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
     fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
@@ -482,6 +482,7 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV scorebug.");
   const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
   const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
+  const footageLabel = input.kind === "HIGHLIGHTS" ? "Match highlights" : "Full match";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -505,6 +506,10 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
 
       <text x="486" y="59" text-anchor="middle" font-size="27" font-weight="900" fill="#ffffff" letter-spacing="2">${xml(secondCode)}</text>
       <g transform="translate(568 14)">${badgeImage(secondBadge, 0, 0, 66, input.fixture.secondTeam.name)}</g>
+    </g>
+    <g transform="translate(54 146)">
+      <rect width="190" height="38" rx="19" fill="#020805" fill-opacity="0.76" stroke="#2dd4bf" stroke-opacity="0.5"/>
+      <text x="95" y="26" text-anchor="middle" font-size="18" font-weight="800" fill="#d1fae5">${xml(footageLabel)}</text>
     </g>
     ${logoImage(sixflTvLogoBytes, 1585, 34, 275, 88, 0.94)}
   </svg>`;
@@ -638,7 +643,10 @@ export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFi
   const teamNameY = predictor ? 470 : 330;
   const startY = predictor ? 535 : 395;
   const rowGap = Math.min(46, Math.floor((predictor ? 365 : 500) / rows));
-  const list = (items: string[], x: number) => items.map((name, index) => `<text x="${x}" y="${startY + index * rowGap}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="700" fill="#ffffff">${xml(fit(name, 34))}</text>`).join("");
+  const list = (items: string[], x: number) => items.map((name, index) => {
+    const y = startY + index * rowGap;
+    return `<g><text x="${x}" y="${y}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="900" fill="#34d399">•</text><text x="${x + 28}" y="${y}" text-anchor="start" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="28" font-weight="700" fill="#ffffff">${xml(fit(name, 30))}</text></g>`;
+  }).join("");
   const predictorPanel = predictor
     ? `<g>
         <rect x="710" y="230" width="500" height="190" rx="28" fill="#020805" fill-opacity="0.82" stroke="#34d399" stroke-width="3"/>
@@ -656,8 +664,8 @@ export async function createSixflTvLineupCard(input: { fixture: SixflTvGraphicFi
     <text x="480" y="${teamNameY}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.firstTeam.name, 28))}</text>
     <text x="1440" y="${teamNameY}" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="40" font-weight="900" fill="#6ee7b7">${xml(fit(input.fixture.secondTeam.name, 28))}</text>
     <line x1="960" y1="${teamNameY - 10}" x2="960" y2="910" stroke="#ffffff" stroke-opacity="0.15" stroke-width="2"/>
-    ${list(first, 480)}
-    ${list(second, 1440)}
+    ${list(first, 250)}
+    ${list(second, 1210)}
     <text x="960" y="972" text-anchor="middle" font-family="SIXFLInter,DejaVu Sans,sans-serif" font-size="25" font-weight="600" fill="#d1d5db">${xml(fit(input.fixture.leagueName, 62))} · ${xml(input.fixture.kickoffLabel)}</text>
     <rect x="650" y="1018" width="620" height="7" rx="4" fill="#34d399"/>
   </svg>`;
