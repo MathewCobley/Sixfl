@@ -12,6 +12,7 @@ const teamList = fs.readFileSync('src/app/(admin)/admin/teams/page.tsx', 'utf8')
 const captainLayout = fs.readFileSync('src/app/captain/team/[teamid]/layout.tsx', 'utf8');
 const templateForm = fs.readFileSync('src/components/admin/email-templates/EmailTemplateForm.tsx', 'utf8');
 const broadcast = fs.readFileSync('src/lib/communications/send-team-broadcast.ts', 'utf8');
+const communicationActions = fs.readFileSync('src/app/(admin)/admin/communications/actions.ts', 'utf8');
 const migration = fs.readFileSync('prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql', 'utf8');
 
 test('Priority score weights late payment most heavily', () => {
@@ -54,6 +55,8 @@ test('email builder exposes and team broadcasts resolve the current score', () =
   assert.match(templateForm, /replaceAll\("\{\{sixflTvPriorityScore\}\}","86"\)/);
   assert.match(broadcast, /getSixflTvPriorityScore\(team\.id\)/);
   assert.match(broadcast, /sixflTvPriorityScore: priorityScore\.score/);
+  assert.match(communicationActions, /"sixflTvPriorityScore"/);
+  assert.match(communicationActions, /sixflTvPriorityScore: priorityScore\.score/);
   assert.match(migration, /INSERT INTO "EmailTemplate"/);
   assert.match(migration, /Your current SIXFL TV Priority Score is \*\*\{\{sixflTvPriorityScore\}\}\/100\*\*/);
   assert.doesNotMatch(migration, /INSERT INTO "NotificationTemplate"[\s\S]*sixfl-tv-priority-launch-email/);
