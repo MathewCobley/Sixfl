@@ -400,6 +400,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     }
     const swipe = content.length ? path.join(dir, "normalised", "swipe.mp4") : null;
     if (swipe) await swipeVideo(dir, swipe);
+    if (swipe) segments.push(swipe);
     for (let index = 0; index < content.length; index++) {
       if (index > 0 && swipe) segments.push(swipe);
       const input = content[index];
@@ -416,14 +417,14 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     if (swipe) segments.push(swipe);
     reportProgress(84, "Adding final match card");
     const result = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(resultPng, result, RESULT_SECONDS); segments.push(result);
+    const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
+    reportProgress(88, "Adding Goal of the Month card");
+    await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
     for (const input of outro) {
       const source = path.join(dir, "source", `${input.position}.mp4`), normal = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
       await normaliseInput(input, source, normal, undefined, "Rendering outro"); segments.push(normal);
     }
-    const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-    reportProgress(88, "Adding Goal of the Month card");
-    await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
-    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length : 0} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} outro=${outro.length} goalOfMonthEndCard=1 footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
+    console.log(`Render assembly ${job.id}: customIntro=${intro.length} titleCard=1 lineupCard=${lineupBytes ? 1 : 0} predictorOnLineup=${metadata.fixture.predictor ? 1 : 0} content=${content.length} swipeTransitions=${content.length ? content.length + 1 : 0} resultCard=1 score=${metadata.fixture.firstTeam.score ?? "?"}-${metadata.fixture.secondTeam.score ?? "?"} goalOfMonthBeforeOutro=1 outro=${outro.length} footageOverlay=${job.kind === "HIGHLIGHTS" ? "FT+logo" : "logo"} renderVersion=${metadata.renderVersion ?? 1}`);
     const concat = path.join(dir, "concat.txt");
     await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "output.mp4");
