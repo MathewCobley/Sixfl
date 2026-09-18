@@ -48,7 +48,7 @@ type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; st
 type PublishJob = {
   id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; renderJobId: string; thumbnailObjectKey: string;
   title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; resumableUrl: string | null; uploadedBytes: bigint;
-  youtubeVideoId: string | null; youtubeUrl: string | null;
+  youtubeVideoId: string | null; youtubeUrl: string | null; notifySubscribers: boolean | null; notificationDay: Date | string | null;
 };
 type Metadata = {
   fixture: SixflTvGraphicFixture;
@@ -569,7 +569,7 @@ async function claimPublishJob() {
   return db.$transaction(async tx => {
     await tx.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='QUEUED',"busyUntil"=NULL,"updatedAt"=NOW(),"error"='Recovered after an interrupted worker.' WHERE "state"='PROCESSING' AND "busyUntil" < NOW()`;
     const rows = await tx.$queryRaw<PublishJob[]>`
-      SELECT "id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","resumableUrl","uploadedBytes","youtubeVideoId","youtubeUrl"
+      SELECT "id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","resumableUrl","uploadedBytes","youtubeVideoId","youtubeUrl","notifySubscribers","notificationDay"
       FROM "SixflTvYoutubePublish" WHERE "state"='QUEUED' ORDER BY "createdAt" FOR UPDATE SKIP LOCKED LIMIT 1`;
     if (!rows[0]) return null;
     await tx.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='PROCESSING',"busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW(),"error"=NULL WHERE "id"=${rows[0].id}`;
@@ -587,9 +587,50 @@ async function renderPartsForPublish(job: PublishJob) {
   return { total: Number(render.outputSizeBytes), parts };
 }
 
+async function assignYoutubeSubscriberNotification(job: PublishJob) {
+  if (job.notifySubscribers !== null && job.notificationDay) return job.notifySubscribers;
+  return db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424423)::text`;
+    const current = await tx.$queryRaw<Array<{ notifySubscribers: boolean | null; notificationDay: Date | null }>>`
+      SELECT "notifySubscribers","notificationDay"
+      FROM "SixflTvYoutubePublish"
+      WHERE "id"=${job.id}
+      FOR UPDATE`;
+    if (!current[0]) throw new Error("YouTube publish job no longer exists.");
+    if (current[0].notifySubscribers !== null && current[0].notificationDay) {
+      job.notifySubscribers = current[0].notifySubscribers;
+      job.notificationDay = current[0].notificationDay;
+      return current[0].notifySubscribers;
+    }
+
+    const status = await tx.$queryRaw<Array<{ day: string; claimed: boolean }>>`
+      SELECT
+        (NOW() AT TIME ZONE 'Europe/London')::date::text AS day,
+        EXISTS(
+          SELECT 1
+          FROM "SixflTvYoutubePublish"
+          WHERE "notifySubscribers" IS TRUE
+            AND "notificationDay"=(NOW() AT TIME ZONE 'Europe/London')::date
+            AND "id" <>${job.id}
+        ) AS claimed`;
+    const day = status[0]?.day;
+    if (!day) throw new Error("Could not determine the SIXFL TV notification day.");
+    const notify = !Boolean(status[0]?.claimed);
+    await tx.$executeRaw`
+      UPDATE "SixflTvYoutubePublish"
+      SET "notifySubscribers"=${notify},"notificationDay"=${day}::date,"updatedAt"=NOW()
+      WHERE "id"=${job.id}`;
+    job.notifySubscribers = notify;
+    job.notificationDay = day;
+    return notify;
+  });
+}
+
 async function startYoutubeResumable(job: PublishJob, accessToken: string, total: number) {
+  const notifySubscribers = await assignYoutubeSubscriberNotification(job);
   const url = new URL("https://www.googleapis.com/upload/youtube/v3/videos");
-  url.searchParams.set("uploadType", "resumable"); url.searchParams.set("part", "snippet,status"); url.searchParams.set("notifySubscribers", "false");
+  url.searchParams.set("uploadType", "resumable"); url.searchParams.set("part", "snippet,status"); url.searchParams.set("notifySubscribers", notifySubscribers ? "true" : "false");
+  console.log(`YouTube subscriber notification for ${job.id}: ${notifySubscribers ? "ON" : "OFF"}`);
   const response = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(total), "X-Upload-Content-Type": "video/mp4" },
@@ -725,7 +766,15 @@ async function main() {
       try { await processPublish(publish); console.log(`Published ${publish.kind} ${publish.id} to YouTube as ${publish.privacyStatus}`); }
       catch (error) {
         const message = safeError(error); console.error(`YouTube publish ${publish.id} failed`, message);
-        await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "state"='FAILED',"error"=${message},"busyUntil"=NULL,"updatedAt"=NOW() WHERE "id"=${publish.id}`.catch(() => undefined);
+        await db.$executeRaw`
+          UPDATE "SixflTvYoutubePublish"
+          SET "state"='FAILED',
+              "error"=${message},
+              "busyUntil"=NULL,
+              "notifySubscribers"=CASE WHEN "youtubeVideoId" IS NULL THEN NULL ELSE "notifySubscribers" END,
+              "notificationDay"=CASE WHEN "youtubeVideoId" IS NULL THEN NULL ELSE "notificationDay" END,
+              "updatedAt"=NOW()
+          WHERE "id"=${publish.id}`.catch(() => undefined);
       }
       continue;
     }
