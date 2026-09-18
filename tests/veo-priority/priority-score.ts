@@ -20,10 +20,10 @@ async function cleanup() {
     DELETE FROM "PlayerMatchPerformance" WHERE "teamId" IN ('${id("team")}','${id("opponent")}')
   `);
   await prisma.fixtureCaptainConfirmation.deleteMany({
-    where: { teamId: { in: [id("team"), id("opponent")] } },
+    where: { teamId: { in: [id("team"), id("opponent"), id("new")] } },
   });
   await prisma.matchResultTeamMeta.deleteMany({
-    where: { teamId: { in: [id("team"), id("opponent")] } },
+    where: { teamId: { in: [id("team"), id("opponent"), id("new")] } },
   });
   await prisma.matchResult.deleteMany({
     where: { fixtureId: { startsWith: id("fixture_") } },
@@ -32,10 +32,10 @@ async function cleanup() {
     where: { id: { startsWith: id("fixture_") } },
   });
   await prisma.teamMember.deleteMany({
-    where: { teamId: { in: [id("team"), id("opponent")] } },
+    where: { teamId: { in: [id("team"), id("opponent"), id("new")] } },
   });
   await prisma.team.deleteMany({
-    where: { id: { in: [id("team"), id("opponent")] } },
+    where: { id: { in: [id("team"), id("opponent"), id("new")] } },
   });
   await prisma.user.deleteMany({
     where: { id: { in: [id("user"), id("opponent_user")] } },
@@ -68,6 +68,9 @@ async function main() {
   });
   await prisma.team.create({
     data: { id: id("opponent"), name: "Opponent Team", claimCode: id("opp_claim"), leagueId: id("league") },
+  });
+  await prisma.team.create({
+    data: { id: id("new"), name: "Brand New Team", claimCode: id("new_claim"), leagueId: id("league") },
   });
 
   await prisma.teamMember.create({
@@ -178,17 +181,17 @@ async function main() {
 
   assert.equal(score.matchesCount, 5);
   assert.equal(score.provisional, false);
-  assert.equal(score.score, 92, "one late payment should lose 8 of the 100 available points");
+  assert.equal(score.score, 96, "one late payment should lose 4 of the 100 available points");
   assert.equal(score.qualifies, true);
   assert.equal(score.coreCompletedMatches, 5);
-  assert.equal(score.matches.reduce((sum, match) => sum + match.paymentPoints, 0), 42);
+  assert.equal(score.matches.reduce((sum, match) => sum + match.paymentPoints, 0), 26);
   assert.equal(score.matches.reduce((sum, match) => sum + match.confirmationPoints, 0), 20);
-  assert.equal(score.matches.reduce((sum, match) => sum + match.matchCardPoints, 0), 20);
+  assert.equal(score.matches.reduce((sum, match) => sum + match.matchCardPoints, 0), 40);
   assert.equal(score.matches.reduce((sum, match) => sum + match.assistsPoints, 0), 5);
   assert.equal(score.matches.reduce((sum, match) => sum + match.ratingsPoints, 0), 5);
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
 
-  const newTeam = await getSixflTvPriorityScore(id("opponent"), prisma);
+  const newTeam = await getSixflTvPriorityScore(id("new"), prisma);
   assert.equal(newTeam.score, 100);
   assert.equal(newTeam.provisional, true);
   assert.equal(newTeam.qualifies, true);

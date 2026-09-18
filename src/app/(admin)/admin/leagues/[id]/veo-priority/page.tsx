@@ -83,7 +83,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority scores</h2>
       <p className="text-sm leading-6 text-white/60">
-        Scores use each team’s last five completed fixtures: payment 10 points, confirmation 4, core match card 4, assists bonus 1 and ratings bonus 1. Late payment earns only 2/10. Teams need at least 60/100 and must complete the core match card in at least 60% of the scored fixtures to qualify. New teams are shown as provisional.
+        Scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists bonus 1 and ratings bonus 1. Late payment earns only 2/6. Teams need at least 60/100 and must complete the core match card in at least 60% of the scored fixtures to qualify. New teams are shown as provisional.
       </p>
       <div className="divide-y divide-white/10">{teams.map(team => {
         const score = priorityScores.get(team.id);

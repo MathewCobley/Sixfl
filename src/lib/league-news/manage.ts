@@ -110,3 +110,125 @@ export async function manageNewsPublication(slug: string, value: unknown) {
   }
   return state(await row(prisma, l.id, date), slug, date);
 }
+
+
+export async function publishNewsAutomatically(input: {
+  slug: string;
+  matchDate: string;
+  actorId: string;
+  requestId?: string;
+}) {
+  const date = validDate(input.matchDate);
+  const l = await league(input.slug);
+  const requestId = input.requestId ?? randomUUID();
+  const source = await getReportSource(input.slug, date);
+  if (!source?.matches.length) throw new ReportError('There are no completed matches ready for automatic publication.');
+
+  const touched = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`matchweek:${l.id}:${date}`}, 0))`;
+
+    const existing = await row(tx, l.id, date);
+    if (existing?.status === 'PUBLISHED') {
+      return { teamIds: existing.teamIds ?? [], published: false, reason: 'already-published' as const };
+    }
+    if (existing?.status === 'UNPUBLISHED') {
+      return { teamIds: existing.teamIds ?? [], published: false, reason: 'manually-unpublished' as const };
+    }
+
+    const saved = await draft(tx, l.id, date);
+    if (!saved?.content || !saved.source) throw new ReportError('Generate and save a draft first.');
+    const currentHash = sourceHash(source);
+    const d = ready(saved, source, saved.version, currentHash);
+
+    const running = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "MatchweekReportRevision"
+      WHERE "draftId"=${saved.id}
+        AND "status"='RUNNING'
+        AND "createdAt">NOW()-INTERVAL '2 minutes'
+      LIMIT 1
+    `;
+    if (running.length) throw new ReportError('Report generation is still running.');
+
+    const prior = (await tx.$queryRaw<Array<{ actorId: string; fingerprint: string }>>`
+      SELECT "actorId","fingerprint"
+      FROM "LeagueNewsEvent"
+      WHERE "requestId"=${requestId}
+    `)[0];
+
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify({
+        slug: input.slug,
+        date,
+        kind: 'automatic-publish',
+        draftVersion: saved.version,
+        sourceHash: currentHash,
+      }))
+      .digest('hex');
+
+    if (prior) {
+      if (prior.actorId !== input.actorId || prior.fingerprint !== fingerprint) {
+        throw new ReportError('This automatic publication reference was already used for another action.', 409);
+      }
+      return { teamIds: existing?.teamIds ?? [], published: false, reason: 'replayed' as const };
+    }
+
+    const snapshot = buildNewsSnapshot(
+      source,
+      d.content,
+      await identities(tx, l.id, source),
+      existing ? validateNewsSettings(existing.settings) : blankNewsSettings(),
+    );
+    const id = existing?.id ?? randomUUID();
+    const revision = (existing?.revision ?? 0) + 1;
+
+    if (!existing) {
+      await tx.$executeRaw`
+        INSERT INTO "LeagueNewsArticle" ("id","draftId","leagueId","matchDate")
+        VALUES (${id},${saved.id},${l.id},${date})
+      `;
+    }
+
+    const teamIds = [...new Set(snapshot.matches.flatMap(m => [m.teamAId, m.teamBId]))];
+
+    await tx.$executeRaw`
+      UPDATE "LeagueNewsArticle"
+      SET
+        "status"='PUBLISHED',
+        "snapshot"=${JSON.stringify(snapshot)}::jsonb,
+        "teamIds"=${teamIds}::text[],
+        "sourceVersion"=${saved.version},
+        "revision"=${revision},
+        "publishedAt"=COALESCE("publishedAt",NOW()),
+        "publishedUpdatedAt"=NOW(),
+        "updatedAt"=NOW()
+      WHERE "id"=${id}
+    `;
+
+    await tx.$executeRaw`
+      INSERT INTO "LeagueNewsEvent" (
+        "requestId","articleId","actorId","fingerprint","kind","revision","snapshot"
+      ) VALUES (
+        ${requestId},${id},${input.actorId},${fingerprint},'publish',${revision},${JSON.stringify(snapshot)}::jsonb
+      )
+    `;
+
+    return { teamIds, published: true, reason: 'published' as const };
+  }, { timeout: 20000 });
+
+  if (touched.published) {
+    revalidatePath(`/leagues/${input.slug}`, 'layout');
+    revalidatePath('/sitemap.xml');
+    for (const id of touched.teamIds) {
+      revalidatePath(`/teams/${id}`, 'layout');
+      revalidatePath(`/captain/team/${id}`, 'layout');
+      revalidatePath(`/player/team/${id}`, 'layout');
+    }
+  }
+
+  return {
+    ...state(await row(prisma, l.id, date), input.slug, date),
+    automaticPublished: touched.published,
+    automaticReason: touched.reason,
+  };
+}

@@ -348,10 +348,10 @@ export async function getSixflTvPriorityScores(
     let matchCardPoints = 0;
     let matchCardStatus: SixflTvPriorityMatchScore["matchCardStatus"] = "INCOMPLETE";
     if (coreComplete && meta!.priorityCoreCompletedAt && meta!.priorityCoreCompletedAt <= cardDeadline) {
-      matchCardPoints = 4;
+      matchCardPoints = 8;
       matchCardStatus = "ON_TIME";
     } else if (coreComplete && meta!.priorityCoreCompletedAt) {
-      matchCardPoints = 2;
+      matchCardPoints = 4;
       matchCardStatus = "LATE";
     }
 
@@ -369,7 +369,7 @@ export async function getSixflTvPriorityScores(
     const ratingsPoints = ratingsCompleteOnTime ? 1 : 0;
 
     const charge = chargeByKey.get(entryKey);
-    let paymentPoints = 10;
+    let paymentPoints = 6;
     let paymentStatus: SixflTvPriorityMatchScore["paymentStatus"] = "NOT_REQUIRED";
     if (charge && charge.amountPence > 0 && charge.status !== "VOID") {
       const dueDate = charge.dueDate ?? fixture.kickoffAt;
@@ -380,13 +380,13 @@ export async function getSixflTvPriorityScores(
         dueDate,
       });
       if (settledAt && settledAt <= dueDate) {
-        paymentPoints = 10;
+        paymentPoints = 6;
         paymentStatus = "ON_TIME";
       } else if (settledAt) {
         paymentPoints = 2;
         paymentStatus = "LATE";
       } else if (dueDate > now) {
-        paymentPoints = 10;
+        paymentPoints = 6;
         paymentStatus = "NOT_REQUIRED";
       } else {
         paymentPoints = 0;

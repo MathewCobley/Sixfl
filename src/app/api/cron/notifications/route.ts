@@ -4,6 +4,7 @@ import { runConfiguredPlayerPoolResponseCheck, logConfiguredPlayerPoolResponseDe
 // ========================================
 
 import { runPlayerRepaymentReminderJob } from "@/lib/payments/player-repayment-reminders";
+import { runAutomaticMatchnightReports } from "@/lib/matchweek-reports/auto-publish";
 import { NextRequest, NextResponse } from "next/server";
 import { runManagedSquadRegistrationReminderJob } from "@/lib/managed-squad/registration-reminders";
 import { runCaptainOnboardingEmailJob } from "@/lib/captain/onboarding-emails";
@@ -215,6 +216,18 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(200),
   );
 
+  const matchnightReports = await runCronStep(
+    "automatic-matchnight-reports",
+    failures,
+    runAutomaticMatchnightReports,
+  );
+  if (matchnightReports.ok && matchnightReports.value.failed > 0) {
+    failures.push({
+      step: "automatic-matchnight-reports",
+      error: `${matchnightReports.value.failed} league report${matchnightReports.value.failed === 1 ? "" : "s"} could not be published automatically.`,
+    });
+  }
+
   await runCronStep("player-pool-response-delivery", failures, logConfiguredPlayerPoolResponseDelivery);
 
   const teamPaymentOrderCheckouts = await runCronStep(
@@ -256,6 +269,7 @@ export async function GET(request: NextRequest) {
     referralEmails,
     referralPayoutEmails,
     generatedQueue,
+    matchnightReports,
     teamPaymentOrderCheckouts,
     matchdayAutoPay,
   };
