@@ -357,7 +357,8 @@ export async function createSixflTvThumbnail(input: {
     { input: headlineOneText, left: 42, top: 438 },
     { input: headlineTwoText, left: 42, top: 518 },
     { input: leagueText, left: 44, top: 620 },
-    { input: footerText, left: 802, top: 650 },
+    // Keep the bottom-right 170px clear: YouTube overlays the video duration there.
+    { input: footerText, left: 670, top: 650 },
   ];
 
   return (background ? sharp(background) : sharp({ create: { width: 1280, height: 720, channels: 3, background: "#020504" } }))
