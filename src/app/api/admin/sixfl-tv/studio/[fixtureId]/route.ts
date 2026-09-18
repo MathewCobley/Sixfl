@@ -40,6 +40,10 @@ export async function POST(request: Request, context: Context) {
     if (data.action === "publish") {
       if (data.confirmed !== true) throw new StudioError("Confirm that you have reviewed this video and thumbnail before uploading it to YouTube.", 409);
       const kind = String(data.kind || "") as SixflTvRenderKind;
+      // The live thumbnail preview can change when a fresh action frame is chosen or
+      // when the admin edits the fields. Re-save those exact values immediately before
+      // queuing YouTube so the thumbnail on YouTube is guaranteed to match the preview.
+      await saveThumbnail(fixtureId, kind, actor, data);
       return NextResponse.json(await queueYoutubePublish(fixtureId, kind, actor, data), { status: 202, headers });
     }
     throw new StudioError("Unknown SIXFL TV studio action.");

@@ -7,6 +7,7 @@ type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY"
 type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: boolean; sizeBytes: number; updatedAt: string };
 type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
 type YoutubeDefaults = { title: string; description: string };
+type ThumbnailDraft = { headline: string; strapline: string; showScore: boolean };
 type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null }; youtubeDefaults: Record<Kind, YoutubeDefaults> };
 
 async function json<T>(url: string, body?: Record<string, unknown>) {
@@ -27,7 +28,7 @@ function renderActive(render: Render) { return render.state === "QUEUED" || rend
 function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
 function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
-function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onSaved: () => Promise<void> }) {
+function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
@@ -49,6 +50,9 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onSav
     const timer = window.setTimeout(() => setDebouncedPreviewSrc(previewSrc), 250);
     return () => window.clearTimeout(timer);
   }, [previewSrc]);
+  useEffect(() => {
+    onDraftChange({ headline, strapline, showScore });
+  }, [headline, strapline, showScore, onDraftChange]);
   async function save() {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -75,17 +79,26 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onSav
   </section>;
 }
 
-function PublishEditor({ fixtureId, kind, render, thumbnail, publish, defaults, connected, busy, onRefresh }: { fixtureId: string; kind: Kind; render?: Render; thumbnail?: Thumbnail; publish?: Publish; defaults: YoutubeDefaults; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
+function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defaults, connected, busy, onRefresh }: { fixtureId: string; kind: Kind; render?: Render; thumbnailDraft: ThumbnailDraft; publish?: Publish; defaults: YoutubeDefaults; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
   const [title, setTitle] = useState(publish?.title || defaults.title);
   const [description, setDescription] = useState(publish?.description || defaults.description);
   const [sending, setSending] = useState(false), [error, setError] = useState("");
-  const ready = render?.state === "READY" && Boolean(thumbnail);
+  const ready = render?.state === "READY" && Boolean(thumbnailDraft.headline.trim());
   const active = publish?.state === "QUEUED" || publish?.state === "PROCESSING";
   async function approve() {
     if (!connected || !ready || active || sending || busy) return;
     setSending(true); setError("");
     try {
-      await json(`/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`, { action: "publish", confirmed: true, kind, title, description });
+      await json(`/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`, {
+        action: "publish",
+        confirmed: true,
+        kind,
+        title,
+        description,
+        headline: thumbnailDraft.headline,
+        strapline: thumbnailDraft.strapline,
+        showScore: thumbnailDraft.showScore,
+      });
       await onRefresh();
     } catch (e) { setError(e instanceof Error ? e.message : "YouTube upload could not be queued."); }
     finally { setSending(false); }
@@ -98,9 +111,9 @@ function PublishEditor({ fixtureId, kind, render, thumbnail, publish, defaults, 
     <div className="mt-4 grid gap-3">
       <label className="text-sm text-white/70">YouTube title <span className="text-white/40">(optional)</span><input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="Automatic title" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <label className="text-sm text-white/70">Description <span className="text-white/40">(optional)</span><textarea value={description} maxLength={5000} rows={4} onChange={e => setDescription(e.target.value)} placeholder="Automatic description" className="mt-1 block w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
-      <p className="text-xs leading-5 text-amber-100/75">Approval publishes the current finished preview with its saved thumbnail directly as <strong>Public</strong> on YouTube. The first SIXFL TV video published each UK calendar day notifies subscribers; later uploads that day publish normally without another subscriber notification.</p>
+      <p className="text-xs leading-5 text-amber-100/75">Approval saves the thumbnail exactly as shown in the live preview, then publishes it with the finished video directly as <strong>Public</strong> on YouTube. The first SIXFL TV video published each UK calendar day notifies subscribers; later uploads that day publish normally without another subscriber notification.</p>
       <button type="button" className={button} disabled={!connected || !ready || active || sending || busy} onClick={() => void approve()}>{sending ? "Approving…" : active ? "Upload in progress…" : "Approve & publish publicly to YouTube"}</button>
-      {!render || render.state !== "READY" ? <p className="text-xs text-white/45">Generate and review the finished {kindLabel(kind).toLowerCase()} preview first.</p> : !thumbnail ? <p className="text-xs text-white/45">Save the matching thumbnail first.</p> : !connected ? <p className="text-xs text-white/45">Connect the SIXFL YouTube channel first.</p> : null}
+      {!render || render.state !== "READY" ? <p className="text-xs text-white/45">Generate and review the finished {kindLabel(kind).toLowerCase()} preview first.</p> : !thumbnailDraft.headline.trim() ? <p className="text-xs text-white/45">Add the thumbnail headline first.</p> : !connected ? <p className="text-xs text-white/45">Connect the SIXFL YouTube channel first.</p> : null}
       {error ? <p role="alert" className="text-sm text-red-200">{error}</p> : null}
     </div>
   </section>;
@@ -108,6 +121,19 @@ function PublishEditor({ fixtureId, kind, render, thumbnail, publish, defaults, 
 
 export default function StudioControls({ fixtureId, initial }: { fixtureId: string; initial: State }) {
   const [state, setState] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
+  const initialThumbs = new Map(initial.thumbnails.map(thumb => [thumb.kind, thumb]));
+  const [thumbnailDrafts, setThumbnailDrafts] = useState<Record<Kind, ThumbnailDraft>>({
+    HIGHLIGHTS: {
+      headline: initialThumbs.get("HIGHLIGHTS")?.headline || "MATCH HIGHLIGHTS",
+      strapline: initialThumbs.get("HIGHLIGHTS")?.strapline || "",
+      showScore: initialThumbs.get("HIGHLIGHTS")?.showScore ?? true,
+    },
+    FULL_MATCH: {
+      headline: initialThumbs.get("FULL_MATCH")?.headline || "FULL MATCH",
+      strapline: initialThumbs.get("FULL_MATCH")?.strapline || "",
+      showScore: initialThumbs.get("FULL_MATCH")?.showScore ?? true,
+    },
+  });
   const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
   const activeRenders = useMemo(() => state.renders.filter(renderActive), [state.renders]);
   const hasReadyPreview = useMemo(() => state.renders.some(render => render.state === "READY"), [state.renders]);
@@ -209,10 +235,11 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         current={thumbByKind.get(kind)}
         busy={busy}
         renderRevision={render?.completedAt || render?.id}
+        onDraftChange={draft => setThumbnailDrafts(current => ({ ...current, [kind]: draft }))}
         onSaved={refresh}
       />;
     })}</div></div>
     <section className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60"><strong className="text-white/85">YouTube connection</strong><br/>{state.youtube.connected ? <>Connected{state.youtube.channelTitle ? ` to ${state.youtube.channelTitle}` : ""}. Every video still needs separate approval below.</> : state.youtube.configured ? <>The shared SIXFL YouTube connection is not authorised yet. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Manage YouTube from SIXFL TV</a>.</> : <>Google OAuth credentials are not configured yet. Preview generation and thumbnail editing still work without Google. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Open SIXFL TV setup</a>.</>}</section>
-    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnail={thumbByKind.get(kind)} publish={publishByKind.get(kind)} defaults={state.youtubeDefaults[kind]} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
+    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnailDraft={thumbnailDrafts[kind]} publish={publishByKind.get(kind)} defaults={state.youtubeDefaults[kind]} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
   </div>;
 }
