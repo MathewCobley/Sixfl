@@ -164,7 +164,7 @@ export async function createSixflTvVideoCard(input: {
   ]);
   const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
   const cardHeading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH RESULT";
-  const scorerLines = (input.fixture.scorers || []).slice(0, 3).map(value => fit(value, 82));
+  const scorerLines = input.mode === "FULL_TIME" ? (input.fixture.scorers || []).slice(0, 3).map(value => fit(value, 82)) : [];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     ${stadiumBackground(1920, 1080)}
     ${logoImage(sixflTvLogoBytes, 760, 28, 400, 128)}
