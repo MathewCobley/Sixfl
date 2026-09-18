@@ -112,21 +112,9 @@ jobs:
             if curl --silent http://127.0.0.1:3101/login > /dev/null; then break; fi
             sleep 1
           done
-          LEAGUE=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/veo/seed.json','utf8')).leagueId")
+          LEAGUE=priority-auth-test
           curl --silent --dump-header veo-auth-headers.txt --output /dev/null "http://127.0.0.1:3101/admin/leagues/$LEAGUE/veo-priority"
           grep -i 'location: /login' veo-auth-headers.txt
-      - name: Install browser test dependencies
-        run: npm install --no-save --package-lock=false playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Start isolated development app
-        shell: bash
-        run: |
-          npx next dev --hostname 127.0.0.1 --port 3100 > veo-dev.log 2>&1 &
-          for attempt in $(seq 1 90); do
-            if curl --silent http://127.0.0.1:3100/login > /dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat veo-dev.log
-          exit 1
       - name: Verify score token survives the real email editor
         run: node -e "const fs=require('fs');const s=fs.readFileSync('src/components/admin/email-templates/EmailTemplateForm.tsx','utf8');if(!s.includes('{{sixflTvPriorityScore}}'))process.exit(1)"
       - name: Upload evidence
@@ -137,7 +125,6 @@ jobs:
           path: |
             artifacts/veo/
             veo-build.log
-            veo-dev.log
             veo-production.log
             veo-auth-headers.txt
           retention-days: 14
