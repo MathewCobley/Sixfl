@@ -122,6 +122,20 @@ function formatAvailabilitySummary(value: string | null | undefined) {
   return value.trim();
 }
 
+function parseShirtNumber(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 99) {
+    return Number.NaN;
+  }
+
+  return parsed;
+}
+
 function normalisePlayerName(name: string | null | undefined) {
   return (name ?? "").trim().toLowerCase();
 }
@@ -185,6 +199,8 @@ function getSavedMessage(saved?: string) {
       return "Player added to your squad.";
     case "player-updated":
       return "Player details updated.";
+    case "shirt-number-updated":
+      return "Shirt number updated.";
     case "login-email-sent":
       return "Dashboard sign-in email sent to the player.";
     default:
@@ -265,6 +281,7 @@ async function addCaptainPlayerAction(formData: FormData) {
   const displayName = String(formData.get("displayName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
+  const shirtNumber = parseShirtNumber(formData.get("shirtNumber"));
   const usesWhatsapp = formData.get("usesWhatsapp") === "on";
 
   await requireCaptain(teamid);
@@ -272,6 +289,10 @@ async function addCaptainPlayerAction(formData: FormData) {
   if (!teamid) redirect("/captain");
   if (!displayName) {
     redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);
+  }
+
+  if (Number.isNaN(shirtNumber)) {
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Shirt number must be between 1 and 99.")}`);
   }
 
   const team = await prisma.team.findUnique({
@@ -317,8 +338,19 @@ async function addCaptainPlayerAction(formData: FormData) {
     WHERE id = ${user.id}
   `;
 
+  if (shirtNumber !== null) {
+    const shirtNumberInUse = await prisma.teamMember.findFirst({
+      where: { teamId: teamid, shirtNumber },
+      select: { id: true },
+    });
+
+    if (shirtNumberInUse) {
+      redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent(`Shirt number ${shirtNumber} is already in use by another player in this squad.`)}`);
+    }
+  }
+
   const member = await prisma.teamMember.create({
-    data: { userId: user.id, teamId: teamid, role: TeamRole.PLAYER },
+    data: { userId: user.id, teamId: teamid, role: TeamRole.PLAYER, shirtNumber },
     select: { id: true },
   });
 
@@ -350,6 +382,53 @@ async function addCaptainPlayerAction(formData: FormData) {
   redirect(`/captain/team/${teamid}/captain-squad?saved=player-added`);
 }
 
+async function updateCaptainPlayerShirtNumberAction(formData: FormData) {
+  "use server";
+
+  const teamid = String(formData.get("teamid") ?? "").trim();
+  const membershipId = String(formData.get("membershipId") ?? "").trim();
+  const shirtNumber = parseShirtNumber(formData.get("shirtNumber"));
+
+  await requireCaptain(teamid);
+
+  if (!teamid || !membershipId) redirect("/captain");
+
+  if (Number.isNaN(shirtNumber)) {
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Shirt number must be between 1 and 99.")}`);
+  }
+
+  const membership = await prisma.teamMember.findFirst({
+    where: { id: membershipId, teamId: teamid },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Player not found.")}`);
+  }
+
+  if (shirtNumber !== null) {
+    const duplicate = await prisma.teamMember.findFirst({
+      where: { teamId: teamid, shirtNumber, id: { not: membershipId } },
+      select: { id: true },
+    });
+
+    if (duplicate) {
+      redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent(`Shirt number ${shirtNumber} is already in use by another player in this squad.`)}`);
+    }
+  }
+
+  await prisma.teamMember.update({
+    where: { id: membershipId },
+    data: { shirtNumber },
+  });
+
+  revalidatePath(`/captain/team/${teamid}`);
+  revalidatePath(`/captain/team/${teamid}/captain-squad`);
+  revalidatePath(`/captain/team/${teamid}/squad`);
+  revalidatePath(`/admin/teams/${teamid}/squad`);
+
+  redirect(`/captain/team/${teamid}/captain-squad?saved=shirt-number-updated`);
+}
 async function sendCaptainPlayerDashboardLoginEmailAction(formData: FormData) {
   "use server";
 
@@ -444,6 +523,7 @@ export default async function CaptainSquadViewPage({
         select: {
           id: true,
           role: true,
+          shirtNumber: true,
           createdAt: true,
           user: {
             select: {
@@ -637,6 +717,11 @@ export default async function CaptainSquadViewPage({
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
+                        {member.shirtNumber ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                            #{member.shirtNumber}
+                          </span>
+                        ) : null}
                         {whatsAppUrl ? <WhatsAppLink href={whatsAppUrl} playerName={playerName} /> : null}
                       </div>
                       <div className="mt-1 text-xs text-white/45">
@@ -671,6 +756,26 @@ export default async function CaptainSquadViewPage({
                     </div>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2 xl:w-72 xl:justify-end">
+                    <form action={updateCaptainPlayerShirtNumberAction} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:col-span-2">
+                      <input type="hidden" name="teamid" value={teamid} />
+                      <input type="hidden" name="membershipId" value={member.id} />
+                      <input
+                        name="shirtNumber"
+                        type="number"
+                        min={1}
+                        max={99}
+                        inputMode="numeric"
+                        defaultValue={member.shirtNumber ?? ""}
+                        placeholder="Shirt no."
+                        className="min-h-11 min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
+                      />
+                      <button
+                        type="submit"
+                        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                      >
+                        Save
+                      </button>
+                    </form>
                     <Link
                       href={`/captain/team/${teamid}/captain-squad/${member.id}/edit`}
                       className="inline-flex items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
@@ -724,6 +829,18 @@ export default async function CaptainSquadViewPage({
                   <input
                     name="phone"
                     placeholder="Mobile number"
+                    className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
+                  />
+                </label>
+                <label className="block space-y-2 text-sm text-white/65">
+                  <span>Shirt number optional</span>
+                  <input
+                    name="shirtNumber"
+                    type="number"
+                    min={1}
+                    max={99}
+                    inputMode="numeric"
+                    placeholder="1–99"
                     className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
                   />
                 </label>
