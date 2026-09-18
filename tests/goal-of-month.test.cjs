@@ -30,6 +30,7 @@ function loader(mocks = {}) {
 }
 let db, sql, awards, calendar;
 const migration = 'prisma/migrations/20260907153000_goal_of_month/migration.sql';
+const clipMigration = 'prisma/migrations/20260918181000_goal_of_month_clip_assets/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -45,6 +46,10 @@ test.before(() => {
     CREATE TABLE "League" (id TEXT PRIMARY KEY,name TEXT);
     CREATE TABLE "Fixture" (id TEXT PRIMARY KEY,"homeTeamId" TEXT,"awayTeamId" TEXT,"leagueId" TEXT,"publishedAt" TIMESTAMP,"sixflTvRecorded" BOOLEAN,"sixflTvUrl" TEXT,status TEXT,"kickoffAt" TIMESTAMP);
     CREATE TABLE "MatchResult" ("fixtureId" TEXT PRIMARY KEY,"homeScore" INTEGER,"awayScore" INTEGER);
+    CREATE TABLE "SixflTvFootageAsset" (
+      id TEXT PRIMARY KEY, "fixtureId" TEXT, kind TEXT, filename TEXT,
+      state TEXT, position INTEGER DEFAULT 0, "createdAt" TIMESTAMP DEFAULT NOW()
+    );
     CREATE TABLE "GoalOfWeek" (id TEXT PRIMARY KEY,"weekOf" TIMESTAMP);
     CREATE TABLE "GoalOfWeekCandidate" (id TEXT PRIMARY KEY,marker TEXT);
     CREATE TABLE "GoalOfWeekNomination" (id TEXT PRIMARY KEY,marker TEXT);
@@ -54,13 +59,14 @@ test.before(() => {
     INSERT INTO "GoalOfWeekNomination" VALUES ('weekly-nomination','unchanged');
     INSERT INTO "GoalOfWeekVote" VALUES ('weekly-vote','unchanged');`);
   sql(read(migration));
+  sql(read(clipMigration));
   sql(`UPDATE "GoalAwardTransition" SET "firstMonth"='2026-09',"weeklyNominationsCloseAt"='2026-09-13T23:00:00',"weeklyVotingClosesAt"='2026-09-15T17:00:00' WHERE id='monthly'`);
   db = new PrismaClient({ datasources: { db: { url } } });
   const load = loader({ '@/lib/prisma': { prisma: db } });
   awards = load('src/lib/goal-of-month/community.ts'); calendar = load('src/lib/goal-of-month/calendar.ts');
 });
 test.beforeEach(() => {
-  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","MatchResult","Fixture","Team","League","User" CASCADE;
+  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","SixflTvFootageAsset","MatchResult","Fixture","Team","League","User" CASCADE;
     INSERT INTO "User" VALUES ('u1'),('u2'),('u3'),('u4');
     INSERT INTO "Team" VALUES ('home','Home FC',NULL),('away','Away FC',NULL);
     INSERT INTO "League" VALUES ('league','Test League');
@@ -104,6 +110,25 @@ test('one goal produces one nominee card regardless of repeated and concurrent n
   assert.deepEqual(payload.videoUrls, ['https://youtu.be/dQw4w9WgXcQ']);
   assert.equal(payload.goalNumber, 1); assert.equal(payload.teamName, 'Home FC');
 });
+test('new monthly nominations attach to the exact numbered SIXFL TV clip', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('clip-one','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const result = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'clip-one', scorerName: 'Clip Scorer',
+  }, now);
+  const goals = await awards.getMonthlyCandidates('2026-09');
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0].clipAssetId, 'clip-one');
+  assert.equal(Number(goals[0].clipNumber), 1);
+  assert.equal(goals[0].goalNumber, null);
+  const payload = awards.monthlyCandidatePayload(goals[0]);
+  assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
+  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}`);
+  assert.equal(payload.scorerName, 'Clip Scorer');
+});
+
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
   const results = await Promise.allSettled([1,2,3,4].map(number => awards.nominateMonthlyGoal(input('u1', number), now)));
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 3);
