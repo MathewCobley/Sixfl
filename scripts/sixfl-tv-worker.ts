@@ -31,6 +31,8 @@ const SWIPE_FRAMES = 24;
 const SWIPE_FPS = 30;
 const RETENTION_SWEEP_MS = 5 * 60 * 1000;
 const RETENTION_DELETE_PARTS_PER_SWEEP = 40;
+const YOUTUBE_UPLOAD_CHUNK_BYTES = 1024 * 1024;
+const YOUTUBE_UPLOAD_BYTES_PER_SECOND = 5 * 1024 * 1024;
 function operationSignal(ms: number) {
   return AbortSignal.any([shutdown.signal, AbortSignal.timeout(ms), ...(renderSignals.getStore() ? [renderSignals.getStore()!] : [])]);
 }
@@ -691,22 +693,46 @@ async function uploadRenderToYoutube(job: PublishJob, accessToken: string) {
     if (!response.ok) throw new Error("Rendered video storage is unavailable during YouTube upload.");
     const full = Buffer.from(await response.arrayBuffer());
     if (full.length !== part.sizeBytes) throw new Error("Rendered video part length changed before YouTube upload.");
-    const sliceStart = offset - partStart, body = full.subarray(sliceStart);
-    const end = offset + body.length - 1;
-    const upload = await fetch(job.resumableUrl!, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4", "Content-Length": String(body.length), "Content-Range": `bytes ${offset}-${end}/${total}` }, body, signal: AbortSignal.timeout(120000) });
-    if (upload.status === 308) {
-      offset = acknowledgedOffset(upload);
-      await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "uploadedBytes"=${offset},"busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id}`;
-      continue;
+    let cursor = offset - partStart;
+    while (cursor < full.length) {
+      const body = full.subarray(cursor, Math.min(full.length, cursor + YOUTUBE_UPLOAD_CHUNK_BYTES));
+      const chunkStart = partStart + cursor;
+      const end = chunkStart + body.length - 1;
+      const startedAt = Date.now();
+      const upload = await fetch(job.resumableUrl!, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "video/mp4",
+          "Content-Length": String(body.length),
+          "Content-Range": `bytes ${chunkStart}-${end}/${total}`,
+        },
+        body,
+        signal: AbortSignal.timeout(120000),
+      });
+      if (upload.status === 308) {
+        const acknowledged = acknowledgedOffset(upload);
+        if (acknowledged <= chunkStart || acknowledged > total) throw new Error("YouTube resumable upload returned an invalid offset.");
+        offset = acknowledged;
+        cursor = Math.max(0, offset - partStart);
+      } else if (upload.ok) {
+        const data = await upload.json().catch(() => ({})) as { id?: string };
+        if (!data.id) throw new Error("YouTube completed the upload without returning a video ID.");
+        await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "uploadedBytes"=${total},"youtubeVideoId"=${data.id},"updatedAt"=NOW() WHERE "id"=${job.id}`;
+        return data.id;
+      } else {
+        const detail = await upload.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(detail.error?.message || `YouTube video upload failed (${upload.status}).`);
+      }
+
+      // Smooth YouTube egress so publishing cannot monopolise project networking.
+      // Rendering stays fast; only the background YouTube transfer is paced.
+      const minimumMs = Math.ceil(body.length / YOUTUBE_UPLOAD_BYTES_PER_SECOND * 1000);
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs < minimumMs) await sleep(minimumMs - elapsedMs);
+      if (offset >= partEnd) break;
     }
-    if (upload.ok) {
-      const data = await upload.json().catch(() => ({})) as { id?: string };
-      if (!data.id) throw new Error("YouTube completed the upload without returning a video ID.");
-      await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "uploadedBytes"=${total},"youtubeVideoId"=${data.id},"updatedAt"=NOW() WHERE "id"=${job.id}`;
-      return data.id;
-    }
-    const detail = await upload.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(detail.error?.message || `YouTube video upload failed (${upload.status}).`);
+    await db.$executeRaw`UPDATE "SixflTvYoutubePublish" SET "uploadedBytes"=${offset},"busyUntil"=NOW()+INTERVAL '12 minutes',"updatedAt"=NOW() WHERE "id"=${job.id}`;
   }
   status = await queryYoutubeUpload(job, accessToken, total);
   if (!status.videoId) throw new Error("YouTube upload did not reach a completed state.");
