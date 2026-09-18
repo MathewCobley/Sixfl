@@ -7,9 +7,10 @@ import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
 const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const YOUTUBE_READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
+const YOUTUBE_MANAGE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
 
 type Connection = { refreshTokenCiphertext: string; channelId: string | null; channelTitle: string | null; scope: string };
-type ConnectionSummary = { channelId: string | null; channelTitle: string | null; connectedAt: Date };
+type ConnectionSummary = { channelId: string | null; channelTitle: string | null; connectedAt: Date; scope: string };
 type PublishRow = { id: string; kind: SixflTvRenderKind; state: string; title: string; privacyStatus: string; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: Date; completedAt: Date | null };
 
 function required(name: string) {
@@ -58,7 +59,7 @@ export function verifyYoutubeState(value: string) {
 export function youtubeAuthorisationUrl(fixtureId: string | null = null) {
   const cfg = config(), url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", cfg.clientId); url.searchParams.set("redirect_uri", cfg.redirectUri); url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE}`); url.searchParams.set("access_type", "offline"); url.searchParams.set("prompt", "consent");
+  url.searchParams.set("scope", `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE} ${YOUTUBE_MANAGE_SCOPE}`); url.searchParams.set("access_type", "offline"); url.searchParams.set("prompt", "consent");
   url.searchParams.set("include_granted_scopes", "true"); url.searchParams.set("state", createYoutubeState(fixtureId));
   return url.toString();
 }
@@ -84,19 +85,21 @@ export async function completeYoutubeAuthorisation(code: string, state: string, 
   if (!channel.id) throw new StudioError("Google authorised the account, but no YouTube channel was found for it.", 409);
   await prisma.$executeRaw`
     INSERT INTO "SixflTvYoutubeConnection" ("id","refreshTokenCiphertext","channelId","channelTitle","scope","connectedByActor")
-    VALUES ('primary',${encrypt(token.refresh_token)},${channel.id},${channel.title},${token.scope || `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE}`},${actor})
+    VALUES ('primary',${encrypt(token.refresh_token)},${channel.id},${channel.title},${token.scope || `${YOUTUBE_UPLOAD_SCOPE} ${YOUTUBE_READ_SCOPE} ${YOUTUBE_MANAGE_SCOPE}`},${actor})
     ON CONFLICT ("id") DO UPDATE SET "refreshTokenCiphertext"=EXCLUDED."refreshTokenCiphertext","channelId"=EXCLUDED."channelId","channelTitle"=EXCLUDED."channelTitle","scope"=EXCLUDED."scope","connectedByActor"=EXCLUDED."connectedByActor","connectedAt"=NOW(),"updatedAt"=NOW()`;
   return fixtureId;
 }
 export async function getYoutubeConnectionStatus() {
   const configured = ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "SIXFL_TV_TOKEN_KEY"].every(name => Boolean(process.env[name]?.trim()));
-  const rows = await prisma.$queryRaw<ConnectionSummary[]>`SELECT "channelId","channelTitle","connectedAt" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
+  const rows = await prisma.$queryRaw<ConnectionSummary[]>`SELECT "channelId","channelTitle","connectedAt","scope" FROM "SixflTvYoutubeConnection" WHERE "id"='primary'`;
+  const scopes = new Set((rows[0]?.scope || "").split(/\s+/).filter(Boolean));
   return {
     configured,
     connected: Boolean(rows[0]),
     channelId: rows[0]?.channelId || null,
     channelTitle: rows[0]?.channelTitle || null,
     connectedAt: rows[0]?.connectedAt?.toISOString() || null,
+    replacementCleanupEnabled: scopes.has(YOUTUBE_MANAGE_SCOPE) || scopes.has("https://www.googleapis.com/auth/youtube"),
   };
 }
 
