@@ -48,6 +48,40 @@ type DiagnosticsState = {
   online: boolean;
 };
 
+type PreviewDevice = {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+};
+
+const previewDevices: PreviewDevice[] = [
+  { id: "iphone-15-pro", label: "iPhone 15 Pro", width: 393, height: 852 },
+  { id: "iphone-15-pro-max", label: "iPhone 15 Pro Max", width: 430, height: 932 },
+  { id: "iphone-se", label: "iPhone SE", width: 375, height: 667 },
+  { id: "pixel-8", label: "Pixel 8", width: 412, height: 915 },
+];
+
+const previewRoutes = [
+  { label: "Admin overview", path: "/admin" },
+  { label: "My SIXFL", path: "/dashboard" },
+  { label: "Public site", path: "/" },
+  { label: "Install page", path: "/install" },
+];
+
+function normalisePreviewPath(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 function toneClasses(tone: CheckTone) {
   if (tone === "good") {
     return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
@@ -175,6 +209,28 @@ export default function PwaDiagnosticsPanel() {
   const [state, setState] = useState<DiagnosticsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [previewDeviceId, setPreviewDeviceId] = useState(previewDevices[0].id);
+  const [previewPath, setPreviewPath] = useState("/admin");
+  const [previewInput, setPreviewInput] = useState("/admin");
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  const previewDevice =
+    previewDevices.find((device) => device.id === previewDeviceId) ??
+    previewDevices[0];
+
+  function loadPreviewPath(value: string) {
+    const nextPath = normalisePreviewPath(value);
+    if (!nextPath) {
+      setPreviewError("Enter a SIXFL route such as /admin, /dashboard or /captain/team/...");
+      return;
+    }
+
+    setPreviewError(null);
+    setPreviewPath(nextPath);
+    setPreviewInput(nextPath);
+    setPreviewKey((value) => value + 1);
+  }
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -292,13 +348,13 @@ export default function PwaDiagnosticsPanel() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/75">
-              Hidden admin test area
+              Admin app tools
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
               PWA diagnostics
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Check whether the SIXFL web app, service worker and install plumbing are working on this exact device. This page is not linked from the public site or admin navigation.
+              Check the SIXFL web app on this device, inspect the PWA plumbing and preview real SIXFL pages at phone sizes from your computer. This remains an admin-only tool and is not exposed on the public site.
             </p>
           </div>
 
@@ -392,7 +448,7 @@ export default function PwaDiagnosticsPanel() {
       <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
         <h2 className="text-lg font-semibold text-white">Test shortcuts</h2>
         <p className="mt-2 text-sm leading-6 text-white/55">
-          These are deliberately only on this hidden admin page while the app is still being developed.
+          These are admin-only shortcuts while the app is still being developed.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
@@ -407,6 +463,160 @@ export default function PwaDiagnosticsPanel() {
           >
             Test app launch route
           </Link>
+        </div>
+      </section>
+
+
+      <section className="rounded-3xl border border-sky-400/15 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.11),transparent_38%),rgba(255,255,255,0.03)] p-5 sm:p-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-200/65">
+              Desktop testing
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Phone preview</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
+              Load the real SIXFL site inside a phone-sized viewport using your current login. This is ideal for checking responsive layout from the PC. It approximates the screen size and app chrome, but it does not emulate Apple&apos;s Safari engine or genuine iPhone standalone APIs.
+            </p>
+          </div>
+
+          <a
+            href={previewPath}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 w-fit items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            Open current route in new tab
+          </a>
+        </div>
+
+        <div className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-start">
+          <div className="min-w-0 space-y-5">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+                Device size
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {previewDevices.map((device) => {
+                  const active = device.id === previewDevice.id;
+                  return (
+                    <button
+                      key={device.id}
+                      type="button"
+                      onClick={() => {
+                        setPreviewDeviceId(device.id);
+                        setPreviewKey((value) => value + 1);
+                      }}
+                      className={[
+                        "min-h-11 rounded-2xl border px-4 py-2 text-sm font-semibold transition",
+                        active
+                          ? "border-sky-300/35 bg-sky-400/15 text-sky-100"
+                          : "border-white/10 bg-black/20 text-white/65 hover:bg-white/[0.05] hover:text-white",
+                      ].join(" ")}
+                    >
+                      {device.label}
+                      <span className="ml-2 text-xs font-normal opacity-55">
+                        {device.width} × {device.height}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+                Quick routes
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {previewRoutes.map((route) => (
+                  <button
+                    key={route.path}
+                    type="button"
+                    onClick={() => loadPreviewPath(route.path)}
+                    className={[
+                      "min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                      previewPath === route.path
+                        ? "border-emerald-300/30 bg-emerald-500/12 text-emerald-100"
+                        : "border-white/10 bg-black/20 text-white/60 hover:bg-white/[0.05] hover:text-white",
+                    ].join(" ")}
+                  >
+                    {route.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                loadPreviewPath(previewInput);
+              }}
+              className="rounded-2xl border border-white/10 bg-black/20 p-4"
+            >
+              <label
+                htmlFor="pwa-preview-route"
+                className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40"
+              >
+                Any SIXFL route
+              </label>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="pwa-preview-route"
+                  value={previewInput}
+                  onChange={(event) => setPreviewInput(event.target.value)}
+                  placeholder="/captain/team/..."
+                  className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none placeholder:text-white/25 focus:border-sky-400/50"
+                />
+                <button
+                  type="submit"
+                  className="min-h-11 rounded-xl bg-sky-500 px-4 text-sm font-bold text-black transition hover:bg-sky-400"
+                >
+                  Load route
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewKey((value) => value + 1)}
+                  className="min-h-11 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  Reload
+                </button>
+              </div>
+              {previewError ? (
+                <p className="mt-2 text-sm text-amber-200">{previewError}</p>
+              ) : (
+                <p className="mt-2 text-xs leading-5 text-white/35">
+                  You can paste a SIXFL path or a full sixfl.co.uk URL. External sites are blocked.
+                </p>
+              )}
+            </form>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/55">
+              <span className="font-semibold text-white/75">Current preview:</span>{" "}
+              {previewPath} · {previewDevice.label} · {previewDevice.width} × {previewDevice.height}px
+            </div>
+          </div>
+
+          <div className="min-w-0 overflow-x-auto pb-2">
+            <div
+              className="mx-auto overflow-hidden rounded-[2.7rem] border-[10px] border-[#171717] bg-black shadow-[0_30px_90px_rgba(0,0,0,0.5)]"
+              style={{ width: previewDevice.width }}
+            >
+              <div
+                aria-hidden="true"
+                className="flex h-11 items-center justify-between bg-[#080b0f] px-7 text-[12px] font-semibold text-white"
+              >
+                <span>9:41</span>
+                <span className="tracking-[0.12em] text-white/85">●●● )))</span>
+              </div>
+              <iframe
+                key={`${previewPath}-${previewDevice.id}-${previewKey}`}
+                src={previewPath}
+                title={`SIXFL phone preview: ${previewPath}`}
+                className="block w-full border-0 bg-black"
+                style={{ height: Math.max(400, previewDevice.height - 44) }}
+              />
+            </div>
+          </div>
         </div>
       </section>
 
