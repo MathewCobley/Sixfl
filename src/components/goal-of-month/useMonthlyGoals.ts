@@ -37,5 +37,18 @@ export function useMonthlyGoals() {
     window.addEventListener("focus", onFocus);
     return () => { active.current = false; request.current?.abort(); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
+
+  useEffect(() => {
+    const mediaPending = data?.nominations?.some((nomination) =>
+      nomination.candidates.some((candidate) =>
+        candidate.mediaState === "QUEUED" || candidate.mediaState === "PROCESSING",
+      ),
+    );
+    if (!mediaPending) return;
+
+    const timer = window.setTimeout(() => { void refresh(); }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [data, refresh]);
+
   return { data, error, loading, refresh };
 }
