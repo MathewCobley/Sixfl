@@ -43,15 +43,13 @@ export async function POST(request: Request) {
     const id = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(value) ? value : null;
     if (body.action === "nominate") {
       const fixtureId = id(body.fixtureId), scoringTeamId = id(body.scoringTeamId);
+      const scorerTeamMemberId = id(body.scorerTeamMemberId);
       const clipAssetId = id(body.clipAssetId);
       const rawGoalNumber = body.goalNumber == null || body.goalNumber === "" ? null : Number(body.goalNumber);
       const goalNumber = Number.isInteger(rawGoalNumber) && Number(rawGoalNumber) > 0 ? Number(rawGoalNumber) : null;
       if (!fixtureId || !scoringTeamId || (!clipAssetId && !goalNumber))
         return NextResponse.json({ error: "Choose the fixture, clip and scoring team." }, { status: 400, headers });
-      const scorerName = typeof body.scorerName === "string" ? body.scorerName.trim().slice(0, 100) || null : null;
-      if (clipAssetId && !scorerName)
-        return NextResponse.json({ error: "Enter the scorer’s name for this clip." }, { status: 400, headers });
-      const result = await nominateMonthlyGoal({ userId: user.id, fixtureId, scoringTeamId, clipAssetId, goalNumber, scorerName });
+      const result = await nominateMonthlyGoal({ userId: user.id, fixtureId, scoringTeamId, scorerTeamMemberId, clipAssetId, goalNumber });
       return NextResponse.json({ ok: true, ...result }, { headers });
     }
     if (body.action === "vote") {
