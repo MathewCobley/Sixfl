@@ -24,6 +24,7 @@ const captainFixtures = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/
 const engagement = fs.readFileSync('src/lib/sixfl-tv/analytics.ts', 'utf8');
 const engagementDashboard = fs.readFileSync('src/app/(admin)/admin/sixfl-tv/analytics/page.tsx', 'utf8');
 const engagementMigration = fs.readFileSync('prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql', 'utf8');
+const singleScoreMigration = fs.readFileSync('prisma/migrations/20260919095500_single_sixfl_tv_priority_score/migration.sql', 'utf8');
 
 test('Priority score makes the match card the largest factor while keeping late payment costly', () => {
   assert.match(score, /paymentPoints = 6/);
@@ -74,6 +75,8 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(bookings, /homeReliabilityPoints:homeScore\?\.reliabilityPoints\?\?0/);
   assert.match(engagementDashboard, /View Score compares each team with the current average in its own division/);
   assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
+  assert.match(singleScoreMigration, /one SIXFL TV Priority Score out of 100/);
+  assert.match(singleScoreMigration, /Reliability — up to 80 points/);
 });
 
 test('captains and admins see the same score', () => {
