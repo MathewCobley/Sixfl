@@ -81,7 +81,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority scores</h2>
       <p className="text-sm leading-6 text-white/60">
-        Base scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists 1 and ratings 1. Teams still need at least 60/100 and regular core match-card completion to qualify. View Score compares recent recorded-fixture viewing with the team’s division average; 100 is average. Audience, nominations and voting add up to 20 allocation points after eligibility is established.
+        Base scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists bonus 1 (by 6pm next day) and ratings bonus 1 (by 6pm next day). Teams still need at least 60/100 and regular core match-card completion to qualify. View Score compares recent recorded-fixture viewing with the team’s division average; 100 is average. Audience, nominations and voting add up to 20 allocation points after eligibility is established.
       </p>
       <div className="divide-y divide-white/10">{teams.map(team => {
         const score = priorityScores.get(team.id);
