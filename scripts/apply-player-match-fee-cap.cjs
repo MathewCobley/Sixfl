@@ -97,8 +97,30 @@ editAction = replaceRequired(
 );
 editAction = replaceRequired(
   editAction,
-  "  const existingPlayerMatchFeeOverride =\\n    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;\\n  const nextPlayerMatchFeeOverride = access.isAdmin\\n    ? playerMatchFeeOverride\\n    : existingPlayerMatchFeeOverride;\\n  const playerMatchFeeOverrideChanged =\\n    access.isAdmin &&\\n    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
-  "  const existingPlayerMatchFeeOverride =\\n    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;\\n  const existingPlayerMatchFeeCap = existingProfiles[0]?.playerMatchFeeCapPence ?? null;\\n  const nextPlayerMatchFeeOverride = access.isAdmin\\n    ? playerMatchFeeOverride\\n    : existingPlayerMatchFeeOverride;\\n  const nextPlayerMatchFeeCap = access.isAdmin\\n    ? playerMatchFeeCap\\n    : existingPlayerMatchFeeCap;\\n  const playerMatchFeeOverrideChanged =\\n    access.isAdmin &&\\n    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
+  [
+    "  const existingPlayerMatchFeeOverride =",
+    "    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;",
+    "  const nextPlayerMatchFeeOverride = access.isAdmin",
+    "    ? playerMatchFeeOverride",
+    "    : existingPlayerMatchFeeOverride;",
+    "  const playerMatchFeeOverrideChanged =",
+    "    access.isAdmin &&",
+    "    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
+  ].join("\n"),
+  [
+    "  const existingPlayerMatchFeeOverride =",
+    "    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;",
+    "  const existingPlayerMatchFeeCap = existingProfiles[0]?.playerMatchFeeCapPence ?? null;",
+    "  const nextPlayerMatchFeeOverride = access.isAdmin",
+    "    ? playerMatchFeeOverride",
+    "    : existingPlayerMatchFeeOverride;",
+    "  const nextPlayerMatchFeeCap = access.isAdmin",
+    "    ? playerMatchFeeCap",
+    "    : existingPlayerMatchFeeCap;",
+    "  const playerMatchFeeOverrideChanged =",
+    "    access.isAdmin &&",
+    "    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
+  ].join("\n"),
   "protected fee settings",
 );
 editAction = replaceRequired(
