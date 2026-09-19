@@ -30,7 +30,7 @@ export default function MonthlyGoalsPanel() {
       const response = await fetch("/api/goal-of-month/community", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Could not save your selection.");
-      setFeedback(payload.action === "vote" ? "Your vote is saved. You can change it before voting closes." : result.alreadyNominated ? "You have already nominated this goal." : "Nomination saved. The exact SIXFL TV clip is now attached to this goal.");
+      setFeedback(payload.action === "vote" ? "Your vote is saved. You can change it before voting closes." : result.alreadyNominated ? "You have already nominated this goal." : "Nomination saved. SIXFL TV is automatically creating its Goal of the Month thumbnail and branded clip.");
       await refresh();
     } catch (failure) {
       setFailed(true);
