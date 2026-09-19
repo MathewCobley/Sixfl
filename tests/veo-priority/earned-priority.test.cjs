@@ -21,6 +21,9 @@ const adminPriorityPage = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/ve
 const adminNightPanel = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/FixtureVeoNightPanel.tsx', 'utf8');
 const captainBookings = fs.readFileSync('src/components/captain/CaptainVeoBookings.tsx', 'utf8');
 const captainFixtures = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/layout.tsx', 'utf8');
+const engagement = fs.readFileSync('src/lib/sixfl-tv/analytics.ts', 'utf8');
+const engagementDashboard = fs.readFileSync('src/app/(admin)/admin/sixfl-tv/analytics/page.tsx', 'utf8');
+const engagementMigration = fs.readFileSync('prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql', 'utf8');
 
 test('Priority score makes the match card the largest factor while keeping late payment costly', () => {
   assert.match(score, /paymentPoints = 6/);
@@ -48,6 +51,25 @@ test('new Priority allocation is score based and permanently free', () => {
   assert.match(priorityRequests, /Paid Veo Priority has ended/);
   assert.match(priorityRequests, /SET status = 'DECLINED'/);
   assert.doesNotMatch(priorityRequests, /SET status = 'APPROVED'/);
+});
+
+test('audience and award engagement can influence allocation without replacing eligibility', () => {
+  assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MIN = 50/);
+  assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MAX = 150/);
+  assert.match(engagement, /SIXFL_TV_ENGAGEMENT_BONUS_MAX = 20/);
+  assert.match(engagement, /SIXFL_TV_VIEW_FIXTURE_WINDOW = 5/);
+  assert.match(engagement, /GoalOfWeekNomination/);
+  assert.match(engagement, /GoalOfWeekVote/);
+  assert.match(engagement, /GoalOfMonthNomination/);
+  assert.match(engagement, /GoalOfMonthVote/);
+  assert.match(engagement, /division:/);
+  assert.match(engagement, /viewBonus \+ nominationPoints \+ votePoints/);
+  assert.match(allocator, /homeAllocationScore/);
+  assert.match(allocator, /f\.homeAllocationScore \?\? f\.homePriorityScore/);
+  assert.match(bookings, /getSixflTvEngagementScores/);
+  assert.match(bookings, /homeAllocationScore:sixflTvAllocationScore/);
+  assert.match(engagementDashboard, /View Score compares each team with the current average in its own division/);
+  assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
 });
 
 test('captains and admins see the same score', () => {
