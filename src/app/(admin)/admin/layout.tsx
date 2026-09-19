@@ -41,6 +41,23 @@ import TeamReplaceFixturesButtonBridge from "@/components/admin/teams/TeamReplac
 import TeamStandardMatchFeeBridge from "@/components/admin/teams/TeamStandardMatchFeeBridge";
 import AppHeader from "@/components/layout/AppHeader";
 import FootageUploadProvider from "@/components/admin/sixfl-tv/FootageUploadProvider";
+import PwaAppFrame, { type PwaAppNavItem } from "@/components/pwa/PwaAppFrame";
+
+function formatAdminAppDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Europe/London",
+  }).format(value);
+}
+
+function getAdminInitials(name: string, email: string) {
+  const source = name.trim() && name !== "Admin" ? name.trim() : email.split("@")[0] ?? "A";
+  const parts = source.split(/[\s._-]+/).filter(Boolean).slice(0, 2);
+  const initials = parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+  return initials || "A";
+}
 
 export default async function AdminLayout({
   children,
@@ -67,6 +84,18 @@ export default async function AdminLayout({
 
   const email = user?.email ?? session?.user?.email ?? "Admin";
   const name = user?.name ?? session?.user?.name ?? "Admin";
+  const appNavItems: PwaAppNavItem[] = [
+    { href: "/admin", label: "Home", icon: "home", exact: true },
+    { href: "/admin/teams", label: "Teams", icon: "teams" },
+    { href: "/admin/fixtures", label: "Fixtures", icon: "fixtures" },
+    {
+      href: "/admin/messages",
+      label: "Inbox",
+      icon: "inbox",
+      badgeCount: inboxSummary.unreadThreads,
+    },
+    { href: "/admin/more", label: "More", icon: "more", fallback: true },
+  ];
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -109,9 +138,21 @@ export default async function AdminLayout({
       <RefereeNightCashDistributionBridge />
       <AdminRefereeCommsHistoryBridge />
       <RefereeWelcomeInviteBridge />
-      <AppHeader variant="admin" />
+      <PwaAppFrame
+        title="Admin"
+        dateLabel={formatAdminAppDate(new Date())}
+        profileInitials={getAdminInitials(name, email)}
+        profileHref="/admin/more"
+        notificationHref="/admin/messages?filter=unread"
+        notificationCount={inboxSummary.unreadThreads}
+        navItems={appNavItems}
+      />
 
-      <nav aria-label="Admin reports" className="border-b border-white/10 px-3 py-3 sm:px-6 lg:px-8 xl:hidden">
+      <div className="pwa-web-chrome">
+        <AppHeader variant="admin" />
+      </div>
+
+      <nav aria-label="Admin reports" className="pwa-web-chrome border-b border-white/10 px-3 py-3 sm:px-6 lg:px-8 xl:hidden">
         <Link
           href="/admin/matchweek-reports"
           className="inline-flex min-h-10 items-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-400"
@@ -120,8 +161,8 @@ export default async function AdminLayout({
         </Link>
       </nav>
 
-      <div className="flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <aside className="hidden w-[34rem] shrink-0 xl:block 2xl:w-[38rem]">
+      <div className="pwa-app-content-shell flex w-full gap-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-6">
+        <aside className="pwa-web-chrome hidden w-[34rem] shrink-0 xl:block 2xl:w-[38rem]">
           <AdminSidebar
             name={name}
             email={email}
@@ -133,7 +174,7 @@ export default async function AdminLayout({
           />
         </aside>
 
-        <div className="w-full min-w-0 flex-1">
+        <div className="pwa-app-main w-full min-w-0 flex-1">
           <div className="space-y-5">
             <AdminDeliveryIssueBanner />
             <Suspense fallback={null}>
