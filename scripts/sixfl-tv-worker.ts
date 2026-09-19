@@ -201,6 +201,67 @@ async function claimJob() {
   });
 }
 
+async function claimGoalMediaJob() {
+  return db.$transaction(async tx => {
+    await tx.$executeRaw`
+      UPDATE "GoalOfMonthCandidate"
+      SET "mediaState" = 'QUEUED',
+          "mediaLeaseToken" = NULL,
+          "mediaBusyUntil" = NULL,
+          "mediaQueuedAt" = NOW(),
+          "updatedAt" = NOW(),
+          "mediaError" = 'Recovered after an interrupted nomination render.'
+      WHERE "mediaState" = 'PROCESSING'
+        AND "mediaBusyUntil" < NOW()
+        AND "clipAssetId" IS NOT NULL
+        AND "status" = 'ACTIVE'
+    `;
+
+    const jobs = await tx.$queryRaw<GoalMediaJob[]>`
+      SELECT "id", "fixtureId", "clipAssetId", "mediaLeaseToken", "mediaAttempts"
+      FROM "GoalOfMonthCandidate"
+      WHERE "status" = 'ACTIVE'
+        AND "clipAssetId" IS NOT NULL
+        AND "mediaState" = 'QUEUED'
+      ORDER BY COALESCE("mediaQueuedAt", "createdAt"), "createdAt", "id"
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+    if (!jobs[0]) return null;
+
+    const lease = randomUUID();
+    const changed = await tx.$executeRaw`
+      UPDATE "GoalOfMonthCandidate"
+      SET "mediaState" = 'PROCESSING',
+          "mediaLeaseToken" = ${lease},
+          "mediaBusyUntil" = NOW() + INTERVAL '15 minutes',
+          "mediaStartedAt" = COALESCE("mediaStartedAt", NOW()),
+          "mediaAttempts" = "mediaAttempts" + 1,
+          "mediaError" = NULL,
+          "updatedAt" = NOW()
+      WHERE "id" = ${jobs[0].id}
+        AND "mediaState" = 'QUEUED'
+        AND "status" = 'ACTIVE'
+    `;
+    if (changed !== 1) return null;
+    return { ...jobs[0], mediaLeaseToken: lease, mediaAttempts: Number(jobs[0].mediaAttempts) + 1 };
+  });
+}
+
+async function failGoalMediaJob(job: GoalMediaJob, message: string) {
+  return db.$executeRaw`
+    UPDATE "GoalOfMonthCandidate"
+    SET "mediaState" = CASE WHEN "mediaAttempts" < 3 THEN 'QUEUED' ELSE 'FAILED' END,
+        "mediaQueuedAt" = CASE WHEN "mediaAttempts" < 3 THEN NOW() ELSE "mediaQueuedAt" END,
+        "mediaError" = ${message},
+        "mediaLeaseToken" = NULL,
+        "mediaBusyUntil" = NULL,
+        "updatedAt" = NOW()
+    WHERE "id" = ${job.id}
+      AND "mediaLeaseToken" = ${job.mediaLeaseToken}
+      AND "mediaState" = 'PROCESSING'
+  `;
+}
 async function loadInputs(jobId: string) {
   return db.$queryRaw<Input[]>`
     SELECT i."assetId",i."role",i."position",a."filename",a."kind",a."partCount",a."sizeBytes",a."state",a."clipNumber"
