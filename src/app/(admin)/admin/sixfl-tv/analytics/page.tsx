@@ -64,10 +64,9 @@ export default async function SixflTvAnalyticsPage({
         <p className="text-sm font-semibold text-emerald-300">SIXFL TV</p>
         <h1 className="mt-2 text-3xl font-bold text-white">Audience & engagement</h1>
         <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
-          View Score compares each team with the current average in its own division. 100 is division average.
-          Recent teams are pulled towards 100 until they build enough recorded-match history. The separate engagement
-          bonus adds YouTube audience, goal nominations and goal voting to camera allocation without changing the
-          60/100 reliability eligibility gate.
+          View Score is an audience index: 100 means average viewing for the team’s current division.
+          It is not a second Priority score. Audience can contribute up to 10 points to the one SIXFL TV Priority
+          Score out of 100, while goal nominations and voting can contribute another 10.
         </p>
       </div>
       <form action={refreshYoutubeAnalyticsAction}>
@@ -97,11 +96,11 @@ export default async function SixflTvAnalyticsPage({
     <section className="rounded-3xl border border-fuchsia-400/20 bg-fuchsia-500/[0.04] p-5 sm:p-6">
       <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/70">Camera priority</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">Team View Scores & engagement bonus</h2>
+        <h2 className="mt-2 text-xl font-semibold text-white">View index & Priority contributions</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-white/60">
           View Score uses up to each team’s five most recent recorded fixtures and compares average fixture views
           with teams in the same division. Highlights and full-match views count; extra links do not distort the
-          benchmark. Audience is worth up to 10 points, nominations up to 5 and voting up to 5.
+          benchmark. Audience is worth up to 10 of the 100 Priority points; nominations are worth up to 5 and voting up to 5.
         </p>
       </div>
 
@@ -117,7 +116,7 @@ export default async function SixflTvAnalyticsPage({
               <th className="px-3 py-3">Audience pts</th>
               <th className="px-3 py-3">Nomination pts</th>
               <th className="px-3 py-3">Voting pts</th>
-              <th className="px-3 py-3">Engagement</th>
+              <th className="px-3 py-3">Into Priority</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
@@ -136,7 +135,7 @@ export default async function SixflTvAnalyticsPage({
               <td className="px-3 py-4 font-semibold">+{team.viewBonus}/10</td>
               <td className="px-3 py-4">+{team.nominationPoints}/5 <span className="text-xs text-white/35">({team.nominationParticipants} players)</span></td>
               <td className="px-3 py-4">+{team.votePoints}/5 <span className="text-xs text-white/35">({team.voteParticipants} players)</span></td>
-              <td className="px-3 py-4"><strong className="text-fuchsia-100">+{team.engagementBonus}/20</strong></td>
+              <td className="px-3 py-4"><strong className="text-fuchsia-100">{team.engagementBonus}/20 pts</strong></td>
             </tr>)}
           </tbody>
         </table>
