@@ -17,7 +17,7 @@ export const SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10;
 export const SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10;
 export const SIXFL_TV_PRIORITY_CORE_MIN_RATE = 0.6;
 
-type Db = Pick<typeof prisma, "$queryRaw">;
+type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw">;
 
 type FixtureRow = {
   fixtureId: string;
