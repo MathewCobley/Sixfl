@@ -22,6 +22,7 @@ export type TeamMemberProfile = {
   availabilitySummary: string | null;
   notes: string | null;
   playerMatchFeePenceOverride: number | null;
+  squadNumber: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -63,6 +64,7 @@ async function ensureTeamMemberProfileTable(client: PrismaRawClientLike) {
       "availabilitySummary" TEXT,
       "notes" TEXT,
       "playerMatchFeePenceOverride" INTEGER,
+      "squadNumber" INTEGER,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
@@ -71,7 +73,8 @@ async function ensureTeamMemberProfileTable(client: PrismaRawClientLike) {
 
   await client.$executeRawUnsafe(`
     ALTER TABLE "TeamMemberProfile"
-      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;
+      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER,
+      ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;
   `);
 
   await client.$executeRawUnsafe(`
@@ -242,6 +245,7 @@ export async function getTeamMemberProfilesByTeamMemberIds(teamMemberIds: string
         "availabilitySummary",
         "notes",
         "playerMatchFeePenceOverride",
+        "squadNumber",
         "createdAt",
         "updatedAt"
       FROM "TeamMemberProfile"
