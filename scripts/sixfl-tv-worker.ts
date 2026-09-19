@@ -226,14 +226,16 @@ async function reconstructAsset(input: Input, target: string) {
 
 type PosterCandidate = { bytes: Buffer; score: number; source: string };
 
-async function sourcePosterCandidate(source: string, dir: string, label: string): Promise<PosterCandidate | null> {
+async function sourcePosterCandidate(source: string, dir: string, label: string, preferredSecond?: number): Promise<PosterCandidate | null> {
   try {
     const seconds = await durationSeconds(source);
-    const fractions = seconds < 2 ? [0.5] : [0.3, 0.5, 0.7];
+    const times = Number.isFinite(preferredSecond) && Number(preferredSecond) > 0
+      ? [Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.08), Number(preferredSecond)))]
+      : (seconds < 2 ? [seconds * 0.5] : [seconds * 0.3, seconds * 0.5, seconds * 0.7]);
     let best: PosterCandidate | null = null;
-    for (let index = 0; index < fractions.length; index++) {
+    for (let index = 0; index < times.length; index++) {
       checkAbort();
-      const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), seconds * fractions[index]));
+      const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), times[index]));
       const target = path.join(dir, `poster-${label}-${index}.jpg`);
       await run("ffmpeg", [
         "-y", "-ss", at.toFixed(3), "-i", source, "-frames:v", "1",
@@ -484,7 +486,12 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
       if (posterLabel || goalClipPosterAssetId) {
-        const candidate = await sourcePosterCandidate(source, dir, posterLabel || `goal-clip-${goalClipPosterAssetId}`);
+        const candidate = await sourcePosterCandidate(
+          source,
+          dir,
+          posterLabel || `goal-clip-${goalClipPosterAssetId}`,
+          goalClipPosterAssetId ? 14 : undefined,
+        );
         if (goalClipPosterAssetId) {
           await saveGoalClipPoster(goalClipPosterAssetId, candidate).catch(error =>
             console.warn(`Could not save Goal of the Month poster for ${goalClipPosterAssetId}: ${safeError(error)}`),
