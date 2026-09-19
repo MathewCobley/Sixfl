@@ -467,7 +467,10 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
     : "";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
-  const score = hasScore ? `${input.homeScore} – ${input.awayScore}` : "VS";
+  const scorerIsHome = input.teamName.trim().toLowerCase() === input.homeTeamName.trim().toLowerCase();
+  const scorerIsAway = input.teamName.trim().toLowerCase() === input.awayTeamName.trim().toLowerCase();
+  const homeFill = scorerIsHome ? "#6ee7b7" : "#cbd5e1";
+  const awayFill = scorerIsAway ? "#6ee7b7" : "#cbd5e1";
 
   const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     <defs>
@@ -489,14 +492,16 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     <rect x="48" y="696" width="420" height="6" rx="3" fill="#10b981"/>
   </svg>`;
 
-  const [titleText, nomineeText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText] = await Promise.all([
+  const [titleText, nomineeText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, dateText, leagueText] = await Promise.all([
     thumbnailTextPng({ text: "GOAL OF THE MONTH", width: 680, height: 54, fontSize: 38, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
     thumbnailTextPng({ text: "NOMINEE", width: 360, height: 42, fontSize: 25, bold: true, fill: "#6ee7b7", letterSpacing: 4 }),
     thumbnailTextPng({ text: scorer, width: 690, height: 82, fontSize: 58, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: team, width: 690, height: 44, fontSize: 27, bold: true, fill: "#a7f3d0" }),
-    thumbnailTextPng({ text: home, width: 290, height: 50, fontSize: 32, bold: true, fill: "#ffffff", align: "right" }),
-    thumbnailTextPng({ text: score, width: 150, height: 62, fontSize: 42, bold: true, fill: "#ffffff", align: "center" }),
-    thumbnailTextPng({ text: away, width: 290, height: 50, fontSize: 32, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: home, width: 290, height: 50, fontSize: 32, bold: true, fill: homeFill, align: "right" }),
+    thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 58, height: 62, fontSize: 42, bold: true, fill: homeFill, align: "center" }),
+    thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 52, height: 62, fontSize: 38, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: hasScore ? String(input.awayScore) : "", width: 58, height: 62, fontSize: 42, bold: true, fill: awayFill, align: "center" }),
+    thumbnailTextPng({ text: away, width: 290, height: 50, fontSize: 32, bold: true, fill: awayFill }),
     thumbnailTextPng({ text: matchDate, width: 520, height: 38, fontSize: 22, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
     thumbnailTextPng({ text: league, width: 720, height: 36, fontSize: 19, bold: true, fill: "#d1fae5" }),
   ]);
@@ -510,7 +515,9 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     { input: scorerText, left: 210, top: 286 },
     { input: teamText, left: 212, top: 350 },
     { input: homeText, left: 62, top: 525 },
-    { input: scoreText, left: 368, top: 515 },
+    { input: homeScoreText, left: 376, top: 515 },
+    { input: separatorText, left: 417, top: 515 },
+    { input: awayScoreText, left: 466, top: 515 },
     { input: awayText, left: 536, top: 525 },
     { input: dateText, left: 48, top: 617 },
     { input: leagueText, left: 48, top: 655 },
@@ -552,7 +559,10 @@ export async function createGoalOfMonthNomineeIntro(input: {
     ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
     : "";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
-  const score = hasScore ? `${input.homeScore} – ${input.awayScore}` : "VS";
+  const scorerIsHome = input.teamName.trim().toLowerCase() === input.homeTeamName.trim().toLowerCase();
+  const scorerIsAway = input.teamName.trim().toLowerCase() === input.awayTeamName.trim().toLowerCase();
+  const homeFill = scorerIsHome ? "#6ee7b7" : "#cbd5e1";
+  const awayFill = scorerIsAway ? "#6ee7b7" : "#cbd5e1";
 
   const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -571,13 +581,15 @@ export async function createGoalOfMonthNomineeIntro(input: {
     ${hasScore ? "<rect x=\"908\" y=\"647\" width=\"104\" height=\"36\" rx=\"18\" fill=\"#10b981\"/>" : ""}
   </svg>`;
 
-  const [labelText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText, siteText] = await Promise.all([
+  const [labelText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, dateText, leagueText, siteText] = await Promise.all([
     thumbnailTextPng({ text: "GOAL OF THE MONTH NOMINEE", width: 1000, height: 52, fontSize: 29, bold: true, fill: "#6ee7b7", align: "center", letterSpacing: 7 }),
     thumbnailTextPng({ text: scorer, width: 1180, height: 105, fontSize: 82, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: team, width: 1120, height: 54, fontSize: 32, bold: true, fill: "#6ee7b7" }),
-    thumbnailTextPng({ text: home, width: 430, height: 66, fontSize: 43, bold: true, fill: "#ffffff", align: "right" }),
-    thumbnailTextPng({ text: score, width: 300, height: 86, fontSize: 58, bold: true, fill: "#ffffff", align: "center" }),
-    thumbnailTextPng({ text: away, width: 430, height: 66, fontSize: 43, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: home, width: 430, height: 66, fontSize: 43, bold: true, fill: homeFill, align: "right" }),
+    thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 90, height: 86, fontSize: 58, bold: true, fill: homeFill, align: "center" }),
+    thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 80, height: 86, fontSize: 52, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: hasScore ? String(input.awayScore) : "", width: 90, height: 86, fontSize: 58, bold: true, fill: awayFill, align: "center" }),
+    thumbnailTextPng({ text: away, width: 430, height: 66, fontSize: 43, bold: true, fill: awayFill }),
     thumbnailTextPng({ text: matchDate, width: 900, height: 48, fontSize: 27, bold: true, fill: "#ffffff", align: "center", letterSpacing: 4 }),
     thumbnailTextPng({ text: league, width: 1000, height: 44, fontSize: 23, bold: true, fill: "#a7f3d0", align: "center" }),
     thumbnailTextPng({ text: "SIXFL.CO.UK", width: 420, height: 34, fontSize: 18, bold: true, fill: "#94a3b8", align: "center", letterSpacing: 4 }),
@@ -590,7 +602,9 @@ export async function createGoalOfMonthNomineeIntro(input: {
     { input: scorerText, left: 570, top: 382 },
     { input: teamText, left: 574, top: 470 },
     { input: homeText, left: 330, top: 697 },
-    { input: scoreText, left: 810, top: 682 },
+    { input: homeScoreText, left: 835, top: 682 },
+    { input: separatorText, left: 920, top: 682 },
+    { input: awayScoreText, left: 995, top: 682 },
     { input: awayText, left: 1160, top: 697 },
     { input: dateText, left: 510, top: 850 },
     { input: leagueText, left: 460, top: 910 },
