@@ -102,6 +102,9 @@ export async function requireCaptain(
   const isCaptainOnlyPreview = Boolean(rawIsAdmin && !isManagedTeam && previewTeamId === teamId);
   const isAdmin = Boolean(rawIsAdmin && !isCaptainOnlyPreview);
   const isCaptain = Boolean(!isManagedTeam && (membership || isCaptainOnlyPreview));
+  const effectiveUser = isCaptainOnlyPreview && user
+    ? { ...user, role: UserRole.USER }
+    : user;
 
   if (!rawIsAdmin && !membership) {
     if (process.env.NODE_ENV !== "production") {
@@ -135,7 +138,7 @@ export async function requireCaptain(
 
   return {
     session,
-    user,
+    user: effectiveUser,
     membership,
     isAdmin,
     isCaptain,
