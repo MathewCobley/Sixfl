@@ -32,6 +32,9 @@ jobs:
       - name: Check native admin latest activity
         run: node --test tests/critical-pages/admin-latest-activity.test.cjs
 
+      - name: Check native player YES team restore
+        run: node --test tests/critical-pages/player-interest-team-restore.test.cjs
+
       - name: Check native exact captain preview and squad numbers
         run: node --test tests/captain-preview-squad-number.test.cjs
 
@@ -52,6 +55,9 @@ jobs:
 
       - name: Check prepared admin latest activity
         run: node --test tests/critical-pages/admin-latest-activity.test.cjs
+
+      - name: Check prepared player YES team restore
+        run: node --test tests/critical-pages/player-interest-team-restore.test.cjs
 
       - name: Check prepared exact captain preview and squad numbers
         run: node --test tests/captain-preview-squad-number.test.cjs
