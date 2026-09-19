@@ -42,6 +42,7 @@ import TeamStandardMatchFeeBridge from "@/components/admin/teams/TeamStandardMat
 import AppHeader from "@/components/layout/AppHeader";
 import FootageUploadProvider from "@/components/admin/sixfl-tv/FootageUploadProvider";
 import PwaAppFrame, { type PwaAppNavItem } from "@/components/pwa/PwaAppFrame";
+import AdminDeploymentRecovery from "@/components/admin/AdminDeploymentRecovery";
 
 function formatAdminAppDate(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -99,6 +100,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <AdminDeploymentRecovery />
       <style>{`
         button[aria-label^="Open team-raised fixture issues"] {
           top: 17rem !important;
