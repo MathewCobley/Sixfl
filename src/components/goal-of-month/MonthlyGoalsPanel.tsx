@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import GoalNomineeCard, { type GoalNominee } from "./GoalNomineeCard";
+import FormListboxField from "@/components/ui/FormListboxField";
 import { useMonthlyGoals } from "./useMonthlyGoals";
 
 function deadline(value: string) {
@@ -15,6 +16,8 @@ export default function MonthlyGoalsPanel() {
   const [month, setMonth] = useState("");
   const [fixtureId, setFixtureId] = useState("");
   const [clipAssetId, setClipAssetId] = useState("");
+  const [scoringTeamId, setScoringTeamId] = useState("");
+  const [scorerTeamMemberId, setScorerTeamMemberId] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [feedback, setFeedback] = useState("");
@@ -44,7 +47,7 @@ export default function MonthlyGoalsPanel() {
     scoringTeamId: goal.teamId,
     clipAssetId: goal.clipAssetId,
     goalNumber: goal.goalNumber,
-    scorerName: goal.scorerName,
+    scorerTeamMemberId: goal.scorerTeamMemberId,
   });
 
   if (loading && !data) return <p role="status" className="p-6 text-white/70">Loading Goal of the Month…</p>;
@@ -54,6 +57,12 @@ export default function MonthlyGoalsPanel() {
   const fixture = selected?.fixtures.find(row => row.id === fixtureId);
   const clip = fixture?.clips?.find(row => row.id === clipAssetId);
   const usesClips = Boolean(fixture?.clips?.length);
+  const scorerOptions = fixture?.squadPlayers
+    .filter(player => player.teamId === scoringTeamId)
+    .map(player => ({
+      value: player.teamMemberId,
+      label: `${player.squadNumber ? `#${player.squadNumber} · ` : ""}${player.name}`,
+    })) ?? [];
   const eligible = data.viewer.eligible;
   const available = selected ? selected.usedNominations < selected.maxNominations : false;
 
@@ -95,11 +104,11 @@ export default function MonthlyGoalsPanel() {
                 scoringTeamId: values.get("scoringTeamId"),
                 clipAssetId: values.get("clipAssetId"),
                 goalNumber: values.get("goalNumber"),
-                scorerName: values.get("scorerName"),
+                scorerTeamMemberId: values.get("scorerTeamMemberId"),
               });
             }}>
               <label className="min-w-0 text-sm sm:col-span-2">Recorded fixture
-                <select name="fixtureId" required value={fixture?.id ?? ""} onChange={event => { setFixtureId(event.target.value); setClipAssetId(""); }} disabled={busy || !eligible || !available} className={field}>
+                <select name="fixtureId" required value={fixture?.id ?? ""} onChange={event => { setFixtureId(event.target.value); setClipAssetId(""); setScoringTeamId(""); setScorerTeamMemberId(""); }} disabled={busy || !eligible || !available} className={field}>
                   <option value="">Choose a recorded match</option>
                   {selected.fixtures.map(row => <option key={row.id} value={row.id}>{row.homeTeamName} v {row.awayTeamName} · {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(new Date(row.kickoffAt))}</option>)}
                 </select>
@@ -127,16 +136,39 @@ export default function MonthlyGoalsPanel() {
                 </>
               ) : null}
 
-              <label className="min-w-0 text-sm">Scoring team
-                <select key={fixture?.id ?? "none"} name="scoringTeamId" required disabled={busy || !eligible || !available || !fixture} className={field} defaultValue="">
-                  <option value="">Choose the scoring team</option>
-                  {fixture ? <><option value={fixture.homeTeamId}>{fixture.homeTeamName}</option><option value={fixture.awayTeamId}>{fixture.awayTeamName}</option></> : null}
-                </select>
-              </label>
-              <label className="text-sm">Scorer’s name{usesClips ? "" : " (optional)"}
-                <input name="scorerName" maxLength={100} required={usesClips} disabled={busy || !eligible || !available || !fixture} className={field} />
-              </label>
-              <button type="submit" disabled={busy || !eligible || !available || !fixture || (usesClips && !clip)} className="self-end rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40">{busy ? "Saving…" : "Submit nomination"}</button>
+              <div className="min-w-0 text-sm">
+                <FormListboxField
+                  name="scoringTeamId"
+                  label="Scoring team"
+                  value={scoringTeamId}
+                  options={fixture ? [
+                    { value: fixture.homeTeamId, label: fixture.homeTeamName },
+                    { value: fixture.awayTeamId, label: fixture.awayTeamName },
+                  ] : []}
+                  placeholder="Choose the scoring team"
+                  disabled={busy || !eligible || !available || !fixture}
+                  onValueChange={value => { setScoringTeamId(value); setScorerTeamMemberId(""); }}
+                />
+              </div>
+              <div className="min-w-0 text-sm">
+                <FormListboxField
+                  name="scorerTeamMemberId"
+                  label="Scorer"
+                  value={scorerTeamMemberId}
+                  options={scorerOptions}
+                  placeholder={scoringTeamId ? "Choose the scorer from the squad" : "Choose the scoring team first"}
+                  disabled={busy || !eligible || !available || !fixture || !scoringTeamId}
+                  onValueChange={setScorerTeamMemberId}
+                />
+                {scoringTeamId ? (
+                  scorerOptions.length ? (
+                    <p className="mt-2 text-xs leading-5 text-white/50">The scorer must be linked to this team’s SIXFL squad so their profile, photo, squad number and awards can stay attached correctly.</p>
+                  ) : (
+                    <p className="mt-2 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">No squad players are available for this team. Ask the captain to add the scorer to the SIXFL squad, then come back and nominate the goal.</p>
+                  )
+                ) : null}
+              </div>
+              <button type="submit" disabled={busy || !eligible || !available || !fixture || !scoringTeamId || !scorerTeamMemberId || (usesClips && !clip)} className="self-end rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-40">{busy ? "Saving…" : "Submit nomination"}</button>
             </form>
             {!selected.fixtures.length ? <p className="mt-3 text-sm text-white/60">Eligible matches appear when their result and SIXFL TV footage are available.</p> : null}
           </details>
