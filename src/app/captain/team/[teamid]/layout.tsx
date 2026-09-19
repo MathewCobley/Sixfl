@@ -479,6 +479,9 @@ export default async function CaptainTeamLayout({
                 </div>
 
                 <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+                    Captain Portal
+                  </p>
                   <h1 className="captain-team-heading mt-2 text-2xl font-semibold tracking-tight text-white sm:text-4xl">
                     {team.name}
                   </h1>
@@ -532,7 +535,7 @@ export default async function CaptainTeamLayout({
 
           <nav
             className="captain-team-nav grid gap-3 px-4 py-4 sm:px-6 lg:grid-cols-2 xl:grid-cols-4"
-            aria-label="Team dashboard"
+            aria-label="Captain Portal navigation"
           >
             {navGroups.map((group) => (
               <div

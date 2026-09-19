@@ -372,7 +372,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                  Player team area
+                  Player Portal
                 </p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   {team.name}

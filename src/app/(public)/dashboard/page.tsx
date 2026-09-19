@@ -29,6 +29,20 @@ function getTeamRedirectPath(input: {
   return `/player/team/${input.teamId}`;
 }
 
+function getTeamPortalLabel(input: {
+  role: TeamRole;
+  teamMode: TeamMode;
+}) {
+  if (
+    input.teamMode !== TeamMode.MANAGED &&
+    (input.role === TeamRole.CAPTAIN || input.role === TeamRole.MANAGER)
+  ) {
+    return "Captain Portal";
+  }
+
+  return "Player Portal";
+}
+
 function getTeamRoleLabel(role: TeamRole) {
   if (role === TeamRole.CAPTAIN) return "Captain";
   if (role === TeamRole.MANAGER) return "Manager";
@@ -55,6 +69,11 @@ function TeamChoiceCard({
     };
   };
 }) {
+  const portalLabel = getTeamPortalLabel({
+    role: membership.role,
+    teamMode: membership.team.teamMode,
+  });
+
   return (
     <Link
       href={getTeamRedirectPath({
@@ -66,7 +85,10 @@ function TeamChoiceCard({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-lg font-semibold text-white">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/75">
+            {portalLabel}
+          </div>
+          <div className="mt-2 text-lg font-semibold text-white">
             {membership.team.name}
           </div>
           <div className="mt-1 text-sm text-white/55">
@@ -84,7 +106,13 @@ function TeamChoiceCard({
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ app?: string }>;
+} = {}) {
+  const sp = (await searchParams) ?? {};
+  const isAppLaunch = sp.app === "1";
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -127,7 +155,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  if (user.role === UserRole.ADMIN) {
+  if (user.role === UserRole.ADMIN && !isAppLaunch) {
     redirect("/admin");
   }
 
@@ -145,13 +173,13 @@ export default async function DashboardPage() {
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              SIXFL account
+              SIXFL portals
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Choose where you want to go
+              Choose a portal
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/70">
-              This email is linked as both a referee and a player/captain. Choose the area you want to open.
+              This account has more than one SIXFL role. Choose the portal you want to open.
             </p>
           </section>
 
@@ -162,8 +190,11 @@ export default async function DashboardPage() {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-lg font-semibold text-white">
-                    Referee dashboard
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-200/75">
+                    Referee Portal
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">
+                    Match nights
                   </div>
                   <div className="mt-1 text-sm text-white/55">
                     Open referee nights, availability, rules and cashup.
@@ -203,13 +234,13 @@ export default async function DashboardPage() {
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              SIXFL account
+              SIXFL portals
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Choose a team
+              Choose a portal
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/70">
-              You are linked to more than one SIXFL team. Choose the team area you want to open.
+              You are linked to more than one SIXFL team or role. Choose the portal you want to open.
             </p>
           </section>
 
@@ -228,6 +259,38 @@ export default async function DashboardPage() {
 
   if (isReferee) {
     redirect("/referee");
+  }
+
+  if (user.role === UserRole.ADMIN && isAppLaunch) {
+    return (
+      <main className="min-h-screen bg-[#07130f] px-4 py-10 text-white">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
+            SIXFL app
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Admin stays on the desktop
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-white/65">
+            The SIXFL app is focused on Captain Portal, Player Portal and Referee Portal. This admin account is not linked to one of those portals.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/"
+              className="inline-flex rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
+            >
+              Open public site
+            </Link>
+            <Link
+              href="/api/auth/signout"
+              className="inline-flex rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08]"
+            >
+              Sign in with another account
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
