@@ -136,34 +136,87 @@ export async function queueYoutubePublish(fixtureId: string, kind: SixflTvRender
   const description = cleanDescription(data.description || defaults.description, 5000);
   if (!title) throw new StudioError("Add a YouTube title.");
 
-  const active = await prisma.$queryRaw<{ id: string }[]>`SELECT "id" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state" IN ('QUEUED','PROCESSING') LIMIT 1`;
-  if (active[0]) throw new StudioError("This video is already being uploaded to YouTube.", 409);
+  return prisma.$transaction(async tx => {
+    // Share the same fixture/kind publish lock as the automatic publisher.
+    // This makes manual Publish / retry idempotent even if the automatic worker
+    // finishes between the browser's last poll and the admin clicking the button.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424424)::text`;
 
-  const failed = await prisma.$queryRaw<{ id: string; renderJobId: string }[]>`
-    SELECT "id","renderJobId" FROM "SixflTvYoutubePublish" WHERE "fixtureId"=${fixtureId} AND "kind"=${kind} AND "state"='FAILED' ORDER BY "createdAt" DESC LIMIT 1`;
-  if (failed[0]?.renderJobId === render[0].id) {
-    await prisma.$executeRaw`
-      UPDATE "SixflTvYoutubePublish"
-      SET "state"='QUEUED',
-          "thumbnailObjectKey"=${thumb[0].objectKey},
-          "title"=${title},
-          "description"=${description},
-          "privacyStatus"='public',
-          "requestedByActor"=${actor},
-          "error"=NULL,
-          "busyUntil"=NULL,
-          "resumableUrl"=NULL,
-          "uploadedBytes"=0,
-          "updatedAt"=NOW()
-      WHERE "id"=${failed[0].id}`;
-    return { id: failed[0].id, kind, state: "QUEUED", privacyStatus: "public", resumed: true };
-  }
+    const exact = await tx.$queryRaw<Array<{
+      id: string;
+      state: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+      privacyStatus: "private" | "unlisted" | "public";
+    }>>`
+      SELECT "id","state","privacyStatus"
+      FROM "SixflTvYoutubePublish"
+      WHERE "renderJobId"=${render[0].id}
+      ORDER BY "createdAt" DESC, "id" DESC
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const existing = exact[0];
+    if (existing?.state === "READY") {
+      return {
+        id: existing.id,
+        kind,
+        state: "READY" as const,
+        privacyStatus: existing.privacyStatus,
+        resumed: false,
+        alreadyPublished: true,
+      };
+    }
+    if (existing?.state === "QUEUED" || existing?.state === "PROCESSING") {
+      return {
+        id: existing.id,
+        kind,
+        state: existing.state,
+        privacyStatus: existing.privacyStatus,
+        resumed: false,
+        alreadyQueued: true,
+      };
+    }
+    if (existing?.state === "FAILED") {
+      await tx.$executeRaw`
+        UPDATE "SixflTvYoutubePublish"
+        SET "state"='QUEUED',
+            "thumbnailObjectKey"=${thumb[0].objectKey},
+            "title"=${title},
+            "description"=${description},
+            "privacyStatus"='public',
+            "requestedByActor"=${actor},
+            "error"=NULL,
+            "busyUntil"=NULL,
+            "resumableUrl"=NULL,
+            "uploadedBytes"=0,
+            "youtubeVideoId"=NULL,
+            "youtubeUrl"=NULL,
+            "completedAt"=NULL,
+            "updatedAt"=NOW()
+        WHERE "id"=${existing.id}
+      `;
+      return { id: existing.id, kind, state: "QUEUED" as const, privacyStatus: "public" as const, resumed: true };
+    }
 
-  const id = randomUUID();
-  await prisma.$executeRaw`
-    INSERT INTO "SixflTvYoutubePublish" ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor")
-    VALUES (${id},${fixtureId},${kind},${render[0].id},${thumb[0].objectKey},${title},${description},'public',${actor})`;
-  return { id, kind, state: "QUEUED", privacyStatus: "public", resumed: false };
+    const active = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "SixflTvYoutubePublish"
+      WHERE "fixtureId"=${fixtureId}
+        AND "kind"=${kind}
+        AND "state" IN ('QUEUED','PROCESSING')
+      LIMIT 1
+      FOR UPDATE
+    `;
+    if (active[0]) throw new StudioError("This video is already being uploaded to YouTube.", 409);
+
+    const id = randomUUID();
+    await tx.$executeRaw`
+      INSERT INTO "SixflTvYoutubePublish"
+        ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor")
+      VALUES
+        (${id},${fixtureId},${kind},${render[0].id},${thumb[0].objectKey},${title},${description},'public',${actor})
+    `;
+    return { id, kind, state: "QUEUED" as const, privacyStatus: "public" as const, resumed: false };
+  });
 }
 export async function syncPublishedYoutubeThumbnail(fixtureId: string, kind: SixflTvRenderKind) {
   const rows = await prisma.$queryRaw<Array<{ youtubeVideoId: string | null; objectKey: string | null }>>(Prisma.sql`

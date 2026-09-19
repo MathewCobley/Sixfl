@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Kind = "HIGHLIGHTS" | "FULL_MATCH";
 type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string; queueAhead: number | null };
@@ -28,7 +28,7 @@ function renderActive(render: Render) { return render.state === "QUEUED" || rend
 function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
 function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
-function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
+function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (kind: Kind, draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
@@ -51,8 +51,8 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDra
     return () => window.clearTimeout(timer);
   }, [previewSrc]);
   useEffect(() => {
-    onDraftChange({ headline, strapline, showScore });
-  }, [headline, strapline, showScore, onDraftChange]);
+    onDraftChange(kind, { headline, strapline, showScore });
+  }, [headline, strapline, showScore, kind, onDraftChange]);
   async function save() {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -107,7 +107,11 @@ function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defau
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} → YouTube</h3><span className="text-xs text-white/50">{publish ? publish.state : "Not uploaded"}</span></div>
     {publish?.state === "READY" && publish.youtubeUrl ? <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm text-emerald-100"><p>Published publicly on YouTube and saved against this fixture.</p><a href={publish.youtubeUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block underline underline-offset-4">Open on YouTube</a></div> : null}
     {publish?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{publish.error || "YouTube upload failed. Review the error before approving another attempt."}</p> : null}
-    {active ? <p className="mt-3 text-sm text-white/60">{publish?.state === "QUEUED" ? "Waiting for the worker." : "Publishing the approved video and thumbnail publicly on YouTube."}</p> : null}
+    {active ? <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm leading-6 text-emerald-100">
+      <p>{publish?.state === "QUEUED" ? "Waiting for the SIXFL TV worker." : "Publishing the approved video and thumbnail publicly on YouTube."}</p>
+      <p className="mt-1 text-emerald-100/75"><strong>Publishing continues in the background.</strong> You can leave this page, open another fixture or use the rest of SIXFL Admin while it finishes.</p>
+      <a href="/admin/sixfl-tv/fixtures" className="mt-2 inline-flex min-h-10 items-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15">Choose another fixture</a>
+    </div> : null}
     <div className="mt-4 grid gap-3">
       <label className="text-sm text-white/70">YouTube title <span className="text-white/40">(optional)</span><input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="Automatic title" className="mt-1 block w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
       <label className="text-sm text-white/70">Description <span className="text-white/40">(optional)</span><textarea value={description} maxLength={5000} rows={4} onChange={e => setDescription(e.target.value)} placeholder="Automatic description" className="mt-1 block w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/40" /></label>
@@ -134,17 +138,31 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       showScore: initialThumbs.get("FULL_MATCH")?.showScore ?? true,
     },
   });
+  const updateThumbnailDraft = useCallback((kind: Kind, draft: ThumbnailDraft) => {
+    setThumbnailDrafts(current => {
+      const previous = current[kind];
+      if (
+        previous.headline === draft.headline &&
+        previous.strapline === draft.strapline &&
+        previous.showScore === draft.showScore
+      ) {
+        return current;
+      }
+      return { ...current, [kind]: draft };
+    });
+  }, []);
   const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
   const activeRenders = useMemo(() => state.renders.filter(renderActive), [state.renders]);
   const hasReadyPreview = useMemo(() => state.renders.some(render => render.state === "READY"), [state.renders]);
-  const active = useMemo(() => activeRenders.length > 0 || state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING"), [activeRenders, state.publishes]);
+  const activePublishes = useMemo(() => state.publishes.filter(publish => publish.state === "QUEUED" || publish.state === "PROCESSING"), [state.publishes]);
+  const active = useMemo(() => activeRenders.length > 0 || activePublishes.length > 0, [activeRenders.length, activePublishes.length]);
   async function refresh() { setState(await json<State>(endpoint)); }
   useEffect(() => {
     if (!active) return;
-    const publishingOnly = activeRenders.length === 0 && state.publishes.some(publish => publish.state === "QUEUED" || publish.state === "PROCESSING");
+    const publishingOnly = activeRenders.length === 0 && activePublishes.length > 0;
     const timer = window.setInterval(() => void refresh().catch(() => undefined), publishingOnly ? 15000 : 5000);
     return () => window.clearInterval(timer);
-  }, [active, activeRenders.length, endpoint, state.publishes]);
+  }, [active, activeRenders.length, activePublishes.length, endpoint]);
   async function generate(kind?: Kind) {
     if (busy || activeRenders.length > 0) return;
     const previousRenders = state.renders;
@@ -185,6 +203,18 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
   const thumbByKind = new Map(state.thumbnails.map(thumb => [thumb.kind, thumb]));
   const publishByKind = new Map(state.publishes.map(publish => [publish.kind, publish]));
   return <div className="space-y-6">
+    {activePublishes.length ? <section className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <strong>YouTube publishing is running in the background.</strong>
+          <p className="mt-1 text-emerald-100/75">You do not need to keep this match open. All other SIXFL TV and Admin controls remain available while {activePublishes.map(publish => kindLabel(publish.kind).toLowerCase()).join(" and ")} finishes.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a href="/admin/sixfl-tv/fixtures" className={button}>Choose another fixture</a>
+          <a href="/admin" className={button}>Back to Admin</a>
+        </div>
+      </div>
+    </section> : null}
     <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer. You can regenerate both together here, or update just Highlights or just Full match from its own preview card below.</p></div>{activeRenders.length ? <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering()}>{busy ? "Stopping…" : "Stop rendering"}</button> : <button type="button" className={button} disabled={busy} onClick={() => void generate()}>{busy ? "Queuing…" : hasReadyPreview ? "Regenerate all previews" : "Generate all previews"}</button>}</div>
       {message ? <p role="status" className="mt-4 text-sm text-emerald-100">{message}</p> : null}{error ? <p role="alert" className="mt-4 text-sm text-red-200">{error}</p> : null}
@@ -240,7 +270,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         current={thumbByKind.get(kind)}
         busy={busy}
         renderRevision={render?.completedAt || render?.id}
-        onDraftChange={draft => setThumbnailDrafts(current => ({ ...current, [kind]: draft }))}
+        onDraftChange={updateThumbnailDraft}
         onSaved={refresh}
       />;
     })}</div></div>
