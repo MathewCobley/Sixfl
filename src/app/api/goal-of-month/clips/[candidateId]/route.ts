@@ -31,7 +31,10 @@ export async function GET(request: Request, context: Context) {
         AND f."publishedAt" IS NOT NULL
         AND a."fixtureId" = c."fixtureId"
         AND a."kind" = 'CLIP'
-        AND a."state" = 'READY'
+        AND (
+          a."state" = 'READY'
+          OR (c."mediaState" = 'READY' AND c."promoVideoObjectKey" IS NOT NULL)
+        )
       LIMIT 1
     `);
     if (!row) throw new FootageError("This nominated clip is unavailable.", 404);
