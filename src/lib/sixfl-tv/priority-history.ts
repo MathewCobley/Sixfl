@@ -39,7 +39,7 @@ export async function capturePriorityWeeklySnapshot(now = new Date()) {
   const leagueTeams = await Promise.all(
     leagues.map(async (league) => ({
       league,
-      teams: await readVeoTeams(league.id),
+      teams: (await readVeoTeams(league.id)).filter((team) => !/^TBC(?:\b|[\s_-])/i.test(team.name.trim())),
     })),
   );
   const teamIds = [...new Set(leagueTeams.flatMap((entry) => entry.teams.map((team) => team.id)))];
@@ -103,7 +103,14 @@ export async function readPriorityWeeklyHistory() {
       "provisional",
       "matchesCount",
       "coreCompletedMatches"
-    FROM "SixflTvPriorityWeeklySnapshot"
+    FROM "SixflTvPriorityWeeklySnapshot" s
+    WHERE UPPER(BTRIM(s."teamName")) !~ '^TBC([[:space:]_-]|$)'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "Team" t
+        WHERE t."id" = s."teamId"
+          AND COALESCE(t."isFixturePlaceholder", false) = true
+      )
     ORDER BY "leagueName","weekStart","teamName","teamId"
   `);
 }
