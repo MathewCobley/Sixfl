@@ -152,7 +152,7 @@ export default async function CaptainVeoPriorityCard({
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-white">Available points per match</h3>
+        <h3 className="text-sm font-semibold text-white">Reliability detail</h3>
         <p className="mt-1 text-xs leading-5 text-white/55">
           Your last five completed matches build the reliability part of your score. The match record is then scaled to a maximum of 80 Priority points.
         </p>
