@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/requireAdmin';
 import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScoreBadge';
 import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
-import { getSixflTvEngagementScores, sixflTvAllocationScore } from '@/lib/sixfl-tv/analytics';
 import { normaliseVeoPitch } from '@/lib/veo/allocator';
 import { londonVeoDate, previewVeoNight, readVeoNight, readVeoSettings, readVeoSnapshots, readVeoTeams, validVeoDate, VeoAllocationError } from '@/lib/veo/service';
 import { saveVeoSettings, saveVeoVideo } from './actions';
@@ -37,7 +36,6 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     readVeoNight(id, date),
   ]);
   const priorityScores = await getSixflTvPriorityScores(teams.map(team => team.id));
-  const engagementScores = await getSixflTvEngagementScores(teams.map(team => team.id));
   let choices: Awaited<ReturnType<typeof previewVeoNight>>['choices'] = [];
   let previewError = '';
   try { if (!settings.confirmAtFixture) choices = (await previewVeoNight(id, date)).choices; }
@@ -60,7 +58,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
   return <div className="mx-auto max-w-7xl space-y-6 text-white">
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">SIXFL TV Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
-      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. The 100-point reliability score decides eligibility. Eligible teams can then earn up to 20 extra allocation points from SIXFL TV audience, goal nominations and goal voting. View Score 100 means average viewing for that team’s current division.</p>
+      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Every team has one SIXFL TV Priority Score out of 100: up to 80 points from reliability, 10 from SIXFL TV audience and 10 from goal-award participation. View Score 100 means average viewing for that team’s current division.</p>
     </header>
     {query.saved && <p role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">Saved. No existing fixtures or charges were recalculated.</p>}
     {query.error && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-4">{query.error.slice(0, 500)}</p>}
@@ -81,12 +79,10 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority scores</h2>
       <p className="text-sm leading-6 text-white/60">
-        Base scores use each team’s last five completed fixtures: core match card 8 points, payment 6, confirmation 4, assists bonus 1 (by 6pm next day) and ratings bonus 1 (by 6pm next day). Teams still need at least 60/100 and regular core match-card completion to qualify. View Score compares recent recorded-fixture viewing with the team’s division average; 100 is average. Audience, nominations and voting add up to 20 allocation points after eligibility is established.
+        The one Priority Score is out of 100: reliability contributes up to 80 points, audience up to 10 and goal nominations/voting up to 10. Teams need at least 60/100 overall and must still meet the underlying reliability and core match-card minimums. View Score is an audience index only: 100 means the team is at its division average.
       </p>
       <div className="divide-y divide-white/10">{teams.map(team => {
         const score = priorityScores.get(team.id);
-        const engagement = engagementScores.get(team.id);
-        const allocation = score ? sixflTvAllocationScore(score.score, engagement?.engagementBonus ?? 0) : 0;
         return <div key={team.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link>
@@ -94,7 +90,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
               {score?.qualifies ? 'Eligible for recorded-pitch priority' : 'Not currently eligible for recorded-pitch priority'}
               {score ? ` · Core cards ${score.coreCompletedMatches}/${score.matchesCount || 0}` : ''}
             </p>
-            {engagement ? <p className="mt-1 text-xs text-white/45">View Score <strong className="text-white/75">{engagement.viewScore}</strong>{engagement.provisional ? ' provisional' : ''} · Audience +{engagement.viewBonus} · Nominations +{engagement.nominationPoints} · Voting +{engagement.votePoints} · Allocation <strong className="text-fuchsia-100">{allocation}/120</strong></p> : null}
+            {score ? <p className="mt-1 text-xs text-white/45">Reliability <strong className="text-white/75">{score.reliabilityPoints}/80</strong> · Audience <strong className="text-white/75">{score.audiencePoints}/10</strong> · Participation <strong className="text-white/75">{score.participationPoints}/10</strong> · View index <strong className="text-fuchsia-100">{score.viewScore}</strong>{score.viewProvisional ? ' provisional' : ''}</p> : null}
           </div>
           {score ? <SixflTvPriorityScoreBadge score={score} /> : null}
         </div>;
