@@ -555,9 +555,9 @@ export async function createGoalOfMonthNomineeIntro(input: {
       }).format(sourceDate).toUpperCase()
     : "";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
-  const score = hasScore ? \`\${input.homeScore} – \${input.awayScore}\` : "VS";
+  const score = hasScore ? `${input.homeScore} – ${input.awayScore}` : "VS";
 
-  const svg = \`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#020805"/>
@@ -570,34 +570,34 @@ export async function createGoalOfMonthNomineeIntro(input: {
       </radialGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.7"/></filter>
     </defs>
-    \${fontCss}
+    ${fontCss}
     <rect width="1920" height="1080" fill="url(#bg)"/>
     <rect width="1920" height="1080" fill="url(#glow)"/>
     <polygon points="-120,0 350,0 -155,1080 -625,1080" fill="#10b981"/>
     <polygon points="90,0 220,0 -285,1080 -415,1080" fill="#ecfdf5" fill-opacity="0.96"/>
     <polygon points="300,0 445,0 -60,1080 -205,1080" fill="#064e3b"/>
 
-    \${logoImage(sixflTvLogoBytes, 720, 62, 480, 154)}
+    ${logoImage(sixflTvLogoBytes, 720, 62, 480, 154)}
     <text x="960" y="294" text-anchor="middle" font-size="29" font-weight="900" letter-spacing="7" fill="#6ee7b7">GOAL OF THE MONTH NOMINEE</text>
 
     <g transform="translate(300 348)" filter="url(#shadow)">
-      \${badgeImage(teamBadge, 0, 0, 210, input.teamName)}
-      <text x="270" y="91" font-size="82" font-weight="900" fill="#ffffff">\${xml(scorer)}</text>
-      <text x="274" y="145" font-size="32" font-weight="800" fill="#6ee7b7">\${xml(team)}</text>
+      ${badgeImage(teamBadge, 0, 0, 210, input.teamName)}
+      <text x="270" y="91" font-size="82" font-weight="900" fill="#ffffff">${xml(scorer)}</text>
+      <text x="274" y="145" font-size="32" font-weight="800" fill="#6ee7b7">${xml(team)}</text>
     </g>
 
     <g filter="url(#shadow)">
       <rect x="300" y="625" width="1320" height="180" rx="28" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.62" stroke-width="3"/>
-      \${hasScore ? '<rect x="908" y="647" width="104" height="36" rx="18" fill="#10b981"/><text x="960" y="672" text-anchor="middle" font-size="17" font-weight="900" letter-spacing="2" fill="#02140d">FT</text>' : ""}
-      <text x="760" y="739" text-anchor="end" font-size="43" font-weight="850" fill="#ffffff">\${xml(home)}</text>
-      <text x="960" y="745" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">\${xml(score)}</text>
-      <text x="1160" y="739" font-size="43" font-weight="850" fill="#ffffff">\${xml(away)}</text>
+      ${hasScore ? '<rect x="908" y="647" width="104" height="36" rx="18" fill="#10b981"/><text x="960" y="672" text-anchor="middle" font-size="17" font-weight="900" letter-spacing="2" fill="#02140d">FT</text>' : ""}
+      <text x="760" y="739" text-anchor="end" font-size="43" font-weight="850" fill="#ffffff">${xml(home)}</text>
+      <text x="960" y="745" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">${xml(score)}</text>
+      <text x="1160" y="739" font-size="43" font-weight="850" fill="#ffffff">${xml(away)}</text>
     </g>
 
-    <text x="960" y="879" text-anchor="middle" font-size="27" font-weight="900" letter-spacing="4" fill="#ffffff">\${xml(matchDate)}</text>
-    <text x="960" y="927" text-anchor="middle" font-size="23" font-weight="700" fill="#a7f3d0">\${xml(league)}</text>
+    <text x="960" y="879" text-anchor="middle" font-size="27" font-weight="900" letter-spacing="4" fill="#ffffff">${xml(matchDate)}</text>
+    <text x="960" y="927" text-anchor="middle" font-size="23" font-weight="700" fill="#a7f3d0">${xml(league)}</text>
     <text x="960" y="1000" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="4" fill="#ffffff" fill-opacity="0.48">SIXFL.CO.UK</text>
-  </svg>\`;
+  </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
@@ -617,17 +617,17 @@ export async function createGoalOfMonthClipOverlay(input: {
   const replayWidth = input.replay ? 112 : 0;
   const width = Math.max(360, Math.min(650, 122 + scorer.length * 18 + replayWidth));
   const replayX = width - 104;
-  const svg = \`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-    \${fontCss}
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${fontCss}
     <g transform="translate(54 46)">
-      <rect width="\${width}" height="70" rx="14" fill="#020805" fill-opacity="0.91" stroke="#10b981" stroke-width="2"/>
+      <rect width="${width}" height="70" rx="14" fill="#020805" fill-opacity="0.91" stroke="#10b981" stroke-width="2"/>
       <rect width="10" height="70" rx="5" fill="#10b981"/>
-      \${badgeImage(teamBadge, 22, 9, 52, input.teamName)}
-      <text x="92" y="46" font-size="25" font-weight="900" letter-spacing="0.5" fill="#ffffff">\${xml(scorer)}</text>
-      \${input.replay ? \`<g transform="translate(\${replayX} 17)"><rect width="88" height="36" rx="18" fill="#10b981"/><text x="44" y="25" text-anchor="middle" font-size="15" font-weight="900" letter-spacing="1.5" fill="#02140d">REPLAY</text></g>\` : ""}
+      ${badgeImage(teamBadge, 22, 9, 52, input.teamName)}
+      <text x="92" y="46" font-size="25" font-weight="900" letter-spacing="0.5" fill="#ffffff">${xml(scorer)}</text>
+      ${input.replay ? `<g transform="translate(${replayX} 17)"><rect width="88" height="36" rx="18" fill="#10b981"/><text x="44" y="25" text-anchor="middle" font-size="15" font-weight="900" letter-spacing="1.5" fill="#02140d">REPLAY</text></g>` : ""}
     </g>
-    \${logoImage(sixflTvLogoBytes, 1632, 38, 232, 74, 0.94)}
-  </svg>\`;
+    ${logoImage(sixflTvLogoBytes, 1632, 38, 232, 74, 0.94)}
+  </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
