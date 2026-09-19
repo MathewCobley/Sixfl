@@ -15,6 +15,7 @@ type Row = {
   clipNumber: number;
   scorerName: string | null;
   teamName: string;
+  teamLogoUrl: string | null;
   opponentName: string;
   leagueName: string;
 };
@@ -33,6 +34,7 @@ export async function GET(request: Request, context: Context) {
         a."clipNumber"::int AS "clipNumber",
         c."scorerName",
         team."name" AS "teamName",
+        team."logoUrl" AS "teamLogoUrl",
         CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
         league."name" AS "leagueName"
       FROM "GoalOfMonthCandidate" c
@@ -75,6 +77,7 @@ export async function GET(request: Request, context: Context) {
       clipNumber: Number(row.clipNumber),
       scorerName: row.scorerName,
       teamName: row.teamName,
+      teamLogoUrl: row.teamLogoUrl,
       opponentName: row.opponentName,
       leagueName: row.leagueName,
       backgroundImage,
