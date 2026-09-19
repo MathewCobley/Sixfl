@@ -145,7 +145,7 @@ export function sixflTvAllocationScore(
 }
 
 async function currentTeamCohorts(db: Db = prisma): Promise<TeamCohortRow[]> {
-  return db.$queryRaw<TeamCohortRow[]>(Prisma.sql\`
+  return db.$queryRaw<TeamCohortRow[]>(Prisma.sql`
     SELECT
       t.id,
       t.name,
@@ -165,11 +165,11 @@ async function currentTeamCohorts(db: Db = prisma): Promise<TeamCohortRow[]> {
     LEFT JOIN "LeagueDivision" d ON d.id = COALESCE(current_entry."divisionId", t."divisionId")
     WHERE COALESCE(t."isFixturePlaceholder", false) = false
     ORDER BY l.name, COALESCE(d."sortOrder", 999), d.name NULLS LAST, t.name, t.id
-  \`);
+  `);
 }
 
 async function linkedFixtureRows(db: Db = prisma): Promise<LinkedFixtureRow[]> {
-  return db.$queryRaw<LinkedFixtureRow[]>(Prisma.sql\`
+  return db.$queryRaw<LinkedFixtureRow[]>(Prisma.sql`
     SELECT
       f.id AS "fixtureId",
       f."kickoffAt",
@@ -189,7 +189,7 @@ async function linkedFixtureRows(db: Db = prisma): Promise<LinkedFixtureRow[]> {
       AND COALESCE(away."isFixturePlaceholder", false) = false
       AND home.id <> away.id
     ORDER BY f."kickoffAt" DESC, f.id DESC
-  \`);
+  `);
 }
 
 async function linkedYoutubeVideos(db: Db = prisma): Promise<LinkedVideoRef[]> {
@@ -211,17 +211,17 @@ async function linkedYoutubeVideos(db: Db = prisma): Promise<LinkedVideoRef[]> {
 }
 
 async function latestSnapshots(db: Db = prisma) {
-  const rows = await db.$queryRaw<SnapshotDbRow[]>(Prisma.sql\`
+  const rows = await db.$queryRaw<SnapshotDbRow[]>(Prisma.sql`
     SELECT DISTINCT ON ("videoId")
       "videoId", title, "viewCount", "likeCount", "commentCount", "publishedAt", "capturedAt"
     FROM "SixflTvYoutubeMetricSnapshot"
     ORDER BY "videoId", "capturedAt" DESC, id DESC
-  \`);
+  `);
   return new Map(rows.map((row) => [row.videoId, row]));
 }
 
 async function latestTwoSnapshots(db: Db = prisma) {
-  const rows = await db.$queryRaw<SnapshotDbRow[]>(Prisma.sql\`
+  const rows = await db.$queryRaw<SnapshotDbRow[]>(Prisma.sql`
     SELECT "videoId", title, "viewCount", "likeCount", "commentCount", "publishedAt", "capturedAt", rn
     FROM (
       SELECT s.*,
@@ -230,7 +230,7 @@ async function latestTwoSnapshots(db: Db = prisma) {
     ) ranked
     WHERE rn <= 2
     ORDER BY "videoId", rn
-  \`);
+  `);
   const current = new Map<string, SnapshotDbRow>();
   const previous = new Map<string, SnapshotDbRow>();
   for (const row of rows) {
@@ -241,7 +241,7 @@ async function latestTwoSnapshots(db: Db = prisma) {
 }
 
 function cohortKey(row: Pick<TeamCohortRow, "leagueId" | "divisionId">) {
-  return row.divisionId ? \`division:\${row.divisionId}\` : \`league:\${row.leagueId}\`;
+  return row.divisionId ? `division:\${row.divisionId}` : `league:\${row.leagueId}`;
 }
 
 export async function getSixflTvViewScores(
@@ -333,7 +333,7 @@ export async function getSixflTvViewScores(
       divisionId: team.divisionId,
       divisionName: team.divisionName,
       cohortLabel: team.divisionName
-        ? \`\${team.leagueName} · \${team.divisionName}\`
+        ? `\${team.leagueName} · \${team.divisionName}`
         : team.leagueName,
       recordedFixtures: own.count,
       averageViews: Math.round(own.average),
@@ -354,7 +354,7 @@ async function getAwardParticipation(
 ) {
   if (!teamIds.length) return new Map<string, { nominations: number; votes: number }>();
   const since = new Date(now.getTime() - SIXFL_TV_AWARD_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-  const rows = await db.$queryRaw<Array<{ teamId: string; kind: string; participants: number }>>(Prisma.sql\`
+  const rows = await db.$queryRaw<Array<{ teamId: string; kind: string; participants: number }>>(Prisma.sql`
     WITH actions AS (
       SELECT "userId", 'NOMINATION'::text AS kind
       FROM "GoalOfWeekNomination"
@@ -387,7 +387,7 @@ async function getAwardParticipation(
     JOIN memberships ON memberships."userId" = actions."userId"
     WHERE memberships."teamId" IN (\${Prisma.join(teamIds)})
     GROUP BY memberships."teamId", actions.kind
-  \`);
+  `);
 
   const result = new Map<string, { nominations: number; votes: number }>();
   for (const teamId of teamIds) result.set(teamId, { nominations: 0, votes: 0 });
@@ -447,10 +447,10 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
     return { synced: false, skipped: "not-connected", videos: 0, capturedAt: null };
   }
 
-  const [latest] = await prisma.$queryRaw<Array<{ capturedAt: Date | null }>>(Prisma.sql\`
+  const [latest] = await prisma.$queryRaw<Array<{ capturedAt: Date | null }>>(Prisma.sql`
     SELECT MAX("capturedAt") AS "capturedAt"
     FROM "SixflTvYoutubeMetricSnapshot"
-  \`);
+  `);
   if (
     !options?.force &&
     latest?.capturedAt &&
@@ -483,7 +483,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
     url.searchParams.set("maxResults", "50");
 
     const response = await fetch(url, {
-      headers: { Authorization: \`Bearer \${accessToken}\` },
+      headers: { Authorization: `Bearer \${accessToken}` },
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });
@@ -500,7 +500,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
       error?: { message?: string };
     };
     if (!response.ok) {
-      throw new Error(data.error?.message || \`YouTube statistics request failed (\${response.status}).\`);
+      throw new Error(data.error?.message || `YouTube statistics request failed (\${response.status}).`);
     }
 
     const writes = (data.items ?? [])
@@ -510,7 +510,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
           item.snippet?.publishedAt && !Number.isNaN(Date.parse(item.snippet.publishedAt))
             ? new Date(item.snippet.publishedAt)
             : null;
-        return prisma.$executeRaw(Prisma.sql\`
+        return prisma.$executeRaw(Prisma.sql`
           INSERT INTO "SixflTvYoutubeMetricSnapshot" (
             "id", "videoId", title, "viewCount", "likeCount", "commentCount", "publishedAt", "capturedAt"
           ) VALUES (
@@ -523,7 +523,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
             \${publishedAt},
             \${capturedAt}
           )
-        \`);
+        `);
       });
     if (writes.length) {
       await prisma.$transaction(writes);
@@ -571,11 +571,11 @@ export async function getSixflTvAnalyticsDashboard(db: Db = prisma) {
     if (!latestCaptureAt || current.capturedAt > latestCaptureAt) latestCaptureAt = current.capturedAt;
     videos.push({
       videoId,
-      title: current.title || \`\${ref.homeTeamName} vs \${ref.awayTeamName}\`,
+      title: current.title || `\${ref.homeTeamName} vs \${ref.awayTeamName}`,
       url: ref.url,
       kind: ref.kind,
       fixtureId: ref.fixtureId,
-      fixtureLabel: \`\${ref.homeTeamName} vs \${ref.awayTeamName}\`,
+      fixtureLabel: `\${ref.homeTeamName} vs \${ref.awayTeamName}`,
       kickoffAt: ref.kickoffAt,
       views,
       likes: current.likeCount == null ? null : Number(current.likeCount),
