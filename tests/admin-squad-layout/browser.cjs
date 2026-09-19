@@ -17,6 +17,10 @@ const { load, renderShell, PANEL } = require('./contract.test.cjs');
     '@/lib/datetime/london': { formatDateTimeInLondon: () => '12/09/2026, 12:00' },
     '@/lib/admin/squadLoginStatus': { getSquadLoginStatusMap: async () => new Map() },
     '@/lib/admin/squadMemberCreationDetails': { getSquadMemberCreationDetailsMap: async () => new Map() },
+    '@/lib/teamMemberProfiles': { getTeamMemberProfilesByTeamMemberIds: async () => new Map([
+      ['active', { squadNumber: 7 }],
+      ['injured', { squadNumber: 12 }],
+    ]) },
     '@/lib/players/player-team-memberships': { getPlayerTeamMembershipsByUserId: async () => new Map() },
     '@/lib/prisma': { prisma: {
       team: { findUnique: async () => ({ id: 'test-team', name: 'Example United', teamMode: 'STANDARD', isRecruiting: true, contactName: 'Example Captain', contactEmail: 'captain@example.invalid', league: { id: 'test-league', name: 'Example League', season: '2026' }, members: [
