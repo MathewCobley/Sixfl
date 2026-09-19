@@ -34,6 +34,7 @@ const clipMigration = 'prisma/migrations/20260918181000_goal_of_month_clip_asset
 const renderMigration = 'prisma/migrations/20260919203000_goal_of_month_nominee_renders/migration.sql';
 const brandingRequeueMigration = 'prisma/migrations/20260919223000_requeue_goal_month_branding_renders/migration.sql';
 const overlayRefreshMigration = 'prisma/migrations/20260919234000_refresh_goal_month_overlay/migration.sql';
+const fontRefreshMigration = 'prisma/migrations/20260920002000_refresh_goal_month_font_renders/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -183,6 +184,24 @@ test('overlay readability refresh requeues completed nominee renders without dis
   const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
     FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
   assert.equal(state, 'QUEUED|old-overlay-render.mp4|true');
+});
+
+test('font rendering refresh requeues completed nominee renders while keeping their previous object until replacement', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('font-refresh-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'font-refresh-clip', scorerName: 'Font Scorer',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-font-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(fontRefreshMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-font-render.mp4|true');
 });
 
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
