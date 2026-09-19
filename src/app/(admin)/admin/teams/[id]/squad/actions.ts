@@ -4,6 +4,7 @@
 
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { TeamRole } from "@prisma/client";
@@ -69,6 +70,8 @@ export async function addAdminSquadMemberAction(formData: FormData) {
   const teamId = String(formData.get("teamId") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = getRoleValue(formData.get("role"));
+  const squadNumberRaw = String(formData.get("squadNumber") ?? "").trim();
+  const squadNumber = squadNumberRaw ? Number(squadNumberRaw) : null;
 
   if (!teamId) {
     redirect("/admin/teams");
@@ -76,6 +79,10 @@ export async function addAdminSquadMemberAction(formData: FormData) {
 
   if (!email) {
     redirect(buildRedirect(teamId, "?error=Email%20is%20required."));
+  }
+
+  if (squadNumber !== null && (!Number.isInteger(squadNumber) || squadNumber < 1 || squadNumber > 99)) {
+    redirect(buildRedirect(teamId, "?error=Squad%20number%20must%20be%20between%201%20and%2099%20or%20left%20blank."));
   }
 
   const team = await prisma.team.findUnique({
@@ -121,13 +128,42 @@ export async function addAdminSquadMemberAction(formData: FormData) {
     redirect(buildRedirect(teamId, "?error=That%20user%20is%20already%20in%20the%20squad."));
   }
 
-  await prisma.teamMember.create({
+  if (squadNumber !== null) {
+    const duplicate = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT tm."id"
+      FROM "TeamMember" tm
+      JOIN "TeamMemberProfile" p ON p."teamMemberId" = tm."id"
+      WHERE tm."teamId" = ${teamId}
+        AND p."squadNumber" = ${squadNumber}
+      LIMIT 1
+    `;
+    if (duplicate[0]) {
+      redirect(buildRedirect(teamId, `?error=${encodeURIComponent(`Squad number ${squadNumber} is already used by another player.`)}`));
+    }
+  }
+
+  const member = await prisma.teamMember.create({
     data: {
       teamId,
       userId: user.id,
       role,
     },
+    select: { id: true },
   });
+
+  if (squadNumber !== null) {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "TeamMemberProfile"
+        ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;
+    `);
+    await prisma.$executeRaw`
+      INSERT INTO "TeamMemberProfile" ("id","teamMemberId","squadNumber","updatedAt")
+      VALUES (${randomUUID()},${member.id},${squadNumber},NOW())
+      ON CONFLICT ("teamMemberId") DO UPDATE SET
+        "squadNumber"=EXCLUDED."squadNumber",
+        "updatedAt"=NOW()
+    `;
+  }
 
   await sendDashboardLoginEmail({
     email: user.email?.trim().toLowerCase() || email,

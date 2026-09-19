@@ -550,10 +550,10 @@ export default async function AdminTeamPage({
 
         <div className="flex flex-wrap gap-3">
           <Link
-            href={`/captain/team/${team.id}`}
+            href={`/admin/teams/${team.id}/captain-preview`}
             className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
           >
-            Captain view
+            Captain view (exact)
           </Link>
 
           <Link

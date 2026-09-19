@@ -265,6 +265,8 @@ async function addCaptainPlayerAction(formData: FormData) {
   const displayName = String(formData.get("displayName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
+  const squadNumberRaw = String(formData.get("squadNumber") ?? "").trim();
+  const squadNumber = squadNumberRaw ? Number(squadNumberRaw) : null;
   const usesWhatsapp = formData.get("usesWhatsapp") === "on";
 
   await requireCaptain(teamid);
@@ -274,6 +276,10 @@ async function addCaptainPlayerAction(formData: FormData) {
     redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Enter the player name.")}`);
   }
 
+  if (squadNumber !== null && (!Number.isInteger(squadNumber) || squadNumber < 1 || squadNumber > 99)) {
+    redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Squad number must be between 1 and 99 or left blank.")}`);
+  }
+
   const team = await prisma.team.findUnique({
     where: { id: teamid },
     select: { id: true, teamMode: true },
@@ -281,6 +287,20 @@ async function addCaptainPlayerAction(formData: FormData) {
 
   if (!team) {
     redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent("Team not found.")}`);
+  }
+
+  if (squadNumber !== null) {
+    const duplicate = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT tm."id"
+      FROM "TeamMember" tm
+      JOIN "TeamMemberProfile" p ON p."teamMemberId" = tm."id"
+      WHERE tm."teamId" = ${teamid}
+        AND p."squadNumber" = ${squadNumber}
+      LIMIT 1
+    `;
+    if (duplicate[0]) {
+      redirect(`/captain/team/${teamid}/captain-squad?error=${encodeURIComponent(`Squad number ${squadNumber} is already used by another player.`)}`);
+    }
   }
 
   if (team.teamMode === "MANAGED") {
@@ -322,25 +342,33 @@ async function addCaptainPlayerAction(formData: FormData) {
     select: { id: true },
   });
 
-  if (phone) {
+  if (phone || squadNumber !== null) {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "TeamMemberProfile" (
         "id" TEXT NOT NULL,
         "teamMemberId" TEXT NOT NULL,
         "phone" TEXT,
+        "squadNumber" INTEGER,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
       );
     `);
     await prisma.$executeRawUnsafe(`
+      ALTER TABLE "TeamMemberProfile"
+        ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;
+    `);
+    await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "TeamMemberProfile_teamMemberId_key"
       ON "TeamMemberProfile"("teamMemberId");
     `);
     await prisma.$executeRaw`
-      INSERT INTO "TeamMemberProfile" ("id", "teamMemberId", "phone", "updatedAt")
-      VALUES (${randomUUID()}, ${member.id}, ${phone}, NOW())
-      ON CONFLICT ("teamMemberId") DO UPDATE SET "phone" = EXCLUDED."phone", "updatedAt" = NOW()
+      INSERT INTO "TeamMemberProfile" ("id", "teamMemberId", "phone", "squadNumber", "updatedAt")
+      VALUES (${randomUUID()}, ${member.id}, ${phone}, ${squadNumber}, NOW())
+      ON CONFLICT ("teamMemberId") DO UPDATE SET
+        "phone" = EXCLUDED."phone",
+        "squadNumber" = EXCLUDED."squadNumber",
+        "updatedAt" = NOW()
     `;
   }
 
@@ -634,6 +662,11 @@ export default async function CaptainSquadViewPage({
                         <div className="truncate text-base font-semibold text-white">
                           {member.user.name || "Unnamed player"}
                         </div>
+                        {profile?.squadNumber ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100">
+                            #{profile.squadNumber}
+                          </span>
+                        ) : null}
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
@@ -724,6 +757,17 @@ export default async function CaptainSquadViewPage({
                   <input
                     name="phone"
                     placeholder="Mobile number"
+                    className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
+                  />
+                </label>
+                <label className="block space-y-2 text-sm text-white/65">
+                  <span>Squad number optional</span>
+                  <input
+                    name="squadNumber"
+                    type="number"
+                    min="1"
+                    max="99"
+                    placeholder="1–99"
                     className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
                   />
                 </label>

@@ -30,19 +30,23 @@ action = replaceRequired(
   "admin-only override validation",
 );
 
-action = replaceRequired(
-  action,
-  "    Array<{ sourceProspectId: string | null }>",
-  "    Array<{\n      sourceProspectId: string | null;\n      playerMatchFeePenceOverride: number | null;\n    }>",
-  "existing override query type",
-);
+if (!/const existingProfiles = await prisma\.\$queryRaw<[\s\S]{0,240}playerMatchFeePenceOverride/.test(action)) {
+  action = replaceRequired(
+    action,
+    "    Array<{ sourceProspectId: string | null }>",
+    "    Array<{\n      sourceProspectId: string | null;\n      playerMatchFeePenceOverride: number | null;\n    }>",
+    "existing override query type",
+  );
+}
 
-action = replaceRequired(
-  action,
-  '    SELECT "sourceProspectId"\n    FROM "TeamMemberProfile"',
-  '    SELECT "sourceProspectId", "playerMatchFeePenceOverride"\n    FROM "TeamMemberProfile"',
-  "existing override query",
-);
+if (!/SELECT "sourceProspectId", "playerMatchFeePenceOverride"(?:, "squadNumber")?\n    FROM "TeamMemberProfile"/.test(action)) {
+  action = replaceRequired(
+    action,
+    '    SELECT "sourceProspectId"\n    FROM "TeamMemberProfile"',
+    '    SELECT "sourceProspectId", "playerMatchFeePenceOverride"\n    FROM "TeamMemberProfile"',
+    "existing override query",
+  );
+}
 
 action = replaceRequired(
   action,

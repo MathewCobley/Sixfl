@@ -29,6 +29,9 @@ jobs:
       - name: Check native homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
 
+      - name: Check native exact captain preview and squad numbers
+        run: node --test tests/captain-preview-squad-number.test.cjs
+
       - name: Check native referee welcome and dashboard status
         run: node --test tests/critical-pages/referee-welcome-status.test.cjs
 
@@ -43,6 +46,9 @@ jobs:
 
       - name: Check prepared homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
+
+      - name: Check prepared exact captain preview and squad numbers
+        run: node --test tests/captain-preview-squad-number.test.cjs
 
       - name: Check prepared referee welcome and dashboard status
         run: node --test tests/critical-pages/referee-welcome-status.test.cjs

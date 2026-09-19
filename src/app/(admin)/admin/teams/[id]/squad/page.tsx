@@ -16,6 +16,7 @@ import {
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   addAdminSquadMemberAction,
   grantAdminCaptainAccessAction,
@@ -241,6 +242,9 @@ export default async function AdminTeamSquadPage({
   const whatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
+  const profileByMembershipId = await getTeamMemberProfilesByTeamMemberIds(
+    team.members.map((member) => member.id),
+  );
   const loginStatusByMembershipId = await getSquadLoginStatusMap(team.id);
 
   const captainCount = team.members.filter(
@@ -292,10 +296,10 @@ export default async function AdminTeamSquadPage({
             Add existing player
           </a>
           <Link
-            href={`/captain/team/${team.id}/captain-squad`}
+            href={`/admin/teams/${team.id}/captain-preview`}
             className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Preview weaker captain view
+            Captain view (exact)
           </Link>
 
           <Link
@@ -421,6 +425,7 @@ export default async function AdminTeamSquadPage({
             ) : (
               team.members.map((member) => {
                 const usesWhatsapp = whatsappByUserId.get(member.user.id) ?? false;
+                const profile = profileByMembershipId.get(member.id);
                 const dashboardStatus = loginStatusByMembershipId.get(member.id);
                 const dashboardCopy = getDashboardStatusCopy(dashboardStatus);
 
@@ -440,6 +445,11 @@ export default async function AdminTeamSquadPage({
                             <div className="truncate text-base font-semibold text-white">
                               {member.user.name || "Unnamed user"}
                             </div>
+                            {profile?.squadNumber ? (
+                              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100">
+                                #{profile.squadNumber}
+                              </span>
+                            ) : null}
                             {usesWhatsapp ? (
                               <span
                                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10"
@@ -654,6 +664,21 @@ export default async function AdminTeamSquadPage({
                 placeholder="Select role"
               />
 
+              <div className="space-y-2">
+                <label htmlFor="squadNumber" className="text-sm text-white/60">
+                  Squad number
+                </label>
+                <input
+                  id="squadNumber"
+                  name="squadNumber"
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="Optional · 1–99"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                />
+              </div>
+
               <button
                 type="submit"
                 className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
@@ -683,14 +708,14 @@ export default async function AdminTeamSquadPage({
               </Link>
 
               <Link
-                href={`/captain/team/${team.id}/captain-squad`}
+                href={`/admin/teams/${team.id}/captain-preview`}
                 className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
-                Preview weaker captain view
+                Captain-only preview
               </Link>
 
               <Link
-                href={`/captain/team/${team.id}/squad`}
+                href={`/admin/teams/${team.id}/captain-preview`}
                 className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
               >
                 Open managed squad tools
