@@ -634,6 +634,11 @@ export default async function CaptainSquadViewPage({
                         <div className="truncate text-base font-semibold text-white">
                           {member.user.name || "Unnamed player"}
                         </div>
+                        {profile?.squadNumber ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100">
+                            #{profile.squadNumber}
+                          </span>
+                        ) : null}
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
