@@ -139,10 +139,14 @@ async function readServiceWorker(): Promise<ServiceWorkerSummary> {
 }
 
 async function collectDiagnostics(): Promise<DiagnosticsState> {
+  const extendedNavigator = navigator as Navigator & {
+    standalone?: boolean;
+    userAgentData?: { platform?: string };
+  };
   const standalone = window.matchMedia("(display-mode: standalone)").matches;
   const iosStandalone =
-    "standalone" in navigator &&
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    "standalone" in extendedNavigator &&
+    Boolean(extendedNavigator.standalone);
 
   const [manifest, serviceWorker] = await Promise.all([
     readManifest(),
@@ -160,7 +164,7 @@ async function collectDiagnostics(): Promise<DiagnosticsState> {
       "Notification" in window ? Notification.permission : "unsupported",
     userAgent: navigator.userAgent,
     platform:
-      navigator.userAgentData?.platform ??
+      extendedNavigator.userAgentData?.platform ??
       navigator.platform ??
       "Unknown",
     online: navigator.onLine,
