@@ -110,7 +110,7 @@ export default async function DashboardPage({
   searchParams,
 }: {
   searchParams?: Promise<{ app?: string }>;
-}) {
+} = {}) {
   const sp = (await searchParams) ?? {};
   const isAppLaunch = sp.app === "1";
   const session = await getServerSession(authOptions);
