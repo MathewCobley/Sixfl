@@ -305,7 +305,7 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
       id: `team-payment:${payment.id}`,
       kind: "TEAM_PAYMENT",
       title: `${money(payment.amountPence)} payment received from ${payment.team.name}`,
-      detail: payment.charge?.title || `Team payment · ${payment.method.toLowerCase().replaceAll("_", " ")}`,
+      detail: payment.charge?.title || `Team payment · ${payment.method.toLowerCase().replace(/_/g, " ")}`,
       occurredAt: payment.paidAt,
       href: `/admin/payments?teamId=${encodeURIComponent(payment.team.id)}&view=recentPayments`,
     });
