@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Kind = "HIGHLIGHTS" | "FULL_MATCH";
 type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string; queueAhead: number | null };
@@ -28,7 +28,7 @@ function renderActive(render: Render) { return render.state === "QUEUED" || rend
 function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
 function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
-function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
+function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (kind: Kind, draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
@@ -51,8 +51,8 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDra
     return () => window.clearTimeout(timer);
   }, [previewSrc]);
   useEffect(() => {
-    onDraftChange({ headline, strapline, showScore });
-  }, [headline, strapline, showScore, onDraftChange]);
+    onDraftChange(kind, { headline, strapline, showScore });
+  }, [headline, strapline, showScore, kind, onDraftChange]);
   async function save() {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -138,6 +138,19 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       showScore: initialThumbs.get("FULL_MATCH")?.showScore ?? true,
     },
   });
+  const updateThumbnailDraft = useCallback((kind: Kind, draft: ThumbnailDraft) => {
+    setThumbnailDrafts(current => {
+      const previous = current[kind];
+      if (
+        previous.headline === draft.headline &&
+        previous.strapline === draft.strapline &&
+        previous.showScore === draft.showScore
+      ) {
+        return current;
+      }
+      return { ...current, [kind]: draft };
+    });
+  }, []);
   const endpoint = `/api/admin/sixfl-tv/studio/${encodeURIComponent(fixtureId)}`;
   const activeRenders = useMemo(() => state.renders.filter(renderActive), [state.renders]);
   const hasReadyPreview = useMemo(() => state.renders.some(render => render.state === "READY"), [state.renders]);
@@ -257,7 +270,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         current={thumbByKind.get(kind)}
         busy={busy}
         renderRevision={render?.completedAt || render?.id}
-        onDraftChange={draft => setThumbnailDrafts(current => ({ ...current, [kind]: draft }))}
+        onDraftChange={updateThumbnailDraft}
         onSaved={refresh}
       />;
     })}</div></div>
