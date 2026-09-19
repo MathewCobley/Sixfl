@@ -376,6 +376,41 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string,
   }
 }
 
+async function slowMotionReplay(source: string, target: string, overlay: string) {
+  const seconds = await durationSeconds(source);
+  const audio = await hasAudio(source);
+  const end = Math.min(GOAL_REPLAY_END_SECONDS, seconds);
+  let start = Math.min(GOAL_REPLAY_START_SECONDS, Math.max(0, end - 0.6));
+  if (end - start < 0.6) start = Math.max(0, end - Math.min(3, seconds));
+  const sourceDuration = Math.max(0.6, end - start);
+  const outputDuration = sourceDuration / GOAL_REPLAY_SPEED;
+  const fadeOutStart = Math.max(0, outputDuration - 0.16).toFixed(3);
+  const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS,fps=30,format=yuv420p`;
+  const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[tag];[base][tag]overlay=0:0:format=auto,fade=t=in:st=0:d=0.12,fade=t=out:st=${fadeOutStart}:d=0.16,format=yuv420p[v]`;
+  if (audio) {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", sourceDuration.toFixed(3), "-i", source,
+      "-loop", "1", "-i", overlay,
+      "-filter_complex", `${videoFilter};[0:a]atempo=${GOAL_REPLAY_SPEED},aresample=48000,afade=t=in:st=0:d=0.08,afade=t=out:st=${fadeOutStart}:d=0.12[a]`,
+      "-map", "[v]", "-map", "[a]", "-t", outputDuration.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  } else {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", sourceDuration.toFixed(3), "-i", source,
+      "-loop", "1", "-i", overlay,
+      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+      "-filter_complex", videoFilter,
+      "-map", "[v]", "-map", "2:a:0", "-t", outputDuration.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  }
+  return { sourceStart: start, sourceEnd: end, outputDuration };
+}
+
+
 type OutputProof = { sizeBytes: number; partCount: number; parts: RenderPart[] };
 async function storeOutput(job: Job, file: string): Promise<OutputProof> {
   const handle = await open(file, "r"), parts: RenderPart[] = [];
