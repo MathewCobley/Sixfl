@@ -22,6 +22,7 @@ import {
   moveAdminSquadMemberToProspectsAction,
   removeAdminSquadMemberAction,
   updateAdminSquadMemberRoleAction,
+  updateAdminSquadMemberShirtNumberAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,8 @@ function getSavedMessage(saved?: string) {
       return "Captain access created and linked. The captain can now log in directly with that email.";
     case "role-updated":
       return "Squad role updated.";
+    case "shirt-number-updated":
+      return "Shirt number updated.";
     case "member-removed":
       return "Squad member removed.";
     case "moved-to-prospects":
@@ -212,6 +215,7 @@ export default async function AdminTeamSquadPage({
         select: {
           id: true,
           role: true,
+          shirtNumber: true,
           createdAt: true,
           user: {
             select: {
@@ -461,6 +465,11 @@ export default async function AdminTeamSquadPage({
                           >
                             {getRoleLabel(member.role)}
                           </span>
+                          {member.shirtNumber ? (
+                            <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                              #{member.shirtNumber}
+                            </span>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 text-sm text-white/65">
@@ -514,6 +523,35 @@ export default async function AdminTeamSquadPage({
                           className={`${adminMemberActionClassName} border-sky-400/25 bg-sky-500/10 text-sky-100 hover:bg-sky-500/15`}
                         >
                           Move to prospects
+                        </button>
+                      </form>
+
+                      <form
+                        action={updateAdminSquadMemberShirtNumberAction}
+                        className="grid w-full min-w-0 grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+                      >
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <input type="hidden" name="membershipId" value={member.id} />
+
+                        <label className="min-w-0">
+                          <span className="sr-only">Shirt number</span>
+                          <input
+                            name="shirtNumber"
+                            type="number"
+                            min={1}
+                            max={99}
+                            inputMode="numeric"
+                            defaultValue={member.shirtNumber ?? ""}
+                            placeholder="Shirt number"
+                            className="min-h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-400/50"
+                          />
+                        </label>
+
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                        >
+                          Save number
                         </button>
                       </form>
 
