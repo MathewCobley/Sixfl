@@ -61,7 +61,8 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(score, /SIXFL_TV_PRIORITY_RELIABILITY_MAX = 80/);
   assert.match(score, /SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10/);
   assert.match(score, /SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10/);
-  assert.match(engagement, /SIXFL_TV_VIEW_FIXTURE_WINDOW = 5/);
+  assert.doesNotMatch(engagement, /SIXFL_TV_VIEW_FIXTURE_WINDOW/);
+  assert.match(engagement, /const measuredFixtures = fixturesByTeam\.get\(team\.id\) \?\? \[\]/);
   assert.match(engagement, /GoalOfWeekNomination/);
   assert.match(engagement, /GoalOfWeekVote/);
   assert.match(engagement, /GoalOfMonthNomination/);
@@ -74,6 +75,7 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(bookings, /homePriorityScore:homeScore\?\.score\?\?0/);
   assert.match(bookings, /homeReliabilityPoints:homeScore\?\.reliabilityPoints\?\?0/);
   assert.match(engagementDashboard, /View index is an audience index/);
+  assert.match(engagementDashboard, /uses every measured SIXFL TV fixture linked to the team/);
   assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
   assert.match(singleScoreMigration, /one SIXFL TV Priority Score out of 100/);
   assert.match(singleScoreMigration, /Reliability — up to 80 points/);

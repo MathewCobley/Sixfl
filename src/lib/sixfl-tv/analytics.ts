@@ -11,7 +11,6 @@ import {
 
 type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw">;
 
-export const SIXFL_TV_VIEW_FIXTURE_WINDOW = 5;
 export const SIXFL_TV_VIEW_SCORE_MIN = 50;
 export const SIXFL_TV_VIEW_SCORE_MAX = 150;
 export const SIXFL_TV_VIEW_SCORE_PRIOR_FIXTURES = 2;
@@ -281,13 +280,11 @@ export async function getSixflTvViewScores(
 
   const averages = new Map<string, { average: number; count: number }>();
   for (const team of teams) {
-    const recent = [...(fixturesByTeam.get(team.id) ?? [])]
-      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime() || b.fixtureId.localeCompare(a.fixtureId))
-      .slice(0, SIXFL_TV_VIEW_FIXTURE_WINDOW);
-    const average = recent.length
-      ? recent.reduce((sum, row) => sum + row.views, 0) / recent.length
+    const measuredFixtures = fixturesByTeam.get(team.id) ?? [];
+    const average = measuredFixtures.length
+      ? measuredFixtures.reduce((sum, row) => sum + row.views, 0) / measuredFixtures.length
       : 0;
-    averages.set(team.id, { average, count: recent.length });
+    averages.set(team.id, { average, count: measuredFixtures.length });
   }
 
   const cohortAverages = new Map<string, number>();

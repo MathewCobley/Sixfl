@@ -98,9 +98,9 @@ export default async function SixflTvAnalyticsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/70">Camera priority</p>
         <h2 className="mt-2 text-xl font-semibold text-white">View index & Priority contributions</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-white/60">
-          View index uses up to each team’s five most recent recorded fixtures and compares average fixture views
-          with teams in the same division. Highlights and full-match views count; extra links do not distort the
-          benchmark. Audience is worth up to 10 of the 100 Priority points; nominations are worth up to 5 and voting up to 5.
+          View index uses every measured SIXFL TV fixture linked to the team and compares its average views per
+          fixture with teams in the same division. Highlights and full-match views count; extra links do not distort
+          the benchmark. Audience is worth up to 10 of the 100 Priority points; nominations are worth up to 5 and voting up to 5.
         </p>
       </div>
 
@@ -125,7 +125,7 @@ export default async function SixflTvAnalyticsPage({
                 <Link href={`/admin/teams/${team.teamId}`} className="font-semibold text-white hover:underline">{team.teamName}</Link>
                 <div className="mt-1 text-xs text-white/40">{team.cohortLabel}</div>
               </td>
-              <td className="px-3 py-4">{team.recordedFixtures}/5{team.provisional ? <span className="ml-2 text-xs text-amber-200">Provisional</span> : null}</td>
+              <td className="px-3 py-4">{team.recordedFixtures} match{team.recordedFixtures === 1 ? "" : "es"}{team.provisional ? <span className="ml-2 text-xs text-amber-200">Provisional</span> : null}</td>
               <td className="px-3 py-4">{number(team.averageViews)}</td>
               <td className="px-3 py-4">{number(team.cohortAverageViews)}</td>
               <td className="px-3 py-4">
