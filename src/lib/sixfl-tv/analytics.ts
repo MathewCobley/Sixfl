@@ -441,7 +441,7 @@ export async function getSixflTvEngagementScores(
   return result;
 }
 
-function parseCounter(value: string | undefined, fallback = 0n) {
+function parseCounter(value: string | undefined, fallback = BigInt(0)) {
   return value && /^[0-9]+$/.test(value) ? BigInt(value) : fallback;
 }
 
