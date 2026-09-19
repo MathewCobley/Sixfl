@@ -143,6 +143,13 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     "player match-fee cap admin validation compatibility",
   );
 
+  const feeCapScriptAlreadyHandlesSquadNumbers =
+    fs.readFileSync(feeCapAbsolutePath, "utf8").includes("squadNumber");
+
+  // Older fee-cap scripts still need the admin-only compatibility rewrites.
+  // The current script already composes those safeguards with squad numbers,
+  // so do not rewrite it back to an older exact source shape.
+  if (!feeCapScriptAlreadyHandlesSquadNumbers) {
   // The admin-only safeguard has also expanded the existing-profile query.
   patchFile(
     feeCapScriptPath,
@@ -174,6 +181,8 @@ if (fs.existsSync(feeCapAbsolutePath)) {
     '  \'        ${phone},\\n        ${nextPlayerMatchFeeOverride},\\n        ${preferredPositions},\',',
     "player match-fee cap protected insert compatibility",
   );
+
+  }
 
   // Cap-page presentation is now native. There are no page-local cap boost
   // snippets left to rewrite; admin cap policy compatibility above remains.
