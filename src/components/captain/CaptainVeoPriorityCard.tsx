@@ -4,6 +4,7 @@ import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScor
 import { prisma } from '@/lib/prisma';
 import { requireCaptain } from '@/lib/requireCaptain';
 import { getSixflTvPriorityScore } from '@/lib/sixfl-tv/priority-score';
+import { getSixflTvEngagementScores, sixflTvAllocationScore } from '@/lib/sixfl-tv/analytics';
 
 type ThisWeekVeoStatus = {
   hasMatchThisWeek: boolean;
@@ -101,10 +102,13 @@ export default async function CaptainVeoPriorityCard({
   await requireCaptain(teamId);
   if (!leagueId) return null;
 
-  const [score, weekStatus] = await Promise.all([
+  const [score, weekStatus, engagementMap] = await Promise.all([
     getSixflTvPriorityScore(teamId),
     readThisWeekVeoStatus(leagueId, teamId),
+    getSixflTvEngagementScores([teamId]),
   ]);
+  const engagement = engagementMap.get(teamId);
+  const allocationScore = sixflTvAllocationScore(score.score, engagement?.engagementBonus ?? 0);
 
   return (
     <section aria-label="SIXFL TV Priority" className="space-y-5 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 text-white sm:p-6">
@@ -123,10 +127,33 @@ export default async function CaptainVeoPriorityCard({
       </div>
 
       <p className="max-w-3xl text-sm leading-6 text-white/80">
-        SIXFL TV Priority is <strong>free</strong>. Recorded pitches are prioritised for teams that confirm fixtures,
-        pay on time and complete their match reports. A qualifying score improves your chance of being filmed but
-        does not guarantee a camera slot.
+        SIXFL TV Priority is <strong>free</strong>. Your 100-point reliability score decides whether you qualify.
+        Once eligible, SIXFL TV audience and community participation can add up to <strong>20 engagement points</strong>
+        when camera slots are allocated.
       </p>
+
+      {engagement ? <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="text-lg font-bold">{engagement.viewScore}</div>
+          <div className="text-xs font-semibold text-white/80">View Score</div>
+          <div className="mt-1 text-[11px] text-white/45">100 = division average{engagement.provisional ? " · provisional" : ""}</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="text-lg font-bold">+{engagement.viewBonus}/10</div>
+          <div className="text-xs font-semibold text-white/80">Audience</div>
+          <div className="mt-1 text-[11px] text-white/45">{engagement.averageViews} avg views / recorded fixture</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="text-lg font-bold">+{engagement.nominationPoints + engagement.votePoints}/10</div>
+          <div className="text-xs font-semibold text-white/80">Goal awards</div>
+          <div className="mt-1 text-[11px] text-white/45">Nominate +{engagement.nominationPoints} · vote +{engagement.votePoints}</div>
+        </div>
+        <div className="rounded-xl border border-fuchsia-300/25 bg-fuchsia-400/10 p-3">
+          <div className="text-lg font-bold text-fuchsia-50">{allocationScore}/120</div>
+          <div className="text-xs font-semibold text-fuchsia-100">Allocation score</div>
+          <div className="mt-1 text-[11px] text-fuchsia-100/55">{score.score}/100 base + {engagement.engagementBonus} engagement</div>
+        </div>
+      </div> : null}
 
       <div>
         <h3 className="text-sm font-semibold text-white">Available points per match</h3>
@@ -237,6 +264,9 @@ export default async function CaptainVeoPriorityCard({
             Check fixture confirmation
           </Link>
         ) : null}
+        <Link href="/goal-of-the-month" className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 px-4 py-2 text-sm font-semibold text-fuchsia-50 hover:bg-fuchsia-400/10">
+          Nominate / vote for goals
+        </Link>
       </div>
     </section>
   );
