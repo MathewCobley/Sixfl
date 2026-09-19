@@ -34,8 +34,9 @@ const clipMigration = 'prisma/migrations/20260918181000_goal_of_month_clip_asset
 const renderMigration = 'prisma/migrations/20260919203000_goal_of_month_nominee_renders/migration.sql';
 const brandingRequeueMigration = 'prisma/migrations/20260919223000_requeue_goal_month_branding_renders/migration.sql';
 const overlayRefreshMigration = 'prisma/migrations/20260919234000_refresh_goal_month_overlay/migration.sql';
+const scorerLinkMigration = 'prisma/migrations/20260920001000_goal_month_link_scorer/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
-const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
+const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerTeamMemberId: 'member-home' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
 test.before(() => {
   const url = process.env.GOAL_MONTH_TEST_DATABASE_URL;
@@ -44,8 +45,10 @@ test.before(() => {
   assert.ok(['localhost', '127.0.0.1'].includes(parsed.hostname));
   assert.equal(parsed.pathname, '/sixfl_goal_month_test');
   sql = query => execFileSync('psql', [url, '-X', '-v', 'ON_ERROR_STOP=1', '-Atc', query], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  sql(`CREATE TABLE "User" (id TEXT PRIMARY KEY);
+  sql(`CREATE TABLE "User" (id TEXT PRIMARY KEY,name TEXT,email TEXT);
     CREATE TABLE "Team" (id TEXT PRIMARY KEY,name TEXT,"logoUrl" TEXT);
+    CREATE TABLE "TeamMember" (id TEXT PRIMARY KEY,"userId" TEXT NOT NULL,"teamId" TEXT NOT NULL,role TEXT NOT NULL DEFAULT 'PLAYER',"createdAt" TIMESTAMP DEFAULT NOW());
+    CREATE TABLE "TeamMemberProfile" (id TEXT PRIMARY KEY,"teamMemberId" TEXT UNIQUE,"squadNumber" INTEGER);
     CREATE TABLE "League" (id TEXT PRIMARY KEY,name TEXT);
     CREATE TABLE "Fixture" (id TEXT PRIMARY KEY,"homeTeamId" TEXT,"awayTeamId" TEXT,"leagueId" TEXT,"publishedAt" TIMESTAMP,"sixflTvRecorded" BOOLEAN,"sixflTvUrl" TEXT,status TEXT,"kickoffAt" TIMESTAMP);
     CREATE TABLE "MatchResult" ("fixtureId" TEXT PRIMARY KEY,"homeScore" INTEGER,"awayScore" INTEGER);
@@ -64,6 +67,7 @@ test.before(() => {
   sql(read(migration));
   sql(read(clipMigration));
   sql(read(renderMigration));
+  sql(read(scorerLinkMigration));
   sql(`UPDATE "GoalAwardTransition" SET "firstMonth"='2026-09',"weeklyNominationsCloseAt"='2026-09-13T23:00:00',"weeklyVotingClosesAt"='2026-09-15T17:00:00' WHERE id='monthly'`);
   db = new PrismaClient({ datasources: { db: { url } } });
   const load = loader({ '@/lib/prisma': { prisma: db } });
@@ -71,8 +75,18 @@ test.before(() => {
 });
 test.beforeEach(() => {
   sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","SixflTvFootageAsset","MatchResult","Fixture","Team","League","User" CASCADE;
-    INSERT INTO "User" VALUES ('u1'),('u2'),('u3'),('u4');
+    INSERT INTO "User" (id,name,email) VALUES
+      ('u1','Test Scorer','u1@example.com'),('u2','Second Player','u2@example.com'),
+      ('u3','Third Player','u3@example.com'),('u4','Fourth Player','u4@example.com'),
+      ('scorer-away','Away Scorer','away@example.com');
     INSERT INTO "Team" VALUES ('home','Home FC',NULL),('away','Away FC',NULL);
+    INSERT INTO "TeamMember" (id,"userId","teamId",role) VALUES
+      ('member-home','u1','home','PLAYER'),
+      ('member-home-2','u2','home','BACKUP_PLAYER'),
+      ('member-away','scorer-away','away','PLAYER');
+    INSERT INTO "TeamMemberProfile" (id,"teamMemberId","squadNumber") VALUES
+      ('profile-home','member-home',10),
+      ('profile-away','member-away',9);
     INSERT INTO "League" VALUES ('league','Test League');
     INSERT INTO "Fixture" VALUES ('fixture','home','away','league',NOW(),TRUE,'https://youtu.be/dQw4w9WgXcQ','COMPLETED','2026-09-03T19:00:00'),
       ('previous','home','away','league',NOW(),TRUE,'https://youtu.be/dQw4w9WgXcQ','COMPLETED','2026-08-30T19:00:00');
@@ -120,7 +134,7 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
     VALUES ('clip-one','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
   const result = await awards.nominateMonthlyGoal({
     userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
-    clipAssetId: 'clip-one', scorerName: 'Clip Scorer',
+    clipAssetId: 'clip-one', scorerTeamMemberId: 'member-home',
   }, now);
   const goals = await awards.getMonthlyCandidates('2026-09');
   assert.equal(goals.length, 1);
@@ -130,8 +144,23 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   const payload = awards.monthlyCandidatePayload(goals[0]);
   assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
   assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-4`);
-  assert.equal(payload.scorerName, 'Clip Scorer');
+  assert.equal(payload.scorerTeamMemberId, 'member-home');
+  assert.equal(payload.scorerName, 'Test Scorer');
   assert.equal(sql(`SELECT "state" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${result.candidateId}'`), 'QUEUED');
+});
+
+test('new nominations persist a verified squad player identity and reject players from the other team', async () => {
+  const created = await awards.nominateMonthlyGoal(input('u1'), now);
+  assert.equal(sql(`SELECT "scorerTeamMemberId" || '|' || "scorerName" FROM "GoalOfMonthCandidate" WHERE "id"='${created.candidateId}'`), 'member-home|Test Scorer');
+  await assert.rejects(
+    awards.nominateMonthlyGoal({ userId:'u2', goalNumber:2, fixtureId:'fixture', scoringTeamId:'home', scorerTeamMemberId:'member-away' }, now),
+    /scorer from that team.*squad|scoring team/i,
+  );
+  const [fixture] = await awards.getMonthlyFixtures('2026-09', db, 'fixture');
+  assert.deepEqual(
+    fixture.squadPlayers.filter(player => player.teamId === 'home').map(player => [player.teamMemberId, player.name, player.squadNumber]),
+    [['member-home','Test Scorer',10],['member-home-2','Second Player',null]],
+  );
 });
 
 test('admin can upgrade a legacy goal-number nominee to an exact clip without losing nominations or votes', async () => {
@@ -155,7 +184,7 @@ test('branding refresh requeues existing active nominee renders while preserving
     VALUES ('branding-refresh-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
   const nomination = await awards.nominateMonthlyGoal({
     userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
-    clipAssetId: 'branding-refresh-clip', scorerName: 'Refresh Scorer',
+    clipAssetId: 'branding-refresh-clip', scorerTeamMemberId: 'member-home',
   }, now);
   sql(`UPDATE "GoalOfMonthClipRender"
     SET "state"='READY',"objectKey"='old-render.mp4',"sizeBytes"=123,"durationMs"=22000,
@@ -173,7 +202,7 @@ test('overlay readability refresh requeues completed nominee renders without dis
     VALUES ('overlay-refresh-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
   const nomination = await awards.nominateMonthlyGoal({
     userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
-    clipAssetId: 'overlay-refresh-clip', scorerName: 'Readable Scorer',
+    clipAssetId: 'overlay-refresh-clip', scorerTeamMemberId: 'member-home',
   }, now);
   sql(`UPDATE "GoalOfMonthClipRender"
     SET "state"='READY',"objectKey"='old-overlay-render.mp4',"sizeBytes"=123,"durationMs"=22000,
