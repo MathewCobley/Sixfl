@@ -99,6 +99,16 @@ export type SixflTvAnalyticsVideo = {
   capturedAt: Date;
 };
 
+export type SixflTvVideoViewMetric = {
+  videoId: string;
+  views: number;
+  sevenDayGain: number | null;
+  trackingGain: number | null;
+  hasSevenDayBaseline: boolean;
+  trackingStartedAt: Date;
+  capturedAt: Date;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -206,6 +216,68 @@ async function latestSnapshots(db: Db = prisma) {
     ORDER BY "videoId", "capturedAt" DESC, id DESC
   `);
   return new Map(rows.map((row) => [row.videoId, row]));
+}
+
+export async function getSixflTvVideoViewMetrics(
+  videoIds: string[],
+  db: Db = prisma,
+): Promise<Map<string, SixflTvVideoViewMetric>> {
+  const unique = [...new Set(videoIds.filter(Boolean))];
+  if (!unique.length) return new Map();
+
+  const rows = await db.$queryRaw<Array<{
+    videoId: string;
+    viewCount: bigint;
+    capturedAt: Date;
+  }>>(Prisma.sql`
+    SELECT "videoId", "viewCount", "capturedAt"
+    FROM "SixflTvYoutubeMetricSnapshot"
+    WHERE "videoId" IN (${Prisma.join(unique)})
+    ORDER BY "videoId", "capturedAt", id
+  `);
+
+  const grouped = new Map<string, Array<{ viewCount: bigint; capturedAt: Date }>>();
+  for (const row of rows) {
+    const list = grouped.get(row.videoId) ?? [];
+    list.push({ viewCount: row.viewCount, capturedAt: row.capturedAt });
+    grouped.set(row.videoId, list);
+  }
+
+  const result = new Map<string, SixflTvVideoViewMetric>();
+  for (const videoId of unique) {
+    const snapshots = grouped.get(videoId) ?? [];
+    if (!snapshots.length) continue;
+
+    const latest = snapshots[snapshots.length - 1];
+    const earliest = snapshots[0];
+    const sevenDaysAgo = latest.capturedAt.getTime() - 7 * 24 * 60 * 60 * 1000;
+    let baseline: (typeof snapshots)[number] | null = null;
+    for (const snapshot of snapshots) {
+      if (snapshot.capturedAt.getTime() <= sevenDaysAgo) baseline = snapshot;
+      else break;
+    }
+
+    const views = Number(latest.viewCount);
+    const sevenDayGain = baseline
+      ? Math.max(0, views - Number(baseline.viewCount))
+      : null;
+    const trackingGain =
+      earliest.capturedAt.getTime() < latest.capturedAt.getTime()
+        ? Math.max(0, views - Number(earliest.viewCount))
+        : null;
+
+    result.set(videoId, {
+      videoId,
+      views,
+      sevenDayGain,
+      trackingGain,
+      hasSevenDayBaseline: baseline != null,
+      trackingStartedAt: earliest.capturedAt,
+      capturedAt: latest.capturedAt,
+    });
+  }
+
+  return result;
 }
 
 async function latestTwoSnapshots(db: Db = prisma) {

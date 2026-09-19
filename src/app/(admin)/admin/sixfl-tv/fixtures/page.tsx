@@ -12,6 +12,11 @@ import {
   getSixflTvVideos,
   parseSixflTvVideoValue,
 } from "@/lib/sixfl-tv/videos";
+import { getYouTubeVideoId } from "@/lib/youtube";
+import {
+  getSixflTvVideoViewMetrics,
+  type SixflTvVideoViewMetric,
+} from "@/lib/sixfl-tv/analytics";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +43,20 @@ function formatKickoff(value: Date) {
     minute: "2-digit",
     timeZone: "Europe/London",
   }).format(value);
+}
+
+function formatViews(value: number) {
+  return new Intl.NumberFormat("en-GB").format(Math.max(0, Math.round(value)));
+}
+
+function growthLabel(metric: SixflTvVideoViewMetric) {
+  if (metric.hasSevenDayBaseline && metric.sevenDayGain != null) {
+    return `+${formatViews(metric.sevenDayGain)} last 7 days`;
+  }
+  if (metric.trackingGain != null) {
+    return `+${formatViews(metric.trackingGain)} since tracking`;
+  }
+  return "Tracking started";
 }
 
 async function getFixtures(query: string, leagueId: string) {
@@ -125,6 +144,14 @@ export default async function SixflTvFixturesPage({
   });
   const leagueId = leagues.some(league => league.id === requestedLeague) ? requestedLeague : "";
   const fixtures = await getFixtures(query, leagueId);
+  const videoIds = [...new Set(
+    fixtures.flatMap(fixture =>
+      getSixflTvVideos(fixture.sixflTvUrl)
+        .map(video => getYouTubeVideoId(video.url))
+        .filter((videoId): videoId is string => Boolean(videoId)),
+    ),
+  )];
+  const viewMetrics = await getSixflTvVideoViewMetrics(videoIds);
   const leagueOptions = [
     { value: "", label: "All leagues" },
     ...leagues.map(league => ({
@@ -164,6 +191,29 @@ export default async function SixflTvFixturesPage({
       {fixtures.length ? fixtures.map(fixture => {
         const saved = parseSixflTvVideoValue(fixture.sixflTvUrl);
         const videos = getSixflTvVideos(fixture.sixflTvUrl);
+        const videoMetrics = videos.map(video => {
+          const videoId = getYouTubeVideoId(video.url);
+          return {
+            ...video,
+            videoId,
+            metric: videoId ? viewMetrics.get(videoId) ?? null : null,
+          };
+        });
+        const measuredMetrics = videoMetrics
+          .map(video => video.metric)
+          .filter((metric): metric is SixflTvVideoViewMetric => metric != null);
+        const totalViews = measuredMetrics.reduce((sum, metric) => sum + metric.views, 0);
+        const allHaveSevenDayBaseline =
+          measuredMetrics.length > 0 &&
+          measuredMetrics.every(metric => metric.hasSevenDayBaseline && metric.sevenDayGain != null);
+        const allHaveTrackingGrowth =
+          measuredMetrics.length > 0 &&
+          measuredMetrics.every(metric => metric.trackingGain != null);
+        const totalGrowth = allHaveSevenDayBaseline
+          ? measuredMetrics.reduce((sum, metric) => sum + (metric.sevenDayGain ?? 0), 0)
+          : allHaveTrackingGrowth
+            ? measuredMetrics.reduce((sum, metric) => sum + (metric.trackingGain ?? 0), 0)
+            : null;
         const context = [fixture.leagueName, fixture.leagueSeason, fixture.venueName].filter(Boolean).join(" · ");
         const isLive = videos.length > 0;
         return <article key={fixture.id} className={isLive
@@ -188,9 +238,51 @@ export default async function SixflTvFixturesPage({
               </div>
               <p className="mt-2 text-sm text-white/55">{formatKickoff(fixture.kickoffAt)}</p>
               <p className="mt-1 text-sm text-white/45">{context}</p>
-              {videos.length ? <div className="mt-3 flex flex-wrap gap-2">{videos.map(video =>
-                <a key={video.url} href={video.url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-50">Open {video.label.toLowerCase()}</a>
-              )}</div> : <p className="mt-3 text-sm text-red-100/60">Not live yet — no video links saved.</p>}
+              {videoMetrics.length ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {videoMetrics.map(video => (
+                      <a
+                        key={video.url}
+                        href={video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-xl border border-fuchsia-300/30 bg-fuchsia-400/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-50"
+                      >
+                        Open {video.label.toLowerCase()}
+                      </a>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {videoMetrics.map(video => (
+                      <div
+                        key={`views:${video.url}`}
+                        className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/70"
+                      >
+                        <span className="font-semibold text-white">{video.label}</span>
+                        {video.metric ? (
+                          <>
+                            <span> · {formatViews(video.metric.views)} views</span>
+                            <span className="ml-2 text-emerald-200/80">{growthLabel(video.metric)}</span>
+                          </>
+                        ) : (
+                          <span className="ml-2 text-white/40">Views pending</span>
+                        )}
+                      </div>
+                    ))}
+                    {measuredMetrics.length > 1 ? (
+                      <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-50">
+                        <span className="font-semibold">Total · {formatViews(totalViews)} views</span>
+                        {totalGrowth != null ? (
+                          <span className="ml-2 text-emerald-200/80">
+                            +{formatViews(totalGrowth)} {allHaveSevenDayBaseline ? "last 7 days" : "since tracking"}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : <p className="mt-3 text-sm text-red-100/60">Not live yet — no video links saved.</p>}
             </div>
 
             <div className="w-full max-w-xl space-y-3">
