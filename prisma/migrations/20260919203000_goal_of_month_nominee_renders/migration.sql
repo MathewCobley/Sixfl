@@ -20,3 +20,15 @@ CREATE TABLE IF NOT EXISTS "GoalOfMonthClipRender" (
 );
 CREATE INDEX IF NOT EXISTS "GoalOfMonthClipRender_state_created"
   ON "GoalOfMonthClipRender" ("state","createdAt");
+
+-- Existing active clip nominees should receive the same branded treatment without
+-- asking players to nominate again.
+INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
+SELECT c."id", c."clipAssetId"
+FROM "GoalOfMonthCandidate" c
+JOIN "SixflTvFootageAsset" a ON a."id"=c."clipAssetId"
+WHERE c."status"='ACTIVE'
+  AND c."clipAssetId" IS NOT NULL
+  AND a."kind"='CLIP'
+  AND a."state"='READY'
+ON CONFLICT ("candidateId") DO NOTHING;
