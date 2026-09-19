@@ -4,6 +4,10 @@ on:
     paths:
       - 'src/lib/veo/**'
       - 'src/lib/sixfl-tv/priority-score.ts'
+      - 'src/lib/sixfl-tv/priority-history.ts'
+      - 'src/components/admin/sixfl-tv/PriorityLeagueChart.tsx'
+      - 'src/app/(admin)/admin/sixfl-tv/priority/**'
+      - 'src/app/(admin)/admin/sixfl-tv/layout.tsx'
       - 'src/lib/sixfl-tv/analytics.ts'
       - 'src/app/(admin)/admin/sixfl-tv/analytics/**'
       - 'src/app/api/cron/notifications/route.ts'
@@ -25,6 +29,7 @@ on:
       - 'prisma/migrations/20260918123000_sixfl_tv_priority_score/**'
       - 'prisma/migrations/20260918140000_sixfl_tv_priority_weight_tuning/**'
       - 'prisma/migrations/20260918143000_retire_legacy_veo_priority_fees/**'
+      - 'prisma/migrations/20260919003000_sixfl_tv_priority_weekly_history/**'
       - 'prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/**'
       - 'prisma/migrations/20260919095500_single_sixfl_tv_priority_score/**'
       - 'src/app/captain/team/**/fixtures/**'
@@ -75,11 +80,11 @@ jobs:
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
       - name: Native earned Priority contracts
-        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
       - name: Prepared earned Priority contracts
-        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs
       - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
@@ -105,6 +110,7 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918140000_sixfl_tv_priority_weight_tuning/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918143000_retire_legacy_veo_priority_fees/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919003000_sixfl_tv_priority_weekly_history/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260808012000_add_community_goal_of_week/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260907153000_goal_of_month/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql
