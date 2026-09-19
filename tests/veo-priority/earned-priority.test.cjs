@@ -94,7 +94,7 @@ test('captains and admins see the same score', () => {
   assert.match(adminPriorityPage, /assists bonus 1 \(by 6pm next day\)/);
   assert.match(adminPriorityPage, /ratings bonus 1 \(by 6pm next day\)/);
   assert.match(captainCard, /Match card not completed/);
-  assert.match(captainCard, /Available points per match/);
+  assert.match(captainCard, /Reliability detail/);
   assert.match(captainCard, /scaled to a maximum of 80 Priority points/);
   assert.match(captainCard, /Your one overall score/);
   assert.doesNotMatch(captainCard, /\/120|Allocation score/);
