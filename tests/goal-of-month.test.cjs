@@ -74,7 +74,7 @@ test.before(() => {
   awards = load('src/lib/goal-of-month/community.ts'); calendar = load('src/lib/goal-of-month/calendar.ts');
 });
 test.beforeEach(() => {
-  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","SixflTvFootageAsset","MatchResult","Fixture","Team","League","User" CASCADE;
+  sql(`TRUNCATE "GoalOfMonthVote","GoalOfMonthNomination","GoalOfMonthCandidate","SixflTvFootageAsset","MatchResult","Fixture","TeamMemberProfile","TeamMember","Team","League","User" CASCADE;
     INSERT INTO "User" (id,name,email) VALUES
       ('u1','Test Scorer','u1@example.com'),('u2','Second Player','u2@example.com'),
       ('u3','Third Player','u3@example.com'),('u4','Fourth Player','u4@example.com'),
