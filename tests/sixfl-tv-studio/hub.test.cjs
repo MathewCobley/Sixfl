@@ -95,3 +95,12 @@ test("YouTube publishing stays background-only and does not lock the studio", ()
   assert.doesNotMatch(studio, /if \(busy \|\| activePublishes\.length > 0\) return/);
   assert.doesNotMatch(studio, /disabled=\{[^}]*activePublishes/);
 });
+
+test("thumbnail draft updates cannot create a parent-child render loop", () => {
+  assert.match(studio, /const updateThumbnailDraft = useCallback/);
+  assert.match(studio, /previous\.headline === draft\.headline/);
+  assert.match(studio, /previous\.strapline === draft\.strapline/);
+  assert.match(studio, /previous\.showScore === draft\.showScore/);
+  assert.match(studio, /onDraftChange=\{updateThumbnailDraft\}/);
+  assert.doesNotMatch(studio, /onDraftChange=\{draft => setThumbnailDrafts/);
+});
