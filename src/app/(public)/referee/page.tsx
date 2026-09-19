@@ -235,10 +235,10 @@ function RefereeIdentityBanner({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-            Referee account
+            Referee Portal
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            {refereeName}&apos;s match night dashboard
+            {refereeName}
           </h1>
           <p className="mt-2 text-sm leading-6 text-emerald-50/75">
             Your referee nights, availability, match sheets, cashup and payments are all shown here.
