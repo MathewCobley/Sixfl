@@ -6,6 +6,7 @@ export default function SixflTvLayout({ children }: { children: ReactNode }) {
   return <div className="space-y-6">
     <nav aria-label="SIXFL TV" className="flex flex-wrap gap-3 rounded-2xl border border-white/10 bg-black/20 p-2">
       <Link href="/admin/sixfl-tv/fixtures" className={tab}>Fixtures</Link>
+      <Link href="/admin/sixfl-tv/priority" className={tab}>Priority</Link>
       <Link href="/admin/sixfl-tv/analytics" className={tab}>Audience & engagement</Link>
       <Link href="/admin/sixfl-tv/goal-of-month" className={tab}>Goal of the Month</Link>
       <Link href="/admin/sixfl-tv/goal-of-week" className={tab}>Goal of the Week</Link>
