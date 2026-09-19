@@ -6,12 +6,13 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createGoalOfMonthNominationEndCard, createGoalOfMonthNominationOverlay, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
 import { sixflTvGoalClipPosterKey } from "../src/lib/sixfl-tv/goal-clip-poster";
 import { monthlyCycle } from "../src/lib/goal-of-month/calendar";
+import { goalOfMonthPromoVideoKey } from "../src/lib/goal-of-month/media";
 import { sixflTvYoutubeDefaults } from "../src/lib/sixfl-tv/youtube-metadata";
 
 const db = new PrismaClient();
