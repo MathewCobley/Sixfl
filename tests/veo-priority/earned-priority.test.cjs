@@ -73,7 +73,7 @@ test('audience and award engagement can influence allocation without replacing e
   assert.doesNotMatch(bookings, /sixflTvAllocationScore|getSixflTvEngagementScores/);
   assert.match(bookings, /homePriorityScore:homeScore\?\.score\?\?0/);
   assert.match(bookings, /homeReliabilityPoints:homeScore\?\.reliabilityPoints\?\?0/);
-  assert.match(engagementDashboard, /View Score compares each team with the current average in its own division/);
+  assert.match(engagementDashboard, /View index is an audience index/);
   assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
   assert.match(singleScoreMigration, /one SIXFL TV Priority Score out of 100/);
   assert.match(singleScoreMigration, /Reliability — up to 80 points/);
