@@ -146,10 +146,11 @@ export default async function AdminLayout({
         notificationHref="/admin/messages?filter=unread"
         notificationCount={inboxSummary.unreadThreads}
         navItems={appNavItems}
-      >
-        <div className="pwa-web-chrome">
-          <AppHeader variant="admin" />
-        </div>
+      />
+
+      <div className="pwa-web-chrome">
+        <AppHeader variant="admin" />
+      </div>
 
       <nav aria-label="Admin reports" className="pwa-web-chrome border-b border-white/10 px-3 py-3 sm:px-6 lg:px-8 xl:hidden">
         <Link
@@ -183,7 +184,6 @@ export default async function AdminLayout({
           </div>
         </div>
       </div>
-      </PwaAppFrame>
     </div>
   );
 }
