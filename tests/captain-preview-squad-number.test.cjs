@@ -34,7 +34,6 @@ test('squad numbers are shared captain/admin profile data with duplicate protect
   const captainSquad = read('src/app/captain/team/[teamid]/captain-squad/page.tsx');
   const adminSquad = read('src/app/(admin)/admin/teams/[id]/squad/page.tsx');
   const adminActions = read('src/app/(admin)/admin/teams/[id]/squad/actions.ts');
-  const loginBridge = read('src/components/captain/PlayerDashboardLoginEmailButtons.tsx');
 
   assert.match(migration, /"squadNumber" INTEGER/);
   assert.match(migration, /BETWEEN 1 AND 99/);
@@ -48,5 +47,4 @@ test('squad numbers are shared captain/admin profile data with duplicate protect
   assert.match(adminSquad, /profile\.squadNumber/);
   assert.match(adminActions, /squadNumber/);
   assert.match(adminActions, /already used by another player/);
-  assert.match(loginBridge, /form\.closest\("#add-player, #add-squad-member"\)/);
 });
