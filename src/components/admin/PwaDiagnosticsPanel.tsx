@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import PwaViewerPicker, {
+  type PwaViewerData,
+} from "@/components/admin/pwa/PwaViewerPicker";
+
 type CheckTone = "good" | "warn" | "neutral";
 
 type CheckRow = {
@@ -63,9 +67,9 @@ const previewDevices: PreviewDevice[] = [
 ];
 
 const previewRoutes = [
-  { label: "Admin overview", path: "/admin" },
-  { label: "My SIXFL", path: "/dashboard" },
+  { label: "App launch", path: "/dashboard?app=1" },
   { label: "Public site", path: "/" },
+  { label: "Admin website", path: "/admin" },
   { label: "Install page", path: "/install" },
 ];
 
@@ -205,13 +209,17 @@ async function collectDiagnostics(): Promise<DiagnosticsState> {
   };
 }
 
-export default function PwaDiagnosticsPanel() {
+export default function PwaDiagnosticsPanel({
+  viewerData,
+}: {
+  viewerData: PwaViewerData;
+}) {
   const [state, setState] = useState<DiagnosticsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [previewDeviceId, setPreviewDeviceId] = useState(previewDevices[0].id);
-  const [previewPath, setPreviewPath] = useState("/admin");
-  const [previewInput, setPreviewInput] = useState("/admin");
+  const [previewPath, setPreviewPath] = useState("/dashboard?app=1");
+  const [previewInput, setPreviewInput] = useState("/dashboard?app=1");
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
 
@@ -312,7 +320,10 @@ export default function PwaDiagnosticsPanel() {
           detail: state.manifest.display
             ? `Display: ${state.manifest.display} · Scope: ${state.manifest.scope ?? "not reported"}`
             : undefined,
-          tone: state.manifest.startUrl === "/dashboard" ? "good" : "neutral",
+          tone:
+            state.manifest.startUrl === "/dashboard?app=1"
+              ? "good"
+              : "neutral",
         },
         {
           label: "Push supported",
@@ -344,6 +355,8 @@ export default function PwaDiagnosticsPanel() {
 
   return (
     <div className="space-y-6">
+      <PwaViewerPicker data={viewerData} onPreview={loadPreviewPath} />
+
       <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_36%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.3)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -354,7 +367,7 @@ export default function PwaDiagnosticsPanel() {
               PWA diagnostics
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Check the SIXFL web app on this device, inspect the PWA plumbing and preview real SIXFL pages at phone sizes from your computer. This remains an admin-only tool and is not exposed on the public site.
+              Technical checks for the installed web app. For day-to-day portal testing, use the Viewer Picker above and the phone preview below.
             </p>
           </div>
 
