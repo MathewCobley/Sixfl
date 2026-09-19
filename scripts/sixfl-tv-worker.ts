@@ -1360,7 +1360,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     await normaliseVideo(brandingOutroSource, brandingOutro);
 
     const concat = path.join(dir, "concat.txt");
-    await writeFile(concat, [brandingIntro, title, normal, replay, brandingOutro].map(file => `file '${file.replaceAll("'", "'\\\\''")}'`).join("\n"));
+    await writeFile(concat, [brandingIntro, title, normal, replay, brandingOutro].map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "nominee.mp4");
     await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
     const durationMs = Math.round((await durationSeconds(output)) * 1000);
