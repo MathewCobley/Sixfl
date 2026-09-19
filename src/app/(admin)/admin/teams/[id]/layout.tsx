@@ -309,13 +309,13 @@ export default async function AdminTeamDetailLayout({
               href={`/admin/teams/${id}/captain-admin-view`}
               className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
             >
-              Admin captain view
+              Admin tools (captain layout)
             </Link>
             <Link
               href={`/admin/teams/${id}/captain-preview`}
               className="inline-flex items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/15"
             >
-              Captain-only preview
+              Captain view (exact)
             </Link>
             <Link
               href={`/admin/teams/${id}/player-preview`}
