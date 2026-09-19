@@ -489,7 +489,7 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     <rect x="48" y="696" width="420" height="6" rx="3" fill="#10b981"/>
   </svg>`;
 
-  const textJobs = [
+  const [titleText, nomineeText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText] = await Promise.all([
     thumbnailTextPng({ text: "GOAL OF THE MONTH", width: 680, height: 54, fontSize: 38, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
     thumbnailTextPng({ text: "NOMINEE", width: 360, height: 42, fontSize: 25, bold: true, fill: "#6ee7b7", letterSpacing: 4 }),
     thumbnailTextPng({ text: scorer, width: 690, height: 82, fontSize: 58, bold: true, fill: "#ffffff" }),
@@ -499,9 +499,10 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     thumbnailTextPng({ text: away, width: 290, height: 50, fontSize: 32, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: matchDate, width: 520, height: 38, fontSize: 22, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
     thumbnailTextPng({ text: league, width: 720, height: 36, fontSize: 19, bold: true, fill: "#d1fae5" }),
-    hasScore ? thumbnailTextPng({ text: "FT", width: 72, height: 24, fontSize: 14, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.4 }) : Promise.resolve(null),
-  ];
-  const [titleText, nomineeText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText, ftText] = await Promise.all(textJobs);
+  ]);
+  const ftText = hasScore
+    ? await thumbnailTextPng({ text: "FT", width: 72, height: 24, fontSize: 14, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.4 })
+    : null;
   const composites: sharp.OverlayOptions[] = [
     { input: Buffer.from(overlaySvg), left: 0, top: 0 },
     { input: titleText, left: 48, top: 132 },
@@ -570,7 +571,7 @@ export async function createGoalOfMonthNomineeIntro(input: {
     ${hasScore ? "<rect x=\"908\" y=\"647\" width=\"104\" height=\"36\" rx=\"18\" fill=\"#10b981\"/>" : ""}
   </svg>`;
 
-  const textJobs = [
+  const [labelText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText, siteText] = await Promise.all([
     thumbnailTextPng({ text: "GOAL OF THE MONTH NOMINEE", width: 1000, height: 52, fontSize: 29, bold: true, fill: "#6ee7b7", align: "center", letterSpacing: 7 }),
     thumbnailTextPng({ text: scorer, width: 1180, height: 105, fontSize: 82, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: team, width: 1120, height: 54, fontSize: 32, bold: true, fill: "#6ee7b7" }),
@@ -580,9 +581,10 @@ export async function createGoalOfMonthNomineeIntro(input: {
     thumbnailTextPng({ text: matchDate, width: 900, height: 48, fontSize: 27, bold: true, fill: "#ffffff", align: "center", letterSpacing: 4 }),
     thumbnailTextPng({ text: league, width: 1000, height: 44, fontSize: 23, bold: true, fill: "#a7f3d0", align: "center" }),
     thumbnailTextPng({ text: "SIXFL.CO.UK", width: 420, height: 34, fontSize: 18, bold: true, fill: "#94a3b8", align: "center", letterSpacing: 4 }),
-    hasScore ? thumbnailTextPng({ text: "FT", width: 104, height: 28, fontSize: 17, bold: true, fill: "#02140d", align: "center", letterSpacing: 2 }) : Promise.resolve(null),
-  ];
-  const [labelText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText, siteText, ftText] = await Promise.all(textJobs);
+  ]);
+  const ftText = hasScore
+    ? await thumbnailTextPng({ text: "FT", width: 104, height: 28, fontSize: 17, bold: true, fill: "#02140d", align: "center", letterSpacing: 2 })
+    : null;
   const composites: sharp.OverlayOptions[] = [
     { input: labelText, left: 460, top: 260 },
     { input: scorerText, left: 570, top: 382 },
@@ -624,11 +626,13 @@ export async function createGoalOfMonthClipOverlay(input: {
     </g>
     ${logoImage(sixflTvLogoBytes, 1600, 36, 260, 84, 0.96)}
   </svg>`;
-  const [scorerText, teamText, replayText] = await Promise.all([
+  const [scorerText, teamText] = await Promise.all([
     thumbnailTextPng({ text: scorer, width: Math.max(340, width - 290 - replaySpace), height: 76, fontSize: 62, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: team, width: Math.max(340, width - 290), height: 46, fontSize: 31, bold: true, fill: "#a7f3d0" }),
-    input.replay ? thumbnailTextPng({ text: "REPLAY", width: 106, height: 32, fontSize: 19, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.3 }) : Promise.resolve(null),
   ]);
+  const replayText = input.replay
+    ? await thumbnailTextPng({ text: "REPLAY", width: 106, height: 32, fontSize: 19, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.3 })
+    : null;
   const composites: sharp.OverlayOptions[] = [
     { input: scorerText, left: 205, top: 78 },
     { input: teamText, left: 207, top: 129 },
