@@ -292,14 +292,14 @@ export default async function AdminTeamSquadPage({
             Add existing player
           </a>
           <Link
-            href={`/captain/team/${team.id}/captain-squad`}
+            href={`/admin/teams/${team.id}/captain-preview`}
             className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Preview weaker captain view
+            Captain-only preview
           </Link>
 
           <Link
-            href={`/captain/team/${team.id}/squad`}
+            href={`/admin/teams/${team.id}/captain-preview`}
             className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
           >
             Open managed squad tools
@@ -683,14 +683,14 @@ export default async function AdminTeamSquadPage({
               </Link>
 
               <Link
-                href={`/captain/team/${team.id}/captain-squad`}
+                href={`/admin/teams/${team.id}/captain-preview`}
                 className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
               >
-                Preview weaker captain view
+                Captain-only preview
               </Link>
 
               <Link
-                href={`/captain/team/${team.id}/squad`}
+                href={`/admin/teams/${team.id}/captain-preview`}
                 className="inline-flex items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15"
               >
                 Open managed squad tools
