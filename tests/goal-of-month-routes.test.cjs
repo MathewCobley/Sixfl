@@ -134,3 +134,48 @@ test('shared dashboard owner inventory contains no old generic nomination title'
   assert.ok(!found.some(line=>line.includes('Goal of the Month — current nominees')));
   console.log('Monthly dashboard source owners:\n'+found.join('\n'));
 });
+
+
+test('nominated clip route switches to the branded media as soon as it is ready and otherwise keeps the original clip available', async () => {
+  for (const ready of [true, false]) {
+    let storedCalls = 0;
+    let rawCalls = 0;
+    const route = load('src/app/api/goal-of-month/clips/[candidateId]/route.ts', {
+      '@/lib/prisma': {
+        prisma: {
+          $queryRaw: async () => [{
+            fixtureId: 'fixture-one',
+            clipAssetId: 'clip-one',
+            mediaState: ready ? 'READY' : 'PROCESSING',
+            promoVideoObjectKey: ready ? 'goal-of-month-nominations/v1/candidate-one.mp4' : null,
+          }],
+        },
+      },
+      '@/lib/sixfl-tv/footage-policy': {
+        footageId: value => value,
+        FootageError: class FootageError extends Error { constructor(message, status = 400) { super(message); this.status = status; } },
+      },
+      '@/lib/sixfl-tv/footage-stream': {
+        streamFootage: async () => {
+          rawCalls++;
+          return new Response('raw', { status: 200 });
+        },
+      },
+      '@/lib/storage/video-response': {
+        createStoredVideoResponse: async input => {
+          storedCalls++;
+          assert.equal(input.key, 'goal-of-month-nominations/v1/candidate-one.mp4');
+          return new Response('branded', { status: 200 });
+        },
+      },
+    });
+    const response = await route.GET(
+      new Request('https://sixfl.co.uk/api/goal-of-month/clips/candidate-one'),
+      { params: Promise.resolve({ candidateId: 'candidate-one' }) },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), ready ? 'branded' : 'raw');
+    assert.equal(storedCalls, ready ? 1 : 0);
+    assert.equal(rawCalls, ready ? 0 : 1);
+  }
+});
