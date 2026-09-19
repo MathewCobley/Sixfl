@@ -278,6 +278,13 @@ export async function nominateMonthlyGoal(input: {
       INSERT INTO "GoalOfMonthNomination" ("id", "candidateId", "userId") VALUES (${randomUUID()}, ${candidateId}, ${input.userId})
       ON CONFLICT ("candidateId", "userId") DO NOTHING
     `);
+    if (clipAssetId && !existing) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
+        VALUES (${candidateId}, ${clipAssetId})
+        ON CONFLICT ("candidateId") DO NOTHING
+      `);
+    }
     return { candidateId, monthKey: key, alreadyNominated: false };
   });
 }
