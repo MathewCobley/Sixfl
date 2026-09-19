@@ -6,32 +6,17 @@ import "./globals.css";
 import "./mobile.css";
 import "./team-badge-sizing.css";
 import "./hide-old-fixture-generator.css";
-import type { Metadata, Viewport } from "next";
 import { Suspense, type ReactNode } from "react";
 import BridgeErrorBoundary from "@/components/BridgeErrorBoundary";
 import RouteScopedBridges from "@/components/RouteScopedBridges";
 import Providers from "./providers";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "SIXFL",
   description: "Six-a-side football league platform",
-  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.png",
-    apple: "/apple-icon.png",
   },
-  appleWebApp: {
-    capable: true,
-    title: "SIXFL",
-    statusBarStyle: "black-translucent",
-  },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: "#0b0f14",
 };
 
 const safeClosestPatch = String.raw`
