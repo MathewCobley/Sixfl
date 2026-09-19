@@ -48,6 +48,13 @@ function parsePreferredNights(value: string | null) {
   return nights.length > 0 ? nights : null;
 }
 
+function parseSquadNumber(value: FormDataEntryValue | null) {
+  const rawValue = String(value ?? "").trim();
+  if (!rawValue) return null;
+  const parsed = Number(rawValue);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 99 ? parsed : Number.NaN;
+}
+
 function parsePlayerMatchFeeOverride(value: FormDataEntryValue | null) {
   const rawValue = String(value ?? "").replace(/[£,\s]/g, "").trim();
 
@@ -69,6 +76,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
   const email = getEmailValue(formData.get("email"));
   const phone = getNullableString(formData.get("phone"));
   const usesWhatsapp = formData.get("usesWhatsapp") === "on";
+  const squadNumber = parseSquadNumber(formData.get("squadNumber"));
   const playerMatchFeeOverride = parsePlayerMatchFeeOverride(
     formData.get("playerMatchFeeOverride"),
   );
@@ -83,6 +91,10 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
 
   if (!teamid || !membershipId) {
     redirect("/captain");
+  }
+
+  if (Number.isNaN(squadNumber)) {
+    redirect(getErrorRedirect(teamid, "Squad number must be between 1 and 99 or left blank.", access.isAdmin));
   }
 
   if (access.isAdmin && Number.isNaN(playerMatchFeeOverride)) {
@@ -146,13 +158,29 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
     Array<{
       sourceProspectId: string | null;
       playerMatchFeePenceOverride: number | null;
+      squadNumber: number | null;
     }>
   >`
-    SELECT "sourceProspectId", "playerMatchFeePenceOverride"
+    SELECT "sourceProspectId", "playerMatchFeePenceOverride", "squadNumber"
     FROM "TeamMemberProfile"
     WHERE "teamMemberId" = ${membershipId}
     LIMIT 1
   `;
+
+  if (squadNumber !== null) {
+    const duplicate = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT tm."id"
+      FROM "TeamMember" tm
+      JOIN "TeamMemberProfile" p ON p."teamMemberId" = tm."id"
+      WHERE tm."teamId" = ${teamid}
+        AND tm."id" <> ${membershipId}
+        AND p."squadNumber" = ${squadNumber}
+      LIMIT 1
+    `;
+    if (duplicate[0]) {
+      redirect(getErrorRedirect(teamid, `Squad number ${squadNumber} is already used by another player.`, access.isAdmin));
+    }
+  }
   const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;
   const existingPlayerMatchFeeOverride =
     existingProfiles[0]?.playerMatchFeePenceOverride ?? null;
@@ -178,10 +206,16 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         "availabilitySummary" TEXT,
         "notes" TEXT,
         "playerMatchFeePenceOverride" INTEGER,
+        "squadNumber" INTEGER,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "TeamMemberProfile_pkey" PRIMARY KEY ("id")
       );
+    `);
+
+    await tx.$executeRawUnsafe(`
+      ALTER TABLE "TeamMemberProfile"
+        ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;
     `);
 
     await tx.$executeRawUnsafe(`
@@ -213,6 +247,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         "id",
         "teamMemberId",
         "phone",
+        "squadNumber",
         "playerMatchFeePenceOverride",
         "preferredPositions",
         "experienceSummary",
@@ -225,6 +260,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
         ${profileId},
         ${membershipId},
         ${phone},
+        ${squadNumber},
         ${nextPlayerMatchFeeOverride},
         ${preferredPositions},
         ${experienceSummary},
@@ -236,6 +272,7 @@ export async function updateManagedSquadMemberDetailsAction(formData: FormData) 
       )
       ON CONFLICT ("teamMemberId") DO UPDATE SET
         "phone" = EXCLUDED."phone",
+        "squadNumber" = EXCLUDED."squadNumber",
         "playerMatchFeePenceOverride" = EXCLUDED."playerMatchFeePenceOverride",
         "preferredPositions" = EXCLUDED."preferredPositions",
         "experienceSummary" = EXCLUDED."experienceSummary",
