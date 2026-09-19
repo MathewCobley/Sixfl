@@ -8,7 +8,7 @@ type Db = Pick<Prisma.TransactionClient, "$queryRaw" | "$executeRaw">;
 export type MonthlyCandidate = {
   id: string; fixtureId: string; teamId: string; monthKey: string;
   goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null;
-  scorerName: string | null; createdAt: Date;
+  scorerName: string | null; mediaState: string; createdAt: Date;
   teamName: string; teamLogoUrl: string | null; opponentName: string;
   leagueName: string; kickoffAt: Date; sixflTvUrl: string;
   nominationCount: number; voteCount: number;
@@ -47,6 +47,7 @@ export function monthlyCandidatePayload(row: MonthlyCandidate) {
     id: row.id, fixtureId: row.fixtureId, teamId: row.teamId, monthKey: row.monthKey,
     goalNumber: row.goalNumber == null ? null : Number(row.goalNumber),
     clipAssetId: row.clipAssetId, clipNumber, scorerName: row.scorerName,
+    mediaState: row.mediaState,
     teamName: row.teamName, teamLogoUrl: row.teamLogoUrl, opponentName: row.opponentName,
     leagueName: row.leagueName, kickoffAt: row.kickoffAt.toISOString(),
     nominationCount: Number(row.nominationCount), voteCount: Number(row.voteCount),
@@ -62,7 +63,7 @@ export async function getMonthlyCandidates(key: string, limit = 300, db: Db = pr
   const period = monthlyPeriod(key);
   return db.$queryRaw<MonthlyCandidate[]>(Prisma.sql`
     SELECT c."id", c."fixtureId", c."teamId", c."monthKey", c."goalNumber", c."clipAssetId",
-      clip."clipNumber", c."scorerName", c."createdAt",
+      clip."clipNumber", c."scorerName", c."mediaState", c."createdAt",
       t."name" AS "teamName", t."logoUrl" AS "teamLogoUrl",
       CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
       l."name" AS "leagueName", f."kickoffAt", COALESCE(f."sixflTvUrl", '') AS "sixflTvUrl",
@@ -270,14 +271,35 @@ export async function nominateMonthlyGoal(input: {
     const candidateId = existing?.id ?? randomUUID();
     if (!existing) {
       await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "GoalOfMonthCandidate" ("id", "fixtureId", "teamId", "monthKey", "goalNumber", "clipAssetId", "scorerName")
-        VALUES (${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${goalNumber}, ${clipAssetId}, ${input.scorerName})
+        INSERT INTO "GoalOfMonthCandidate" (
+          "id", "fixtureId", "teamId", "monthKey", "goalNumber", "clipAssetId", "scorerName",
+          "mediaState", "mediaQueuedAt"
+        )
+        VALUES (
+          ${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${goalNumber}, ${clipAssetId}, ${input.scorerName},
+          ${clipAssetId ? "QUEUED" : "NOT_REQUIRED"}, ${clipAssetId ? now : null}
+        )
       `);
     }
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "GoalOfMonthNomination" ("id", "candidateId", "userId") VALUES (${randomUUID()}, ${candidateId}, ${input.userId})
       ON CONFLICT ("candidateId", "userId") DO NOTHING
     `);
+    if (clipAssetId) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "GoalOfMonthCandidate"
+        SET "mediaState" = 'QUEUED',
+            "mediaQueuedAt" = NOW(),
+            "mediaError" = NULL,
+            "mediaBusyUntil" = NULL,
+            "mediaLeaseToken" = NULL,
+            "updatedAt" = NOW()
+        WHERE "id" = ${candidateId}
+          AND "status" = 'ACTIVE'
+          AND "clipAssetId" IS NOT NULL
+          AND "mediaState" = 'FAILED'
+      `);
+    }
     return { candidateId, monthKey: key, alreadyNominated: false };
   });
 }
