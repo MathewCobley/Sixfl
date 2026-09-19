@@ -299,7 +299,7 @@ export default async function AdminTeamSquadPage({
             href={`/admin/teams/${team.id}/captain-preview`}
             className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Captain-only preview
+            Captain view (exact)
           </Link>
 
           <Link
