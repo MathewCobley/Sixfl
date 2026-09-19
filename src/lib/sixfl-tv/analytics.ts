@@ -112,7 +112,7 @@ export function calculateSixflTvViewScore(input: {
   const benchmark = Math.max(0, input.cohortAverageViews);
   const sample = Math.max(0, Math.trunc(input.recordedFixtures));
   if (!benchmark || !sample || input.teamAverageViews < 0) {
-    return { viewScore: 100, viewBonus: 5, adjustedAverageViews: benchmark || 0 };
+    return { viewScore: 100, viewBonus: 0, adjustedAverageViews: benchmark || 0 };
   }
 
   const adjustedAverageViews =
