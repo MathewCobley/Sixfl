@@ -161,7 +161,9 @@ async function saveProspectResponse(input: {
     where: { id: prospect.id },
     data: {
       status: noLongerInterested ? "DECLINED" : "QUALIFIED",
-      teamId: noLongerInterested ? null : prospect.teamId,
+      teamId: noLongerInterested
+        ? null
+        : prospect.teamId ?? team?.id ?? null,
       notes: responseNote({
         answer: input.answer,
         date: now,
