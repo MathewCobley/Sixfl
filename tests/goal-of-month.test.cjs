@@ -326,6 +326,6 @@ test('Goal of the Month admin links scorers to squad members instead of free tex
   assert.match(admin, /Scorer missing\? Open team squad/);
   assert.doesNotMatch(admin, /name="scorerName"/);
   assert.match(publicPanel, /Choose the scorer from the squad/);
-  assert.match(publicPanel, /ask the captain to add the scorer to the SIXFL squad/);
+  assert.match(publicPanel, /Ask the captain to add the scorer to the SIXFL squad/);
   assert.doesNotMatch(publicPanel, /name="scorerName"/);
 });
