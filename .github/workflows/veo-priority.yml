@@ -105,6 +105,8 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918123000_sixfl_tv_priority_score/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918140000_sixfl_tv_priority_weight_tuning/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918143000_retire_legacy_veo_priority_fees/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260808012000_add_community_goal_of_week/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260907153000_goal_of_month/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919095500_single_sixfl_tv_priority_score/migration.sql
       - name: Real Priority score database checks
