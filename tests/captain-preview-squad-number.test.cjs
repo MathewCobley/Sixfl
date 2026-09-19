@@ -15,7 +15,7 @@ test('admin Captain view always enters the exact captain-only preview', () => {
   assert.match(teamPage, /Captain view \(exact\)/);
   assert.match(teamLayout, /Admin tools \(captain layout\)/);
   assert.match(teamLayout, /Captain view \(exact\)/);
-  assert.match(squadPage, /Captain-only preview/);
+  assert.match(squadPage, /Captain view \(exact\)/);
   assert.match(squadPage, /captain-preview/);
   assert.match(squadPage, /Open managed squad tools/);
   assert.match(previewRoute, /CAPTAIN_ONLY_PREVIEW_COOKIE/);
