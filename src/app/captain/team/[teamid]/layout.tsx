@@ -3,6 +3,7 @@ import CupInvitationNotice from "@/components/cups/CupInvitationNotice";
 // File: src/app/captain/team/[teamid]/layout.tsx
 // ========================================
 
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,6 +14,7 @@ import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRout
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
+import CaptainPwaBottomNav from "@/components/captain/CaptainPwaBottomNav";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
@@ -26,6 +28,24 @@ import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
+
+export const metadata: Metadata = {
+  icons: {
+    apple: "/apple-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SIXFL",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#07130f",
+};
 
 const captainMobileStyles = String.raw`
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
@@ -422,7 +442,7 @@ export default async function CaptainTeamLayout({
       {access.isAdmin ? <PendingActivationReturnLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
-      <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-10 sm:py-6">
+      <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 pb-24 pt-4 sm:gap-8 sm:px-10 sm:py-6">
         <header className="captain-team-header overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-3xl">
           <div className="captain-team-header-top border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
             <div className="mb-5">
@@ -571,6 +591,12 @@ export default async function CaptainTeamLayout({
           <CaptainAdminFeeRouteNotice teamId={team.id} />
         </main>
       </div>
+
+      <CaptainPwaBottomNav
+        teamId={team.id}
+        squadHref={squadHref}
+        unreadMessageCount={unreadMessageCount}
+      />
     </div>
   );
 }

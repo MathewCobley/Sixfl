@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "SIXFL",
     description:
       "SIXFL six-a-side football leagues, fixtures, squads, payments and referee tools.",
-    start_url: "/",
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",
