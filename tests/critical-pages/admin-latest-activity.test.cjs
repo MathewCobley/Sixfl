@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const overview = fs.readFileSync("src/app/(admin)/admin/page.tsx", "utf8");
 const activity = fs.readFileSync("src/lib/admin/latest-activity.ts", "utf8");
 
-test("admin overview shows the five newest external actions", () => {
+test("admin overview shows the ten newest external actions", () => {
   assert.match(overview, /Latest activity/);
   assert.match(overview, /getAdminLatestActivity\(5\)/);
   assert.match(overview, /Newest first/);
