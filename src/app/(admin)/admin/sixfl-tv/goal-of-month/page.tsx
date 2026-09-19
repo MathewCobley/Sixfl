@@ -103,7 +103,36 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
     <form className="flex flex-wrap gap-3"><label className="text-sm">Award month <input name="month" type="month" defaultValue={key} className="rounded-lg border border-white/20 bg-black p-2 text-white" /></label><button type="submit" className="rounded-lg border border-white/20 px-4 py-2">Show month</button></form>
     <h2 className="text-xl font-bold">{period.label} — {rows.length} nominated goals</h2>
     <p className="text-sm text-white/60">{page.voting.open ? `${page.voting.label} voting is open.` : "Monthly voting is not currently open."} Winners are derived from the recorded player vote; there is no automatic message blast.</p>
-    <div className="space-y-4">{rows.map(row => <article key={row.id} className="rounded-2xl border border-white/10 p-5"><h3 className="font-bold">{row.teamName} v {row.opponentName} · {row.clipNumber ? `Clip ${row.clipNumber}` : `Goal ${row.goalNumber ?? "—"}`}</h3><p className="my-2 text-sm text-white/60">{row.nominationCount} nominations · {row.voteCount} votes · {row.status}</p><div className="mb-3 flex gap-3">{row.clipAssetId ? <a href={`/api/goal-of-month/clips/${row.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch exact clip ↗</a> : safeVideoLinks(row.sixflTvUrl).map((url,index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch video {index+1}</a>)}</div><form action={reviewNominee} className="flex flex-wrap items-end gap-3"><input type="hidden" name="candidateId" value={row.id} /><input type="hidden" name="monthKey" value={key} /><label className="text-sm">Scorer <input name="scorerName" defaultValue={row.scorerName ?? ""} maxLength={100} className="block rounded-lg border border-white/20 bg-black p-2" /></label><label className="text-sm">Status <select name="status" defaultValue={row.status} className="block rounded-lg border border-white/20 bg-black p-2"><option value="ACTIVE">Active nominee</option><option value="REMOVED">Removed — keep history</option></select></label><button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 font-bold text-black">Save changes</button></form></article>)}</div>
+    {query.switched === "1" ? <p role="status" className="rounded-xl border border-emerald-300/25 bg-emerald-400/10 p-3 text-emerald-100">Nominee switched to the exact SIXFL TV clip. Existing nominations and votes were kept, and a fresh nominee video has been queued.</p> : null}
+    <div className="space-y-4">
+      {rows.map(row => {
+        const availableClips = !row.clipAssetId ? (clipsByFixture.get(row.fixtureId) ?? []) : [];
+        return <article key={row.id} className="rounded-2xl border border-white/10 p-5">
+          <h3 className="font-bold">{row.teamName} v {row.opponentName} · {row.clipNumber ? `Clip ${row.clipNumber}` : `Goal ${row.goalNumber ?? "—"}`}</h3>
+          <p className="my-2 text-sm text-white/60">{row.nominationCount} nominations · {row.voteCount} votes · {row.status}</p>
+          <div className="mb-3 flex flex-wrap gap-3">
+            {row.clipAssetId ? <a href={`/api/goal-of-month/clips/${row.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch exact clip ↗</a> : safeVideoLinks(row.sixflTvUrl).map((url,index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch video {index+1}</a>)}
+          </div>
+          <form action={reviewNominee} className="space-y-4">
+            <input type="hidden" name="candidateId" value={row.id} />
+            <input type="hidden" name="monthKey" value={key} />
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm">Scorer <input name="scorerName" defaultValue={row.scorerName ?? ""} maxLength={100} className="block rounded-lg border border-white/20 bg-black p-2" /></label>
+              <label className="text-sm">Status <select name="status" defaultValue={row.status} className="block rounded-lg border border-white/20 bg-black p-2"><option value="ACTIVE">Active nominee</option><option value="REMOVED">Removed — keep history</option></select></label>
+              <button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 font-bold text-black">Save changes</button>
+            </div>
+            {!row.clipAssetId && row.status === "ACTIVE" ? <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 p-4">
+              <p className="font-semibold text-amber-100">Legacy nomination — switch it to the exact highlights clip</p>
+              <p className="mt-1 text-sm leading-6 text-white/60">This keeps the same nominee, nominations and votes. It only replaces the old goal-number/video reference with the exact SIXFL TV clip and queues the new branded nominee video.</p>
+              {availableClips.length ? <div className="mt-3 flex flex-wrap gap-2">{availableClips.map(clip => <div key={clip.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 p-2">
+                <a href={`/api/goal-of-month/fixtures/${row.fixtureId}/clips/${clip.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch Clip {clip.clipNumber}</a>
+                <button type="submit" name="switchClipAssetId" value={clip.id} className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-100">Switch to Clip {clip.clipNumber}</button>
+              </div>)}</div> : <p className="mt-3 text-sm text-white/50">No unused ready highlight clips are available for this match yet.</p>}
+            </div> : null}
+          </form>
+        </article>;
+      })}
+    </div>
     {!rows.length ? <p className="text-white/60">No nominations for this month yet.</p> : null}
   </div>;
 }
