@@ -70,7 +70,12 @@ for(const width of [390,1440]) {
   test(`failed save keeps fixture selection and permits a deliberate retry at ${width}px`,async()=>{
     const {context,page}=await screen(width,payload({nominees:false}));
     try{
-      await page.getByLabel('Recorded fixture').selectOption('fixture-one');await page.getByLabel('Goal number in the match').fill('1');await page.getByLabel('Scoring team').selectOption('team-one');
+      await page.getByLabel('Recorded fixture').selectOption('fixture-one');
+      await page.getByLabel('Goal number in the match').fill('1');
+      await page.getByRole('button',{name:'Scoring team',exact:true}).click();
+      await page.getByRole('option',{name:'Example FC',exact:true}).click();
+      await page.getByRole('button',{name:'Scorer',exact:true}).click();
+      await page.getByRole('option',{name:'#10 · Test Scorer',exact:true}).click();
       await page.evaluate(()=>window.mode='fail');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('alert').filter({hasText:'Could not save'}).waitFor();
       assert.equal(await page.getByLabel('Recorded fixture').inputValue(),'fixture-one');assert.equal(await page.getByLabel('Goal number in the match').inputValue(),'1');assert.equal(await page.getByRole('button',{name:'Submit nomination',exact:true}).isEnabled(),true);
       assert.equal(await page.evaluate(()=>window.posts.length),1);await page.evaluate(()=>window.mode='success');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('button',{name:'You nominated this goal'}).waitFor();assert.equal(await page.evaluate(()=>window.posts.length),2);
