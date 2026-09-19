@@ -22,6 +22,7 @@ test('admin Captain view always enters the exact captain-only preview', () => {
   assert.match(previewRoute, /response\.cookies\.set\(CAPTAIN_ONLY_PREVIEW_COOKIE, id/);
   assert.match(access, /isCaptainOnlyPreview/);
   assert.match(access, /const isAdmin = Boolean\(rawIsAdmin && !isCaptainOnlyPreview\)/);
+  assert.match(access, /isCaptainOnlyPreview && user[\s\S]*role: UserRole\.USER/);
   assert.match(access, /accessMode: isCaptainOnlyPreview \? "captain-preview" : "captain"/);
 });
 
