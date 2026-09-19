@@ -37,11 +37,6 @@ function formatPreferredNights(value: unknown) {
   return String(value);
 }
 
-function formatFeeOverride(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  return (value / 100).toFixed(2);
-}
-
 function getInitials(name: string | null | undefined, email: string | null | undefined) {
   const base = (name || email || "?").trim();
   const parts = base.split(/\s+/).filter(Boolean).slice(0, 2);
