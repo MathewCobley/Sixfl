@@ -229,7 +229,7 @@ export default async function AdminHome() {
       },
     }),
     getAdminInboxSummary(),
-    getAdminLatestActivity(5),
+    getAdminLatestActivity(10),
     prisma.fixture.findMany({
       where: {
         status: "SCHEDULED",
@@ -379,7 +379,7 @@ export default async function AdminHome() {
         <AdminCard title="Latest activity">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-white/55">
-              The five most recent actions made by captains, players, leads, payers and other external users.
+              The ten most recent actions made by captains, players, leads, payers and other external users.
             </p>
             <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
               Newest first
