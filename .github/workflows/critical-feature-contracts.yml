@@ -32,6 +32,9 @@ jobs:
       - name: Check native admin latest activity
         run: node --test tests/critical-pages/admin-latest-activity.test.cjs
 
+      - name: Check native admin stale-deployment recovery
+        run: node --test tests/admin-stale-deployment-recovery.test.cjs
+
       - name: Check native player YES team restore
         run: node --test tests/critical-pages/player-interest-team-restore.test.cjs
 
@@ -55,6 +58,9 @@ jobs:
 
       - name: Check prepared admin latest activity
         run: node --test tests/critical-pages/admin-latest-activity.test.cjs
+
+      - name: Check prepared admin stale-deployment recovery
+        run: node --test tests/admin-stale-deployment-recovery.test.cjs
 
       - name: Check prepared player YES team restore
         run: node --test tests/critical-pages/player-interest-team-restore.test.cjs
