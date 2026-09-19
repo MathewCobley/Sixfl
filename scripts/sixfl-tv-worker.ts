@@ -1357,6 +1357,13 @@ async function cleanupMaturedGoalOfMonthFootage() {
         FROM "SixflTvFootageAsset" pending
         WHERE pending."fixtureId"=a."fixtureId" AND pending."state"='UPLOADING'
       )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "GoalOfMonthCandidate" candidate
+        WHERE candidate."clipAssetId" = a."id"
+          AND candidate."status" = 'ACTIVE'
+          AND candidate."mediaState" IN ('QUEUED','PROCESSING')
+      )
       AND (
         (a."kind" IN ('CLIP','HIGHLIGHTS') AND EXISTS (
           SELECT 1 FROM "SixflTvYoutubePublish" p
@@ -1424,6 +1431,23 @@ async function main() {
       }
       continue;
     }
+
+    const nominationMedia = await claimGoalMediaJob().catch(error => {
+      console.error("Goal of the Month media claim failed", safeError(error));
+      return null;
+    });
+    if (nominationMedia) {
+      try {
+        await processGoalMediaJob(nominationMedia);
+        console.log(`Rendered Goal of the Month nomination ${nominationMedia.id}`);
+      } catch (error) {
+        const message = safeError(error);
+        console.error(`Goal of the Month nomination ${nominationMedia.id} failed`, message);
+        await failGoalMediaJob(nominationMedia, message).catch(() => undefined);
+      }
+      continue;
+    }
+
     await queueAutomaticYoutubePublish().catch(error => console.error("Automatic YouTube queue failed", safeError(error)));
     const publish = await claimPublishJob().catch(error => { console.error("YouTube claim failed", safeError(error)); return null; });
     if (publish) {
@@ -1465,7 +1489,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, claimGoalMediaJob, processGoalMediaJob, failGoalMediaJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
