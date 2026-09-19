@@ -84,3 +84,14 @@ test("shared branding is no longer managed inside a fixture", () => {
   assert.match(sharedRoute, /putFootagePart\(null/);
   assert.match(sharedRoute, /removeFootage\(null/);
 });
+
+
+test("YouTube publishing stays background-only and does not lock the studio", () => {
+  assert.match(studio, /YouTube publishing is running in the background/);
+  assert.match(studio, /You do not need to keep this match open/);
+  assert.match(studio, /href="\/admin\/sixfl-tv\/fixtures"/);
+  assert.match(studio, /const activePublishes = useMemo/);
+  assert.match(studio, /if \(busy \|\| activeRenders\.length > 0\) return/);
+  assert.doesNotMatch(studio, /if \(busy \|\| activePublishes\.length > 0\) return/);
+  assert.doesNotMatch(studio, /disabled=\{[^}]*activePublishes/);
+});
