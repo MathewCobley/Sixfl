@@ -6,9 +6,9 @@ const {build} = require('esbuild');
 const {chromium} = require(process.env.GOAL_MONTH_PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname,'..');
 let browser,bundle;
-const goal={id:'goal-one',fixtureId:'fixture-one',teamId:'team-one',monthKey:'2026-09',goalNumber:1,scorerName:'Test Scorer',teamName:'Example FC',opponentName:'Opponent FC',teamLogoUrl:null,leagueName:'Example League',kickoffAt:'2026-09-03T19:00:00Z',nominationCount:1,voteCount:0,videoUrls:['https://youtu.be/dQw4w9WgXcQ']};
+const goal={id:'goal-one',fixtureId:'fixture-one',teamId:'team-one',monthKey:'2026-09',goalNumber:1,scorerTeamMemberId:'member-one',scorerName:'Test Scorer',teamName:'Example FC',opponentName:'Opponent FC',teamLogoUrl:null,leagueName:'Example League',kickoffAt:'2026-09-03T19:00:00Z',nominationCount:1,voteCount:0,videoUrls:['https://youtu.be/dQw4w9WgXcQ']};
 function payload({nominees=true,eligible=true,voting=false}={}) {
-  return {viewer:{signedIn:eligible,eligible},nominations:[{key:'2026-09',label:'September 2026',closesAt:'2026-10-05T23:00:00Z',usedNominations:0,maxNominations:3,nominatedCandidateIds:[],candidates:nominees?[goal]:[],fixtures:[{id:'fixture-one',kickoffAt:goal.kickoffAt,homeTeamId:'team-one',awayTeamId:'team-two',homeTeamName:'Example FC',awayTeamName:'Opponent FC',homeScore:6,awayScore:4,sixflTvUrl:goal.videoUrls[0],videoUrls:goal.videoUrls,leagueName:'Example League'}]}],voting:{key:'2026-09',label:'September 2026',open:voting,closesAt:'2026-10-12T23:00:00Z',candidates:voting?[goal]:[],selectedCandidateId:null},winners:[],legacy:{nominationsOpen:false,votingMayBeOpen:false,nominationsCloseAt:'2026-09-13T23:00:00Z',votingClosesAt:'2026-09-15T17:00:00Z'}};
+  return {viewer:{signedIn:eligible,eligible},nominations:[{key:'2026-09',label:'September 2026',closesAt:'2026-10-05T23:00:00Z',usedNominations:0,maxNominations:3,nominatedCandidateIds:[],candidates:nominees?[goal]:[],fixtures:[{id:'fixture-one',kickoffAt:goal.kickoffAt,homeTeamId:'team-one',awayTeamId:'team-two',homeTeamName:'Example FC',awayTeamName:'Opponent FC',homeScore:6,awayScore:4,sixflTvUrl:goal.videoUrls[0],videoUrls:goal.videoUrls,leagueName:'Example League',squadPlayers:[{teamMemberId:'member-one',teamId:'team-one',name:'Test Scorer',squadNumber:10},{teamMemberId:'member-two',teamId:'team-two',name:'Opponent Scorer',squadNumber:9}],clips:[]}]}],voting:{key:'2026-09',label:'September 2026',open:voting,closesAt:'2026-10-12T23:00:00Z',candidates:voting?[goal]:[],selectedCandidateId:null},winners:[],legacy:{nominationsOpen:false,votingMayBeOpen:false,nominationsCloseAt:'2026-09-13T23:00:00Z',votingClosesAt:'2026-09-15T17:00:00Z'}};
 }
 test.before(async()=>{
   const result=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Panel from './src/components/goal-of-month/MonthlyGoalsPanel';import Promo from './src/components/goal-of-week/GoalOfWeekDashboardPromo';const root=createRoot(document.getElementById('root'));let version=0;window.mount=kind=>root.render(kind==='promo'?<Promo key={++version} teamId="team-one" href="/goal-of-the-week?from=captain&teamId=team-one"/>:<Panel key={++version}/>);`,loader:'tsx',resolveDir:root},bundle:true,write:false,platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-next-link',setup(api){api.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'mock'}));api.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:"import React from 'react';export default function Link(props){return React.createElement('a',props)}",resolveDir:root}));api.onResolve({filter:/^@\//},args=>{const base=path.join(root,'src',args.path.slice(2));return{path:[base+'.ts',base+'.tsx',base].find(file=>fs.existsSync(file)&&fs.statSync(file).isFile())};});}}]});
@@ -45,11 +45,14 @@ for(const width of [390,1440]) {
     try{
       await page.getByLabel('Recorded fixture').selectOption('fixture-one');
       await page.getByLabel('Goal number in the match').fill('1');
-      await page.getByLabel('Scoring team').selectOption('team-one');
-      await page.getByLabel('Scorer’s name (optional)').fill('Test Scorer');
+      await page.getByRole('button',{name:'Scoring team',exact:true}).click();
+      await page.getByRole('option',{name:'Example FC',exact:true}).click();
+      await page.getByRole('button',{name:'Scorer',exact:true}).click();
+      await page.getByRole('option',{name:'#10 · Test Scorer',exact:true}).click();
       await page.evaluate(()=>window.mode='defer');
       await page.getByRole('button',{name:'Submit nomination',exact:true}).click();
       await page.waitForFunction(()=>window.posts.length===1);
+      assert.equal(await page.evaluate(()=>window.posts[0].scorerTeamMemberId),'member-one');
       assert.equal(await page.getByRole('button',{name:'Saving…',exact:true}).isDisabled(),true);
       await page.evaluate(()=>window.release());
       await page.getByRole('button',{name:'You nominated this goal'}).waitFor();
