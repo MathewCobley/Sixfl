@@ -310,3 +310,23 @@ test('Goal of the Month nominee render uses shared branding and player identity 
   assert.match(nomineeGraphics, /REPLAY/);
   assert.doesNotMatch(nomineeGraphics, /CLIP \$\{input\.clipNumber\}/);
 });
+
+
+test('Goal of the Month thumbnail and player overlay stay readable at embedded-player size', async () => {
+  const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
+  const thumbnailStart = graphics.indexOf('export async function createGoalOfMonthNominationThumbnail');
+  const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro', thumbnailStart);
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay', introStart);
+  const overlayEnd = graphics.indexOf('export async function createSixflTvScoreBug', overlayStart);
+  assert.ok(thumbnailStart >= 0 && introStart > thumbnailStart);
+  assert.ok(overlayStart >= 0 && overlayEnd > overlayStart);
+  const thumbnail = graphics.slice(thumbnailStart, introStart);
+  const overlay = graphics.slice(overlayStart, overlayEnd);
+  assert.ok(thumbnail.includes('font-size="58"'));
+  assert.ok(thumbnail.includes('homeTeamName'));
+  assert.ok(thumbnail.includes('homeScore'));
+  assert.equal(thumbnail.includes('clipNumber'), false);
+  assert.ok(overlay.includes('font-size="62"'));
+  assert.ok(overlay.includes('height="142"'));
+  assert.equal(overlay.includes('CLIP '), false);
+});
