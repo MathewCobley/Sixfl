@@ -1388,6 +1388,21 @@ async function main() {
       }
       continue;
     }
+    const nominee = await claimGoalOfMonthClipRender().catch(error => {
+      console.error("Goal of the Month render claim failed", safeError(error));
+      return null;
+    });
+    if (nominee) {
+      try {
+        await processGoalOfMonthClipRender(nominee);
+        console.log(`Rendered Goal of the Month nominee ${nominee.candidateId}`);
+      } catch (error) {
+        const message = safeError(error);
+        console.error(`Goal of the Month nominee ${nominee.candidateId} failed`, message);
+        await failGoalOfMonthClipRender(nominee, message).catch(() => undefined);
+      }
+      continue;
+    }
     await queueAutomaticYoutubePublish().catch(error => console.error("Automatic YouTube queue failed", safeError(error)));
     const publish = await claimPublishJob().catch(error => { console.error("YouTube claim failed", safeError(error)); return null; });
     if (publish) {
@@ -1429,7 +1444,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
