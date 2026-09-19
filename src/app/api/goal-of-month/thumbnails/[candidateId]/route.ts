@@ -94,9 +94,7 @@ export async function GET(request: Request, context: Context) {
     return new Response(new Uint8Array(png), {
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": backgroundImage
-          ? "public, max-age=0, s-maxage=60, stale-while-revalidate=60"
-          : "private, no-store, max-age=0",
+        "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },
     });
