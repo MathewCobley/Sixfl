@@ -64,7 +64,7 @@ export default async function SixflTvAnalyticsPage({
         <p className="text-sm font-semibold text-emerald-300">SIXFL TV</p>
         <h1 className="mt-2 text-3xl font-bold text-white">Audience & engagement</h1>
         <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">
-          View Score is an audience index: 100 means average viewing for the team’s current division.
+          View index is an audience index: 100 means average viewing for the team’s current division.
           It is not a second Priority score. Audience can contribute up to 10 points to the one SIXFL TV Priority
           Score out of 100, while goal nominations and voting can contribute another 10.
         </p>
@@ -98,7 +98,7 @@ export default async function SixflTvAnalyticsPage({
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200/70">Camera priority</p>
         <h2 className="mt-2 text-xl font-semibold text-white">View index & Priority contributions</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-white/60">
-          View Score uses up to each team’s five most recent recorded fixtures and compares average fixture views
+          View index uses up to each team’s five most recent recorded fixtures and compares average fixture views
           with teams in the same division. Highlights and full-match views count; extra links do not distort the
           benchmark. Audience is worth up to 10 of the 100 Priority points; nominations are worth up to 5 and voting up to 5.
         </p>
@@ -112,7 +112,7 @@ export default async function SixflTvAnalyticsPage({
               <th className="px-3 py-3">Recorded</th>
               <th className="px-3 py-3">Avg views / fixture</th>
               <th className="px-3 py-3">Division avg</th>
-              <th className="px-3 py-3">View Score</th>
+              <th className="px-3 py-3">View index</th>
               <th className="px-3 py-3">Audience pts</th>
               <th className="px-3 py-3">Nomination pts</th>
               <th className="px-3 py-3">Voting pts</th>
