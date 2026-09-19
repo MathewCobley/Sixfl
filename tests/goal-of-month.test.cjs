@@ -129,7 +129,7 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   assert.equal(goals[0].goalNumber, null);
   const payload = awards.monthlyCandidatePayload(goals[0]);
   assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
-  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-3`);
+  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-4`);
   assert.equal(payload.scorerName, 'Clip Scorer');
   assert.equal(sql(`SELECT "state" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${result.candidateId}'`), 'QUEUED');
 });
@@ -227,6 +227,25 @@ test('nominee cards render footage, goal identity and nomination count without a
   assert.match(html, /Watch footage/); assert.match(html, /Goal 2/); assert.match(html, /3 nominations/);
   assert.equal(html.includes('<iframe'), false); assert.equal(html.includes('autoplay'), false);
 });
+test('clip nominees hide internal clip numbers and force the current poster version', () => {
+  const React = require('react'); const { renderToStaticMarkup } = require('react-dom/server');
+  const Card = loader()('src/components/goal-of-month/GoalNomineeCard.tsx').default;
+  const html = renderToStaticMarkup(React.createElement(Card, { goal: {
+    id:'clip-goal', fixtureId:'fixture', teamId:'home', monthKey:'2026-09',
+    goalNumber:null, clipNumber:7, clipAssetId:'clip-one', scorerName:'Test scorer',
+    teamName:'Home FC', opponentName:'Away FC', teamLogoUrl:null, leagueName:'Test League',
+    kickoffAt:'2026-09-03T19:00:00Z', nominationCount:3, voteCount:0,
+    clipVideoUrl:'/api/goal-of-month/clips/clip-goal',
+    thumbnailUrl:'/api/goal-of-month/thumbnails/clip-goal?v=sixfl-gotm-4',
+    videoUrls:[],
+  } }));
+  assert.match(html, /Goal of the Month nominee/);
+  assert.match(html, /sixfl-gotm-4/);
+  assert.equal(html.includes('Clip 7'), false);
+  const thumbnailRoute = read('src/app/api/goal-of-month/thumbnails/[candidateId]/route.ts');
+  assert.match(thumbnailRoute, /private, no-store, max-age=0/);
+});
+
 test('native competition and dashboard reuse one clip component and one monthly API', () => {
   const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
   const dashboard = read('src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx');
