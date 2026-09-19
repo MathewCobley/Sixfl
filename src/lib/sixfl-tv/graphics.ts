@@ -453,10 +453,9 @@ export async function createGoalOfMonthNominationThumbnail(input: {
   leagueName: string;
   backgroundImage?: Buffer | null;
 }) {
-  const [sixflTvLogoBytes, teamBadge, fontCss] = await Promise.all([
+  const [sixflTvLogoBytes, teamBadge] = await Promise.all([
     sixflTvLogo(input.siteUrl),
     fetchSixflTvBadge(input.teamLogoUrl, input.siteUrl),
-    embeddedFontStyle(input.siteUrl),
   ]);
   const scorer = fit(input.scorerName || input.teamName, 24);
   const team = fit(input.teamName, 36);
@@ -465,81 +464,64 @@ export async function createGoalOfMonthNominationThumbnail(input: {
   const league = fit(input.leagueName, 54);
   const sourceDate = input.kickoffAt instanceof Date ? input.kickoffAt : new Date(input.kickoffAt);
   const matchDate = Number.isFinite(sourceDate.getTime())
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        timeZone: "Europe/London",
-      }).format(sourceDate).toUpperCase()
+    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
     : "";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
   const score = hasScore ? `${input.homeScore} – ${input.awayScore}` : "VS";
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     <defs>
-      <linearGradient id="fallback" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#07170f"/>
-        <stop offset="0.58" stop-color="#03100b"/>
-        <stop offset="1" stop-color="#000000"/>
-      </linearGradient>
-      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#000000" stop-opacity="0.90"/>
-        <stop offset="0.46" stop-color="#000000" stop-opacity="0.72"/>
-        <stop offset="0.72" stop-color="#000000" stop-opacity="0.32"/>
-        <stop offset="1" stop-color="#000000" stop-opacity="0"/>
-      </linearGradient>
-      <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#000000" stop-opacity="0"/>
-        <stop offset="0.62" stop-color="#000000" stop-opacity="0.12"/>
-        <stop offset="1" stop-color="#000000" stop-opacity="0.72"/>
-      </linearGradient>
+      <linearGradient id="fallback" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07170f"/><stop offset="0.58" stop-color="#03100b"/><stop offset="1" stop-color="#000000"/></linearGradient>
+      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000" stop-opacity="0.90"/><stop offset="0.46" stop-color="#000000" stop-opacity="0.72"/><stop offset="0.72" stop-color="#000000" stop-opacity="0.32"/><stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>
+      <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.62" stop-color="#000000" stop-opacity="0.12"/><stop offset="1" stop-color="#000000" stop-opacity="0.72"/></linearGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#000000" flood-opacity="0.72"/></filter>
     </defs>
-    ${fontCss}
     ${input.backgroundImage?.length ? "" : "<rect width=\"1280\" height=\"720\" fill=\"url(#fallback)\"/>"}
     <rect width="900" height="720" fill="url(#leftShade)"/>
     <rect width="1280" height="720" fill="url(#bottomShade)"/>
-
     <polygon points="0,0 178,0 128,106 0,106" fill="#10b981"/>
     <polygon points="102,0 188,0 138,106 52,106" fill="#d1fae5" fill-opacity="0.92"/>
     <polygon points="167,0 236,0 186,106 117,106" fill="#064e3b"/>
-
     ${logoImage(sixflTvLogoBytes, 42, 28, 270, 86)}
-
-    <g transform="translate(48 148)" filter="url(#shadow)">
-      <text x="0" y="0" font-size="38" font-weight="900" letter-spacing="2.2" fill="#ffffff">GOAL OF THE MONTH</text>
-      <text x="2" y="39" font-size="25" font-weight="900" letter-spacing="4" fill="#6ee7b7">NOMINEE</text>
-    </g>
-
-    <g transform="translate(48 265)" filter="url(#shadow)">
-      ${badgeImage(teamBadge, 0, 0, 132, input.teamName)}
-      <text x="162" y="63" font-size="58" font-weight="900" fill="#ffffff">${xml(scorer)}</text>
-      <text x="164" y="105" font-size="27" font-weight="800" fill="#a7f3d0">${xml(team)}</text>
-    </g>
-
-    <g filter="url(#shadow)">
-      <rect x="48" y="482" width="790" height="112" rx="22" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.72" stroke-width="3"/>
-      ${hasScore ? "<rect x=\"407\" y=\"494\" width=\"72\" height=\"28\" rx=\"14\" fill=\"#10b981\"/><text x=\"443\" y=\"514\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"900\" letter-spacing=\"1.4\" fill=\"#02140d\">FT</text>" : ""}
-      <text x="350" y="558" text-anchor="end" font-size="32" font-weight="900" fill="#ffffff">${xml(home)}</text>
-      <text x="443" y="562" text-anchor="middle" font-size="42" font-weight="900" fill="#ffffff">${xml(score)}</text>
-      <text x="536" y="558" font-size="32" font-weight="900" fill="#ffffff">${xml(away)}</text>
-    </g>
-
-    <text x="48" y="640" font-size="22" font-weight="900" letter-spacing="2.2" fill="#ffffff">${xml(matchDate)}</text>
-    <text x="48" y="674" font-size="19" font-weight="750" fill="#d1fae5">${xml(league)}</text>
+    <g filter="url(#shadow)">${badgeImage(teamBadge, 48, 265, 132, input.teamName)}</g>
+    <rect x="48" y="482" width="790" height="112" rx="22" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.72" stroke-width="3"/>
+    ${hasScore ? "<rect x=\"407\" y=\"494\" width=\"72\" height=\"28\" rx=\"14\" fill=\"#10b981\"/>" : ""}
     <rect x="48" y="696" width="420" height="6" rx="3" fill="#10b981"/>
   </svg>`;
-  if (!input.backgroundImage?.length) {
-    return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
-  }
-  const background = await sharp(input.backgroundImage)
-    .rotate()
-    .resize(1280, 720, { fit: "cover", position: "centre" })
-    .modulate({ brightness: 0.98, saturation: 1.08 })
-    .jpeg({ quality: 92 })
-    .toBuffer();
-  return sharp(background)
-    .composite([{ input: Buffer.from(svg) }])
+
+  const [titleText, nomineeText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText] = await Promise.all([
+    thumbnailTextPng({ text: "GOAL OF THE MONTH", width: 680, height: 54, fontSize: 38, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
+    thumbnailTextPng({ text: "NOMINEE", width: 360, height: 42, fontSize: 25, bold: true, fill: "#6ee7b7", letterSpacing: 4 }),
+    thumbnailTextPng({ text: scorer, width: 690, height: 82, fontSize: 58, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: 690, height: 44, fontSize: 27, bold: true, fill: "#a7f3d0" }),
+    thumbnailTextPng({ text: home, width: 290, height: 50, fontSize: 32, bold: true, fill: "#ffffff", align: "right" }),
+    thumbnailTextPng({ text: score, width: 150, height: 62, fontSize: 42, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: away, width: 290, height: 50, fontSize: 32, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: matchDate, width: 520, height: 38, fontSize: 22, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
+    thumbnailTextPng({ text: league, width: 720, height: 36, fontSize: 19, bold: true, fill: "#d1fae5" }),
+  ]);
+  const ftText = hasScore
+    ? await thumbnailTextPng({ text: "FT", width: 72, height: 24, fontSize: 14, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.4 })
+    : null;
+  const composites: sharp.OverlayOptions[] = [
+    { input: Buffer.from(overlaySvg), left: 0, top: 0 },
+    { input: titleText, left: 48, top: 132 },
+    { input: nomineeText, left: 50, top: 178 },
+    { input: scorerText, left: 210, top: 286 },
+    { input: teamText, left: 212, top: 350 },
+    { input: homeText, left: 62, top: 525 },
+    { input: scoreText, left: 368, top: 515 },
+    { input: awayText, left: 536, top: 525 },
+    { input: dateText, left: 48, top: 617 },
+    { input: leagueText, left: 48, top: 655 },
+  ];
+  if (ftText) composites.push({ input: ftText, left: 407, top: 496 });
+
+  const background = input.backgroundImage?.length
+    ? await sharp(input.backgroundImage).rotate().resize(1280, 720, { fit: "cover", position: "centre" }).modulate({ brightness: 0.98, saturation: 1.08 }).jpeg({ quality: 92 }).toBuffer()
+    : null;
+  return (background ? sharp(background) : sharp({ create: { width: 1280, height: 720, channels: 3, background: "#020504" } }))
+    .composite(composites)
     .png({ compressionLevel: 9 })
     .toBuffer();
 }
@@ -556,10 +538,9 @@ export async function createGoalOfMonthNomineeIntro(input: {
   kickoffAt: Date | string;
   leagueName: string;
 }) {
-  const [sixflTvLogoBytes, teamBadge, fontCss] = await Promise.all([
+  const [sixflTvLogoBytes, teamBadge] = await Promise.all([
     sixflTvLogo(input.siteUrl),
     fetchSixflTvBadge(input.teamLogoUrl, input.siteUrl),
-    embeddedFontStyle(input.siteUrl),
   ]);
   const scorer = fit(input.scorerName || input.teamName, 32);
   const team = fit(input.teamName, 42);
@@ -568,58 +549,55 @@ export async function createGoalOfMonthNomineeIntro(input: {
   const league = fit(input.leagueName, 64);
   const sourceDate = input.kickoffAt instanceof Date ? input.kickoffAt : new Date(input.kickoffAt);
   const matchDate = Number.isFinite(sourceDate.getTime())
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: "Europe/London",
-      }).format(sourceDate).toUpperCase()
+    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
     : "";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
   const score = hasScore ? `${input.homeScore} – ${input.awayScore}` : "VS";
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#020805"/>
-        <stop offset="0.58" stop-color="#06140f"/>
-        <stop offset="1" stop-color="#000000"/>
-      </linearGradient>
-      <radialGradient id="glow" cx="67%" cy="42%" r="55%">
-        <stop offset="0" stop-color="#10b981" stop-opacity="0.18"/>
-        <stop offset="1" stop-color="#10b981" stop-opacity="0"/>
-      </radialGradient>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#020805"/><stop offset="0.58" stop-color="#06140f"/><stop offset="1" stop-color="#000000"/></linearGradient>
+      <radialGradient id="glow" cx="67%" cy="42%" r="55%"><stop offset="0" stop-color="#10b981" stop-opacity="0.18"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></radialGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.7"/></filter>
     </defs>
-    ${fontCss}
     <rect width="1920" height="1080" fill="url(#bg)"/>
     <rect width="1920" height="1080" fill="url(#glow)"/>
     <polygon points="-120,0 350,0 -155,1080 -625,1080" fill="#10b981"/>
     <polygon points="90,0 220,0 -285,1080 -415,1080" fill="#ecfdf5" fill-opacity="0.96"/>
     <polygon points="300,0 445,0 -60,1080 -205,1080" fill="#064e3b"/>
-
     ${logoImage(sixflTvLogoBytes, 720, 62, 480, 154)}
-    <text x="960" y="294" text-anchor="middle" font-size="29" font-weight="900" letter-spacing="7" fill="#6ee7b7">GOAL OF THE MONTH NOMINEE</text>
-
-    <g transform="translate(300 348)" filter="url(#shadow)">
-      ${badgeImage(teamBadge, 0, 0, 210, input.teamName)}
-      <text x="270" y="91" font-size="82" font-weight="900" fill="#ffffff">${xml(scorer)}</text>
-      <text x="274" y="145" font-size="32" font-weight="800" fill="#6ee7b7">${xml(team)}</text>
-    </g>
-
-    <g filter="url(#shadow)">
-      <rect x="300" y="625" width="1320" height="180" rx="28" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.62" stroke-width="3"/>
-      ${hasScore ? '<rect x="908" y="647" width="104" height="36" rx="18" fill="#10b981"/><text x="960" y="672" text-anchor="middle" font-size="17" font-weight="900" letter-spacing="2" fill="#02140d">FT</text>' : ""}
-      <text x="760" y="739" text-anchor="end" font-size="43" font-weight="850" fill="#ffffff">${xml(home)}</text>
-      <text x="960" y="745" text-anchor="middle" font-size="58" font-weight="900" fill="#ffffff">${xml(score)}</text>
-      <text x="1160" y="739" font-size="43" font-weight="850" fill="#ffffff">${xml(away)}</text>
-    </g>
-
-    <text x="960" y="879" text-anchor="middle" font-size="27" font-weight="900" letter-spacing="4" fill="#ffffff">${xml(matchDate)}</text>
-    <text x="960" y="927" text-anchor="middle" font-size="23" font-weight="700" fill="#a7f3d0">${xml(league)}</text>
-    <text x="960" y="1000" text-anchor="middle" font-size="18" font-weight="800" letter-spacing="4" fill="#ffffff" fill-opacity="0.48">SIXFL.CO.UK</text>
+    <g transform="translate(300 348)" filter="url(#shadow)">${badgeImage(teamBadge, 0, 0, 210, input.teamName)}</g>
+    <rect x="300" y="625" width="1320" height="180" rx="28" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.62" stroke-width="3"/>
+    ${hasScore ? "<rect x=\"908\" y=\"647\" width=\"104\" height=\"36\" rx=\"18\" fill=\"#10b981\"/>" : ""}
   </svg>`;
-  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+
+  const [labelText, scorerText, teamText, homeText, scoreText, awayText, dateText, leagueText, siteText] = await Promise.all([
+    thumbnailTextPng({ text: "GOAL OF THE MONTH NOMINEE", width: 1000, height: 52, fontSize: 29, bold: true, fill: "#6ee7b7", align: "center", letterSpacing: 7 }),
+    thumbnailTextPng({ text: scorer, width: 1180, height: 105, fontSize: 82, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: 1120, height: 54, fontSize: 32, bold: true, fill: "#6ee7b7" }),
+    thumbnailTextPng({ text: home, width: 430, height: 66, fontSize: 43, bold: true, fill: "#ffffff", align: "right" }),
+    thumbnailTextPng({ text: score, width: 300, height: 86, fontSize: 58, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: away, width: 430, height: 66, fontSize: 43, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: matchDate, width: 900, height: 48, fontSize: 27, bold: true, fill: "#ffffff", align: "center", letterSpacing: 4 }),
+    thumbnailTextPng({ text: league, width: 1000, height: 44, fontSize: 23, bold: true, fill: "#a7f3d0", align: "center" }),
+    thumbnailTextPng({ text: "SIXFL.CO.UK", width: 420, height: 34, fontSize: 18, bold: true, fill: "#94a3b8", align: "center", letterSpacing: 4 }),
+  ]);
+  const ftText = hasScore
+    ? await thumbnailTextPng({ text: "FT", width: 104, height: 28, fontSize: 17, bold: true, fill: "#02140d", align: "center", letterSpacing: 2 })
+    : null;
+  const composites: sharp.OverlayOptions[] = [
+    { input: labelText, left: 460, top: 260 },
+    { input: scorerText, left: 570, top: 382 },
+    { input: teamText, left: 574, top: 470 },
+    { input: homeText, left: 330, top: 697 },
+    { input: scoreText, left: 810, top: 682 },
+    { input: awayText, left: 1160, top: 697 },
+    { input: dateText, left: 510, top: 850 },
+    { input: leagueText, left: 460, top: 910 },
+    { input: siteText, left: 750, top: 980 },
+  ];
+  if (ftText) composites.push({ input: ftText, left: 908, top: 650 });
+  return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
 }
 
 export async function createGoalOfMonthClipOverlay(input: {
@@ -629,34 +607,39 @@ export async function createGoalOfMonthClipOverlay(input: {
   teamLogoUrl?: string | null;
   replay?: boolean;
 }) {
-  const [sixflTvLogoBytes, teamBadge, fontCss] = await Promise.all([
+  const [sixflTvLogoBytes, teamBadge] = await Promise.all([
     sixflTvLogo(input.siteUrl),
     fetchSixflTvBadge(input.teamLogoUrl, input.siteUrl),
-    embeddedFontStyle(input.siteUrl),
   ]);
   const scorer = fit(input.scorerName || input.teamName, 24);
   const team = fit(input.teamName, 32);
   const replaySpace = input.replay ? 150 : 0;
   const width = Math.max(560, Math.min(980, 245 + scorer.length * 29 + replaySpace));
   const replayX = width - 132;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-    <defs>
-      <filter id="overlayShadow"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.70"/></filter>
-    </defs>
-    ${fontCss}
+  const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs><filter id="overlayShadow"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.70"/></filter></defs>
     <g transform="translate(54 46)" filter="url(#overlayShadow)">
       <rect width="${width}" height="142" rx="19" fill="#020805" fill-opacity="0.92" stroke="#10b981" stroke-width="3"/>
       <rect width="13" height="142" rx="6" fill="#10b981"/>
       ${badgeImage(teamBadge, 28, 22, 98, input.teamName)}
-      <text x="151" y="65" font-size="62" font-weight="900" letter-spacing="0.2" fill="#ffffff">${xml(scorer)}</text>
-      <text x="153" y="108" font-size="31" font-weight="800" fill="#a7f3d0">${xml(team)}</text>
-      ${input.replay ? `<g transform="translate(${replayX} 49)"><rect width="106" height="44" rx="22" fill="#10b981"/><text x="53" y="30" text-anchor="middle" font-size="19" font-weight="900" letter-spacing="1.3" fill="#02140d">REPLAY</text></g>` : ""}
+      ${input.replay ? `<rect x="${replayX}" y="49" width="106" height="44" rx="22" fill="#10b981"/>` : ""}
     </g>
     ${logoImage(sixflTvLogoBytes, 1600, 36, 260, 84, 0.96)}
   </svg>`;
-  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  const [scorerText, teamText] = await Promise.all([
+    thumbnailTextPng({ text: scorer, width: Math.max(340, width - 290 - replaySpace), height: 76, fontSize: 62, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: Math.max(340, width - 290), height: 46, fontSize: 31, bold: true, fill: "#a7f3d0" }),
+  ]);
+  const replayText = input.replay
+    ? await thumbnailTextPng({ text: "REPLAY", width: 106, height: 32, fontSize: 19, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.3 })
+    : null;
+  const composites: sharp.OverlayOptions[] = [
+    { input: scorerText, left: 205, top: 78 },
+    { input: teamText, left: 207, top: 129 },
+  ];
+  if (replayText) composites.push({ input: replayText, left: 54 + replayX, top: 97 });
+  return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
 }
-
 export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string; clipNumber?: number | null }) {
   const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
