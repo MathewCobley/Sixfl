@@ -5,7 +5,6 @@ import { resolveTeamFixtureFeePence } from '@/lib/payments/fixture-fee-policy';
 import { allocateVeoNight, normaliseVeoPitch, type VeoFixture, type VeoHistory } from './allocator';
 import { readVeoSettings, validVeoDate } from './service';
 import { getSixflTvPriorityScores } from '@/lib/sixfl-tv/priority-score';
-import { getSixflTvEngagementScores, sixflTvAllocationScore } from '@/lib/sixfl-tv/analytics';
 import { veoCameraKey, veoVersion, validateVeoVideo, type VeoFixtureChoice } from './fixture-policy';
 
 export class VeoBookingError extends Error {}
@@ -120,23 +119,21 @@ export async function previewFixtureVeoNight(leagueId:string,date:string,db:Db=p
     WHERE f."venueId"=${settings.venueId} AND to_char(f."kickoffAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London','YYYY-MM-DD')=${date} AND c.status::text='CONFIRMED' ORDER BY c."fixtureId",c."teamId"`;
   const confirmed=new Set(confirmations.map(x=>`${x.fixtureId}:${x.teamId}`));
   const teamIds=[...new Set(rows.flatMap(f=>[f.homeTeamId as string,f.awayTeamId as string]))];
-  const [priorityScores,engagementScores]=await Promise.all([getSixflTvPriorityScores(teamIds,db),getSixflTvEngagementScores(teamIds,db)]);
+  const priorityScores=await getSixflTvPriorityScores(teamIds,db);
   const fixtures:NightMatch[]=rows.map(f=>{
     const own=requests.filter(r=>r.fixtureId===f.id);
     const homeScore=priorityScores.get(f.homeTeamId);
     const awayScore=priorityScores.get(f.awayTeamId);
-    const homeEngagement=engagementScores.get(f.homeTeamId);
-    const awayEngagement=engagementScores.get(f.awayTeamId);
     const homePriority=Boolean(homeScore?.qualifies && confirmed.has(`${f.id}:${f.homeTeamId}`));
     const awayPriority=Boolean(awayScore?.qualifies && confirmed.has(`${f.id}:${f.awayTeamId}`));
     return {id:f.id,leagueId:f.leagueId,homeTeamId:f.homeTeamId,awayTeamId:f.awayTeamId,homeName:f.homeName,awayName:f.awayName,kickoffAt:f.kickoffAt,kickoffMs:+f.kickoffAt,venueId:f.venueId,pitch:f.pitch,durationMinutes:f.duration,
       locked:!!f.legacy || ['PLANNED','READY'].includes(f.bookingState) || f.sixflTvRecorded || !f.publishedAt || f.status!=='SCHEDULED' || +f.kickoffAt<=Date.now() || !leagueIds.includes(f.leagueId),
       eligible:!f.placeholder && !f.bookingState && (homePriority||awayPriority),
       homePriority,awayPriority,homePriorityScore:homeScore?.score??0,awayPriorityScore:awayScore?.score??0,
-      homeEngagementBonus:homeEngagement?.engagementBonus??0,awayEngagementBonus:awayEngagement?.engagementBonus??0,
-      homeViewScore:homeEngagement?.viewScore??100,awayViewScore:awayEngagement?.viewScore??100,
-      homeAllocationScore:sixflTvAllocationScore(homeScore?.score??0,homeEngagement?.engagementBonus??0),
-      awayAllocationScore:sixflTvAllocationScore(awayScore?.score??0,awayEngagement?.engagementBonus??0),
+      homeReliabilityPoints:homeScore?.reliabilityPoints??0,awayReliabilityPoints:awayScore?.reliabilityPoints??0,
+      homeAudiencePoints:homeScore?.audiencePoints??0,awayAudiencePoints:awayScore?.audiencePoints??0,
+      homeParticipationPoints:homeScore?.participationPoints??0,awayParticipationPoints:awayScore?.participationPoints??0,
+      homeViewScore:homeScore?.viewScore??100,awayViewScore:awayScore?.viewScore??100,
       filmed:f.sixflTvRecorded || ['PLANNED','READY'].includes(f.bookingState),bookingState:f.bookingState,requestRows:own,
       homeBase:resolveTeamFixtureFeePence(f.homeMatchFeePence,f.homeStandard,f.matchFeePence),awayBase:resolveTeamFixtureFeePence(f.awayMatchFeePence,f.awayStandard,f.matchFeePence)};
   });
@@ -148,8 +145,8 @@ export async function previewFixtureVeoNight(leagueId:string,date:string,db:Db=p
   const history:VeoHistory=Object.fromEntries(historyRows.map(x=>[x.teamId,{count:x.count,lastMs:+x.last}]));
   const choices=allocateVeoNight(fixtures,{...settings,maxMatches:capacity},history);
   const scoreFingerprint=[...priorityScores.values()].map(score=>({teamId:score.teamId,score:score.score,qualifies:score.qualifies,matchesCount:score.matchesCount}));
-  const engagementFingerprint=[...engagementScores.values()].map(score=>({teamId:score.teamId,viewScore:score.viewScore,engagementBonus:score.engagementBonus,recordedFixtures:score.recordedFixtures}));
-  return {settings:{...settings,maxMatches:capacity},fixtures,choices,cameraKey,fingerprint:veoVersion([settings,sharing,fixtures,confirmations,scoreFingerprint,engagementFingerprint,history,choices])};
+  const scoreBreakdownFingerprint=[...priorityScores.values()].map(score=>({teamId:score.teamId,score:score.score,reliabilityPoints:score.reliabilityPoints,audiencePoints:score.audiencePoints,participationPoints:score.participationPoints,viewScore:score.viewScore}));
+  return {settings:{...settings,maxMatches:capacity},fixtures,choices,cameraKey,fingerprint:veoVersion([settings,sharing,fixtures,confirmations,scoreFingerprint,scoreBreakdownFingerprint,history,choices])};
 }
 export async function finaliseFixtureVeoNight(leagueId:string,date:string,actorId:string,fingerprint:string) {
   return veoTransaction(async db=>{

@@ -4,7 +4,6 @@ import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScor
 import { prisma } from '@/lib/prisma';
 import { requireCaptain } from '@/lib/requireCaptain';
 import { getSixflTvPriorityScore } from '@/lib/sixfl-tv/priority-score';
-import { getSixflTvEngagementScores, sixflTvAllocationScore } from '@/lib/sixfl-tv/analytics';
 
 type ThisWeekVeoStatus = {
   hasMatchThisWeek: boolean;
@@ -102,13 +101,10 @@ export default async function CaptainVeoPriorityCard({
   await requireCaptain(teamId);
   if (!leagueId) return null;
 
-  const [score, weekStatus, engagementMap] = await Promise.all([
+  const [score, weekStatus] = await Promise.all([
     getSixflTvPriorityScore(teamId),
     readThisWeekVeoStatus(leagueId, teamId),
-    getSixflTvEngagementScores([teamId]),
   ]);
-  const engagement = engagementMap.get(teamId);
-  const allocationScore = sixflTvAllocationScore(score.score, engagement?.engagementBonus ?? 0);
 
   return (
     <section aria-label="SIXFL TV Priority" className="space-y-5 rounded-3xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-5 text-white sm:p-6">
@@ -127,38 +123,38 @@ export default async function CaptainVeoPriorityCard({
       </div>
 
       <p className="max-w-3xl text-sm leading-6 text-white/80">
-        SIXFL TV Priority is <strong>free</strong>. Your 100-point reliability score decides whether you qualify.
-        Once eligible, SIXFL TV audience and community participation can add up to <strong>20 engagement points</strong>
-        when camera slots are allocated.
+        SIXFL TV Priority is <strong>free</strong>. You have one Priority Score out of <strong>100</strong>.
+        Reliability is worth up to 80 points, SIXFL TV audience up to 10 and taking part in goal nominations
+        and voting up to 10. You still need to meet the reliability and core match-card minimums.
       </p>
 
-      {engagement ? <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-lg font-bold">{engagement.viewScore}</div>
-          <div className="text-xs font-semibold text-white/80">View Score</div>
-          <div className="mt-1 text-[11px] text-white/45">100 = division average{engagement.provisional ? " · provisional" : ""}</div>
+          <div className="text-lg font-bold">{score.reliabilityPoints}/80</div>
+          <div className="text-xs font-semibold text-white/80">Reliability</div>
+          <div className="mt-1 text-[11px] text-white/45">Match cards, payment and fixture confirmation</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-lg font-bold">+{engagement.viewBonus}/10</div>
+          <div className="text-lg font-bold">{score.audiencePoints}/10</div>
           <div className="text-xs font-semibold text-white/80">Audience</div>
-          <div className="mt-1 text-[11px] text-white/45">{engagement.averageViews} avg views / recorded fixture</div>
+          <div className="mt-1 text-[11px] text-white/45">View index {score.viewScore}{score.viewProvisional ? " · provisional" : ""} · 100 = division average</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-lg font-bold">+{engagement.nominationPoints + engagement.votePoints}/10</div>
-          <div className="text-xs font-semibold text-white/80">Goal awards</div>
-          <div className="mt-1 text-[11px] text-white/45">Nominate +{engagement.nominationPoints} · vote +{engagement.votePoints}</div>
+          <div className="text-lg font-bold">{score.participationPoints}/10</div>
+          <div className="text-xs font-semibold text-white/80">Participation</div>
+          <div className="mt-1 text-[11px] text-white/45">Goal nominations and voting</div>
         </div>
         <div className="rounded-xl border border-fuchsia-300/25 bg-fuchsia-400/10 p-3">
-          <div className="text-lg font-bold text-fuchsia-50">{allocationScore}/120</div>
-          <div className="text-xs font-semibold text-fuchsia-100">Allocation score</div>
-          <div className="mt-1 text-[11px] text-fuchsia-100/55">{score.score}/100 base + {engagement.engagementBonus} engagement</div>
+          <div className="text-lg font-bold text-fuchsia-50">{score.score}/100</div>
+          <div className="text-xs font-semibold text-fuchsia-100">SIXFL TV Priority</div>
+          <div className="mt-1 text-[11px] text-fuchsia-100/55">Your one overall score</div>
         </div>
-      </div> : null}
+      </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-white">Available points per match</h3>
+        <h3 className="text-sm font-semibold text-white">Reliability detail</h3>
         <p className="mt-1 text-xs leading-5 text-white/55">
-          Each completed match is worth up to 20 points. Your overall SIXFL TV Priority Score is based on your last five completed matches.
+          Your last five completed matches build the reliability part of your score. The match record is then scaled to a maximum of 80 Priority points.
         </p>
       </div>
 
@@ -179,9 +175,9 @@ export default async function CaptainVeoPriorityCard({
       </div>
 
       <p className="text-xs leading-5 text-white/55">
-        The score is based on your last five completed fixtures. You need at least <strong>60/100</strong> and
-        core match cards completed in at least 60% of scored fixtures. Scores are provisional until five fixtures
-        have been recorded.
+        You need at least <strong>60/100 overall</strong>, and you must still meet the reliability and core match-card
+        minimums. The reliability history is provisional until five completed fixtures have been recorded; the View
+        index is provisional until there are enough measured SIXFL TV matches.
       </p>
 
       {score.matches.length ? (
@@ -248,7 +244,7 @@ export default async function CaptainVeoPriorityCard({
         </details>
       ) : (
         <p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white/65">
-          New team: your score starts provisionally at 100/100 and will become history-based as completed fixtures are added.
+          New team: your reliability starts provisionally at full strength, so your initial Priority Score is 80/100 before audience or participation points are earned.
         </p>
       )}
 

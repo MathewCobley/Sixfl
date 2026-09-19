@@ -4,8 +4,9 @@ export type VeoFixture = {
   pitch: string | null; homeTeamId: string; awayTeamId: string;
   homePriority: boolean; awayPriority: boolean; locked: boolean; eligible: boolean;
   homePriorityScore?: number; awayPriorityScore?: number;
-  homeAllocationScore?: number; awayAllocationScore?: number;
-  homeEngagementBonus?: number; awayEngagementBonus?: number;
+  homeReliabilityPoints?: number; awayReliabilityPoints?: number;
+  homeAudiencePoints?: number; awayAudiencePoints?: number;
+  homeParticipationPoints?: number; awayParticipationPoints?: number;
   homeViewScore?: number; awayViewScore?: number;
   filmed: boolean;
 };
@@ -34,8 +35,8 @@ function rank(f: VeoFixture, history: VeoHistory): number[] {
   const ids = [f.homeTeamId, f.awayTeamId];
   const priorityFlags = [f.homePriority, f.awayPriority];
   const priorityScores = [
-    f.homeAllocationScore ?? f.homePriorityScore ?? 0,
-    f.awayAllocationScore ?? f.awayPriorityScore ?? 0,
+    f.homePriorityScore ?? 0,
+    f.awayPriorityScore ?? 0,
   ];
   const priorityIds = ids.filter((_, i) => priorityFlags[i]);
   const qualifyingScores = priorityScores.filter((_, i) => priorityFlags[i]);

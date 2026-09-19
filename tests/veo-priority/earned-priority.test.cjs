@@ -24,6 +24,7 @@ const captainFixtures = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/
 const engagement = fs.readFileSync('src/lib/sixfl-tv/analytics.ts', 'utf8');
 const engagementDashboard = fs.readFileSync('src/app/(admin)/admin/sixfl-tv/analytics/page.tsx', 'utf8');
 const engagementMigration = fs.readFileSync('prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql', 'utf8');
+const singleScoreMigration = fs.readFileSync('prisma/migrations/20260919095500_single_sixfl_tv_priority_score/migration.sql', 'utf8');
 
 test('Priority score makes the match card the largest factor while keeping late payment costly', () => {
   assert.match(score, /paymentPoints = 6/);
@@ -57,6 +58,9 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MIN = 50/);
   assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MAX = 150/);
   assert.match(engagement, /SIXFL_TV_ENGAGEMENT_BONUS_MAX = 20/);
+  assert.match(score, /SIXFL_TV_PRIORITY_RELIABILITY_MAX = 80/);
+  assert.match(score, /SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10/);
+  assert.match(score, /SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10/);
   assert.match(engagement, /SIXFL_TV_VIEW_FIXTURE_WINDOW = 5/);
   assert.match(engagement, /GoalOfWeekNomination/);
   assert.match(engagement, /GoalOfWeekVote/);
@@ -64,12 +68,15 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(engagement, /GoalOfMonthVote/);
   assert.match(engagement, /division:/);
   assert.match(engagement, /viewBonus \+ nominationPoints \+ votePoints/);
-  assert.match(allocator, /homeAllocationScore/);
-  assert.match(allocator, /f\.homeAllocationScore \?\? f\.homePriorityScore/);
-  assert.match(bookings, /getSixflTvEngagementScores/);
-  assert.match(bookings, /homeAllocationScore:sixflTvAllocationScore/);
-  assert.match(engagementDashboard, /View Score compares each team with the current average in its own division/);
+  assert.doesNotMatch(allocator, /homeAllocationScore|awayAllocationScore/);
+  assert.match(allocator, /f\.homePriorityScore \?\? 0/);
+  assert.doesNotMatch(bookings, /sixflTvAllocationScore|getSixflTvEngagementScores/);
+  assert.match(bookings, /homePriorityScore:homeScore\?\.score\?\?0/);
+  assert.match(bookings, /homeReliabilityPoints:homeScore\?\.reliabilityPoints\?\?0/);
+  assert.match(engagementDashboard, /View index is an audience index/);
   assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
+  assert.match(singleScoreMigration, /one SIXFL TV Priority Score out of 100/);
+  assert.match(singleScoreMigration, /Reliability — up to 80 points/);
 });
 
 test('captains and admins see the same score', () => {
@@ -84,11 +91,15 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /Ratings', 'Bonus · by 6pm next day'/);
   assert.match(captainCard, /Assists bonus completed by 6pm/);
   assert.match(captainCard, /Player ratings bonus completed by 6pm/);
-  assert.match(adminPriorityPage, /assists bonus 1 \(by 6pm next day\)/);
-  assert.match(adminPriorityPage, /ratings bonus 1 \(by 6pm next day\)/);
+  assert.match(adminPriorityPage, /reliability contributes up to 80 points/);
+  assert.match(adminPriorityPage, /audience up to 10/);
+  assert.match(adminPriorityPage, /goal nominations\/voting up to 10/);
+  assert.match(adminPriorityPage, /View index is an audience index only/);
   assert.match(captainCard, /Match card not completed/);
-  assert.match(captainCard, /Available points per match/);
-  assert.match(captainCard, /Each completed match is worth up to 20 points/);
+  assert.match(captainCard, /Reliability detail/);
+  assert.match(captainCard, /scaled to a maximum of 80 Priority points/);
+  assert.match(captainCard, /Your one overall score/);
+  assert.doesNotMatch(captainCard, /\/120|Allocation score/);
   assert.match(captainCard, /What was missing\?/);
   assert.match(captainCard, /pointsMissed/);
   assert.match(captainCard, /missed/);

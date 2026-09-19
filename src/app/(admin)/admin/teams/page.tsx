@@ -11,7 +11,6 @@ import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
 import SixflTvPriorityScoreBadge from "@/components/sixfl-tv/SixflTvPriorityScoreBadge";
 import { getSixflTvPriorityScores } from "@/lib/sixfl-tv/priority-score";
-import { getSixflTvEngagementScores } from "@/lib/sixfl-tv/analytics";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { deleteTeamAction } from "./actions";
@@ -343,10 +342,7 @@ export default async function AdminTeamsPage({
   const displayTeams = dedupeTeamsForDisplay(allTeams);
   const groups = groupTeams(allTeams);
   const teamIds = displayTeams.map((team) => team.id);
-  const [priorityScores, engagementScores] = await Promise.all([
-    getSixflTvPriorityScores(teamIds),
-    getSixflTvEngagementScores(teamIds),
-  ]);
+  const priorityScores = await getSixflTvPriorityScores(teamIds);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
@@ -503,13 +499,13 @@ export default async function AdminTeamsPage({
                           {priorityScores.get(team.id) ? (
                             <SixflTvPriorityScoreBadge score={priorityScores.get(team.id)!} />
                           ) : null}
-                          {engagementScores.get(team.id) ? (
+                          {priorityScores.get(team.id) ? (
                             <span
-                              title={`Average SIXFL TV viewing versus ${engagementScores.get(team.id)!.cohortLabel}. 100 is the division benchmark.`}
+                              title="SIXFL TV viewing index. 100 means average viewing for the team’s current division."
                               className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-semibold text-fuchsia-100"
                             >
-                              View {engagementScores.get(team.id)!.viewScore}
-                              {engagementScores.get(team.id)!.provisional ? " · provisional" : ""}
+                              View {priorityScores.get(team.id)!.viewScore}
+                              {priorityScores.get(team.id)!.viewProvisional ? " · provisional" : ""}
                             </span>
                           ) : null}
                           <span className={accessState.className}>{accessState.label}</span>

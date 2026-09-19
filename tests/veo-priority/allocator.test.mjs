@@ -38,10 +38,10 @@ test('higher earned score wins between equally eligible fixtures', () => {
   ];
   assert.equal(allocateVeoNight(matches, settings)[0].fixtureId, 'b');
 });
-test('engagement-adjusted allocation score breaks ties after eligibility', () => {
+test('camera allocation uses the one displayed Priority score with no hidden second score', () => {
   const matches = [
-    fixture('a', 0, '1', { homePriority: true, homePriorityScore: 90, homeAllocationScore: 94 }),
-    fixture('b', 0, '2', { homePriority: true, homePriorityScore: 82, homeAllocationScore: 99 }),
+    fixture('a', 0, '1', { homePriority: true, homePriorityScore: 90, homeAllocationScore: 120 }),
+    fixture('b', 0, '2', { homePriority: true, homePriorityScore: 94 }),
   ];
   assert.equal(allocateVeoNight(matches, settings)[0].fixtureId, 'b');
 });

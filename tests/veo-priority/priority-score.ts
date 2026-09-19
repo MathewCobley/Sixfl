@@ -181,7 +181,11 @@ async function main() {
 
   assert.equal(score.matchesCount, 5);
   assert.equal(score.provisional, false);
-  assert.equal(score.score, 96, "one late payment should lose 4 of the 100 available points");
+  assert.equal(score.reliabilityScore, 96, "one late payment should reduce the reliability rate by four points");
+  assert.equal(score.reliabilityPoints, 77, "96% reliability should contribute 77 of the 80 available Priority points");
+  assert.equal(score.audiencePoints, 0);
+  assert.equal(score.participationPoints, 0);
+  assert.equal(score.score, 77, "the headline Priority score should be the single 100-point total");
   assert.equal(score.qualifies, true);
   assert.equal(score.coreCompletedMatches, 5);
   assert.equal(score.matches.reduce((sum, match) => sum + match.paymentPoints, 0), 26);
@@ -192,7 +196,9 @@ async function main() {
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
 
   const newTeam = await getSixflTvPriorityScore(id("new"), prisma);
-  assert.equal(newTeam.score, 100);
+  assert.equal(newTeam.reliabilityScore, 100);
+  assert.equal(newTeam.reliabilityPoints, 80);
+  assert.equal(newTeam.score, 80, "a new team starts with full provisional reliability but no unearned engagement points");
   assert.equal(newTeam.provisional, true);
   assert.equal(newTeam.qualifies, true);
 
