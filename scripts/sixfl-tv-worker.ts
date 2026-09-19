@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createGoalOfMonthClipOverlay, createGoalOfMonthNomineeIntro, createGoalOfMonthNomineeOutro, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
@@ -28,6 +28,11 @@ const TITLE_SECONDS = 4;
 const LINEUP_SECONDS = 5;
 const LEAGUE_TABLE_SECONDS = 5;
 const GOAL_OF_MONTH_END_SECONDS = 5;
+const GOAL_NOMINEE_INTRO_SECONDS = 1.4;
+const GOAL_NOMINEE_OUTRO_SECONDS = 2.8;
+const GOAL_REPLAY_START_SECONDS = 13;
+const GOAL_REPLAY_END_SECONDS = 16;
+const GOAL_REPLAY_SPEED = 0.5;
 const SWIPE_FRAMES = 24;
 const SWIPE_FPS = 30;
 const RETENTION_SWEEP_MS = 5 * 60 * 1000;
@@ -52,6 +57,28 @@ type Job = { id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; m
 type Input = { assetId: string; role: "INTRO" | "CONTENT" | "OUTRO"; position: number; filename: string; kind: string; partCount: number; sizeBytes: bigint; state: string; clipNumber: number | null };
 type SourcePart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
 type RenderPart = { partNumber: number; objectKey: string; sizeBytes: number; stored: boolean; sha256: string };
+type GoalOfMonthRenderJob = {
+  candidateId: string;
+  sourceAssetId: string;
+  state: "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+  objectKey: string | null;
+  leaseToken: string | null;
+};
+type GoalOfMonthRenderDetails = {
+  candidateId: string;
+  sourceAssetId: string;
+  fixtureId: string;
+  clipNumber: number;
+  scorerName: string | null;
+  teamName: string;
+  teamLogoUrl: string | null;
+  opponentName: string;
+  leagueName: string;
+  filename: string;
+  partCount: number;
+  sizeBytes: bigint;
+  assetState: string;
+};
 type PublishJob = {
   id: string; fixtureId: string; kind: "HIGHLIGHTS" | "FULL_MATCH"; renderJobId: string; thumbnailObjectKey: string;
   title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; resumableUrl: string | null; uploadedBytes: bigint;
@@ -226,14 +253,16 @@ async function reconstructAsset(input: Input, target: string) {
 
 type PosterCandidate = { bytes: Buffer; score: number; source: string };
 
-async function sourcePosterCandidate(source: string, dir: string, label: string): Promise<PosterCandidate | null> {
+async function sourcePosterCandidate(source: string, dir: string, label: string, preferredSecond?: number): Promise<PosterCandidate | null> {
   try {
     const seconds = await durationSeconds(source);
-    const fractions = seconds < 2 ? [0.5] : [0.3, 0.5, 0.7];
+    const times = Number.isFinite(preferredSecond) && Number(preferredSecond) > 0
+      ? [Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.08), Number(preferredSecond)))]
+      : (seconds < 2 ? [seconds * 0.5] : [seconds * 0.3, seconds * 0.5, seconds * 0.7]);
     let best: PosterCandidate | null = null;
-    for (let index = 0; index < fractions.length; index++) {
+    for (let index = 0; index < times.length; index++) {
       checkAbort();
-      const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), seconds * fractions[index]));
+      const at = Math.max(0.05, Math.min(Math.max(0.05, seconds - 0.05), times[index]));
       const target = path.join(dir, `poster-${label}-${index}.jpg`);
       await run("ffmpeg", [
         "-y", "-ss", at.toFixed(3), "-i", source, "-frames:v", "1",
@@ -346,6 +375,41 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
   }
 }
+
+async function slowMotionReplay(source: string, target: string, overlay: string) {
+  const seconds = await durationSeconds(source);
+  const audio = await hasAudio(source);
+  const end = Math.min(GOAL_REPLAY_END_SECONDS, seconds);
+  let start = Math.min(GOAL_REPLAY_START_SECONDS, Math.max(0, end - 0.6));
+  if (end - start < 0.6) start = Math.max(0, end - Math.min(3, seconds));
+  const sourceDuration = Math.max(0.6, end - start);
+  const outputDuration = sourceDuration / GOAL_REPLAY_SPEED;
+  const fadeOutStart = Math.max(0, outputDuration - 0.16).toFixed(3);
+  const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS,fps=30,format=yuv420p`;
+  const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[tag];[base][tag]overlay=0:0:format=auto,fade=t=in:st=0:d=0.12,fade=t=out:st=${fadeOutStart}:d=0.16,format=yuv420p[v]`;
+  if (audio) {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", sourceDuration.toFixed(3), "-i", source,
+      "-loop", "1", "-i", overlay,
+      "-filter_complex", `${videoFilter};[0:a]atempo=${GOAL_REPLAY_SPEED},aresample=48000,afade=t=in:st=0:d=0.08,afade=t=out:st=${fadeOutStart}:d=0.12[a]`,
+      "-map", "[v]", "-map", "[a]", "-t", outputDuration.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  } else {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", sourceDuration.toFixed(3), "-i", source,
+      "-loop", "1", "-i", overlay,
+      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+      "-filter_complex", videoFilter,
+      "-map", "[v]", "-map", "2:a:0", "-t", outputDuration.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  }
+  return { sourceStart: start, sourceEnd: end, outputDuration };
+}
+
 
 type OutputProof = { sizeBytes: number; partCount: number; parts: RenderPart[] };
 async function storeOutput(job: Job, file: string): Promise<OutputProof> {
@@ -484,7 +548,12 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       reportProgress(progressFor(0), `Preparing ${label}`);
       await reconstructAsset(input, source);
       if (posterLabel || goalClipPosterAssetId) {
-        const candidate = await sourcePosterCandidate(source, dir, posterLabel || `goal-clip-${goalClipPosterAssetId}`);
+        const candidate = await sourcePosterCandidate(
+          source,
+          dir,
+          posterLabel || `goal-clip-${goalClipPosterAssetId}`,
+          goalClipPosterAssetId ? 14 : undefined,
+        );
         if (goalClipPosterAssetId) {
           await saveGoalClipPoster(goalClipPosterAssetId, candidate).catch(error =>
             console.warn(`Could not save Goal of the Month poster for ${goalClipPosterAssetId}: ${safeError(error)}`),
@@ -1080,6 +1149,159 @@ async function queueAutomaticYoutubePublish() {
 type RetentionAsset = { id: string; fixtureId: string; filename: string; kind: string };
 type RetentionPart = { assetId: string; partNumber: number; objectKey: string };
 
+async function claimGoalOfMonthClipRender() {
+  return db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76424425)::text`;
+    await tx.$executeRaw`
+      UPDATE "GoalOfMonthClipRender"
+      SET "state"='QUEUED',"leaseToken"=NULL,"busyUntil"=NULL,"error"='Recovered after an interrupted nominee render.',"updatedAt"=NOW()
+      WHERE "state"='PROCESSING' AND "busyUntil" < NOW()`;
+    const rows = await tx.$queryRaw<GoalOfMonthRenderJob[]>`
+      SELECT "candidateId","sourceAssetId","state","objectKey","leaseToken"
+      FROM "GoalOfMonthClipRender"
+      WHERE "state"='QUEUED'
+      ORDER BY "createdAt","candidateId"
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1`;
+    const row = rows[0];
+    if (!row) return null;
+    const lease = randomUUID();
+    await tx.$executeRaw`
+      UPDATE "GoalOfMonthClipRender"
+      SET "state"='PROCESSING',"leaseToken"=${lease},"busyUntil"=NOW()+INTERVAL '10 minutes',"error"=NULL,"updatedAt"=NOW()
+      WHERE "candidateId"=${row.candidateId} AND "state"='QUEUED'`;
+    return { ...row, state: "PROCESSING" as const, leaseToken: lease };
+  });
+}
+
+async function goalOfMonthRenderDetails(job: GoalOfMonthRenderJob) {
+  const rows = await db.$queryRaw<GoalOfMonthRenderDetails[]>(Prisma.sql`
+    SELECT
+      c."id" AS "candidateId",
+      c."clipAssetId" AS "sourceAssetId",
+      c."fixtureId",
+      a."clipNumber"::int AS "clipNumber",
+      c."scorerName",
+      team."name" AS "teamName",
+      team."logoUrl" AS "teamLogoUrl",
+      CASE WHEN f."homeTeamId"=c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
+      league."name" AS "leagueName",
+      a."filename",
+      a."partCount",
+      a."sizeBytes",
+      a."state" AS "assetState"
+    FROM "GoalOfMonthCandidate" c
+    JOIN "Fixture" f ON f."id"=c."fixtureId"
+    JOIN "Team" team ON team."id"=c."teamId"
+    JOIN "Team" home ON home."id"=f."homeTeamId"
+    JOIN "Team" away ON away."id"=f."awayTeamId"
+    JOIN "League" league ON league."id"=f."leagueId"
+    JOIN "SixflTvFootageAsset" a ON a."id"=c."clipAssetId" AND a."fixtureId"=c."fixtureId"
+    WHERE c."id"=${job.candidateId}
+      AND c."status"='ACTIVE'
+      AND c."clipAssetId"=${job.sourceAssetId}
+      AND a."kind"='CLIP'
+      AND a."state"='READY'
+      AND a."clipNumber" IS NOT NULL
+    LIMIT 1
+  `);
+  if (!rows[0]) throw new Error("The nominated source clip is no longer available.");
+  return rows[0];
+}
+
+async function finishGoalOfMonthClipRender(job: GoalOfMonthRenderJob, file: string, durationMs: number) {
+  const bytes = await readFile(file);
+  if (!bytes.length || bytes.length > 512 * 1024 * 1024) throw new Error("Rendered Goal of the Month clip size is invalid.");
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const key = `goal-of-month-render/v1/${job.candidateId}/${digest}.mp4`;
+  await uploadRailwayObject({ key, body: bytes, contentType: "video/mp4", signal: operationSignal(60000) });
+  const changed = await db.$executeRaw`
+    UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"=${key},"sizeBytes"=${bytes.length},"durationMs"=${durationMs},
+        "completedAt"=NOW(),"leaseToken"=NULL,"busyUntil"=NULL,"error"=NULL,"updatedAt"=NOW()
+    WHERE "candidateId"=${job.candidateId}
+      AND "leaseToken"=${job.leaseToken}
+      AND "state"='PROCESSING'`;
+  if (changed !== 1) {
+    await deleteRailwayObject(key, AbortSignal.timeout(15000)).catch(() => undefined);
+    throw new Error("Goal of the Month render ownership expired.");
+  }
+  if (job.objectKey && job.objectKey !== key) {
+    await deleteRailwayObject(job.objectKey, AbortSignal.timeout(15000)).catch(() => undefined);
+  }
+}
+
+async function failGoalOfMonthClipRender(job: GoalOfMonthRenderJob, message: string) {
+  await db.$executeRaw`
+    UPDATE "GoalOfMonthClipRender"
+    SET "state"='FAILED',"error"=${message},"leaseToken"=NULL,"busyUntil"=NULL,"updatedAt"=NOW()
+    WHERE "candidateId"=${job.candidateId}
+      AND "leaseToken"=${job.leaseToken}
+      AND "state"='PROCESSING'`;
+}
+
+async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
+  const detail = await goalOfMonthRenderDetails(job);
+  const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-gotm-${job.candidateId}-`));
+  try {
+    const source = path.join(dir, "source.mp4");
+    await reconstructAsset({
+      assetId: detail.sourceAssetId,
+      role: "CONTENT",
+      position: 0,
+      filename: detail.filename,
+      kind: "CLIP",
+      partCount: detail.partCount,
+      sizeBytes: detail.sizeBytes,
+      state: detail.assetState,
+      clipNumber: detail.clipNumber,
+    }, source);
+
+    const poster = await sourcePosterCandidate(source, dir, `gotm-${detail.candidateId}`, 14);
+    await saveGoalClipPoster(detail.sourceAssetId, poster).catch(error =>
+      console.warn(`Could not save Goal of the Month 14-second poster for ${detail.sourceAssetId}: ${safeError(error)}`),
+    );
+
+    const introPng = path.join(dir, "intro.png");
+    const clipOverlayPng = path.join(dir, "clip-overlay.png");
+    const replayOverlayPng = path.join(dir, "replay-overlay.png");
+    const outroPng = path.join(dir, "outro.png");
+    await Promise.all([
+      writeFile(introPng, await createGoalOfMonthNomineeIntro({ siteUrl: siteUrl(), clipNumber: detail.clipNumber })),
+      writeFile(clipOverlayPng, await createGoalOfMonthClipOverlay({ siteUrl: siteUrl(), clipNumber: detail.clipNumber })),
+      writeFile(replayOverlayPng, await createGoalOfMonthClipOverlay({ siteUrl: siteUrl(), clipNumber: detail.clipNumber, replay: true })),
+      writeFile(outroPng, await createGoalOfMonthNomineeOutro({
+        siteUrl: siteUrl(),
+        clipNumber: detail.clipNumber,
+        scorerName: detail.scorerName,
+        teamName: detail.teamName,
+        teamLogoUrl: detail.teamLogoUrl,
+        opponentName: detail.opponentName,
+        leagueName: detail.leagueName,
+        backgroundImage: poster?.bytes ?? null,
+      })),
+    ]);
+
+    const intro = path.join(dir, "intro.mp4");
+    const normal = path.join(dir, "normal.mp4");
+    const replay = path.join(dir, "replay.mp4");
+    const outro = path.join(dir, "outro.mp4");
+    await cardVideo(introPng, intro, GOAL_NOMINEE_INTRO_SECONDS);
+    await normaliseVideo(source, normal, clipOverlayPng);
+    await slowMotionReplay(source, replay, replayOverlayPng);
+    await cardVideo(outroPng, outro, GOAL_NOMINEE_OUTRO_SECONDS);
+
+    const concat = path.join(dir, "concat.txt");
+    await writeFile(concat, [intro, normal, replay, outro].map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
+    const output = path.join(dir, "nominee.mp4");
+    await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
+    const durationMs = Math.round((await durationSeconds(output)) * 1000);
+    await finishGoalOfMonthClipRender(job, output, durationMs);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 async function cleanupMaturedGoalOfMonthFootage() {
   const latestClosedMonth = monthlyCycle(new Date()).latestClosedMonth;
   const assets = await db.$queryRaw<RetentionAsset[]>(Prisma.sql`
@@ -1166,6 +1388,21 @@ async function main() {
       }
       continue;
     }
+    const nominee = await claimGoalOfMonthClipRender().catch(error => {
+      console.error("Goal of the Month render claim failed", safeError(error));
+      return null;
+    });
+    if (nominee) {
+      try {
+        await processGoalOfMonthClipRender(nominee);
+        console.log(`Rendered Goal of the Month nominee ${nominee.candidateId}`);
+      } catch (error) {
+        const message = safeError(error);
+        console.error(`Goal of the Month nominee ${nominee.candidateId} failed`, message);
+        await failGoalOfMonthClipRender(nominee, message).catch(() => undefined);
+      }
+      continue;
+    }
     await queueAutomaticYoutubePublish().catch(error => console.error("Automatic YouTube queue failed", safeError(error)));
     const publish = await claimPublishJob().catch(error => { console.error("YouTube claim failed", safeError(error)); return null; });
     if (publish) {
@@ -1207,7 +1444,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;

@@ -51,7 +51,7 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
         ) : <p className="p-4 text-sm text-white/60">Footage currently unavailable.</p>}
       </div>
       <div className="space-y-2 p-4">
-        <p className="text-xs font-semibold text-fuchsia-200">
+        <p className="text-xs font-semibold text-emerald-200">
           {new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${goal.monthKey}-01T12:00:00Z`))} · {identity}
         </p>
         <h3 className="break-words font-bold text-white">{goal.scorerName || goal.teamName}</h3>

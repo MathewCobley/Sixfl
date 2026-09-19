@@ -21,10 +21,32 @@ async function reviewNominee(form: FormData) {
   const status = String(form.get("status") ?? "");
   const scorer = String(form.get("scorerName") ?? "").trim().slice(0, 100) || null;
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || !validMonthKey(key) || !["ACTIVE", "REMOVED"].includes(status)) throw new Error("Choose a valid nomination.");
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
-    WHERE "id" = ${id} AND "monthKey" = ${key}
-  `);
+  await prisma.$transaction(async tx => {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
+      WHERE "id" = ${id} AND "monthKey" = ${key}
+    `);
+    if (status === "ACTIVE") {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
+        SELECT c."id", c."clipAssetId"
+        FROM "GoalOfMonthCandidate" c
+        JOIN "SixflTvFootageAsset" a ON a."id"=c."clipAssetId"
+        WHERE c."id"=${id}
+          AND c."clipAssetId" IS NOT NULL
+          AND a."kind"='CLIP'
+          AND a."state"='READY'
+        ON CONFLICT ("candidateId") DO UPDATE SET
+          "sourceAssetId"=EXCLUDED."sourceAssetId",
+          "state"='QUEUED',
+          "leaseToken"=NULL,
+          "busyUntil"=NULL,
+          "error"=NULL,
+          "completedAt"=NULL,
+          "updatedAt"=NOW()
+      `);
+    }
+  });
   revalidatePath("/goal-of-the-month"); revalidatePath("/admin/sixfl-tv/goal-of-month"); revalidatePath("/");
   redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&saved=1`);
 }
@@ -47,7 +69,7 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
     `), getMonthlyPageData(null),
   ]);
   return <div className="space-y-6">
-    <header className="rounded-3xl border border-fuchsia-300/25 bg-fuchsia-400/5 p-6"><h1 className="text-3xl font-bold text-white">Goal of the Month</h1><p className="mt-3 text-sm leading-6 text-white/65">One monthly competition across SIXFL. Nominations run through the following 5th; the top six go to voting from the 6th–12th. Existing weekly records remain separate. Remove only incorrect or unsuitable nominations; removal preserves the original nominations and votes.</p><div className="mt-4 flex flex-wrap gap-4 text-sm text-emerald-100"><Link href="/goal-of-the-month">Open public competition →</Link><Link href="/admin/sixfl-tv/goal-of-week?legacy=1">Historical weekly nominations</Link><Link href="/admin/sixfl-tv/goal-of-week">SIXFL TV / weekly winner editor</Link></div></header>
+    <header className="rounded-3xl border border-emerald-300/25 bg-emerald-400/5 p-6"><h1 className="text-3xl font-bold text-white">Goal of the Month</h1><p className="mt-3 text-sm leading-6 text-white/65">One monthly competition across SIXFL. Nominations run through the following 5th; the top six go to voting from the 6th–12th. Existing weekly records remain separate. Remove only incorrect or unsuitable nominations; removal preserves the original nominations and votes.</p><div className="mt-4 flex flex-wrap gap-4 text-sm text-emerald-100"><Link href="/goal-of-the-month">Open public competition →</Link><Link href="/admin/sixfl-tv/goal-of-week?legacy=1">Historical weekly nominations</Link><Link href="/admin/sixfl-tv/goal-of-week">SIXFL TV / weekly winner editor</Link></div></header>
     {query.saved === "1" ? <p role="status" className="text-emerald-100">Nomination changes saved.</p> : null}
     <form className="flex flex-wrap gap-3"><label className="text-sm">Award month <input name="month" type="month" defaultValue={key} className="rounded-lg border border-white/20 bg-black p-2 text-white" /></label><button type="submit" className="rounded-lg border border-white/20 px-4 py-2">Show month</button></form>
     <h2 className="text-xl font-bold">{period.label} — {rows.length} nominated goals</h2>

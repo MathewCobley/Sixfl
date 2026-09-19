@@ -207,6 +207,22 @@ test('highlight normalisation overlays a persistent scorebug without removing ma
   assert.ok(meta.streams.some(stream => stream.codec_type === 'audio'), 'Scorebug overlay must keep the original match audio');
 });
 
+test('Goal of the Month replay slows the 13-16 second goal window to half speed', { timeout: 90000 }, async t => {
+  const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t);
+  const source = path.join(dir, 'goal.mp4'), replay = path.join(dir, 'replay.mp4'), overlay = path.join(dir, 'replay.png');
+  await w.run('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=25', '-f', 'lavfi', '-i', 'sine=frequency=660:sample_rate=48000', '-t', '18', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', source]);
+  await fs.writeFile(overlay, await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="180" height="54" rx="12" fill="#10b981"/><text x="144" y="82" text-anchor="middle" font-size="24" fill="#fff">REPLAY</text></svg>')).png().toBuffer());
+  const replayInfo = await w.slowMotionReplay(source, replay, overlay);
+  assert.ok(Math.abs(replayInfo.sourceStart - 13) < 0.01);
+  assert.ok(Math.abs(replayInfo.sourceEnd - 16) < 0.01);
+  assert.ok(Math.abs(replayInfo.outputDuration - 6) < 0.05);
+  const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', replay], true));
+  assert.equal(meta.streams.find(stream => stream.codec_type === 'video').width, 1920);
+  assert.equal(meta.streams.find(stream => stream.codec_type === 'video').height, 1080);
+  assert.ok(meta.streams.some(stream => stream.codec_type === 'audio'));
+  assert.ok(Number(meta.format.duration) >= 5.8 && Number(meta.format.duration) <= 6.2);
+});
+
 test('actual FFmpeg assembly reconstructs saved manifests and produces a decodable private MP4', { timeout: 90000 }, async t => {
   const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t), job = addJob(db);
   const source = path.join(dir, 'input.mp4');
