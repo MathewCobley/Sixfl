@@ -3,6 +3,7 @@ import CupInvitationNotice from "@/components/cups/CupInvitationNotice";
 // File: src/app/captain/team/[teamid]/layout.tsx
 // ========================================
 
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -27,6 +28,24 @@ import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
+
+export const metadata: Metadata = {
+  icons: {
+    apple: "/apple-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SIXFL",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#07130f",
+};
 
 const captainMobileStyles = String.raw`
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
