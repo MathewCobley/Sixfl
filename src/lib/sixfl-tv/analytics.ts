@@ -241,7 +241,7 @@ async function latestTwoSnapshots(db: Db = prisma) {
 }
 
 function cohortKey(row: Pick<TeamCohortRow, "leagueId" | "divisionId">) {
-  return row.divisionId ? `division:\${row.divisionId}` : `league:\${row.leagueId}`;
+  return row.divisionId ? `division:${row.divisionId}` : `league:${row.leagueId}`;
 }
 
 export async function getSixflTvViewScores(
@@ -337,7 +337,7 @@ export async function getSixflTvViewScores(
       divisionId: team.divisionId,
       divisionName: team.divisionName,
       cohortLabel: team.divisionName
-        ? `\${team.leagueName} · \${team.divisionName}`
+        ? `${team.leagueName} · ${team.divisionName}`
         : team.leagueName,
       recordedFixtures: own.count,
       averageViews: Math.round(own.average),
@@ -362,19 +362,19 @@ async function getAwardParticipation(
     WITH actions AS (
       SELECT "userId", 'NOMINATION'::text AS kind
       FROM "GoalOfWeekNomination"
-      WHERE "createdAt" >= \${since}
+      WHERE "createdAt" >= ${since}
       UNION ALL
       SELECT "userId", 'VOTE'::text AS kind
       FROM "GoalOfWeekVote"
-      WHERE "updatedAt" >= \${since}
+      WHERE "updatedAt" >= ${since}
       UNION ALL
       SELECT "userId", 'NOMINATION'::text AS kind
       FROM "GoalOfMonthNomination"
-      WHERE "createdAt" >= \${since}
+      WHERE "createdAt" >= ${since}
       UNION ALL
       SELECT "userId", 'VOTE'::text AS kind
       FROM "GoalOfMonthVote"
-      WHERE "updatedAt" >= \${since}
+      WHERE "updatedAt" >= ${since}
     ),
     memberships AS (
       SELECT "userId", "teamId" FROM "TeamMember"
@@ -389,7 +389,7 @@ async function getAwardParticipation(
       COUNT(DISTINCT actions."userId")::int AS participants
     FROM actions
     JOIN memberships ON memberships."userId" = actions."userId"
-    WHERE memberships."teamId" IN (\${Prisma.join(teamIds)})
+    WHERE memberships."teamId" IN (${Prisma.join(teamIds)})
     GROUP BY memberships."teamId", actions.kind
   `);
 
@@ -487,7 +487,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
     url.searchParams.set("maxResults", "50");
 
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer \${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });
@@ -504,7 +504,7 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
       error?: { message?: string };
     };
     if (!response.ok) {
-      throw new Error(data.error?.message || `YouTube statistics request failed (\${response.status}).`);
+      throw new Error(data.error?.message || `YouTube statistics request failed (${response.status}).`);
     }
 
     const writes = (data.items ?? [])
@@ -519,14 +519,14 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
           INSERT INTO "SixflTvYoutubeMetricSnapshot" (
             "id", "videoId", title, "viewCount", "likeCount", "commentCount", "publishedAt", "capturedAt"
           ) VALUES (
-            \${randomUUID()},
-            \${item.id},
-            \${item.snippet?.title?.trim().slice(0, 500) || null},
-            \${parseCounter(item.statistics?.viewCount)},
-            \${item.statistics?.likeCount == null ? null : parseCounter(item.statistics.likeCount)},
-            \${item.statistics?.commentCount == null ? null : parseCounter(item.statistics.commentCount)},
-            \${publishedAt},
-            \${capturedAt}
+            ${randomUUID()},
+            ${videoId},
+            ${item.snippet?.title?.trim().slice(0, 500) || null},
+            ${parseCounter(item.statistics?.viewCount)},
+            ${item.statistics?.likeCount == null ? null : parseCounter(item.statistics.likeCount)},
+            ${item.statistics?.commentCount == null ? null : parseCounter(item.statistics.commentCount)},
+            ${publishedAt},
+            ${capturedAt}
           )
         `);
       });
@@ -576,11 +576,11 @@ export async function getSixflTvAnalyticsDashboard(db: Db = prisma) {
     if (!latestCaptureAt || current.capturedAt > latestCaptureAt) latestCaptureAt = current.capturedAt;
     videos.push({
       videoId,
-      title: current.title || `\${ref.homeTeamName} vs \${ref.awayTeamName}`,
+      title: current.title || `${ref.homeTeamName} vs ${ref.awayTeamName}`,
       url: ref.url,
       kind: ref.kind,
       fixtureId: ref.fixtureId,
-      fixtureLabel: `\${ref.homeTeamName} vs \${ref.awayTeamName}`,
+      fixtureLabel: `${ref.homeTeamName} vs ${ref.awayTeamName}`,
       kickoffAt: ref.kickoffAt,
       views,
       likes: current.likeCount == null ? null : Number(current.likeCount),
