@@ -48,3 +48,18 @@ test('squad numbers are shared captain/admin profile data with duplicate protect
   assert.match(adminActions, /squadNumber/);
   assert.match(adminActions, /already used by another player/);
 });
+
+test('captain-specific player editor exposes squad number but never fee overrides', () => {
+  const captainEdit = read('src/app/captain/team/[teamid]/captain-squad/[membershipId]/edit/page.tsx');
+  const adminEdit = read('src/app/captain/team/[teamid]/squad/[membershipId]/edit/page.tsx');
+
+  assert.match(captainEdit, /label="Squad number"/);
+  assert.match(captainEdit, /name="squadNumber"/);
+  assert.doesNotMatch(captainEdit, /Player fee override/);
+  assert.doesNotMatch(captainEdit, /name="playerMatchFeeOverride"/);
+  assert.doesNotMatch(captainEdit, /Match fee setting/);
+
+  assert.match(adminEdit, /access\.isAdmin/);
+  assert.match(adminEdit, /Player fee override/);
+  assert.match(adminEdit, /name="squadNumber"/);
+});
