@@ -435,6 +435,176 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string,
   }
 }
 
+async function processGoalMediaJob(job: GoalMediaJob) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("Nomination render time limit reached.")), 15 * 60 * 1000);
+  timer.unref();
+  let refreshing = false;
+  const heartbeat = setInterval(async () => {
+    if (refreshing || controller.signal.aborted) return;
+    refreshing = true;
+    try {
+      const changed = await db.$executeRaw`
+        UPDATE "GoalOfMonthCandidate"
+        SET "mediaBusyUntil" = NOW() + INTERVAL '15 minutes', "updatedAt" = NOW()
+        WHERE "id" = ${job.id}
+          AND "mediaLeaseToken" = ${job.mediaLeaseToken}
+          AND "mediaState" = 'PROCESSING'
+          AND "status" = 'ACTIVE'
+      `;
+      if (changed !== 1) controller.abort(new Error("Nomination render ownership expired."));
+    } catch {
+      controller.abort(new Error("Nomination render ownership could not be renewed."));
+    } finally {
+      refreshing = false;
+    }
+  }, RENDER_HEARTBEAT_MS);
+  heartbeat.unref();
+
+  try {
+    await renderSignals.run(controller.signal, async () => {
+      const [details] = await db.$queryRaw<GoalMediaDetails[]>(Prisma.sql`
+        SELECT
+          c."id",
+          c."fixtureId",
+          c."clipAssetId",
+          c."monthKey",
+          c."scorerName",
+          team."name" AS "teamName",
+          team."logoUrl" AS "teamLogoUrl",
+          CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
+          league."name" AS "leagueName",
+          f."kickoffAt",
+          player."image" AS "playerImageUrl",
+          asset."clipNumber"::int AS "clipNumber",
+          asset."filename",
+          asset."kind",
+          asset."partCount"::int AS "partCount",
+          asset."sizeBytes",
+          asset."state"
+        FROM "GoalOfMonthCandidate" c
+        JOIN "Fixture" f ON f."id" = c."fixtureId"
+        JOIN "Team" team ON team."id" = c."teamId"
+        JOIN "Team" home ON home."id" = f."homeTeamId"
+        JOIN "Team" away ON away."id" = f."awayTeamId"
+        JOIN "League" league ON league."id" = f."leagueId"
+        JOIN "SixflTvFootageAsset" asset
+          ON asset."id" = c."clipAssetId"
+         AND asset."fixtureId" = c."fixtureId"
+         AND asset."kind" = 'CLIP'
+        LEFT JOIN LATERAL (
+          SELECT u."image"
+          FROM "TeamMember" tm
+          JOIN "User" u ON u."id" = tm."userId"
+          WHERE tm."teamId" = c."teamId"
+            AND c."scorerName" IS NOT NULL
+            AND LOWER(TRIM(COALESCE(u."name", ''))) = LOWER(TRIM(c."scorerName"))
+            AND COALESCE(TRIM(u."image"), '') <> ''
+          ORDER BY tm."createdAt" ASC, tm."id" ASC
+          LIMIT 1
+        ) player ON TRUE
+        WHERE c."id" = ${job.id}
+          AND c."status" = 'ACTIVE'
+          AND c."mediaState" = 'PROCESSING'
+          AND c."mediaLeaseToken" = ${job.mediaLeaseToken}
+        LIMIT 1
+      `);
+      if (!details) throw new Error("Nomination media details are unavailable.");
+      if (details.state !== "READY" || !Number.isInteger(Number(details.clipNumber))) {
+        throw new Error("The nominated SIXFL TV clip is not ready.");
+      }
+
+      const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-goal-nominee-${job.id}-`));
+      try {
+        const source = path.join(dir, "source.mp4");
+        const overlayPng = path.join(dir, "nominee-overlay.png");
+        const endCardPng = path.join(dir, "nominee-end-card.png");
+        const brandedClip = path.join(dir, "branded-clip.mp4");
+        const endCardVideo = path.join(dir, "end-card.mp4");
+        const concatFile = path.join(dir, "concat.txt");
+        const output = path.join(dir, "nomination.mp4");
+
+        const input: Input = {
+          assetId: details.clipAssetId,
+          role: "CONTENT",
+          position: 0,
+          filename: details.filename,
+          kind: details.kind,
+          partCount: Number(details.partCount),
+          sizeBytes: details.sizeBytes,
+          state: details.state,
+          clipNumber: Number(details.clipNumber),
+        };
+        await reconstructAsset(input, source);
+
+        const poster = await sourcePosterCandidate(source, dir, `nominee-${job.id}`);
+        await saveGoalClipPoster(details.clipAssetId, poster).catch(error =>
+          console.warn(`Could not save Goal of the Month nominee poster for ${details.clipAssetId}: ${safeError(error)}`),
+        );
+
+        await writeFile(overlayPng, await createGoalOfMonthNominationOverlay({
+          siteUrl: siteUrl(),
+          clipNumber: Number(details.clipNumber),
+          scorerName: details.scorerName,
+          teamName: details.teamName,
+        }));
+        await writeFile(endCardPng, await createGoalOfMonthNominationEndCard({
+          siteUrl: siteUrl(),
+          monthKey: details.monthKey,
+          clipNumber: Number(details.clipNumber),
+          scorerName: details.scorerName,
+          teamName: details.teamName,
+          teamLogoUrl: details.teamLogoUrl,
+          opponentName: details.opponentName,
+          leagueName: details.leagueName,
+          kickoffAt: details.kickoffAt,
+          playerImageUrl: details.playerImageUrl,
+        }));
+
+        await normaliseVideo(source, brandedClip, overlayPng);
+        await cardVideo(endCardPng, endCardVideo, 4);
+        await writeFile(concatFile, [brandedClip, endCardVideo].map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
+        await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concatFile, "-c", "copy", "-movflags", "+faststart", output]);
+
+        const bytes = await readFile(output);
+        if (!bytes.length || bytes.length > 256 * 1024 * 1024) {
+          throw new Error("The branded nomination clip is outside the supported size limit.");
+        }
+        const objectKey = goalOfMonthPromoVideoKey(job.id);
+        await uploadRailwayObject({
+          key: objectKey,
+          body: bytes,
+          contentType: "video/mp4",
+          signal: operationSignal(120000),
+        });
+        const durationMs = Math.round((await durationSeconds(output)) * 1000);
+
+        const changed = await db.$executeRaw`
+          UPDATE "GoalOfMonthCandidate"
+          SET "mediaState" = 'READY',
+              "promoVideoObjectKey" = ${objectKey},
+              "promoVideoSizeBytes" = ${bytes.length},
+              "promoVideoDurationMs" = ${durationMs},
+              "mediaError" = NULL,
+              "mediaCompletedAt" = NOW(),
+              "mediaBusyUntil" = NULL,
+              "mediaLeaseToken" = NULL,
+              "updatedAt" = NOW()
+          WHERE "id" = ${job.id}
+            AND "mediaLeaseToken" = ${job.mediaLeaseToken}
+            AND "mediaState" = 'PROCESSING'
+            AND "status" = 'ACTIVE'
+        `;
+        if (changed !== 1) throw new Error("Nomination render ownership expired before completion.");
+      } finally {
+        await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      }
+    });
+  } finally {
+    clearTimeout(timer);
+    clearInterval(heartbeat);
+  }
+}
 type OutputProof = { sizeBytes: number; partCount: number; parts: RenderPart[] };
 async function storeOutput(job: Job, file: string): Promise<OutputProof> {
   const handle = await open(file, "r"), parts: RenderPart[] = [];
