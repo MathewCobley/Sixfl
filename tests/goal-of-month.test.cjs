@@ -31,6 +31,7 @@ function loader(mocks = {}) {
 let db, sql, awards, calendar;
 const migration = 'prisma/migrations/20260907153000_goal_of_month/migration.sql';
 const clipMigration = 'prisma/migrations/20260918181000_goal_of_month_clip_assets/migration.sql';
+const mediaMigration = 'prisma/migrations/20260919183000_goal_of_month_nomination_media/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -60,6 +61,7 @@ test.before(() => {
     INSERT INTO "GoalOfWeekVote" VALUES ('weekly-vote','unchanged');`);
   sql(read(migration));
   sql(read(clipMigration));
+  sql(read(mediaMigration));
   sql(`UPDATE "GoalAwardTransition" SET "firstMonth"='2026-09',"weeklyNominationsCloseAt"='2026-09-13T23:00:00',"weeklyVotingClosesAt"='2026-09-15T17:00:00' WHERE id='monthly'`);
   db = new PrismaClient({ datasources: { db: { url } } });
   const load = loader({ '@/lib/prisma': { prisma: db } });
@@ -127,6 +129,9 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
   assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}`);
   assert.equal(payload.scorerName, 'Clip Scorer');
+  assert.equal(payload.mediaState, 'QUEUED');
+  assert.equal(sql(`SELECT "mediaState" FROM "GoalOfMonthCandidate" WHERE id='${result.candidateId}'`), 'QUEUED');
+  assert.match(sql(`SELECT "mediaQueuedAt"::text FROM "GoalOfMonthCandidate" WHERE id='${result.candidateId}'`), /^2026-/);
 });
 
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
