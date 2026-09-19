@@ -278,6 +278,7 @@ export async function getSixflTvViewScores(
     }
   }
 
+  // Audience history deliberately uses every measured fixture; the five-match window applies only to reliability.
   const averages = new Map<string, { average: number; count: number }>();
   for (const team of teams) {
     const measuredFixtures = fixturesByTeam.get(team.id) ?? [];
