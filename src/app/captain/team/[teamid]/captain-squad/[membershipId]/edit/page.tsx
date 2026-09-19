@@ -226,7 +226,7 @@ export default async function EditCaptainSquadPlayerPage({
                 Edit {membership.user.name || "player"}
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/65 sm:text-base">
-                Update this player’s contact details, availability notes and payment settings for your team.
+                Update this player’s squad number, contact details and football profile for your team.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
@@ -373,25 +373,17 @@ export default async function EditCaptainSquadPlayerPage({
 
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-              Match fee setting
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <Field
-                label="Player fee override"
-                name="playerMatchFeeOverride"
-                type="number"
-                defaultValue={formatFeeOverride(profile?.playerMatchFeePenceOverride)}
-                placeholder="Leave blank to use the team default"
-                help="Use 0 for a free player. Leave blank to use the default amount on the squad payments page."
-              />
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
               Football profile
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field
+                label="Squad number"
+                name="squadNumber"
+                type="number"
+                defaultValue={profile?.squadNumber?.toString() ?? ""}
+                placeholder="1–99"
+                help="Optional. Each squad number can only be used once within the team."
+              />
               <Field
                 label="Preferred positions"
                 name="preferredPositions"
