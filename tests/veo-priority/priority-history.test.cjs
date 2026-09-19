@@ -48,6 +48,7 @@ test('Priority history uses stable Monday-start UK weeks across DST', () => {
 
 test('Priority history is permanent, weekly and visible by league', () => {
   const migration = fs.readFileSync(path.join(root, 'prisma/migrations/20260919003000_sixfl_tv_priority_weekly_history/migration.sql'), 'utf8');
+  const tbcCleanup = fs.readFileSync(path.join(root, 'prisma/migrations/20260919144500_priority_history_exclude_tbc/migration.sql'), 'utf8');
   const source = fs.readFileSync(path.join(root, 'src/lib/sixfl-tv/priority-history.ts'), 'utf8');
   const page = fs.readFileSync(path.join(root, 'src/app/(admin)/admin/sixfl-tv/priority/page.tsx'), 'utf8');
   const chart = fs.readFileSync(path.join(root, 'src/components/admin/sixfl-tv/PriorityLeagueChart.tsx'), 'utf8');
@@ -60,6 +61,10 @@ test('Priority history is permanent, weekly and visible by league', () => {
   assert.match(source, /ON CONFLICT \("weekStart","leagueId","teamId"\) DO NOTHING/);
   assert.match(source, /leagueName/);
   assert.match(source, /teamName/);
+  assert.match(source, /isFixturePlaceholder/);
+  assert.match(source, /\^TBC/);
+  assert.match(tbcCleanup, /DELETE FROM "SixflTvPriorityWeeklySnapshot"/);
+  assert.match(tbcCleanup, /isFixturePlaceholder/);
   assert.match(cron, /sixfl-tv-priority-weekly-snapshot/);
   assert.match(cron, /capturePriorityWeeklySnapshot/);
   assert.match(layout, /\/admin\/sixfl-tv\/priority/);
