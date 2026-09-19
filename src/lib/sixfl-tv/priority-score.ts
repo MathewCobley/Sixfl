@@ -7,9 +7,14 @@ import {
   getPlayerFeeSubsidyPence,
 } from "@/lib/payments/player-fee-coverage";
 import { prisma } from "@/lib/prisma";
+import { getSixflTvEngagementScores } from "@/lib/sixfl-tv/analytics";
 
 export const SIXFL_TV_PRIORITY_MATCH_COUNT = 5;
 export const SIXFL_TV_PRIORITY_MIN_SCORE = 60;
+export const SIXFL_TV_PRIORITY_MIN_RELIABILITY_SCORE = 60;
+export const SIXFL_TV_PRIORITY_RELIABILITY_MAX = 80;
+export const SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10;
+export const SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10;
 export const SIXFL_TV_PRIORITY_CORE_MIN_RATE = 0.6;
 
 type Db = Pick<typeof prisma, "$queryRaw">;
@@ -96,9 +101,29 @@ export type SixflTvPriorityMatchScore = {
   coreComplete: boolean;
 };
 
-export type SixflTvPriorityScore = {
+type SixflTvReliabilityScore = {
   teamId: string;
   score: number;
+  provisional: boolean;
+  matchesCount: number;
+  reliabilityQualifies: boolean;
+  coreCompletedMatches: number;
+  matches: SixflTvPriorityMatchScore[];
+};
+
+export type SixflTvPriorityScore = {
+  teamId: string;
+  /** The only headline SIXFL TV Priority Score. */
+  score: number;
+  /** Internal 0-100 reliability rate used to protect the minimum standards gate. */
+  reliabilityScore: number;
+  /** Reliability contribution to the one headline score. */
+  reliabilityPoints: number;
+  audiencePoints: number;
+  participationPoints: number;
+  engagementPoints: number;
+  viewScore: number;
+  viewProvisional: boolean;
   provisional: boolean;
   matchesCount: number;
   qualifies: boolean;
@@ -169,11 +194,11 @@ export function priorityScoreTone(score: SixflTvPriorityScore) {
   return "AT_RISK";
 }
 
-export async function getSixflTvPriorityScores(
+async function getSixflTvReliabilityScores(
   teamIds: string[],
   db: Db = prisma,
   now = new Date(),
-): Promise<Map<string, SixflTvPriorityScore>> {
+): Promise<Map<string, SixflTvReliabilityScore>> {
   const uniqueTeamIds = [...new Set(teamIds.filter(Boolean))];
   if (!uniqueTeamIds.length) return new Map();
 
@@ -228,7 +253,7 @@ export async function getSixflTvPriorityScores(
           score: 100,
           provisional: true,
           matchesCount: 0,
-          qualifies: true,
+          reliabilityQualifies: true,
           coreCompletedMatches: 0,
           matches: [],
         },
@@ -430,7 +455,7 @@ export async function getSixflTvPriorityScores(
             score: 100,
             provisional: true,
             matchesCount: 0,
-            qualifies: true,
+            reliabilityQualifies: true,
             coreCompletedMatches: 0,
             matches,
           },
@@ -448,11 +473,72 @@ export async function getSixflTvPriorityScores(
           score,
           provisional: matches.length < SIXFL_TV_PRIORITY_MATCH_COUNT,
           matchesCount: matches.length,
-          qualifies: score >= SIXFL_TV_PRIORITY_MIN_SCORE && coreCompletedMatches >= coreNeeded,
+          reliabilityQualifies: score >= SIXFL_TV_PRIORITY_MIN_RELIABILITY_SCORE && coreCompletedMatches >= coreNeeded,
           coreCompletedMatches,
           matches,
         },
       ];
+    }),
+  );
+}
+
+function clampPriority(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+export async function getSixflTvPriorityScores(
+  teamIds: string[],
+  db: Db = prisma,
+  now = new Date(),
+): Promise<Map<string, SixflTvPriorityScore>> {
+  const uniqueTeamIds = [...new Set(teamIds.filter(Boolean))];
+  if (!uniqueTeamIds.length) return new Map();
+
+  const [reliabilityScores, engagementScores] = await Promise.all([
+    getSixflTvReliabilityScores(uniqueTeamIds, db, now),
+    getSixflTvEngagementScores(uniqueTeamIds, db, now),
+  ]);
+
+  return new Map(
+    uniqueTeamIds.flatMap((teamId) => {
+      const reliability = reliabilityScores.get(teamId);
+      if (!reliability) return [];
+      const engagement = engagementScores.get(teamId);
+      const reliabilityPoints = Math.round(
+        (reliability.score / 100) * SIXFL_TV_PRIORITY_RELIABILITY_MAX,
+      );
+      const audiencePoints = Math.min(
+        SIXFL_TV_PRIORITY_AUDIENCE_MAX,
+        engagement?.viewBonus ?? 0,
+      );
+      const participationPoints = Math.min(
+        SIXFL_TV_PRIORITY_PARTICIPATION_MAX,
+        (engagement?.nominationPoints ?? 0) + (engagement?.votePoints ?? 0),
+      );
+      const engagementPoints = audiencePoints + participationPoints;
+      const score = clampPriority(reliabilityPoints + engagementPoints);
+
+      return [[
+        teamId,
+        {
+          teamId,
+          score,
+          reliabilityScore: reliability.score,
+          reliabilityPoints,
+          audiencePoints,
+          participationPoints,
+          engagementPoints,
+          viewScore: engagement?.viewScore ?? 100,
+          viewProvisional: engagement?.provisional ?? true,
+          provisional: reliability.provisional,
+          matchesCount: reliability.matchesCount,
+          qualifies:
+            reliability.reliabilityQualifies &&
+            score >= SIXFL_TV_PRIORITY_MIN_SCORE,
+          coreCompletedMatches: reliability.coreCompletedMatches,
+          matches: reliability.matches,
+        },
+      ] as [string, SixflTvPriorityScore]];
     }),
   );
 }
