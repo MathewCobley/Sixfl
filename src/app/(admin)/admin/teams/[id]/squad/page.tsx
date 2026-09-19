@@ -16,6 +16,7 @@ import {
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   addAdminSquadMemberAction,
   grantAdminCaptainAccessAction,
@@ -241,6 +242,9 @@ export default async function AdminTeamSquadPage({
   const whatsappByUserId = new Map(
     whatsappRows.map((row) => [row.id, Boolean(row.usesWhatsapp)]),
   );
+  const profileByMembershipId = await getTeamMemberProfilesByTeamMemberIds(
+    team.members.map((member) => member.id),
+  );
   const loginStatusByMembershipId = await getSquadLoginStatusMap(team.id);
 
   const captainCount = team.members.filter(
@@ -421,6 +425,7 @@ export default async function AdminTeamSquadPage({
             ) : (
               team.members.map((member) => {
                 const usesWhatsapp = whatsappByUserId.get(member.user.id) ?? false;
+                const profile = profileByMembershipId.get(member.id);
                 const dashboardStatus = loginStatusByMembershipId.get(member.id);
                 const dashboardCopy = getDashboardStatusCopy(dashboardStatus);
 
@@ -440,6 +445,11 @@ export default async function AdminTeamSquadPage({
                             <div className="truncate text-base font-semibold text-white">
                               {member.user.name || "Unnamed user"}
                             </div>
+                            {profile?.squadNumber ? (
+                              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100">
+                                #{profile.squadNumber}
+                              </span>
+                            ) : null}
                             {usesWhatsapp ? (
                               <span
                                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10"
