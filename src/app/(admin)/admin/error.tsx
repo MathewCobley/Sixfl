@@ -35,7 +35,7 @@ export default function AdminError({
         <p className="mt-3 text-sm leading-6 text-white/60">
           {staleDeployment
             ? "This tab was open on the previous website version. SIXFL is refreshing it onto the latest version now."
-            : "The page hit a browser-side error. Your data has not been changed by this error screen."}
+            : "The page hit a browser-side error. Reload, then check the current state before repeating any save, payment, message or fixture action."}
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
