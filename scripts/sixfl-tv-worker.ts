@@ -58,6 +58,32 @@ type PublishJob = {
   title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; resumableUrl: string | null; uploadedBytes: bigint;
   youtubeVideoId: string | null; youtubeUrl: string | null; notifySubscribers: boolean | null; notificationDay: Date | string | null;
 };
+type GoalMediaJob = {
+  id: string;
+  fixtureId: string;
+  clipAssetId: string;
+  mediaLeaseToken: string | null;
+  mediaAttempts: number;
+};
+type GoalMediaDetails = {
+  id: string;
+  fixtureId: string;
+  clipAssetId: string;
+  monthKey: string;
+  scorerName: string | null;
+  teamName: string;
+  teamLogoUrl: string | null;
+  opponentName: string;
+  leagueName: string;
+  kickoffAt: Date;
+  playerImageUrl: string | null;
+  clipNumber: number;
+  filename: string;
+  kind: string;
+  partCount: number;
+  sizeBytes: bigint;
+  state: string;
+};
 type Metadata = {
   fixture: SixflTvGraphicFixture;
   label: string;
