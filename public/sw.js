@@ -1,6 +1,5 @@
-const CACHE_NAME = "sixfl-static-v1";
+const CACHE_NAME = "sixfl-static-v2";
 const CORE_ASSETS = [
-  "/manifest.webmanifest",
   "/icon.png",
   "/apple-icon.png",
   "/favicon-192.png",
