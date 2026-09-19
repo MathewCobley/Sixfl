@@ -86,7 +86,7 @@ export default function MonthlyGoalsPanel() {
         <section aria-labelledby="monthly-nominees" className="space-y-5 rounded-3xl border border-emerald-300/20 bg-white/[0.03] p-5 sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div><h2 id="monthly-nominees" className="text-2xl font-bold">{selected.label} — current nominees</h2><p className="mt-2 text-sm text-white/60">Nominate until {deadline(selected.closesAt)} UK time. Goals qualify by match date.</p></div>
-            {data.nominations.length > 1 ? <label className="text-sm">Award month<select aria-label="Award month" value={selected.key} onChange={event => { setMonth(event.target.value); setFixtureId(""); setClipAssetId(""); }} className={field}>{data.nominations.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label> : null}
+            {data.nominations.length > 1 ? <label className="text-sm">Award month<select aria-label="Award month" value={selected.key} onChange={event => { setMonth(event.target.value); setFixtureId(""); setClipAssetId(""); setScoringTeamId(""); setScorerTeamMemberId(""); }} className={field}>{data.nominations.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label> : null}
           </div>
 
           <p className="text-sm text-white/60">New nominations use the exact SIXFL TV clip, so everyone can watch the goal directly here. Older nominations keep their original match-video links.</p>
