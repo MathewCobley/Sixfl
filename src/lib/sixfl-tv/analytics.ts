@@ -262,9 +262,13 @@ export async function getSixflTvViewScores(
     string,
     { kickoffAt: Date; homeTeamId: string; awayTeamId: string; views: number }
   >();
+  const countedFixtureVideos = new Set<string>();
 
   for (const ref of refs) {
     if (ref.kind === "EXTRA") continue;
+    const fixtureVideoKey = `${ref.fixtureId}:${ref.videoId}`;
+    if (countedFixtureVideos.has(fixtureVideoKey)) continue;
+    countedFixtureVideos.add(fixtureVideoKey);
     const snapshot = snapshots.get(ref.videoId);
     if (!snapshot) continue;
     const existing = fixtureViews.get(ref.fixtureId) ?? {
@@ -504,8 +508,9 @@ export async function syncSixflTvYoutubeMetrics(options?: { force?: boolean }) {
     }
 
     const writes = (data.items ?? [])
-      .filter((item): item is NonNullable<typeof item> & { id: string } => Boolean(item.id))
+      .filter((item) => Boolean(item.id))
       .map((item) => {
+        const videoId = item.id!;
         const publishedAt =
           item.snippet?.publishedAt && !Number.isNaN(Date.parse(item.snippet.publishedAt))
             ? new Date(item.snippet.publishedAt)
