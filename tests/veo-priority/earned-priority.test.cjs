@@ -91,8 +91,10 @@ test('captains and admins see the same score', () => {
   assert.match(captainCard, /Ratings', 'Bonus · by 6pm next day'/);
   assert.match(captainCard, /Assists bonus completed by 6pm/);
   assert.match(captainCard, /Player ratings bonus completed by 6pm/);
-  assert.match(adminPriorityPage, /assists bonus 1 \(by 6pm next day\)/);
-  assert.match(adminPriorityPage, /ratings bonus 1 \(by 6pm next day\)/);
+  assert.match(adminPriorityPage, /reliability contributes up to 80 points/);
+  assert.match(adminPriorityPage, /audience up to 10/);
+  assert.match(adminPriorityPage, /goal nominations\/voting up to 10/);
+  assert.match(adminPriorityPage, /View index is an audience index only/);
   assert.match(captainCard, /Match card not completed/);
   assert.match(captainCard, /Reliability detail/);
   assert.match(captainCard, /scaled to a maximum of 80 Priority points/);
