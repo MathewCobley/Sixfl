@@ -372,6 +372,13 @@ export default async function AdminHome() {
               >
                 Create league
               </Link>
+
+              <Link
+                href="/admin/pwa"
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/15"
+              >
+                PWA / phone preview
+              </Link>
             </div>
           </div>
         </section>
