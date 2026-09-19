@@ -58,7 +58,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
   return <div className="mx-auto max-w-7xl space-y-6 text-white">
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-semibold">SIXFL TV Priority</h1><span className={`rounded-full border px-3 py-1 text-sm font-semibold ${settings.enabled ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/20 bg-white/5 text-white/70'}`}>{settings.enabled ? 'ON for this league' : 'OFF for this league'}</span></div>
-      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Every team has one SIXFL TV Priority Score out of 100: up to 80 points from reliability, 10 from SIXFL TV audience and 10 from goal-award participation. View Score 100 means average viewing for that team’s current division.</p>
+      <p className="max-w-3xl text-sm leading-6 text-white/65">{league.name}. Every team has one SIXFL TV Priority Score out of 100: up to 80 points from reliability, 10 from SIXFL TV audience and 10 from goal-award participation. View index 100 means average viewing for that team’s current division.</p>
     </header>
     {query.saved && <p role="status" className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">Saved. No existing fixtures or charges were recalculated.</p>}
     {query.error && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-4">{query.error.slice(0, 500)}</p>}
@@ -79,7 +79,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
     <section className={panel}>
       <h2 className="text-xl font-semibold">Team Priority scores</h2>
       <p className="text-sm leading-6 text-white/60">
-        The one Priority Score is out of 100: reliability contributes up to 80 points, audience up to 10 and goal nominations/voting up to 10. Teams need at least 60/100 overall and must still meet the underlying reliability and core match-card minimums. View Score is an audience index only: 100 means the team is at its division average.
+        The one Priority Score is out of 100: reliability contributes up to 80 points, audience up to 10 and goal nominations/voting up to 10. Teams need at least 60/100 overall and must still meet the underlying reliability and core match-card minimums. View index is an audience index only: 100 means the team is at its division average.
       </p>
       <div className="divide-y divide-white/10">{teams.map(team => {
         const score = priorityScores.get(team.id);
