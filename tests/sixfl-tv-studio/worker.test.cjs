@@ -281,3 +281,32 @@ test('PostgreSQL transactions enforce current lease and exact output manifests',
     assert.equal(rows[0].state, 'READY'); assert.equal(Number(rows[0].outputSizeBytes), 11);
   } finally { await db.$disconnect(); await root.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`); await root.$disconnect(); }
 });
+
+
+test('Goal of the Month nominee render uses shared branding and player identity instead of the clip number', async () => {
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
+  const workerStart = worker.indexOf('async function goalOfMonthRenderDetails');
+  const workerEnd = worker.indexOf('async function cleanupMaturedGoalOfMonthFootage', workerStart);
+  const graphicsStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
+  const graphicsEnd = graphics.indexOf('export async function createSixflTvScoreBug', graphicsStart);
+  assert.ok(workerStart >= 0 && workerEnd > workerStart, 'Goal of the Month worker block must exist');
+  assert.ok(graphicsStart >= 0 && graphicsEnd > graphicsStart, 'Goal of the Month graphics block must exist');
+  const nomineeWorker = worker.slice(workerStart, workerEnd);
+  const nomineeGraphics = graphics.slice(graphicsStart, graphicsEnd);
+
+  assert.match(nomineeWorker, /goalOfMonthBrandingAsset\("INTRO"\)/);
+  assert.match(nomineeWorker, /goalOfMonthBrandingAsset\("OUTRO"\)/);
+  assert.match(nomineeWorker, /\[brandingIntro, title, normal, replay, brandingOutro\]/);
+  assert.match(nomineeWorker, /homeTeamName/);
+  assert.match(nomineeWorker, /awayTeamName/);
+  assert.match(nomineeWorker, /homeScore/);
+  assert.match(nomineeWorker, /awayScore/);
+  assert.match(nomineeWorker, /kickoffAt/);
+
+  assert.match(nomineeGraphics, /badgeImage\(teamBadge/);
+  assert.match(nomineeGraphics, /xml\(scorer\)/);
+  assert.match(nomineeGraphics, /GOAL OF THE MONTH NOMINEE/);
+  assert.match(nomineeGraphics, /REPLAY/);
+  assert.doesNotMatch(nomineeGraphics, /CLIP \$\{input\.clipNumber\}/);
+});
