@@ -12,11 +12,14 @@ export const revalidate = 0;
 type Context = { params: Promise<{ candidateId: string }> };
 type Row = {
   clipAssetId: string;
-  clipNumber: number;
   scorerName: string | null;
   teamName: string;
   teamLogoUrl: string | null;
-  opponentName: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  kickoffAt: Date;
   leagueName: string;
 };
 
@@ -31,11 +34,14 @@ export async function GET(request: Request, context: Context) {
     const [row] = await prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT
         c."clipAssetId",
-        a."clipNumber"::int AS "clipNumber",
         c."scorerName",
         team."name" AS "teamName",
         team."logoUrl" AS "teamLogoUrl",
-        CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
+        home."name" AS "homeTeamName",
+        away."name" AS "awayTeamName",
+        result."homeScore"::int AS "homeScore",
+        result."awayScore"::int AS "awayScore",
+        f."kickoffAt",
         league."name" AS "leagueName"
       FROM "GoalOfMonthCandidate" c
       JOIN "Fixture" f ON f."id" = c."fixtureId"
@@ -43,6 +49,7 @@ export async function GET(request: Request, context: Context) {
       JOIN "Team" home ON home."id" = f."homeTeamId"
       JOIN "Team" away ON away."id" = f."awayTeamId"
       JOIN "League" league ON league."id" = f."leagueId"
+      LEFT JOIN "MatchResult" result ON result."fixtureId" = f."id"
       JOIN "SixflTvFootageAsset" a ON a."id" = c."clipAssetId" AND a."fixtureId" = c."fixtureId"
       WHERE c."id" = ${safeCandidateId}
         AND c."status" = 'ACTIVE'
@@ -73,11 +80,14 @@ export async function GET(request: Request, context: Context) {
 
     const png = await createGoalOfMonthNominationThumbnail({
       siteUrl: siteUrl(request),
-      clipNumber: Number(row.clipNumber),
       scorerName: row.scorerName,
       teamName: row.teamName,
       teamLogoUrl: row.teamLogoUrl,
-      opponentName: row.opponentName,
+      homeTeamName: row.homeTeamName,
+      awayTeamName: row.awayTeamName,
+      homeScore: row.homeScore,
+      awayScore: row.awayScore,
+      kickoffAt: row.kickoffAt,
       leagueName: row.leagueName,
       backgroundImage,
     });
