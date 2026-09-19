@@ -218,17 +218,11 @@ export async function switchLegacyMonthlyCandidateToClip(candidateId: string, cl
     fixtureId: string;
     status: string;
     clipAssetId: string | null;
-    nominationCount: number;
-    voteCount: number;
   }>>(Prisma.sql`
-    SELECT c."id", c."fixtureId", c."status", c."clipAssetId",
-      COUNT(DISTINCT n."id")::int AS "nominationCount",
-      COUNT(DISTINCT v."id")::int AS "voteCount"
-    FROM "GoalOfMonthCandidate" c
-    LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId"=c."id"
-    LEFT JOIN "GoalOfMonthVote" v ON v."candidateId"=c."id"
-    WHERE c."id"=${candidateId}
-    GROUP BY c."id"
+    SELECT "id", "fixtureId", "status", "clipAssetId"
+    FROM "GoalOfMonthCandidate"
+    WHERE "id"=${candidateId}
+    FOR UPDATE
   `);
   if (!candidate) throw new GoalAwardError("That Goal of the Month nomination no longer exists.", 404);
   if (candidate.status !== "ACTIVE") throw new GoalAwardError("Only an active nominee can be switched to an exact clip.");
@@ -270,15 +264,21 @@ export async function switchLegacyMonthlyCandidateToClip(candidateId: string, cl
       "completedAt"=NULL,
       "updatedAt"=NOW()
   `);
+  const [counts] = await db.$queryRaw<Array<{ nominationCount: number; voteCount: number }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
+    FROM "GoalOfMonthCandidate" c
+    LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId"=c."id"
+    LEFT JOIN "GoalOfMonthVote" v ON v."candidateId"=c."id"
+    WHERE c."id"=${candidateId}
+  `);
   return {
     candidateId,
     clipAssetId,
     clipNumber: Number(clip.clipNumber),
-    nominationCount: Number(candidate.nominationCount),
-    voteCount: Number(candidate.voteCount),
+    nominationCount: Number(counts?.nominationCount ?? 0),
+    voteCount: Number(counts?.voteCount ?? 0),
   };
 }
-
 export async function nominateMonthlyGoal(input: {
   userId: string;
   fixtureId: string;
