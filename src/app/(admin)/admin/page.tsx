@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import AdminCard from "@/components/admin/AdminCard";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import { getAdminLatestActivity, type AdminActivityKind } from "@/lib/admin/latest-activity";
+import AdminPwaHome from "@/components/admin/pwa/AdminPwaHome";
 
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -322,8 +323,52 @@ export default async function AdminHome() {
     inboxSummary.latestInbound?.thread.recipient?.displayName ||
     "No replies yet";
 
+  const nextFixture = upcomingFixtures[0] ?? null;
+  const nextFixtureSummary = nextFixture
+    ? {
+        matchup: `${nextFixture.homeTeam.name} v ${nextFixture.awayTeam.name}`,
+        kickoffLabel: formatDateTime(nextFixture.kickoffAt),
+        leagueLabel: nextFixture.league.season
+          ? `${nextFixture.league.name} · ${nextFixture.league.season}`
+          : nextFixture.league.name,
+        venueLabel: [
+          nextFixture.venue?.name ?? null,
+          nextFixture.pitch ? `Pitch ${nextFixture.pitch}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Venue TBC",
+        refereeLabel:
+          nextFixture.referee?.name ||
+          nextFixture.referee?.email ||
+          "Referee needed",
+        hasReferee: Boolean(nextFixture.referee),
+      }
+    : null;
+
+  const appLatestActivity = latestActivity.slice(0, 5).map((item) => ({
+    id: item.id,
+    href: item.href,
+    kind: item.kind,
+    title: item.title,
+    detail: item.detail,
+    occurredAtLabel: formatDateTime(item.occurredAt),
+    relativeLabel: formatRelativeActivityTime(item.occurredAt, now),
+  }));
+
   return (
-    <div className="w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+    <>
+      <AdminPwaHome
+        nextFixture={nextFixtureSummary}
+        upcomingFixturesCount={upcomingFixturesCount}
+        unreadThreads={inboxSummary.unreadThreads}
+        newLeadsCount={newLeadsCount}
+        fixturesWithoutRefereeCount={fixturesWithoutRefereeCount}
+        disputedResultsCount={disputedResultsCount}
+        teamsNeedingContactCleanupCount={teamsNeedingContactCleanupCount}
+        latestActivity={appLatestActivity}
+      />
+
+      <div className="pwa-web-home w-full px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_34%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)] md:p-8">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-end 2xl:justify-between">
@@ -712,5 +757,6 @@ export default async function AdminHome() {
         </div>
       </div>
     </div>
+    </>
   );
 }
