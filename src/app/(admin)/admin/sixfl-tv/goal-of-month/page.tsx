@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { monthKey, monthlyPeriod, validMonthKey } from "@/lib/goal-of-month/calendar";
-import { getMonthlyPageData, safeVideoLinks } from "@/lib/goal-of-month/community";
+import { getMonthlyPageData, safeVideoLinks, switchLegacyMonthlyCandidateToClip } from "@/lib/goal-of-month/community";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const metadata = { title: "Goal of the Month | SIXFL Admin" };
-type Row = { id: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
+type Row = { id: string; fixtureId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };\ntype ClipOption = { id: string; fixtureId: string; clipNumber: number; filename: string };
 
 async function reviewNominee(form: FormData) {
   "use server";
@@ -20,13 +20,18 @@ async function reviewNominee(form: FormData) {
   const key = String(form.get("monthKey") ?? "");
   const status = String(form.get("status") ?? "");
   const scorer = String(form.get("scorerName") ?? "").trim().slice(0, 100) || null;
+  const switchClipAssetId = String(form.get("switchClipAssetId") ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || !validMonthKey(key) || !["ACTIVE", "REMOVED"].includes(status)) throw new Error("Choose a valid nomination.");
+  if (switchClipAssetId && !/^[A-Za-z0-9_-]{1,120}$/.test(switchClipAssetId)) throw new Error("Choose a valid SIXFL TV clip.");
   await prisma.$transaction(async tx => {
     await tx.$executeRaw(Prisma.sql`
       UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
       WHERE "id" = ${id} AND "monthKey" = ${key}
     `);
-    if (status === "ACTIVE") {
+    if (switchClipAssetId) {
+      if (status !== "ACTIVE") throw new Error("Reactivate the nominee before switching it to an exact clip.");
+      await switchLegacyMonthlyCandidateToClip(id, switchClipAssetId, tx);
+    } else if (status === "ACTIVE") {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
         SELECT c."id", c."clipAssetId"
@@ -48,9 +53,9 @@ async function reviewNominee(form: FormData) {
     }
   });
   revalidatePath("/goal-of-the-month"); revalidatePath("/admin/sixfl-tv/goal-of-month"); revalidatePath("/");
-  redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&saved=1`);
+  redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&${switchClipAssetId ? "switched=1" : "saved=1"}`);
 }
-export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?: Promise<{ month?: string; saved?: string }> }) {
+export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?: Promise<{ month?: string; saved?: string; switched?: string }> }) {
   await requireAdmin();
   const query = (await searchParams) ?? {};
   const key = validMonthKey(query.month) ? query.month : monthKey(new Date());
