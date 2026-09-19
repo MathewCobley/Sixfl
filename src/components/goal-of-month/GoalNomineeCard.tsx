@@ -24,6 +24,9 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
   const embed = videoId ? youtubeEmbedUrl(videoId) : null;
   const identity = goal.clipNumber ? `Clip ${goal.clipNumber}` : goal.goalNumber ? `Goal ${goal.goalNumber}` : "Nominated goal";
   const label = `${goal.teamName} v ${goal.opponentName} — ${identity.toLowerCase()}`;
+  const clipVideoUrl = goal.clipVideoUrl && goal.mediaState === "READY"
+    ? `${goal.clipVideoUrl}?nomination=ready`
+    : goal.clipVideoUrl;
 
   return (
     <article className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/30" data-monthly-goal={goal.id}>
@@ -34,7 +37,7 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
             preload="metadata"
             playsInline
             poster={goal.thumbnailUrl ?? undefined}
-            src={goal.clipVideoUrl}
+            src={clipVideoUrl ?? undefined}
             aria-label={`Watch ${label}`}
             className="h-full w-full object-contain"
           />
