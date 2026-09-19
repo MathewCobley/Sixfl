@@ -199,11 +199,9 @@ function addButtonsToCaptainSquadPage(teamId: string) {
 function findAddPlayerForm(teamId: string) {
   return Array.from(document.querySelectorAll<HTMLFormElement>("form")).find((form) => {
     const teamInput = form.querySelector<HTMLInputElement>('input[name="teamid"]');
-    const addPlayerSection = form.closest("#add-player, #add-squad-member");
     return (
-      Boolean(addPlayerSection) &&
       teamInput?.value === teamId &&
-      Boolean(form.querySelector<HTMLInputElement>('input[name="displayName"], input[name="name"]')) &&
+      Boolean(form.querySelector<HTMLInputElement>('input[name="displayName"]')) &&
       Boolean(form.querySelector<HTMLInputElement>('input[name="email"]'))
     );
   }) ?? null;
