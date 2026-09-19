@@ -23,6 +23,7 @@ import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib
 import { reconcileTeamPaymentOrderCheckouts } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
 import { syncSixflTvYoutubeMetrics } from "@/lib/sixfl-tv/analytics";
+import { capturePriorityWeeklySnapshot } from "@/lib/sixfl-tv/priority-history";
 import { runPendingSquadActivationEmailJob } from "@/lib/squad/activation-emails";
 import {
   queueMissingReferralRecordedEmails,
@@ -217,6 +218,12 @@ export async function GET(request: NextRequest) {
     () => processNotificationQueue(200),
   );
 
+  const priorityWeeklySnapshot = await runCronStep(
+    "sixfl-tv-priority-weekly-snapshot",
+    failures,
+    capturePriorityWeeklySnapshot,
+  );
+
   const matchnightReports = await runCronStep(
     "automatic-matchnight-reports",
     failures,
@@ -284,6 +291,7 @@ export async function GET(request: NextRequest) {
     referralEmails,
     referralPayoutEmails,
     generatedQueue,
+    priorityWeeklySnapshot,
     matchnightReports,
     teamPaymentOrderCheckouts,
     matchdayAutoPay,
