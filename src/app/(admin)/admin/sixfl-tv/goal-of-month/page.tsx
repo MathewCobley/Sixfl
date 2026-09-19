@@ -21,10 +21,32 @@ async function reviewNominee(form: FormData) {
   const status = String(form.get("status") ?? "");
   const scorer = String(form.get("scorerName") ?? "").trim().slice(0, 100) || null;
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || !validMonthKey(key) || !["ACTIVE", "REMOVED"].includes(status)) throw new Error("Choose a valid nomination.");
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
-    WHERE "id" = ${id} AND "monthKey" = ${key}
-  `);
+  await prisma.$transaction(async tx => {
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
+      WHERE "id" = ${id} AND "monthKey" = ${key}
+    `);
+    if (status === "ACTIVE") {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
+        SELECT c."id", c."clipAssetId"
+        FROM "GoalOfMonthCandidate" c
+        JOIN "SixflTvFootageAsset" a ON a."id"=c."clipAssetId"
+        WHERE c."id"=${id}
+          AND c."clipAssetId" IS NOT NULL
+          AND a."kind"='CLIP'
+          AND a."state"='READY'
+        ON CONFLICT ("candidateId") DO UPDATE SET
+          "sourceAssetId"=EXCLUDED."sourceAssetId",
+          "state"='QUEUED',
+          "leaseToken"=NULL,
+          "busyUntil"=NULL,
+          "error"=NULL,
+          "completedAt"=NULL,
+          "updatedAt"=NOW()
+      `);
+    }
+  });
   revalidatePath("/goal-of-the-month"); revalidatePath("/admin/sixfl-tv/goal-of-month"); revalidatePath("/");
   redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&saved=1`);
 }
