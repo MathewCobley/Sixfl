@@ -385,6 +385,10 @@ export default async function CaptainTeamLayout({
           logoSrc: "/Sixfl-tv.png",
         },
         {
+          href: `/captain/team/${teamid}/veo-priority`,
+          label: "Priority score",
+        },
+        {
           href: `/goal-of-the-month?from=captain&teamId=${encodeURIComponent(teamid)}`,
           label: "Goal of the Month",
         },
@@ -465,7 +469,13 @@ export default async function CaptainTeamLayout({
                     {displayIsLive ? " · Current live season" : ""}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <SixflTvPriorityScoreBadge score={priorityScore} />
+                    <Link
+                      href={`/captain/team/${teamid}/veo-priority`}
+                      aria-label={`Open SIXFL TV Priority Score: ${priorityScore.score} out of 100`}
+                      className="inline-flex rounded-full outline-none transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-fuchsia-300/70"
+                    >
+                      <SixflTvPriorityScoreBadge score={priorityScore} />
+                    </Link>
                     <span className="text-xs text-white/45">
                       {priorityScore.qualifies
                         ? "Eligible for recorded-pitch priority"

@@ -21,6 +21,7 @@ const adminPriorityPage = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/ve
 const adminNightPanel = fs.readFileSync('src/app/(admin)/admin/leagues/[id]/veo-priority/FixtureVeoNightPanel.tsx', 'utf8');
 const captainBookings = fs.readFileSync('src/components/captain/CaptainVeoBookings.tsx', 'utf8');
 const captainFixtures = fs.readFileSync('src/app/captain/team/[teamid]/fixtures/layout.tsx', 'utf8');
+const captainPriorityPage = fs.readFileSync('src/app/captain/team/[teamid]/veo-priority/page.tsx', 'utf8');
 const engagement = fs.readFileSync('src/lib/sixfl-tv/analytics.ts', 'utf8');
 const engagementDashboard = fs.readFileSync('src/app/(admin)/admin/sixfl-tv/analytics/page.tsx', 'utf8');
 const engagementMigration = fs.readFileSync('prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql', 'utf8');
@@ -111,6 +112,18 @@ test('captains and admins see the same score', () => {
   assert.match(captainConfirmationPage, /<form action=\{confirmFixtureAction\}/);
   assert.match(captainConfirmationPage, /Yes — we can play/);
   assert.match(captainConfirmationPage, /markFixtureUnavailableAction/);
+});
+
+test('captains have a real Priority score page linked from League & media', () => {
+  assert.match(captainLayout, /href: `\/captain\/team\/\$\{teamid\}\/veo-priority`/);
+  assert.match(captainLayout, /label: "Priority score"/);
+  assert.match(captainLayout, /Open SIXFL TV Priority Score/);
+  assert.match(captainPriorityPage, /Priority Score/);
+  assert.match(captainPriorityPage, /reliability contributes up to 80 points/);
+  assert.match(captainPriorityPage, /audience up to 10/);
+  assert.match(captainPriorityPage, /goal-award\s+participation up to 10/);
+  assert.match(captainPriorityPage, /View index across all measured SIXFL TV matches/);
+  assert.match(captainPriorityPage, /CaptainVeoPriorityCard/);
 });
 
 test('legacy £5 pilot fees are retired without leaving fee UI or double-credit paths', () => {
