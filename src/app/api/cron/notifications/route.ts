@@ -22,6 +22,7 @@ import { runRefereeEveningNotifications } from "@/lib/referees/evening-notificat
 import { syncPublishedFixtureRefereeNightAssignmentsAndRecalculate } from "@/lib/referee-night-assignment-sync";
 import { reconcileTeamPaymentOrderCheckouts } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
+import { syncSixflTvYoutubeMetrics } from "@/lib/sixfl-tv/analytics";
 import { runPendingSquadActivationEmailJob } from "@/lib/squad/activation-emails";
 import {
   queueMissingReferralRecordedEmails,
@@ -243,6 +244,20 @@ export async function GET(request: NextRequest) {
     ? summariseAutoPay(autoPayResults.value)
     : autoPayResults;
 
+  // Analytics is deliberately non-fatal: a temporary Google/YouTube problem must
+  // never make notification delivery or payment jobs look failed. The sync itself
+  // throttles to one snapshot every six hours.
+  let sixflTvYoutubeAnalytics: unknown;
+  try {
+    sixflTvYoutubeAnalytics = await syncSixflTvYoutubeMetrics();
+  } catch (error) {
+    console.error("[notifications-cron] SIXFL TV YouTube analytics failed", error);
+    sixflTvYoutubeAnalytics = {
+      synced: false,
+      error: getErrorMessage(error),
+    };
+  }
+
   const response = {
     ok: failures.length === 0,
     diagnosis:
@@ -272,6 +287,7 @@ export async function GET(request: NextRequest) {
     matchnightReports,
     teamPaymentOrderCheckouts,
     matchdayAutoPay,
+    sixflTvYoutubeAnalytics,
   };
 
   // Keep a failed HTTP status so Railway correctly flags a partial cron failure,
