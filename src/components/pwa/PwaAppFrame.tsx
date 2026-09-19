@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BellIcon,
@@ -30,7 +30,6 @@ export type PwaAppNavItem = {
 };
 
 type PwaAppFrameProps = {
-  children: ReactNode;
   title: string;
   dateLabel: string;
   profileInitials: string;
@@ -67,7 +66,6 @@ function isPwaPreviewFrame() {
 }
 
 export default function PwaAppFrame({
-  children,
   title,
   dateLabel,
   profileInitials,
@@ -94,7 +92,7 @@ export default function PwaAppFrame({
   }, [navItems, pathname]);
 
   return (
-    <div className={`pwa-app-root min-h-screen ${forcedAppMode ? "pwa-app-forced" : ""}`}>
+    <div className={forcedAppMode ? "pwa-app-forced" : "pwa-app-controller"}>
       <style>{`
         .pwa-app-header,
         .pwa-app-bottom-nav,
@@ -103,50 +101,50 @@ export default function PwaAppFrame({
         }
 
         @media (display-mode: standalone) {
-          .pwa-app-root .pwa-web-chrome,
-          .pwa-app-root .pwa-web-home {
+          .pwa-web-chrome,
+          .pwa-web-home {
             display: none !important;
           }
 
-          .pwa-app-root .pwa-app-header {
+          .pwa-app-header {
             display: flex;
           }
 
-          .pwa-app-root .pwa-app-bottom-nav,
-          .pwa-app-root .pwa-app-home {
+          .pwa-app-bottom-nav,
+          .pwa-app-home {
             display: block;
           }
 
-          .pwa-app-root .pwa-app-content-shell {
+          .pwa-app-content-shell {
             padding: 0 0 calc(5rem + env(safe-area-inset-bottom)) !important;
             gap: 0 !important;
           }
 
-          .pwa-app-root .pwa-app-main {
+          .pwa-app-main {
             padding-top: 0 !important;
           }
         }
 
-        .pwa-app-root.pwa-app-forced .pwa-web-chrome,
-        .pwa-app-root.pwa-app-forced .pwa-web-home {
+        body:has(.pwa-app-forced) .pwa-web-chrome,
+        body:has(.pwa-app-forced) .pwa-web-home {
           display: none !important;
         }
 
-        .pwa-app-root.pwa-app-forced .pwa-app-header {
+        body:has(.pwa-app-forced) .pwa-app-header {
           display: flex;
         }
 
-        .pwa-app-root.pwa-app-forced .pwa-app-bottom-nav,
-        .pwa-app-root.pwa-app-forced .pwa-app-home {
+        body:has(.pwa-app-forced) .pwa-app-bottom-nav,
+        body:has(.pwa-app-forced) .pwa-app-home {
           display: block;
         }
 
-        .pwa-app-root.pwa-app-forced .pwa-app-content-shell {
+        body:has(.pwa-app-forced) .pwa-app-content-shell {
           padding: 0 0 5rem !important;
           gap: 0 !important;
         }
 
-        .pwa-app-root.pwa-app-forced .pwa-app-main {
+        body:has(.pwa-app-forced) .pwa-app-main {
           padding-top: 0 !important;
         }
       `}</style>
@@ -205,8 +203,6 @@ export default function PwaAppFrame({
           </Link>
         </div>
       </header>
-
-      {children}
 
       <nav
         aria-label="SIXFL app navigation"
