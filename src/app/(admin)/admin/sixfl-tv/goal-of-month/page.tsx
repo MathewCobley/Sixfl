@@ -6,12 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { monthKey, monthlyPeriod, validMonthKey } from "@/lib/goal-of-month/calendar";
 import { getMonthlyPageData, safeVideoLinks, switchLegacyMonthlyCandidateToClip } from "@/lib/goal-of-month/community";
+import FormListboxField from "@/components/ui/FormListboxField";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const metadata = { title: "Goal of the Month | SIXFL Admin" };
-type Row = { id: string; fixtureId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
+type Row = { id: string; fixtureId: string; teamId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerTeamMemberId: string | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
 type ClipOption = { id: string; fixtureId: string; clipNumber: number; filename: string };
+type SquadPlayer = { teamMemberId: string; teamId: string; name: string; squadNumber: number | null };
 
 async function reviewNominee(form: FormData) {
   "use server";
@@ -20,15 +22,42 @@ async function reviewNominee(form: FormData) {
   const id = String(form.get("candidateId") ?? "");
   const key = String(form.get("monthKey") ?? "");
   const status = String(form.get("status") ?? "");
-  const scorer = String(form.get("scorerName") ?? "").trim().slice(0, 100) || null;
+  const scorerTeamMemberId = String(form.get("scorerTeamMemberId") ?? "").trim();
   const switchClipAssetId = String(form.get("switchClipAssetId") ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || !validMonthKey(key) || !["ACTIVE", "REMOVED"].includes(status)) throw new Error("Choose a valid nomination.");
   if (switchClipAssetId && !/^[A-Za-z0-9_-]{1,120}$/.test(switchClipAssetId)) throw new Error("Choose a valid SIXFL TV clip.");
+  if (scorerTeamMemberId && !/^[A-Za-z0-9_-]{1,120}$/.test(scorerTeamMemberId)) throw new Error("Choose a valid squad player.");
   await prisma.$transaction(async tx => {
+    const [candidate] = await tx.$queryRaw<Array<{ teamId: string }>>(Prisma.sql`
+      SELECT "teamId" FROM "GoalOfMonthCandidate"
+      WHERE "id"=${id} AND "monthKey"=${key}
+      FOR UPDATE
+    `);
+    if (!candidate) throw new Error("That nomination no longer exists.");
+
     await tx.$executeRaw(Prisma.sql`
-      UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
+      UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "updatedAt" = NOW()
       WHERE "id" = ${id} AND "monthKey" = ${key}
     `);
+
+    if (scorerTeamMemberId) {
+      const [player] = await tx.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
+        SELECT tm."id", BTRIM(u."name") AS "name"
+        FROM "TeamMember" tm
+        JOIN "User" u ON u."id"=tm."userId"
+        WHERE tm."id"=${scorerTeamMemberId}
+          AND tm."teamId"=${candidate.teamId}
+          AND tm."role"::text <> 'COACH'
+          AND NULLIF(BTRIM(COALESCE(u."name", '')), '') IS NOT NULL
+        LIMIT 1
+      `);
+      if (!player) throw new Error("Choose a scorer who is currently on that team’s SIXFL squad.");
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "GoalOfMonthCandidate"
+        SET "scorerTeamMemberId"=${player.id}, "scorerName"=${player.name}, "updatedAt"=NOW()
+        WHERE "id"=${id} AND "monthKey"=${key}
+      `);
+    }
     if (switchClipAssetId) {
       if (status !== "ACTIVE") throw new Error("Reactivate the nominee before switching it to an exact clip.");
       await switchLegacyMonthlyCandidateToClip(id, switchClipAssetId, tx);
@@ -61,9 +90,9 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
   const query = (await searchParams) ?? {};
   const key = validMonthKey(query.month) ? query.month : monthKey(new Date());
   const period = monthlyPeriod(key);
-  const [rows, page, clipOptions] = await Promise.all([
+  const [rows, page, clipOptions, squadPlayers] = await Promise.all([
     prisma.$queryRaw<Row[]>(Prisma.sql`
-      SELECT c."id", c."fixtureId", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerName", c."status", t."name" AS "teamName",
+      SELECT c."id", c."fixtureId", c."teamId", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerTeamMemberId", c."scorerName", c."status", t."name" AS "teamName",
         CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
         COALESCE(f."sixflTvUrl",'') AS "sixflTvUrl", COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
       FROM "GoalOfMonthCandidate" c JOIN "Fixture" f ON f."id"=c."fixtureId" JOIN "Team" t ON t."id"=c."teamId"
@@ -90,7 +119,26 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
         )
       ORDER BY a."fixtureId", a."clipNumber"
     `),
+    prisma.$queryRaw<SquadPlayer[]>(Prisma.sql`
+      SELECT tm."id" AS "teamMemberId", tm."teamId", BTRIM(u."name") AS "name",
+        p."squadNumber"::int AS "squadNumber"
+      FROM "TeamMember" tm
+      JOIN "User" u ON u."id"=tm."userId"
+      LEFT JOIN "TeamMemberProfile" p ON p."teamMemberId"=tm."id"
+      WHERE tm."teamId" IN (
+        SELECT DISTINCT "teamId" FROM "GoalOfMonthCandidate" WHERE "monthKey"=${key}
+      )
+        AND tm."role"::text <> 'COACH'
+        AND NULLIF(BTRIM(COALESCE(u."name", '')), '') IS NOT NULL
+      ORDER BY tm."teamId", p."squadNumber" NULLS LAST, LOWER(BTRIM(u."name")), tm."createdAt", tm."id"
+    `),
   ]);
+  const playersByTeam = new Map<string, SquadPlayer[]>();
+  for (const player of squadPlayers) {
+    const list = playersByTeam.get(player.teamId) ?? [];
+    list.push({ ...player, squadNumber: player.squadNumber == null ? null : Number(player.squadNumber) });
+    playersByTeam.set(player.teamId, list);
+  }
   const clipsByFixture = new Map<string, ClipOption[]>();
   for (const clip of clipOptions) {
     const list = clipsByFixture.get(clip.fixtureId) ?? [];
@@ -117,7 +165,20 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
             <input type="hidden" name="candidateId" value={row.id} />
             <input type="hidden" name="monthKey" value={key} />
             <div className="flex flex-wrap items-end gap-3">
-              <label className="text-sm">Scorer <input name="scorerName" defaultValue={row.scorerName ?? ""} maxLength={100} className="block rounded-lg border border-white/20 bg-black p-2" /></label>
+              <div className="min-w-[260px] flex-1">
+                <FormListboxField
+                  name="scorerTeamMemberId"
+                  label="Scorer"
+                  value={row.scorerTeamMemberId ?? ""}
+                  options={(playersByTeam.get(row.teamId) ?? []).map(player => ({
+                    value: player.teamMemberId,
+                    label: `${player.squadNumber ? `#${player.squadNumber} · ` : ""}${player.name}`,
+                  }))}
+                  placeholder={row.scorerName ? `Unlinked legacy scorer: ${row.scorerName}` : "Choose scorer from squad"}
+                />
+                {!row.scorerTeamMemberId ? <p className="mt-2 text-xs leading-5 text-amber-100">This nominee is still text-only. Link it to the correct squad player before player photos, squad numbers or profile awards are used.</p> : <p className="mt-2 text-xs text-emerald-100/70">Linked player: {row.scorerName}</p>}
+                <Link href={`/admin/teams/${row.teamId}/squad`} className="mt-2 inline-block text-xs text-emerald-200 underline">Scorer missing? Open team squad →</Link>
+              </div>
               <label className="text-sm">Status <select name="status" defaultValue={row.status} className="block rounded-lg border border-white/20 bg-black p-2"><option value="ACTIVE">Active nominee</option><option value="REMOVED">Removed — keep history</option></select></label>
               <button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 font-bold text-black">Save changes</button>
             </div>

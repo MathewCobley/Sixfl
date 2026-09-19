@@ -8,7 +8,7 @@ type Db = Pick<Prisma.TransactionClient, "$queryRaw" | "$executeRaw">;
 export type MonthlyCandidate = {
   id: string; fixtureId: string; teamId: string; monthKey: string;
   goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null;
-  scorerName: string | null; createdAt: Date;
+  scorerTeamMemberId: string | null; scorerName: string | null; createdAt: Date;
   teamName: string; teamLogoUrl: string | null; opponentName: string;
   leagueName: string; kickoffAt: Date; sixflTvUrl: string;
   nominationCount: number; voteCount: number;
@@ -16,10 +16,16 @@ export type MonthlyCandidate = {
 export type MonthlyClip = {
   id: string; fixtureId: string; clipNumber: number; filename: string;
 };
+export type MonthlySquadPlayer = {
+  teamMemberId: string;
+  teamId: string;
+  name: string;
+  squadNumber: number | null;
+};
 export type MonthlyFixture = {
   id: string; kickoffAt: Date; homeTeamId: string; awayTeamId: string;
   homeTeamName: string; awayTeamName: string; homeScore: number; awayScore: number;
-  sixflTvUrl: string; leagueName: string; clips: MonthlyClip[];
+  sixflTvUrl: string; leagueName: string; clips: MonthlyClip[]; squadPlayers: MonthlySquadPlayer[];
 };
 export type AwardTransition = {
   firstMonth: string; weeklyNominationsCloseAt: Date; weeklyVotingClosesAt: Date;
@@ -46,7 +52,7 @@ export function monthlyCandidatePayload(row: MonthlyCandidate) {
   return {
     id: row.id, fixtureId: row.fixtureId, teamId: row.teamId, monthKey: row.monthKey,
     goalNumber: row.goalNumber == null ? null : Number(row.goalNumber),
-    clipAssetId: row.clipAssetId, clipNumber, scorerName: row.scorerName,
+    clipAssetId: row.clipAssetId, clipNumber, scorerTeamMemberId: row.scorerTeamMemberId, scorerName: row.scorerName,
     teamName: row.teamName, teamLogoUrl: row.teamLogoUrl, opponentName: row.opponentName,
     leagueName: row.leagueName, kickoffAt: row.kickoffAt.toISOString(),
     nominationCount: Number(row.nominationCount), voteCount: Number(row.voteCount),
@@ -62,7 +68,7 @@ export async function getMonthlyCandidates(key: string, limit = 300, db: Db = pr
   const period = monthlyPeriod(key);
   return db.$queryRaw<MonthlyCandidate[]>(Prisma.sql`
     SELECT c."id", c."fixtureId", c."teamId", c."monthKey", c."goalNumber", c."clipAssetId",
-      clip."clipNumber", c."scorerName", c."createdAt",
+      clip."clipNumber", c."scorerTeamMemberId", c."scorerName", c."createdAt",
       t."name" AS "teamName", t."logoUrl" AS "teamLogoUrl",
       CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
       l."name" AS "leagueName", f."kickoffAt", COALESCE(f."sixflTvUrl", '') AS "sixflTvUrl",
@@ -97,7 +103,7 @@ export async function getMonthlyCandidates(key: string, limit = 300, db: Db = pr
 
 export async function getMonthlyFixtures(key: string, db: Db = prisma, fixtureId?: string): Promise<MonthlyFixture[]> {
   const period = monthlyPeriod(key);
-  const fixtures = await db.$queryRaw<Omit<MonthlyFixture, "clips">[]>(Prisma.sql`
+  const fixtures = await db.$queryRaw<Omit<MonthlyFixture, "clips" | "squadPlayers">[]>(Prisma.sql`
     SELECT f."id", f."kickoffAt", f."homeTeamId", f."awayTeamId",
       home."name" AS "homeTeamName", away."name" AS "awayTeamName",
       r."homeScore"::int AS "homeScore", r."awayScore"::int AS "awayScore",
@@ -122,20 +128,47 @@ export async function getMonthlyFixtures(key: string, db: Db = prisma, fixtureId
   `);
   if (!fixtures.length) return [];
 
-  const clips = await db.$queryRaw<MonthlyClip[]>(Prisma.sql`
-    SELECT "id", "fixtureId", "clipNumber", "filename"
-    FROM "SixflTvFootageAsset"
-    WHERE "fixtureId" IN (${Prisma.join(fixtures.map(row => row.id))})
-      AND "kind" = 'CLIP' AND "state" = 'READY' AND "clipNumber" IS NOT NULL
-    ORDER BY "fixtureId", "clipNumber", "createdAt", "id"
-  `);
+  const teamIds = [...new Set(fixtures.flatMap(row => [row.homeTeamId, row.awayTeamId]))];
+  const [clips, squadPlayers] = await Promise.all([
+    db.$queryRaw<MonthlyClip[]>(Prisma.sql`
+      SELECT "id", "fixtureId", "clipNumber", "filename"
+      FROM "SixflTvFootageAsset"
+      WHERE "fixtureId" IN (${Prisma.join(fixtures.map(row => row.id))})
+        AND "kind" = 'CLIP' AND "state" = 'READY' AND "clipNumber" IS NOT NULL
+      ORDER BY "fixtureId", "clipNumber", "createdAt", "id"
+    `),
+    db.$queryRaw<MonthlySquadPlayer[]>(Prisma.sql`
+      SELECT tm."id" AS "teamMemberId", tm."teamId",
+        BTRIM(u."name") AS "name", p."squadNumber"::int AS "squadNumber"
+      FROM "TeamMember" tm
+      JOIN "User" u ON u."id" = tm."userId"
+      LEFT JOIN "TeamMemberProfile" p ON p."teamMemberId" = tm."id"
+      WHERE tm."teamId" IN (${Prisma.join(teamIds)})
+        AND tm."role"::text <> 'COACH'
+        AND NULLIF(BTRIM(COALESCE(u."name", '')), '') IS NOT NULL
+      ORDER BY tm."teamId", p."squadNumber" NULLS LAST, LOWER(BTRIM(u."name")), tm."createdAt", tm."id"
+    `),
+  ]);
   const clipsByFixture = new Map<string, MonthlyClip[]>();
   for (const clip of clips) {
     const list = clipsByFixture.get(clip.fixtureId) ?? [];
     list.push({ ...clip, clipNumber: Number(clip.clipNumber) });
     clipsByFixture.set(clip.fixtureId, list);
   }
-  return fixtures.map(fixture => ({ ...fixture, clips: clipsByFixture.get(fixture.id) ?? [] }));
+  const playersByTeam = new Map<string, MonthlySquadPlayer[]>();
+  for (const player of squadPlayers) {
+    const list = playersByTeam.get(player.teamId) ?? [];
+    list.push({ ...player, squadNumber: player.squadNumber == null ? null : Number(player.squadNumber) });
+    playersByTeam.set(player.teamId, list);
+  }
+  return fixtures.map(fixture => ({
+    ...fixture,
+    clips: clipsByFixture.get(fixture.id) ?? [],
+    squadPlayers: [
+      ...(playersByTeam.get(fixture.homeTeamId) ?? []),
+      ...(playersByTeam.get(fixture.awayTeamId) ?? []),
+    ],
+  }));
 }
 
 export function pickMonthlyWinner(candidates: MonthlyCandidate[]): MonthlyCandidate | null {
@@ -283,7 +316,7 @@ export async function nominateMonthlyGoal(input: {
   userId: string;
   fixtureId: string;
   scoringTeamId: string;
-  scorerName: string | null;
+  scorerTeamMemberId?: string | null;
   clipAssetId?: string | null;
   goalNumber?: number | null;
 }, now = new Date()) {
@@ -306,26 +339,54 @@ export async function nominateMonthlyGoal(input: {
     if (![fixture.homeTeamId, fixture.awayTeamId].includes(input.scoringTeamId))
       throw new GoalAwardError("The scoring team must have played in that match.", 400);
 
-    let existing: { id: string; teamId: string; status: string } | undefined;
+    const scorerTeamMemberId = input.scorerTeamMemberId?.trim() || null;
+    const [scorer] = scorerTeamMemberId
+      ? await tx.$queryRaw<Array<{ teamMemberId: string; scorerName: string }>>(Prisma.sql`
+          SELECT tm."id" AS "teamMemberId", BTRIM(u."name") AS "scorerName"
+          FROM "TeamMember" tm
+          JOIN "User" u ON u."id" = tm."userId"
+          WHERE tm."id" = ${scorerTeamMemberId}
+            AND tm."teamId" = ${input.scoringTeamId}
+            AND tm."role"::text <> 'COACH'
+            AND NULLIF(BTRIM(COALESCE(u."name", '')), '') IS NOT NULL
+          LIMIT 1
+        `)
+      : [];
+    const scorerName = scorer?.scorerName ?? null;
+
+    let existing: { id: string; teamId: string; status: string; scorerTeamMemberId: string | null } | undefined;
     if (clipAssetId) {
       const clip = fixture.clips.find(row => row.id === clipAssetId);
       if (!clip) throw new GoalAwardError("Choose an available SIXFL TV clip from that match.", 400);
-      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string }>>(Prisma.sql`
-        SELECT "id", "teamId", "status" FROM "GoalOfMonthCandidate"
+      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string; scorerTeamMemberId: string | null }>>(Prisma.sql`
+        SELECT "id", "teamId", "status", "scorerTeamMemberId" FROM "GoalOfMonthCandidate"
         WHERE "clipAssetId" = ${clipAssetId}
       `);
     } else {
       const goals = Number(fixture.homeScore) + Number(fixture.awayScore);
       if (!Number.isInteger(goalNumber) || Number(goalNumber) < 1 || Number(goalNumber) > goals)
         throw new GoalAwardError("Choose a valid goal number from that match.", 400);
-      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string }>>(Prisma.sql`
-        SELECT "id", "teamId", "status" FROM "GoalOfMonthCandidate"
+      [existing] = await tx.$queryRaw<Array<{ id: string; teamId: string; status: string; scorerTeamMemberId: string | null }>>(Prisma.sql`
+        SELECT "id", "teamId", "status", "scorerTeamMemberId" FROM "GoalOfMonthCandidate"
         WHERE "fixtureId" = ${input.fixtureId} AND "clipAssetId" IS NULL AND "goalNumber" = ${goalNumber}
       `);
     }
 
     if (existing && (existing.status !== "ACTIVE" || existing.teamId !== input.scoringTeamId))
       throw new GoalAwardError("That goal was removed or has a different scoring team recorded. Ask SIXFL to review it.");
+    if (!existing && !scorer) {
+      throw new GoalAwardError("Choose the scorer from that team’s SIXFL squad. If they are missing, ask the captain to add them to the squad first.", 400);
+    }
+    if (existing?.scorerTeamMemberId && scorerTeamMemberId && existing.scorerTeamMemberId !== scorerTeamMemberId) {
+      throw new GoalAwardError("This goal is already linked to a different squad player. Ask SIXFL to review the scorer.", 409);
+    }
+    if (existing && !existing.scorerTeamMemberId && scorer) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "GoalOfMonthCandidate"
+        SET "scorerTeamMemberId"=${scorer.teamMemberId}, "scorerName"=${scorer.scorerName}, "updatedAt"=NOW()
+        WHERE "id"=${existing.id} AND "scorerTeamMemberId" IS NULL
+      `);
+    }
 
     const mine = await tx.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
       SELECT n."candidateId" FROM "GoalOfMonthNomination" n JOIN "GoalOfMonthCandidate" c ON c."id" = n."candidateId"
@@ -337,8 +398,8 @@ export async function nominateMonthlyGoal(input: {
     const candidateId = existing?.id ?? randomUUID();
     if (!existing) {
       await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "GoalOfMonthCandidate" ("id", "fixtureId", "teamId", "monthKey", "goalNumber", "clipAssetId", "scorerName")
-        VALUES (${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${goalNumber}, ${clipAssetId}, ${input.scorerName})
+        INSERT INTO "GoalOfMonthCandidate" ("id", "fixtureId", "teamId", "monthKey", "goalNumber", "clipAssetId", "scorerTeamMemberId", "scorerName")
+        VALUES (${candidateId}, ${input.fixtureId}, ${input.scoringTeamId}, ${key}, ${goalNumber}, ${clipAssetId}, ${scorer!.teamMemberId}, ${scorer!.scorerName})
       `);
     }
     await tx.$executeRaw(Prisma.sql`
