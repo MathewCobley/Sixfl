@@ -5,12 +5,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { monthKey, monthlyPeriod, validMonthKey } from "@/lib/goal-of-month/calendar";
-import { getMonthlyPageData, safeVideoLinks } from "@/lib/goal-of-month/community";
+import { getMonthlyPageData, safeVideoLinks, switchLegacyMonthlyCandidateToClip } from "@/lib/goal-of-month/community";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const metadata = { title: "Goal of the Month | SIXFL Admin" };
-type Row = { id: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
+type Row = { id: string; fixtureId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
+type ClipOption = { id: string; fixtureId: string; clipNumber: number; filename: string };
 
 async function reviewNominee(form: FormData) {
   "use server";
@@ -20,13 +21,18 @@ async function reviewNominee(form: FormData) {
   const key = String(form.get("monthKey") ?? "");
   const status = String(form.get("status") ?? "");
   const scorer = String(form.get("scorerName") ?? "").trim().slice(0, 100) || null;
+  const switchClipAssetId = String(form.get("switchClipAssetId") ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(id) || !validMonthKey(key) || !["ACTIVE", "REMOVED"].includes(status)) throw new Error("Choose a valid nomination.");
+  if (switchClipAssetId && !/^[A-Za-z0-9_-]{1,120}$/.test(switchClipAssetId)) throw new Error("Choose a valid SIXFL TV clip.");
   await prisma.$transaction(async tx => {
     await tx.$executeRaw(Prisma.sql`
       UPDATE "GoalOfMonthCandidate" SET "status" = ${status}, "scorerName" = ${scorer}, "updatedAt" = NOW()
       WHERE "id" = ${id} AND "monthKey" = ${key}
     `);
-    if (status === "ACTIVE") {
+    if (switchClipAssetId) {
+      if (status !== "ACTIVE") throw new Error("Reactivate the nominee before switching it to an exact clip.");
+      await switchLegacyMonthlyCandidateToClip(id, switchClipAssetId, tx);
+    } else if (status === "ACTIVE") {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
         SELECT c."id", c."clipAssetId"
@@ -48,16 +54,16 @@ async function reviewNominee(form: FormData) {
     }
   });
   revalidatePath("/goal-of-the-month"); revalidatePath("/admin/sixfl-tv/goal-of-month"); revalidatePath("/");
-  redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&saved=1`);
+  redirect(`/admin/sixfl-tv/goal-of-month?month=${key}&${switchClipAssetId ? "switched=1" : "saved=1"}`);
 }
-export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?: Promise<{ month?: string; saved?: string }> }) {
+export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?: Promise<{ month?: string; saved?: string; switched?: string }> }) {
   await requireAdmin();
   const query = (await searchParams) ?? {};
   const key = validMonthKey(query.month) ? query.month : monthKey(new Date());
   const period = monthlyPeriod(key);
-  const [rows, page] = await Promise.all([
+  const [rows, page, clipOptions] = await Promise.all([
     prisma.$queryRaw<Row[]>(Prisma.sql`
-      SELECT c."id", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerName", c."status", t."name" AS "teamName",
+      SELECT c."id", c."fixtureId", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerName", c."status", t."name" AS "teamName",
         CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
         COALESCE(f."sixflTvUrl",'') AS "sixflTvUrl", COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
       FROM "GoalOfMonthCandidate" c JOIN "Fixture" f ON f."id"=c."fixtureId" JOIN "Team" t ON t."id"=c."teamId"
@@ -66,15 +72,67 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
       LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId"=c."id" LEFT JOIN "GoalOfMonthVote" v ON v."candidateId"=c."id"
       WHERE c."monthKey"=${key} GROUP BY c."id", t."name", f."homeTeamId", away."name", home."name", f."sixflTvUrl", clip."clipNumber"
       ORDER BY COUNT(DISTINCT n."id") DESC, c."createdAt" ASC, c."id" ASC
-    `), getMonthlyPageData(null),
+    `),
+    getMonthlyPageData(null),
+    prisma.$queryRaw<ClipOption[]>(Prisma.sql`
+      SELECT DISTINCT a."id", a."fixtureId", a."clipNumber"::int AS "clipNumber", a."filename"
+      FROM "SixflTvFootageAsset" a
+      JOIN "GoalOfMonthCandidate" c ON c."fixtureId"=a."fixtureId"
+      WHERE c."monthKey"=${key}
+        AND c."clipAssetId" IS NULL
+        AND c."status"='ACTIVE'
+        AND a."kind"='CLIP'
+        AND a."state"='READY'
+        AND a."clipNumber" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM "GoalOfMonthCandidate" used
+          WHERE used."clipAssetId"=a."id"
+        )
+      ORDER BY a."fixtureId", a."clipNumber"
+    `),
   ]);
+  const clipsByFixture = new Map<string, ClipOption[]>();
+  for (const clip of clipOptions) {
+    const list = clipsByFixture.get(clip.fixtureId) ?? [];
+    list.push(clip);
+    clipsByFixture.set(clip.fixtureId, list);
+  }
   return <div className="space-y-6">
     <header className="rounded-3xl border border-emerald-300/25 bg-emerald-400/5 p-6"><h1 className="text-3xl font-bold text-white">Goal of the Month</h1><p className="mt-3 text-sm leading-6 text-white/65">One monthly competition across SIXFL. Nominations run through the following 5th; the top six go to voting from the 6th–12th. Existing weekly records remain separate. Remove only incorrect or unsuitable nominations; removal preserves the original nominations and votes.</p><div className="mt-4 flex flex-wrap gap-4 text-sm text-emerald-100"><Link href="/goal-of-the-month">Open public competition →</Link><Link href="/admin/sixfl-tv/goal-of-week?legacy=1">Historical weekly nominations</Link><Link href="/admin/sixfl-tv/goal-of-week">SIXFL TV / weekly winner editor</Link></div></header>
     {query.saved === "1" ? <p role="status" className="text-emerald-100">Nomination changes saved.</p> : null}
     <form className="flex flex-wrap gap-3"><label className="text-sm">Award month <input name="month" type="month" defaultValue={key} className="rounded-lg border border-white/20 bg-black p-2 text-white" /></label><button type="submit" className="rounded-lg border border-white/20 px-4 py-2">Show month</button></form>
     <h2 className="text-xl font-bold">{period.label} — {rows.length} nominated goals</h2>
     <p className="text-sm text-white/60">{page.voting.open ? `${page.voting.label} voting is open.` : "Monthly voting is not currently open."} Winners are derived from the recorded player vote; there is no automatic message blast.</p>
-    <div className="space-y-4">{rows.map(row => <article key={row.id} className="rounded-2xl border border-white/10 p-5"><h3 className="font-bold">{row.teamName} v {row.opponentName} · {row.clipNumber ? `Clip ${row.clipNumber}` : `Goal ${row.goalNumber ?? "—"}`}</h3><p className="my-2 text-sm text-white/60">{row.nominationCount} nominations · {row.voteCount} votes · {row.status}</p><div className="mb-3 flex gap-3">{row.clipAssetId ? <a href={`/api/goal-of-month/clips/${row.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch exact clip ↗</a> : safeVideoLinks(row.sixflTvUrl).map((url,index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch video {index+1}</a>)}</div><form action={reviewNominee} className="flex flex-wrap items-end gap-3"><input type="hidden" name="candidateId" value={row.id} /><input type="hidden" name="monthKey" value={key} /><label className="text-sm">Scorer <input name="scorerName" defaultValue={row.scorerName ?? ""} maxLength={100} className="block rounded-lg border border-white/20 bg-black p-2" /></label><label className="text-sm">Status <select name="status" defaultValue={row.status} className="block rounded-lg border border-white/20 bg-black p-2"><option value="ACTIVE">Active nominee</option><option value="REMOVED">Removed — keep history</option></select></label><button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 font-bold text-black">Save changes</button></form></article>)}</div>
+    {query.switched === "1" ? <p role="status" className="rounded-xl border border-emerald-300/25 bg-emerald-400/10 p-3 text-emerald-100">Nominee switched to the exact SIXFL TV clip. Existing nominations and votes were kept, and a fresh nominee video has been queued.</p> : null}
+    <div className="space-y-4">
+      {rows.map(row => {
+        const availableClips = !row.clipAssetId ? (clipsByFixture.get(row.fixtureId) ?? []) : [];
+        return <article key={row.id} className="rounded-2xl border border-white/10 p-5">
+          <h3 className="font-bold">{row.teamName} v {row.opponentName} · {row.clipNumber ? `Clip ${row.clipNumber}` : `Goal ${row.goalNumber ?? "—"}`}</h3>
+          <p className="my-2 text-sm text-white/60">{row.nominationCount} nominations · {row.voteCount} votes · {row.status}</p>
+          <div className="mb-3 flex flex-wrap gap-3">
+            {row.clipAssetId ? <a href={`/api/goal-of-month/clips/${row.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch exact clip ↗</a> : safeVideoLinks(row.sixflTvUrl).map((url,index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch video {index+1}</a>)}
+          </div>
+          <form action={reviewNominee} className="space-y-4">
+            <input type="hidden" name="candidateId" value={row.id} />
+            <input type="hidden" name="monthKey" value={key} />
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm">Scorer <input name="scorerName" defaultValue={row.scorerName ?? ""} maxLength={100} className="block rounded-lg border border-white/20 bg-black p-2" /></label>
+              <label className="text-sm">Status <select name="status" defaultValue={row.status} className="block rounded-lg border border-white/20 bg-black p-2"><option value="ACTIVE">Active nominee</option><option value="REMOVED">Removed — keep history</option></select></label>
+              <button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 font-bold text-black">Save changes</button>
+            </div>
+            {!row.clipAssetId && row.status === "ACTIVE" ? <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 p-4">
+              <p className="font-semibold text-amber-100">Legacy nomination — switch it to the exact highlights clip</p>
+              <p className="mt-1 text-sm leading-6 text-white/60">This keeps the same nominee, nominations and votes. It only replaces the old goal-number/video reference with the exact SIXFL TV clip and queues the new branded nominee video.</p>
+              {availableClips.length ? <div className="mt-3 flex flex-wrap gap-2">{availableClips.map(clip => <div key={clip.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 p-2">
+                <a href={`/api/goal-of-month/fixtures/${row.fixtureId}/clips/${clip.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-emerald-100 underline">Watch Clip {clip.clipNumber}</a>
+                <button type="submit" name="switchClipAssetId" value={clip.id} className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-100">Switch to Clip {clip.clipNumber}</button>
+              </div>)}</div> : <p className="mt-3 text-sm text-white/50">No unused ready highlight clips are available for this match yet.</p>}
+            </div> : null}
+          </form>
+        </article>;
+      })}
+    </div>
     {!rows.length ? <p className="text-white/60">No nominations for this month yet.</p> : null}
   </div>;
 }

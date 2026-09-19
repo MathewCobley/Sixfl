@@ -134,6 +134,21 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   assert.equal(sql(`SELECT "state" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${result.candidateId}'`), 'QUEUED');
 });
 
+test('admin can upgrade a legacy goal-number nominee to an exact clip without losing nominations or votes', async () => {
+  const legacy = await awards.nominateMonthlyGoal(input('u1', 1), now);
+  sql(`INSERT INTO "GoalOfMonthVote" ("id","candidateId","userId","monthKey") VALUES ('legacy-vote','${legacy.candidateId}','u2','2026-09');
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('legacy-upgrade-clip','fixture','CLIP','legacy-goal.mp4','READY',0,NOW(),7);`);
+  const result = await db.$transaction(tx => awards.switchLegacyMonthlyCandidateToClip(legacy.candidateId, 'legacy-upgrade-clip', tx));
+  assert.equal(result.candidateId, legacy.candidateId);
+  assert.equal(result.clipAssetId, 'legacy-upgrade-clip');
+  assert.equal(result.clipNumber, 7);
+  assert.equal(result.nominationCount, 1);
+  assert.equal(result.voteCount, 1);
+  assert.equal(sql(`SELECT COALESCE("goalNumber"::text,'NULL') || '|' || COALESCE("clipAssetId",'NULL') FROM "GoalOfMonthCandidate" WHERE "id"='${legacy.candidateId}'`), 'NULL|legacy-upgrade-clip');
+  assert.equal(sql(`SELECT "state" || '|' || "sourceAssetId" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${legacy.candidateId}'`), 'QUEUED|legacy-upgrade-clip');
+});
+
 test('branding refresh requeues existing active nominee renders while preserving the old object until replacement', async () => {
   sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
     INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
