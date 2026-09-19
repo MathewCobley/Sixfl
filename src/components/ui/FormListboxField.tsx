@@ -85,6 +85,7 @@ export default function FormListboxField({
           return (
             <div ref={fieldRef} className="relative">
               <Listbox.Button
+                aria-label={label || placeholder}
                 onClick={updateOpenDirection}
                 onFocus={updateOpenDirection}
                 className={[
