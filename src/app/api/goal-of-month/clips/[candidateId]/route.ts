@@ -70,15 +70,11 @@ export async function GET(request: Request, context: Context) {
       SELECT c."fixtureId", c."clipAssetId"
       FROM "GoalOfMonthCandidate" c
       JOIN "Fixture" f ON f."id" = c."fixtureId"
-      JOIN "SixflTvFootageAsset" a ON a."id" = c."clipAssetId"
       WHERE c."id" = ${safeCandidateId}
         AND c."status" = 'ACTIVE'
         AND c."clipAssetId" IS NOT NULL
         AND f."status"::text = 'COMPLETED'
         AND f."publishedAt" IS NOT NULL
-        AND a."fixtureId" = c."fixtureId"
-        AND a."kind" = 'CLIP'
-        AND a."state" = 'READY'
       LIMIT 1
     `);
     if (!row) throw new FootageError("This nominated clip is unavailable.", 404);
