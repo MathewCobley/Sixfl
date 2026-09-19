@@ -31,26 +31,26 @@ function replaceRequired(source, before, after, label) {
 let profile = read(profilePath);
 profile = replaceRequired(
   profile,
-  "  playerMatchFeePenceOverride: number | null;\n  createdAt: Date;",
-  "  playerMatchFeePenceOverride: number | null;\n  playerMatchFeeCapPence: number | null;\n  createdAt: Date;",
+  "  playerMatchFeePenceOverride: number | null;\n  squadNumber: number | null;\n  createdAt: Date;",
+  "  playerMatchFeePenceOverride: number | null;\n  playerMatchFeeCapPence: number | null;\n  squadNumber: number | null;\n  createdAt: Date;",
   "profile cap type",
 );
 profile = replaceRequired(
   profile,
-  '      "playerMatchFeePenceOverride" INTEGER,\n      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
-  '      "playerMatchFeePenceOverride" INTEGER,\n      "playerMatchFeeCapPence" INTEGER,\n      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '      "playerMatchFeePenceOverride" INTEGER,\n      "squadNumber" INTEGER,\n      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '      "playerMatchFeePenceOverride" INTEGER,\n      "playerMatchFeeCapPence" INTEGER,\n      "squadNumber" INTEGER,\n      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
   "profile cap table column",
 );
 profile = replaceRequired(
   profile,
-  '  await client.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;\n  `);',
-  '  await client.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER;\n  `);\n\n  await client.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeeCapPence" INTEGER;\n  `);',
+  '  await client.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER,\n      ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;\n  `);',
+  '  await client.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeePenceOverride" INTEGER,\n      ADD COLUMN IF NOT EXISTS "playerMatchFeeCapPence" INTEGER,\n      ADD COLUMN IF NOT EXISTS "squadNumber" INTEGER;\n  `);',
   "profile cap alter",
 );
 profile = replaceRequired(
   profile,
-  '        "playerMatchFeePenceOverride",\n        "createdAt",',
-  '        "playerMatchFeePenceOverride",\n        "playerMatchFeeCapPence",\n        "createdAt",',
+  '        "playerMatchFeePenceOverride",\n        "squadNumber",\n        "createdAt",',
+  '        "playerMatchFeePenceOverride",\n        "playerMatchFeeCapPence",\n        "squadNumber",\n        "createdAt",',
   "profile cap select",
 );
 write(profilePath, profile);
@@ -85,26 +85,26 @@ editAction = replaceRequired(
 );
 editAction = replaceRequired(
   editAction,
-  '  if (Number.isNaN(playerMatchFeeOverride)) {\n    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank.", access.isAdmin));\n  }',
+  '  if (access.isAdmin && Number.isNaN(playerMatchFeeOverride)) {\n    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank.", access.isAdmin));\n  }',
   '  if (access.isAdmin && Number.isNaN(playerMatchFeeOverride)) {\n    redirect(getErrorRedirect(teamid, "Player fee override must be a valid amount or left blank.", access.isAdmin));\n  }\n\n  if (access.isAdmin && Number.isNaN(playerMatchFeeCap)) {\n    redirect(getErrorRedirect(teamid, "Maximum player charge must be a valid amount or left blank.", access.isAdmin));\n  }',
   "admin cap validation",
 );
 editAction = replaceRequired(
   editAction,
-  '  const existingProfiles = await prisma.$queryRaw<\n    Array<{ sourceProspectId: string | null }>\n  >`\n    SELECT "sourceProspectId"\n    FROM "TeamMemberProfile"',
-  '  await prisma.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeeCapPence" INTEGER;\n  `);\n\n  const existingProfiles = await prisma.$queryRaw<\n    Array<{\n      sourceProspectId: string | null;\n      playerMatchFeePenceOverride: number | null;\n      playerMatchFeeCapPence: number | null;\n    }>\n  >`\n    SELECT "sourceProspectId", "playerMatchFeePenceOverride", "playerMatchFeeCapPence"\n    FROM "TeamMemberProfile"',
+  '  const existingProfiles = await prisma.$queryRaw<\n    Array<{\n      sourceProspectId: string | null;\n      playerMatchFeePenceOverride: number | null;\n      squadNumber: number | null;\n    }>\n  >`\n    SELECT "sourceProspectId", "playerMatchFeePenceOverride", "squadNumber"\n    FROM "TeamMemberProfile"',
+  '  await prisma.$executeRawUnsafe(`\n    ALTER TABLE "TeamMemberProfile"\n      ADD COLUMN IF NOT EXISTS "playerMatchFeeCapPence" INTEGER;\n  `);\n\n  const existingProfiles = await prisma.$queryRaw<\n    Array<{\n      sourceProspectId: string | null;\n      playerMatchFeePenceOverride: number | null;\n      playerMatchFeeCapPence: number | null;\n      squadNumber: number | null;\n    }>\n  >`\n    SELECT "sourceProspectId", "playerMatchFeePenceOverride", "playerMatchFeeCapPence", "squadNumber"\n    FROM "TeamMemberProfile"',
   "existing fee settings query",
 );
 editAction = replaceRequired(
   editAction,
-  '  const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;\n\n  await prisma.$transaction(async (tx) => {',
-  '  const sourceProspectId = existingProfiles[0]?.sourceProspectId ?? null;\n  const existingPlayerMatchFeeOverride = existingProfiles[0]?.playerMatchFeePenceOverride ?? null;\n  const existingPlayerMatchFeeCap = existingProfiles[0]?.playerMatchFeeCapPence ?? null;\n  const nextPlayerMatchFeeOverride = access.isAdmin\n    ? playerMatchFeeOverride\n    : existingPlayerMatchFeeOverride;\n  const nextPlayerMatchFeeCap = access.isAdmin\n    ? playerMatchFeeCap\n    : existingPlayerMatchFeeCap;\n\n  await prisma.$transaction(async (tx) => {',
+  "  const existingPlayerMatchFeeOverride =\\n    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;\\n  const nextPlayerMatchFeeOverride = access.isAdmin\\n    ? playerMatchFeeOverride\\n    : existingPlayerMatchFeeOverride;\\n  const playerMatchFeeOverrideChanged =\\n    access.isAdmin &&\\n    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
+  "  const existingPlayerMatchFeeOverride =\\n    existingProfiles[0]?.playerMatchFeePenceOverride ?? null;\\n  const existingPlayerMatchFeeCap = existingProfiles[0]?.playerMatchFeeCapPence ?? null;\\n  const nextPlayerMatchFeeOverride = access.isAdmin\\n    ? playerMatchFeeOverride\\n    : existingPlayerMatchFeeOverride;\\n  const nextPlayerMatchFeeCap = access.isAdmin\\n    ? playerMatchFeeCap\\n    : existingPlayerMatchFeeCap;\\n  const playerMatchFeeOverrideChanged =\\n    access.isAdmin &&\\n    existingPlayerMatchFeeOverride !== nextPlayerMatchFeeOverride;",
   "protected fee settings",
 );
 editAction = replaceRequired(
   editAction,
-  '        "playerMatchFeePenceOverride" INTEGER,\n        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
-  '        "playerMatchFeePenceOverride" INTEGER,\n        "playerMatchFeeCapPence" INTEGER,\n        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '        "playerMatchFeePenceOverride" INTEGER,\n        "squadNumber" INTEGER,\n        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+  '        "playerMatchFeePenceOverride" INTEGER,\n        "playerMatchFeeCapPence" INTEGER,\n        "squadNumber" INTEGER,\n        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,',
   "edit action cap table column",
 );
 editAction = replaceRequired(
@@ -115,14 +115,14 @@ editAction = replaceRequired(
 );
 editAction = replaceRequired(
   editAction,
-  '        "phone",\n        "playerMatchFeePenceOverride",\n        "preferredPositions",',
-  '        "phone",\n        "playerMatchFeePenceOverride",\n        "playerMatchFeeCapPence",\n        "preferredPositions",',
+  '        "phone",\n        "squadNumber",\n        "playerMatchFeePenceOverride",\n        "preferredPositions",',
+  '        "phone",\n        "squadNumber",\n        "playerMatchFeePenceOverride",\n        "playerMatchFeeCapPence",\n        "preferredPositions",',
   "cap insert column",
 );
 editAction = replaceRequired(
   editAction,
-  '        ${phone},\n        ${playerMatchFeeOverride},\n        ${preferredPositions},',
-  '        ${phone},\n        ${nextPlayerMatchFeeOverride},\n        ${nextPlayerMatchFeeCap},\n        ${preferredPositions},',
+  '        ${phone},\n        ${squadNumber},\n        ${nextPlayerMatchFeeOverride},\n        ${preferredPositions},',
+  '        ${phone},\n        ${squadNumber},\n        ${nextPlayerMatchFeeOverride},\n        ${nextPlayerMatchFeeCap},\n        ${preferredPositions},',
   "cap insert value",
 );
 editAction = replaceRequired(
