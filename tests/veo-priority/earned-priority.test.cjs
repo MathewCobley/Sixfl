@@ -57,6 +57,9 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MIN = 50/);
   assert.match(engagement, /SIXFL_TV_VIEW_SCORE_MAX = 150/);
   assert.match(engagement, /SIXFL_TV_ENGAGEMENT_BONUS_MAX = 20/);
+  assert.match(score, /SIXFL_TV_PRIORITY_RELIABILITY_MAX = 80/);
+  assert.match(score, /SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10/);
+  assert.match(score, /SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10/);
   assert.match(engagement, /SIXFL_TV_VIEW_FIXTURE_WINDOW = 5/);
   assert.match(engagement, /GoalOfWeekNomination/);
   assert.match(engagement, /GoalOfWeekVote/);
@@ -64,10 +67,11 @@ test('audience and award engagement can influence allocation without replacing e
   assert.match(engagement, /GoalOfMonthVote/);
   assert.match(engagement, /division:/);
   assert.match(engagement, /viewBonus \+ nominationPoints \+ votePoints/);
-  assert.match(allocator, /homeAllocationScore/);
-  assert.match(allocator, /f\.homeAllocationScore \?\? f\.homePriorityScore/);
-  assert.match(bookings, /getSixflTvEngagementScores/);
-  assert.match(bookings, /homeAllocationScore:sixflTvAllocationScore/);
+  assert.doesNotMatch(allocator, /homeAllocationScore|awayAllocationScore/);
+  assert.match(allocator, /f\.homePriorityScore \?\? 0/);
+  assert.doesNotMatch(bookings, /sixflTvAllocationScore|getSixflTvEngagementScores/);
+  assert.match(bookings, /homePriorityScore:homeScore\?\.score\?\?0/);
+  assert.match(bookings, /homeReliabilityPoints:homeScore\?\.reliabilityPoints\?\?0/);
   assert.match(engagementDashboard, /View Score compares each team with the current average in its own division/);
   assert.match(engagementMigration, /SixflTvYoutubeMetricSnapshot/);
 });
@@ -88,7 +92,9 @@ test('captains and admins see the same score', () => {
   assert.match(adminPriorityPage, /ratings bonus 1 \(by 6pm next day\)/);
   assert.match(captainCard, /Match card not completed/);
   assert.match(captainCard, /Available points per match/);
-  assert.match(captainCard, /Each completed match is worth up to 20 points/);
+  assert.match(captainCard, /scaled to a maximum of 80 Priority points/);
+  assert.match(captainCard, /Your one overall score/);
+  assert.doesNotMatch(captainCard, /\/120|Allocation score/);
   assert.match(captainCard, /What was missing\?/);
   assert.match(captainCard, /pointsMissed/);
   assert.match(captainCard, /missed/);
