@@ -297,3 +297,16 @@ test('native competition and dashboard reuse one clip component and one monthly 
   assert.ok(read('src/components/goal-of-month/useMonthlyGoals.ts').includes('/api/goal-of-month/community'));
   assert.equal(/MutationObserver|querySelector/.test(panel + dashboard), false);
 });
+
+
+test('Goal of the Month admin links scorers to squad members instead of free text', () => {
+  const admin = read('src/app/(admin)/admin/sixfl-tv/goal-of-month/page.tsx');
+  const publicPanel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
+  assert.match(admin, /name="scorerTeamMemberId"/);
+  assert.match(admin, /FormListboxField/);
+  assert.match(admin, /Scorer missing\? Open team squad/);
+  assert.doesNotMatch(admin, /name="scorerName"/);
+  assert.match(publicPanel, /Choose the scorer from the squad/);
+  assert.match(publicPanel, /ask the captain to add the scorer to the SIXFL squad/);
+  assert.doesNotMatch(publicPanel, /name="scorerName"/);
+});
