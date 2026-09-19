@@ -664,6 +664,21 @@ export default async function AdminTeamSquadPage({
                 placeholder="Select role"
               />
 
+              <div className="space-y-2">
+                <label htmlFor="squadNumber" className="text-sm text-white/60">
+                  Squad number
+                </label>
+                <input
+                  id="squadNumber"
+                  name="squadNumber"
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="Optional · 1–99"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-emerald-500/60"
+                />
+              </div>
+
               <button
                 type="submit"
                 className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
