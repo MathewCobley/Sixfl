@@ -63,7 +63,6 @@ export async function GET(request: Request, context: Context) {
         AND c."status" = 'ACTIVE'
         AND c."clipAssetId" IS NOT NULL
         AND a."kind" = 'CLIP'
-        AND a."state" = 'READY'
         AND a."clipNumber" IS NOT NULL
         AND f."status"::text = 'COMPLETED'
         AND f."publishedAt" IS NOT NULL
