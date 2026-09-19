@@ -76,14 +76,15 @@ export default function PwaAppFrame({
 }: PwaAppFrameProps) {
   const pathname = usePathname();
   const [forcedAppMode, setForcedAppMode] = useState(false);
+  const appModeEnabled = !(pathname === "/admin" || pathname.startsWith("/admin/"));
 
   useEffect(() => {
     const iosStandalone =
       "standalone" in navigator &&
       Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
-    setForcedAppMode(iosStandalone || isPwaPreviewFrame());
-  }, []);
+    setForcedAppMode(appModeEnabled && (iosStandalone || isPwaPreviewFrame()));
+  }, [appModeEnabled]);
 
   const activeHref = useMemo(() => {
     const active = navItems.find((item) => isNavItemActive(pathname, item));
@@ -92,7 +93,15 @@ export default function PwaAppFrame({
   }, [navItems, pathname]);
 
   return (
-    <div className={forcedAppMode ? "pwa-app-forced" : "pwa-app-controller"}>
+    <div
+      className={[
+        "pwa-app-controller",
+        appModeEnabled ? "pwa-app-enabled" : "pwa-app-disabled",
+        forcedAppMode ? "pwa-app-forced" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <style>{`
         .pwa-app-header,
         .pwa-app-bottom-nav,
@@ -101,50 +110,50 @@ export default function PwaAppFrame({
         }
 
         @media (display-mode: standalone) {
-          .pwa-web-chrome,
-          .pwa-web-home {
+          body:has(.pwa-app-enabled) .pwa-web-chrome,
+          body:has(.pwa-app-enabled) .pwa-web-home {
             display: none !important;
           }
 
-          .pwa-app-header {
+          body:has(.pwa-app-enabled) .pwa-app-header {
             display: flex;
           }
 
-          .pwa-app-bottom-nav,
-          .pwa-app-home {
+          body:has(.pwa-app-enabled) .pwa-app-bottom-nav,
+          body:has(.pwa-app-enabled) .pwa-app-home {
             display: block;
           }
 
-          .pwa-app-content-shell {
+          body:has(.pwa-app-enabled) .pwa-app-content-shell {
             padding: 0 0 calc(5rem + env(safe-area-inset-bottom)) !important;
             gap: 0 !important;
           }
 
-          .pwa-app-main {
+          body:has(.pwa-app-enabled) .pwa-app-main {
             padding-top: 0 !important;
           }
         }
 
-        body:has(.pwa-app-forced) .pwa-web-chrome,
-        body:has(.pwa-app-forced) .pwa-web-home {
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-web-chrome,
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-web-home {
           display: none !important;
         }
 
-        body:has(.pwa-app-forced) .pwa-app-header {
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-app-header {
           display: flex;
         }
 
-        body:has(.pwa-app-forced) .pwa-app-bottom-nav,
-        body:has(.pwa-app-forced) .pwa-app-home {
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-app-bottom-nav,
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-app-home {
           display: block;
         }
 
-        body:has(.pwa-app-forced) .pwa-app-content-shell {
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-app-content-shell {
           padding: 0 0 5rem !important;
           gap: 0 !important;
         }
 
-        body:has(.pwa-app-forced) .pwa-app-main {
+        body:has(.pwa-app-enabled.pwa-app-forced) .pwa-app-main {
           padding-top: 0 !important;
         }
       `}</style>
