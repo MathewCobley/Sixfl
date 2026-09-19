@@ -24,7 +24,7 @@ function loadRecovery() {
     },
   }).outputText;
   const module = { exports: {} };
-  new Function("require", "module", "exports")(require, module, module.exports);
+  new Function("require", "module", "exports", code)(require, module, module.exports);
   return module.exports;
 }
 
