@@ -133,17 +133,6 @@ export function calculateSixflTvViewScore(input: {
   return { viewScore, viewBonus, adjustedAverageViews };
 }
 
-export function sixflTvAllocationScore(
-  priorityScore: number,
-  engagementBonus: number,
-) {
-  return clamp(
-    Math.round(priorityScore) + Math.round(engagementBonus),
-    0,
-    100 + SIXFL_TV_ENGAGEMENT_BONUS_MAX,
-  );
-}
-
 async function currentTeamCohorts(db: Db = prisma): Promise<TeamCohortRow[]> {
   return db.$queryRaw<TeamCohortRow[]>(Prisma.sql`
     SELECT
