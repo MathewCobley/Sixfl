@@ -58,6 +58,15 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
         <p className="break-words text-sm text-white/70">{goal.teamName} v {goal.opponentName}</p>
         <p className="text-xs text-white/50">{goal.leagueName} · {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(new Date(goal.kickoffAt))}</p>
         <p className="text-xs text-emerald-100">{goal.nominationCount} nomination{goal.nominationCount === 1 ? "" : "s"}{winner ? ` · ${goal.voteCount} vote${goal.voteCount === 1 ? "" : "s"}` : ""}</p>
+        {goal.mediaState === "QUEUED" || goal.mediaState === "PROCESSING" ? (
+          <p className="rounded-lg border border-fuchsia-300/20 bg-fuchsia-400/5 px-2.5 py-2 text-xs leading-5 text-fuchsia-100">
+            SIXFL TV is automatically creating the branded Goal of the Month version of this clip.
+          </p>
+        ) : goal.mediaState === "FAILED" ? (
+          <p className="rounded-lg border border-amber-300/20 bg-amber-400/5 px-2.5 py-2 text-xs leading-5 text-amber-100">
+            The branded nomination version is not ready yet. The original goal clip remains available.
+          </p>
+        ) : null}
         {goal.clipNumber ? (
           <p className="text-xs leading-5 text-white/45">This is the exact SIXFL TV Clip {goal.clipNumber} nominated for this goal.</p>
         ) : goal.goalNumber ? (
