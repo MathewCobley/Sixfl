@@ -35,6 +35,8 @@ async function loadWorker(db, objects, uploadHook) {
       createSixflTvLineupCard: async ({ fixture }) => (fixture.firstTeamLineup?.length || fixture.secondTeamLineup?.length) ? cards.lineup : null,
       createSixflTvPredictorCard: async ({ fixture }) => fixture.predictor ? cards.predictor : null,
       createSixflTvScoreBug: async ({ kind }) => kind === 'FULL_MATCH' ? cards.watermark : cards.scoreBug,
+      createGoalOfMonthNominationOverlay: async () => cards.scoreBug,
+      createGoalOfMonthNominationEndCard: async () => cards.goal,
       createSixflTvThumbnail: async () => Buffer.from('thumbnail'),
       createSixflTvWatermark: async () => { throw new Error('Full match must use the labelled scorebug, not the legacy watermark'); },
     },
@@ -47,6 +49,9 @@ async function loadWorker(db, objects, uploadHook) {
     },
     '../src/lib/goal-of-month/calendar': {
       monthlyCycle: () => ({ latestClosedMonth: '2026-08' }),
+    },
+    '../src/lib/goal-of-month/media': {
+      goalOfMonthPromoVideoKey: candidateId => `goal-of-month-nominations/v1/${candidateId}.mp4`,
     },
     '../src/lib/sixfl-tv/youtube-metadata': {
       sixflTvYoutubeDefaults: (_fixture, kind) => ({ title: kind === 'HIGHLIGHTS' ? 'Highlights title' : 'Full match title', description: 'Automatic description' }),
@@ -134,6 +139,20 @@ function addJob(db, id = randomUUID(), leaseToken = randomUUID()) {
   db.jobs.set(id, { ...job, state: 'PROCESSING', active: true }); return job;
 }
 async function temp(t) { const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-worker-test-')); t.after(() => fs.rm(dir, { recursive: true, force: true })); return dir; }
+
+test('worker owns the automatic Goal of the Month nomination media pipeline', async () => {
+  const source = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  for (const token of [
+    'claimGoalMediaJob',
+    'processGoalMediaJob',
+    'createGoalOfMonthNominationOverlay',
+    'createGoalOfMonthNominationEndCard',
+    'goalOfMonthPromoVideoKey',
+    'mediaState',
+    'promoVideoObjectKey',
+  ]) assert.ok(source.includes(token), `missing automatic nomination media contract: ${token}`);
+  assert.ok(source.indexOf('claimGoalMediaJob') < source.lastIndexOf('queueAutomaticYoutubePublish'), 'nomination media must be processed by the existing worker before idle publishing work');
+});
 
 test('worker subprocesses complete, cancel and enforce a wall-clock limit', async () => {
   const w = await loadWorker(memoryDb(), new Map());
