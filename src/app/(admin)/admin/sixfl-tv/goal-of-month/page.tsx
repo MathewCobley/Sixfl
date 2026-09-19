@@ -10,7 +10,8 @@ import { getMonthlyPageData, safeVideoLinks, switchLegacyMonthlyCandidateToClip 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const metadata = { title: "Goal of the Month | SIXFL Admin" };
-type Row = { id: string; fixtureId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };\ntype ClipOption = { id: string; fixtureId: string; clipNumber: number; filename: string };
+type Row = { id: string; fixtureId: string; monthKey: string; goalNumber: number | null; clipAssetId: string | null; clipNumber: number | null; scorerName: string | null; status: string; teamName: string; opponentName: string; sixflTvUrl: string; nominationCount: number; voteCount: number };
+type ClipOption = { id: string; fixtureId: string; clipNumber: number; filename: string };
 
 async function reviewNominee(form: FormData) {
   "use server";
@@ -60,9 +61,9 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
   const query = (await searchParams) ?? {};
   const key = validMonthKey(query.month) ? query.month : monthKey(new Date());
   const period = monthlyPeriod(key);
-  const [rows, page] = await Promise.all([
+  const [rows, page, clipOptions] = await Promise.all([
     prisma.$queryRaw<Row[]>(Prisma.sql`
-      SELECT c."id", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerName", c."status", t."name" AS "teamName",
+      SELECT c."id", c."fixtureId", c."monthKey", c."goalNumber", c."clipAssetId", clip."clipNumber", c."scorerName", c."status", t."name" AS "teamName",
         CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
         COALESCE(f."sixflTvUrl",'') AS "sixflTvUrl", COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
       FROM "GoalOfMonthCandidate" c JOIN "Fixture" f ON f."id"=c."fixtureId" JOIN "Team" t ON t."id"=c."teamId"
@@ -71,8 +72,31 @@ export default async function MonthlyGoalAdmin({ searchParams }: { searchParams?
       LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId"=c."id" LEFT JOIN "GoalOfMonthVote" v ON v."candidateId"=c."id"
       WHERE c."monthKey"=${key} GROUP BY c."id", t."name", f."homeTeamId", away."name", home."name", f."sixflTvUrl", clip."clipNumber"
       ORDER BY COUNT(DISTINCT n."id") DESC, c."createdAt" ASC, c."id" ASC
-    `), getMonthlyPageData(null),
+    `),
+    getMonthlyPageData(null),
+    prisma.$queryRaw<ClipOption[]>(Prisma.sql`
+      SELECT DISTINCT a."id", a."fixtureId", a."clipNumber"::int AS "clipNumber", a."filename"
+      FROM "SixflTvFootageAsset" a
+      JOIN "GoalOfMonthCandidate" c ON c."fixtureId"=a."fixtureId"
+      WHERE c."monthKey"=${key}
+        AND c."clipAssetId" IS NULL
+        AND c."status"='ACTIVE'
+        AND a."kind"='CLIP'
+        AND a."state"='READY'
+        AND a."clipNumber" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM "GoalOfMonthCandidate" used
+          WHERE used."clipAssetId"=a."id"
+        )
+      ORDER BY a."fixtureId", a."clipNumber"
+    `),
   ]);
+  const clipsByFixture = new Map<string, ClipOption[]>();
+  for (const clip of clipOptions) {
+    const list = clipsByFixture.get(clip.fixtureId) ?? [];
+    list.push(clip);
+    clipsByFixture.set(clip.fixtureId, list);
+  }
   return <div className="space-y-6">
     <header className="rounded-3xl border border-emerald-300/25 bg-emerald-400/5 p-6"><h1 className="text-3xl font-bold text-white">Goal of the Month</h1><p className="mt-3 text-sm leading-6 text-white/65">One monthly competition across SIXFL. Nominations run through the following 5th; the top six go to voting from the 6th–12th. Existing weekly records remain separate. Remove only incorrect or unsuitable nominations; removal preserves the original nominations and votes.</p><div className="mt-4 flex flex-wrap gap-4 text-sm text-emerald-100"><Link href="/goal-of-the-month">Open public competition →</Link><Link href="/admin/sixfl-tv/goal-of-week?legacy=1">Historical weekly nominations</Link><Link href="/admin/sixfl-tv/goal-of-week">SIXFL TV / weekly winner editor</Link></div></header>
     {query.saved === "1" ? <p role="status" className="text-emerald-100">Nomination changes saved.</p> : null}
