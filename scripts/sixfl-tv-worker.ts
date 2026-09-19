@@ -1179,7 +1179,7 @@ async function claimGoalOfMonthClipRender() {
 }
 
 async function goalOfMonthRenderDetails(job: GoalOfMonthRenderJob) {
-  const rows = await db.$queryRaw<GoalOfMonthRenderDetails[]>(Prisma.sql\`
+  const rows = await db.$queryRaw<GoalOfMonthRenderDetails[]>(Prisma.sql`
     SELECT
       c."id" AS "candidateId",
       c."clipAssetId" AS "sourceAssetId",
@@ -1207,14 +1207,14 @@ async function goalOfMonthRenderDetails(job: GoalOfMonthRenderJob) {
     JOIN "League" league ON league."id"=f."leagueId"
     LEFT JOIN "MatchResult" mr ON mr."fixtureId"=f."id"
     JOIN "SixflTvFootageAsset" a ON a."id"=c."clipAssetId" AND a."fixtureId"=c."fixtureId"
-    WHERE c."id"=\${job.candidateId}
+    WHERE c."id"=${job.candidateId}
       AND c."status"='ACTIVE'
-      AND c."clipAssetId"=\${job.sourceAssetId}
+      AND c."clipAssetId"=${job.sourceAssetId}
       AND a."kind"='CLIP'
       AND a."state"='READY'
       AND a."clipNumber" IS NOT NULL
     LIMIT 1
-  \`);
+  `);
   if (!rows[0]) throw new Error("The nominated source clip is no longer available.");
   return rows[0];
 }
@@ -1227,7 +1227,7 @@ async function goalOfMonthBrandingAsset(kind: "INTRO" | "OUTRO"): Promise<Input 
     partCount: number;
     sizeBytes: bigint;
     state: string;
-  }>>(Prisma.sql\`
+  }>>(Prisma.sql`
     SELECT
       a."id" AS "assetId",
       a."filename",
@@ -1237,11 +1237,11 @@ async function goalOfMonthBrandingAsset(kind: "INTRO" | "OUTRO"): Promise<Input 
       a."state"
     FROM "SixflTvFootageAsset" a
     WHERE a."fixtureId" IS NULL
-      AND a."kind"=\${kind}
+      AND a."kind"=${kind}
       AND a."state"='READY'
     ORDER BY a."completedAt" DESC NULLS LAST, a."createdAt" DESC, a."id" DESC
     LIMIT 1
-  \`);
+  `);
   const row = rows[0];
   if (!row) return null;
   return {
@@ -1293,7 +1293,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     throw new Error("Upload the shared SIXFL TV intro and outro before rendering Goal of the Month nominees.");
   }
 
-  const dir = await mkdtemp(path.join(os.tmpdir(), \`sixfl-gotm-\${job.candidateId}-\`));
+  const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-gotm-${job.candidateId}-`));
   try {
     const source = path.join(dir, "source.mp4");
     const brandingIntroSource = path.join(dir, "branding-intro-source.mp4");
@@ -1312,9 +1312,9 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     await reconstructAsset(brandingIntroAsset, brandingIntroSource);
     await reconstructAsset(brandingOutroAsset, brandingOutroSource);
 
-    const poster = await sourcePosterCandidate(source, dir, \`gotm-\${detail.candidateId}\`, 14);
+    const poster = await sourcePosterCandidate(source, dir, `gotm-${detail.candidateId}`, 14);
     await saveGoalClipPoster(detail.sourceAssetId, poster).catch(error =>
-      console.warn(\`Could not save Goal of the Month 14-second poster for \${detail.sourceAssetId}: \${safeError(error)}\`),
+      console.warn(`Could not save Goal of the Month 14-second poster for ${detail.sourceAssetId}: ${safeError(error)}`),
     );
 
     const titlePng = path.join(dir, "title.png");
@@ -1360,7 +1360,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     await normaliseVideo(brandingOutroSource, brandingOutro);
 
     const concat = path.join(dir, "concat.txt");
-    await writeFile(concat, [brandingIntro, title, normal, replay, brandingOutro].map(file => \`file '\${file.replaceAll("'", "'\\\\''")}'\`).join("\n"));
+    await writeFile(concat, [brandingIntro, title, normal, replay, brandingOutro].map(file => `file '${file.replaceAll("'", "'\\\\''")}'`).join("\n"));
     const output = path.join(dir, "nominee.mp4");
     await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
     const durationMs = Math.round((await durationSeconds(output)) * 1000);
