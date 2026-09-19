@@ -305,9 +305,10 @@ test('Goal of the Month nominee render uses shared branding and player identity 
   assert.match(nomineeWorker, /kickoffAt/);
 
   assert.match(nomineeGraphics, /badgeImage\(teamBadge/);
-  assert.match(nomineeGraphics, /xml\(scorer\)/);
+  assert.match(nomineeGraphics, /thumbnailTextPng\(\{ text: scorer/);
   assert.match(nomineeGraphics, /GOAL OF THE MONTH NOMINEE/);
   assert.match(nomineeGraphics, /REPLAY/);
+  assert.doesNotMatch(nomineeGraphics, /embeddedFontStyle\(input\.siteUrl\)/);
   assert.doesNotMatch(nomineeGraphics, /CLIP \$\{input\.clipNumber\}/);
 });
 
@@ -322,11 +323,15 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.ok(overlayStart >= 0 && overlayEnd > overlayStart);
   const thumbnail = graphics.slice(thumbnailStart, introStart);
   const overlay = graphics.slice(overlayStart, overlayEnd);
-  assert.ok(thumbnail.includes('font-size="58"'));
+  assert.ok(thumbnail.includes('fontSize: 58'));
+  assert.ok(thumbnail.includes('thumbnailTextPng'));
   assert.ok(thumbnail.includes('homeTeamName'));
   assert.ok(thumbnail.includes('homeScore'));
+  assert.equal(thumbnail.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(thumbnail.includes('clipNumber'), false);
-  assert.ok(overlay.includes('font-size="62"'));
+  assert.ok(overlay.includes('fontSize: 62'));
   assert.ok(overlay.includes('height="142"'));
+  assert.ok(overlay.includes('thumbnailTextPng'));
+  assert.equal(overlay.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(overlay.includes('CLIP '), false);
 });
