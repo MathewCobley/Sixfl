@@ -33,6 +33,7 @@ const migration = 'prisma/migrations/20260907153000_goal_of_month/migration.sql'
 const clipMigration = 'prisma/migrations/20260918181000_goal_of_month_clip_assets/migration.sql';
 const renderMigration = 'prisma/migrations/20260919203000_goal_of_month_nominee_renders/migration.sql';
 const brandingRequeueMigration = 'prisma/migrations/20260919223000_requeue_goal_month_branding_renders/migration.sql';
+const overlayRefreshMigration = 'prisma/migrations/20260919234000_refresh_goal_month_overlay/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerName: 'Test Scorer' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -149,6 +150,24 @@ test('branding refresh requeues existing active nominee renders while preserving
   const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || COALESCE("leaseToken",'NULL') || '|' || ("completedAt" IS NULL)::text
     FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
   assert.equal(state, 'QUEUED|old-render.mp4|NULL|true');
+});
+
+test('overlay readability refresh requeues completed nominee renders without discarding the old object', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('overlay-refresh-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'overlay-refresh-clip', scorerName: 'Readable Scorer',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-overlay-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(overlayRefreshMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-overlay-render.mp4|true');
 });
 
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
