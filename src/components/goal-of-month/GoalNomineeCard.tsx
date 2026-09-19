@@ -22,7 +22,7 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
   const video = videos.find(link => getYouTubeVideoId(link)) ?? videos[0];
   const videoId = getYouTubeVideoId(video);
   const embed = videoId ? youtubeEmbedUrl(videoId) : null;
-  const identity = goal.clipNumber ? `Clip ${goal.clipNumber}` : goal.goalNumber ? `Goal ${goal.goalNumber}` : "Nominated goal";
+  const identity = goal.clipNumber ? "Goal of the Month nominee" : goal.goalNumber ? `Goal ${goal.goalNumber}` : "Nominated goal";
   const label = `${goal.teamName} v ${goal.opponentName} — ${identity.toLowerCase()}`;
 
   return (
@@ -30,6 +30,7 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
       <div className="relative aspect-video overflow-hidden bg-black">
         {goal.clipVideoUrl ? (
           <video
+            key={`${goal.clipVideoUrl}:${goal.thumbnailUrl ?? ""}`}
             controls
             preload="metadata"
             playsInline
@@ -58,9 +59,7 @@ export default function GoalNomineeCard({ goal, actionLabel, onAction, disabled,
         <p className="break-words text-sm text-white/70">{goal.teamName} v {goal.opponentName}</p>
         <p className="text-xs text-white/50">{goal.leagueName} · {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(new Date(goal.kickoffAt))}</p>
         <p className="text-xs text-emerald-100">{goal.nominationCount} nomination{goal.nominationCount === 1 ? "" : "s"}{winner ? ` · ${goal.voteCount} vote${goal.voteCount === 1 ? "" : "s"}` : ""}</p>
-        {goal.clipNumber ? (
-          <p className="text-xs leading-5 text-white/45">This is the exact SIXFL TV Clip {goal.clipNumber} nominated for this goal.</p>
-        ) : goal.goalNumber ? (
+        {goal.goalNumber && !goal.clipNumber ? (
           <p className="text-xs leading-5 text-white/45">Look for goal {goal.goalNumber} in this fixture’s footage.</p>
         ) : null}
         {!goal.clipVideoUrl && videos.length > 1 ? <div className="flex flex-wrap gap-2">{videos.map((link, i) => <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-200 underline">Video {i + 1} ↗</a>)}</div> : null}
