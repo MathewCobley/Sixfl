@@ -29,6 +29,9 @@ jobs:
       - name: Check native homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
 
+      - name: Check native admin latest activity
+        run: node --test tests/critical-pages/admin-latest-activity.test.cjs
+
       - name: Check native exact captain preview and squad numbers
         run: node --test tests/captain-preview-squad-number.test.cjs
 
@@ -46,6 +49,9 @@ jobs:
 
       - name: Check prepared homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
+
+      - name: Check prepared admin latest activity
+        run: node --test tests/critical-pages/admin-latest-activity.test.cjs
 
       - name: Check prepared exact captain preview and squad numbers
         run: node --test tests/captain-preview-squad-number.test.cjs
