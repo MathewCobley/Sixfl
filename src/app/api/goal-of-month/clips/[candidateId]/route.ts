@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { footageId, FootageError } from "@/lib/sixfl-tv/footage-policy";
 import { streamFootage } from "@/lib/sixfl-tv/footage-stream";
+import { createStoredVideoResponse } from "@/lib/storage/video-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +14,13 @@ export async function GET(request: Request, context: Context) {
   try {
     const { candidateId } = await context.params;
     const safeCandidateId = footageId(candidateId);
-    const [row] = await prisma.$queryRaw<Array<{ fixtureId: string; clipAssetId: string }>>(Prisma.sql`
-      SELECT c."fixtureId", c."clipAssetId"
+    const [row] = await prisma.$queryRaw<Array<{
+      fixtureId: string;
+      clipAssetId: string;
+      mediaState: string;
+      promoVideoObjectKey: string | null;
+    }>>(Prisma.sql`
+      SELECT c."fixtureId", c."clipAssetId", c."mediaState", c."promoVideoObjectKey"
       FROM "GoalOfMonthCandidate" c
       JOIN "Fixture" f ON f."id" = c."fixtureId"
       JOIN "SixflTvFootageAsset" a ON a."id" = c."clipAssetId"
@@ -29,6 +35,16 @@ export async function GET(request: Request, context: Context) {
       LIMIT 1
     `);
     if (!row) throw new FootageError("This nominated clip is unavailable.", 404);
+
+    if (row.mediaState === "READY" && row.promoVideoObjectKey) {
+      return createStoredVideoResponse({
+        key: row.promoVideoObjectKey,
+        range: request.headers.get("range"),
+        filename: `sixfl-goal-of-the-month-${safeCandidateId}.mp4`,
+        cacheControl: "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+      });
+    }
+
     return await streamFootage(request, row.fixtureId, row.clipAssetId);
   } catch (error) {
     return new Response(error instanceof FootageError ? error.message : "This nominated clip is unavailable.", {
