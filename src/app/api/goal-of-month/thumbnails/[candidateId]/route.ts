@@ -13,10 +13,13 @@ type Context = { params: Promise<{ candidateId: string }> };
 type Row = {
   clipAssetId: string;
   clipNumber: number;
+  monthKey: string;
   scorerName: string | null;
   teamName: string;
+  teamLogoUrl: string | null;
   opponentName: string;
   leagueName: string;
+  playerImageUrl: string | null;
 };
 
 function siteUrl(request: Request) {
@@ -31,10 +34,13 @@ export async function GET(request: Request, context: Context) {
       SELECT
         c."clipAssetId",
         a."clipNumber"::int AS "clipNumber",
+        c."monthKey",
         c."scorerName",
         team."name" AS "teamName",
+        team."logoUrl" AS "teamLogoUrl",
         CASE WHEN f."homeTeamId" = c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
-        league."name" AS "leagueName"
+        league."name" AS "leagueName",
+        player."image" AS "playerImageUrl"
       FROM "GoalOfMonthCandidate" c
       JOIN "Fixture" f ON f."id" = c."fixtureId"
       JOIN "Team" team ON team."id" = c."teamId"
@@ -42,6 +48,17 @@ export async function GET(request: Request, context: Context) {
       JOIN "Team" away ON away."id" = f."awayTeamId"
       JOIN "League" league ON league."id" = f."leagueId"
       JOIN "SixflTvFootageAsset" a ON a."id" = c."clipAssetId" AND a."fixtureId" = c."fixtureId"
+      LEFT JOIN LATERAL (
+        SELECT u."image"
+        FROM "TeamMember" tm
+        JOIN "User" u ON u."id" = tm."userId"
+        WHERE tm."teamId" = c."teamId"
+          AND c."scorerName" IS NOT NULL
+          AND LOWER(TRIM(COALESCE(u."name", ''))) = LOWER(TRIM(c."scorerName"))
+          AND COALESCE(TRIM(u."image"), '') <> ''
+        ORDER BY tm."createdAt" ASC, tm."id" ASC
+        LIMIT 1
+      ) player ON TRUE
       WHERE c."id" = ${safeCandidateId}
         AND c."status" = 'ACTIVE'
         AND c."clipAssetId" IS NOT NULL
@@ -75,8 +92,11 @@ export async function GET(request: Request, context: Context) {
       clipNumber: Number(row.clipNumber),
       scorerName: row.scorerName,
       teamName: row.teamName,
+      teamLogoUrl: row.teamLogoUrl,
       opponentName: row.opponentName,
       leagueName: row.leagueName,
+      monthKey: row.monthKey,
+      playerImageUrl: row.playerImageUrl,
       backgroundImage,
     });
     return new Response(new Uint8Array(png), {
