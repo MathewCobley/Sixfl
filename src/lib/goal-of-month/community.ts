@@ -212,6 +212,73 @@ export class GoalAwardError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
 
+export async function switchLegacyMonthlyCandidateToClip(candidateId: string, clipAssetId: string, db: Db = prisma) {
+  const [candidate] = await db.$queryRaw<Array<{
+    id: string;
+    fixtureId: string;
+    status: string;
+    clipAssetId: string | null;
+  }>>(Prisma.sql`
+    SELECT "id", "fixtureId", "status", "clipAssetId"
+    FROM "GoalOfMonthCandidate"
+    WHERE "id"=${candidateId}
+    FOR UPDATE
+  `);
+  if (!candidate) throw new GoalAwardError("That Goal of the Month nomination no longer exists.", 404);
+  if (candidate.status !== "ACTIVE") throw new GoalAwardError("Only an active nominee can be switched to an exact clip.");
+  if (candidate.clipAssetId) throw new GoalAwardError("This nominee already uses an exact SIXFL TV clip.");
+
+  const [clip] = await db.$queryRaw<Array<{ id: string; clipNumber: number }>>(Prisma.sql`
+    SELECT "id", "clipNumber"::int AS "clipNumber"
+    FROM "SixflTvFootageAsset"
+    WHERE "id"=${clipAssetId}
+      AND "fixtureId"=${candidate.fixtureId}
+      AND "kind"='CLIP'
+      AND "state"='READY'
+      AND "clipNumber" IS NOT NULL
+    LIMIT 1
+  `);
+  if (!clip) throw new GoalAwardError("Choose a ready SIXFL TV highlight clip from the same match.", 400);
+
+  const [existing] = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id" FROM "GoalOfMonthCandidate"
+    WHERE "clipAssetId"=${clipAssetId} AND "id"<>${candidateId}
+    LIMIT 1
+  `);
+  if (existing) throw new GoalAwardError("That exact SIXFL TV clip is already attached to another Goal of the Month nominee.");
+
+  await db.$executeRaw(Prisma.sql`
+    UPDATE "GoalOfMonthCandidate"
+    SET "clipAssetId"=${clipAssetId}, "goalNumber"=NULL, "updatedAt"=NOW()
+    WHERE "id"=${candidateId} AND "clipAssetId" IS NULL
+  `);
+  await db.$executeRaw(Prisma.sql`
+    INSERT INTO "GoalOfMonthClipRender" ("candidateId","sourceAssetId")
+    VALUES (${candidateId},${clipAssetId})
+    ON CONFLICT ("candidateId") DO UPDATE SET
+      "sourceAssetId"=EXCLUDED."sourceAssetId",
+      "state"='QUEUED',
+      "leaseToken"=NULL,
+      "busyUntil"=NULL,
+      "error"=NULL,
+      "completedAt"=NULL,
+      "updatedAt"=NOW()
+  `);
+  const [counts] = await db.$queryRaw<Array<{ nominationCount: number; voteCount: number }>>(Prisma.sql`
+    SELECT COUNT(DISTINCT n."id")::int AS "nominationCount", COUNT(DISTINCT v."id")::int AS "voteCount"
+    FROM "GoalOfMonthCandidate" c
+    LEFT JOIN "GoalOfMonthNomination" n ON n."candidateId"=c."id"
+    LEFT JOIN "GoalOfMonthVote" v ON v."candidateId"=c."id"
+    WHERE c."id"=${candidateId}
+  `);
+  return {
+    candidateId,
+    clipAssetId,
+    clipNumber: Number(clip.clipNumber),
+    nominationCount: Number(counts?.nominationCount ?? 0),
+    voteCount: Number(counts?.voteCount ?? 0),
+  };
+}
 export async function nominateMonthlyGoal(input: {
   userId: string;
   fixtureId: string;
