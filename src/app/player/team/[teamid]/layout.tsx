@@ -4,7 +4,7 @@
 
 import { getServerSession } from "next-auth";
 import { Suspense, type ReactNode } from "react";
-import { UserRole } from "@prisma/client";
+import { TeamRole, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import GoalOfWeekDashboardPromo from "@/components/goal-of-week/GoalOfWeekDashboardPromo";
@@ -14,6 +14,7 @@ import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewReturnBanner from "@/components/player/PlayerPreviewReturnBanner";
 import PlayerPwaPortalHeader from "@/components/player/PlayerPwaPortalHeader";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
+import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
 import { prisma } from "@/lib/prisma";
 
 export default async function PlayerTeamLayout({
@@ -45,13 +46,11 @@ export default async function PlayerTeamLayout({
     ? await prisma.user.findUnique({
         where: { email },
         select: {
+          id: true,
           role: true,
           teamMembers: {
-            where: {
-              teamId: teamid,
-              role: "CAPTAIN",
-            },
-            select: { id: true },
+            where: { teamId: teamid },
+            select: { id: true, role: true },
             take: 1,
           },
         },
@@ -59,7 +58,16 @@ export default async function PlayerTeamLayout({
     : null;
 
   const isAdmin = viewer?.role === UserRole.ADMIN;
-  const isCaptain = Boolean(viewer?.teamMembers.length);
+  const membership = viewer?.teamMembers[0] ?? null;
+  const isCaptain = membership?.role === TeamRole.CAPTAIN;
+  const unreadChatCount =
+    viewer?.id && membership && !isAdmin
+      ? await getPortalChatUnreadCount({
+          teamId: teamid,
+          userId: viewer.id,
+          role: membership.role,
+        })
+      : 0;
   const returnHref = isAdmin
     ? `/admin/teams/${teamid}`
     : isCaptain
@@ -96,7 +104,7 @@ export default async function PlayerTeamLayout({
       ) : null}
 
       <Suspense>
-        <PlayerTeamNav teamId={teamid} />
+        <PlayerTeamNav teamId={teamid} unreadChatCount={unreadChatCount} />
       </Suspense>
 
       {/* Keep the player's dashboard first; discovery panels must not precede it. */}
