@@ -168,32 +168,28 @@ export async function queuePushNotifications(
     },
   });
 
-  if (subscriptions.length === 0) {
-    return {
-      targetedUsers: uniqueTargets.length,
-      activeDevices: 0,
-      wakesSent: 0,
-    };
+  const activeDeviceCountByUser = new Map<string, number>();
+  for (const subscription of subscriptions) {
+    activeDeviceCountByUser.set(
+      subscription.userId,
+      (activeDeviceCountByUser.get(subscription.userId) ?? 0) + 1,
+    );
   }
 
-  const subscribedUserIds = new Set(
-    subscriptions.map((subscription) => subscription.userId),
-  );
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   await prisma.pushNotification.createMany({
-    data: uniqueTargets
-      .filter((target) => subscribedUserIds.has(target.userId))
-      .map((target) => ({
-        userId: target.userId,
-        title: target.title,
-        body: target.body,
-        url: target.url,
-        tag: target.tag,
-        sourceType: target.sourceType ?? null,
-        sourceId: target.sourceId ?? null,
-        expiresAt,
-      })),
+    data: uniqueTargets.map((target) => ({
+      userId: target.userId,
+      title: target.title,
+      body: target.body,
+      url: target.url,
+      tag: target.tag,
+      sourceType: target.sourceType ?? null,
+      sourceId: target.sourceId ?? null,
+      expiresAt,
+      targetedDeviceCount: activeDeviceCountByUser.get(target.userId) ?? 0,
+    })),
   });
 
   const results = await Promise.all(
@@ -201,7 +197,7 @@ export async function queuePushNotifications(
   );
 
   return {
-    targetedUsers: subscribedUserIds.size,
+    targetedUsers: uniqueTargets.length,
     activeDevices: subscriptions.length,
     wakesSent: results.filter((result) => result.ok).length,
   };

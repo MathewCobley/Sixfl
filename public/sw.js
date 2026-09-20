@@ -150,6 +150,22 @@ async function fetchPendingPushNotification() {
   return payload?.notification || null;
 }
 
+async function recordPushReceipt(notificationId, status) {
+  const token = await getPushDeviceToken();
+  if (!token || !notificationId) return;
+
+  await fetch("/api/push/receipt", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ notificationId, status }),
+  }).catch(() => null);
+}
+
 async function isMatchingChatAlreadyVisible(url) {
   const destination = new URL(url, self.location.origin);
   const windows = await self.clients.matchAll({
@@ -178,6 +194,7 @@ self.addEventListener("push", (event) => {
       if (!notification) return;
 
       if (await isMatchingChatAlreadyVisible(notification.url)) {
+        await recordPushReceipt(notification.id, "SUPPRESSED_VISIBLE");
         return;
       }
 
@@ -189,9 +206,12 @@ self.addEventListener("push", (event) => {
         renotify: false,
         timestamp: notification.timestamp || Date.now(),
         data: {
+          notificationId: notification.id,
           url: notification.url || "/dashboard?app=1",
         },
       });
+
+      await recordPushReceipt(notification.id, "SHOWN");
     })(),
   );
 });
@@ -199,6 +219,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
+  const notificationId = event.notification?.data?.notificationId || null;
   const targetUrl = new URL(
     event.notification?.data?.url || "/dashboard?app=1",
     self.location.origin,
@@ -206,6 +227,8 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     (async () => {
+      await recordPushReceipt(notificationId, "CLICKED");
+
       const windows = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,

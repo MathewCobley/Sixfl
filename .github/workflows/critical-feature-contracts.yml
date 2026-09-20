@@ -104,6 +104,9 @@ jobs:
       - name: Check restrained PWA push notifications
         run: node --test tests/pwa-push-notifications/contract.test.cjs
 
+      - name: Check admin app messaging centre
+        run: node --test tests/admin-app-messaging/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
