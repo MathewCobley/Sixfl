@@ -96,6 +96,7 @@ export default function TemporaryPlayerPassLauncher() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
+  const [standaloneApp, setStandaloneApp] = useState(false);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -107,7 +108,15 @@ export default function TemporaryPlayerPassLauncher() {
     {},
   );
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    const iosStandalone =
+      "standalone" in navigator &&
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    setStandaloneApp(
+      window.matchMedia("(display-mode: standalone)").matches || iosStandalone,
+    );
+  }, []);
 
   const captainMatch = pathname.match(/^\/captain\/team\/([^/]+)\/match-fees\/?$/);
   const isPlayerArea = pathname.startsWith("/player");
@@ -371,7 +380,16 @@ export default function TemporaryPlayerPassLauncher() {
     }
   }
 
-  if (!mounted || (!captainMatch && !isPlayerArea)) return null;
+  const explicitPlayerAppPreview =
+    isPlayerArea && searchParams.get("pwaPreview") === "1";
+
+  if (
+    !mounted ||
+    (!captainMatch && !isPlayerArea) ||
+    (isPlayerArea && (standaloneApp || explicitPlayerAppPreview))
+  ) {
+    return null;
+  }
 
   return createPortal(
     <>

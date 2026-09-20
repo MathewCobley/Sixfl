@@ -23,6 +23,10 @@ source = source
     '  if (!mounted || (!captainMatch && !isPlayerArea)) return null;',
     '  if (!mounted || (!captainFixtureContext && !isPlayerArea)) return null;',
   )
+  .replace(
+    '    (!captainMatch && !isPlayerArea) ||',
+    '    (!captainFixtureContext && !isPlayerArea) ||',
+  )
   .replaceAll('          captainMatch\n            ?', '          captainFixtureContext\n            ?')
   .replaceAll('{captainMatch ? "+ Add temporary player" : "Play for another team"}', '{captainFixtureContext ? "+ Add temporary player" : "Play for another team"}')
   .replaceAll('{captainMatch ? "Add a temporary player" : "Share a temporary-player pass"}', '{captainFixtureContext ? "Add a temporary player" : "Share a temporary-player pass"}')
@@ -34,7 +38,7 @@ if (!source.includes('/(?:match-fees|player-payments)')) {
   throw new Error("Captain temporary-player launcher does not recognise squad payments.");
 }
 
-if (!source.includes('if (!mounted || (!captainFixtureContext && !isPlayerArea)) return null;')) {
+if (!source.includes("!captainFixtureContext && !isPlayerArea")) {
   throw new Error("Captain temporary-player launcher was not restricted to a selected fixture.");
 }
 

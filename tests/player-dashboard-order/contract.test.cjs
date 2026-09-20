@@ -83,6 +83,7 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
     } },
     '@/components/player/PlayerTeamNav': nav,
     '@/components/player/PlayerDashboardOnly': only,
+    '@/components/player/PlayerPwaModeOnly': ({ children }) => children,
     '@/components/goal-of-week/GoalOfWeekDashboardPromo': panel('goals', 'Goal of the Month — current nominees'),
     '@/components/player/PlayerLeagueMediaPanel': panel('media', 'League & form'),
     '@/components/player/PlayerMessageBox': panel('messages', 'Team messages'),
@@ -179,4 +180,28 @@ test('player PWA home uses an explicit app/web gate and real SIXFL branding', ()
   assert.match(previewRoute, /pwaPreview=1/);
   assert.match(pwaHeader, /src="\/logo2\.png"/);
   assert.doesNotMatch(pwaHeader, /player-pwa-controller\) \.player-app-home/);
+});
+
+
+test('player app layout keeps web discovery panels behind the web-only gate', () => {
+  const layout = read(LAYOUT);
+  assert.match(
+    layout,
+    /<PlayerPwaModeOnly mode="web">\s*<div className="player-web-discovery">/,
+  );
+  assert.match(layout, /<GoalOfWeekDashboardPromo/);
+  assert.match(layout, /<PlayerLeagueMediaPanel/);
+  assert.match(layout, /<PlayerMessageBox/);
+});
+
+
+test('player app excludes preview and temporary-player website overlays', () => {
+  const layout = read(LAYOUT);
+  const launcher = read('src/components/captain/TemporaryPlayerPassLauncher.tsx');
+  assert.match(
+    layout,
+    /<PlayerPwaModeOnly mode="web">\s*<PlayerPreviewReturnBanner/,
+  );
+  assert.match(launcher, /explicitPlayerAppPreview/);
+  assert.match(launcher, /standaloneApp \|\| explicitPlayerAppPreview/);
 });
