@@ -63,3 +63,51 @@ test('captain payment-link list remains native React with explicit captain autho
     assert.doesNotMatch(source, /MutationObserver|document\.querySelector|document\.querySelectorAll/);
   }
 });
+
+
+const playerAccounts = fs.readFileSync(
+  'src/app/captain/team/[teamid]/player-payments/accounts/page.tsx',
+  'utf8',
+);
+const playerLedger = fs.readFileSync(
+  'src/lib/payments/player-ledger.ts',
+  'utf8',
+);
+const playerStatement = fs.readFileSync(
+  'src/components/payments/PlayerLedgerStatement.tsx',
+  'utf8',
+);
+const orphanAdmin = fs.readFileSync(
+  'src/app/(admin)/admin/payments/orphaned-player-fees/page.tsx',
+  'utf8',
+);
+
+test('captain outstanding payment list recovers historical identity instead of showing Historical player', () => {
+  assert.match(playerAccounts, /getHistoricalPlayerFeeIdentities/);
+  assert.match(playerAccounts, /Player identity needs SIXFL review/);
+  assert.doesNotMatch(playerAccounts, /Historical player/);
+  assert.match(playerAccounts, /Payment link hidden until identified/);
+  assert.match(playerAccounts, /SIXFL needs to identify this player/);
+});
+
+test('player ledger account recovers the original payment recipient when the live link was lost', () => {
+  assert.match(playerLedger, /NotificationRecipient/);
+  assert.match(playerLedger, /player-match-fee:/);
+  assert.match(playerLedger, /identityRecoveredFromHistory/);
+  assert.match(playerLedger, /Player identity needs SIXFL review/);
+});
+
+test('admin orphan repair shows the recovered historical recipient before reattaching', () => {
+  assert.match(orphanAdmin, /getHistoricalPlayerFeeIdentities/);
+  assert.match(orphanAdmin, /Original payment recipient recovered/);
+  assert.match(orphanAdmin, /historical\?\.email/);
+});
+
+test('player payment history is newest first and opening balances use the original fixture date', () => {
+  assert.match(playerStatement, /Most recent activity is shown first/);
+  assert.match(playerStatement, /Balance brought forward/);
+  assert.match(playerStatement, /left\.sequence < right\.sequence \? 1 : -1/);
+  assert.match(playerStatement, /e\.kind === "OPENING_BALANCE" && fee\?\.fixture\?\.kickoffAt/);
+  assert.match(playerStatement, /runningBalanceByEntryId/);
+  assert.doesNotMatch(playerStatement, /Opening balances use the amounts already recorded/);
+});
