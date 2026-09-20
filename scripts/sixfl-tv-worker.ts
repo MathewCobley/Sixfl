@@ -6,12 +6,12 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createGoalOfMonthClipOverlay, createGoalOfMonthNomineeIntro, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createGoalOfMonthClipOverlay, createGoalOfMonthNomineeIntro, createGoalOfMonthVoteCard, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
 import { sixflTvGoalClipPosterKey } from "../src/lib/sixfl-tv/goal-clip-poster";
-import { monthlyCycle } from "../src/lib/goal-of-month/calendar";
+import { monthlyCycle, monthlyPeriod } from "../src/lib/goal-of-month/calendar";
 import { sixflTvYoutubeDefaults } from "../src/lib/sixfl-tv/youtube-metadata";
 
 const db = new PrismaClient();
@@ -29,6 +29,7 @@ const LINEUP_SECONDS = 5;
 const LEAGUE_TABLE_SECONDS = 5;
 const GOAL_OF_MONTH_END_SECONDS = 5;
 const GOAL_NOMINEE_TITLE_SECONDS = 3;
+const GOAL_VOTE_CARD_SECONDS = 6;
 const GOAL_REPLAY_START_SECONDS = 13;
 const GOAL_REPLAY_END_SECONDS = 16;
 const GOAL_REPLAY_SPEED = 0.5;
@@ -67,6 +68,7 @@ type GoalOfMonthRenderDetails = {
   candidateId: string;
   sourceAssetId: string;
   fixtureId: string;
+  monthKey: string;
   clipNumber: number;
   scorerName: string | null;
   teamName: string;
@@ -74,6 +76,7 @@ type GoalOfMonthRenderDetails = {
   opponentName: string;
   leagueName: string;
   kickoffAt: Date;
+  matchweekNumber: number | null;
   homeTeamName: string;
   awayTeamName: string;
   homeScore: number | null;
@@ -379,6 +382,75 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
   }
 }
+
+async function normaliseVideoSegment(
+  source: string,
+  target: string,
+  startSeconds: number,
+  endSeconds: number,
+  overlay?: string,
+) {
+  const total = await durationSeconds(source);
+  const start = Math.max(0, Math.min(total, startSeconds));
+  const end = Math.max(start, Math.min(total, endSeconds));
+  const seconds = end - start;
+  if (seconds < 0.18) return false;
+
+  const audio = await hasAudio(source);
+  const fadeOutStart = Math.max(0, seconds - 0.14).toFixed(3);
+  const base = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p";
+  const fade = `fade=t=in:st=0:d=0.10,fade=t=out:st=${fadeOutStart}:d=0.14`;
+  const audioFilter = `aresample=48000,afade=t=in:st=0:d=0.08,afade=t=out:st=${fadeOutStart}:d=0.10`;
+
+  if (overlay) {
+    const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[tag];[base][tag]overlay=0:0:format=auto,${fade},format=yuv420p[v]`;
+    if (audio) {
+      await run("ffmpeg", [
+        "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
+        "-loop", "1", "-i", overlay,
+        "-filter_complex", videoFilter,
+        "-map", "[v]", "-map", "0:a:0", "-af", audioFilter,
+        "-t", seconds.toFixed(3), "-shortest",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+      ]);
+    } else {
+      await run("ffmpeg", [
+        "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
+        "-loop", "1", "-i", overlay,
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+        "-filter_complex", videoFilter,
+        "-map", "[v]", "-map", "2:a:0",
+        "-t", seconds.toFixed(3), "-shortest",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+      ]);
+    }
+    return true;
+  }
+
+  const videoFilter = `${base},${fade}`;
+  if (audio) {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
+      "-map", "0:v:0", "-map", "0:a:0", "-vf", videoFilter, "-af", audioFilter,
+      "-t", seconds.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  } else {
+    await run("ffmpeg", [
+      "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
+      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+      "-map", "0:v:0", "-map", "1:a:0", "-vf", videoFilter,
+      "-t", seconds.toFixed(3), "-shortest",
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
+    ]);
+  }
+  return true;
+}
+
 
 async function slowMotionReplay(source: string, target: string, overlay: string) {
   const seconds = await durationSeconds(source);
@@ -1178,12 +1250,30 @@ async function claimGoalOfMonthClipRender() {
   });
 }
 
+function goalOfMonthVoteLabels(key: string) {
+  const period = monthlyPeriod(key);
+  const nominationLastMinute = new Date(period.nominationsCloseAt.getTime() - 60_000);
+  const votingLastMinute = new Date(period.votingClosesAt.getTime() - 60_000);
+  const dayMonth = (date: Date) => new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/London",
+  }).format(date).toUpperCase();
+  return {
+    awardLabel: `${period.label} Goal of the Month`,
+    nominationsCloseLabel: `NOMINATIONS CLOSE ${dayMonth(nominationLastMinute)} · 23:59 UK`,
+    votingWindowLabel: `VOTING ${dayMonth(period.votingOpensAt)} – ${dayMonth(votingLastMinute)} · 23:59 UK`,
+    winnerLabel: `RESULT AVAILABLE FROM ${dayMonth(period.votingClosesAt)}`,
+  };
+}
+
 async function goalOfMonthRenderDetails(job: GoalOfMonthRenderJob) {
   const rows = await db.$queryRaw<GoalOfMonthRenderDetails[]>(Prisma.sql`
     SELECT
       c."id" AS "candidateId",
       c."clipAssetId" AS "sourceAssetId",
       c."fixtureId",
+      c."monthKey",
       a."clipNumber"::int AS "clipNumber",
       c."scorerName",
       team."name" AS "teamName",
@@ -1191,6 +1281,7 @@ async function goalOfMonthRenderDetails(job: GoalOfMonthRenderJob) {
       CASE WHEN f."homeTeamId"=c."teamId" THEN away."name" ELSE home."name" END AS "opponentName",
       league."name" AS "leagueName",
       f."kickoffAt",
+      f."round"::int AS "matchweekNumber",
       home."name" AS "homeTeamName",
       away."name" AS "awayTeamName",
       mr."homeScore"::int AS "homeScore",
