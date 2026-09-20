@@ -89,11 +89,13 @@ export default async function PlayerTeamLayout({
       ) : null}
 
       {returnHref ? (
-        <PlayerPreviewReturnBanner
-          returnHref={returnHref}
-          returnLabel={returnLabel}
-          isAdmin={isAdmin}
-        />
+        <PlayerPwaModeOnly mode="web">
+          <PlayerPreviewReturnBanner
+            returnHref={returnHref}
+            returnLabel={returnLabel}
+            isAdmin={isAdmin}
+          />
+        </PlayerPwaModeOnly>
       ) : null}
 
       <Suspense>
