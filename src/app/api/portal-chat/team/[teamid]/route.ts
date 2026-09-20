@@ -15,6 +15,7 @@ import {
   previewText,
   privateChatRef,
 } from "@/lib/portal-messaging";
+import { queuePushNotifications } from "@/lib/push-notifications";
 import { prisma } from "@/lib/prisma";
 
 type ViewRole = "CAPTAIN" | "PLAYER";
@@ -43,6 +44,17 @@ type AccessContext = {
   isPreview: boolean;
   canSend: boolean;
 };
+
+function senderRoleFromContext(context: AccessContext) {
+  return isCaptainRole(context.membershipRole)
+    ? PortalMessageSenderRole.CAPTAIN
+    : PortalMessageSenderRole.PLAYER;
+}
+
+function pushPreview(body: string) {
+  const compact = body.trim().replace(/\s+/g, " ");
+  return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+}
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -501,9 +513,12 @@ export async function POST(
   }
 
   const payload = (await request.json().catch(() => null)) as
-    | { conversation?: unknown; message?: unknown }
+    | { conversation?: unknown; message?: unknown; notifyTeam?: unknown }
     | null;
   const message = String(payload?.message ?? "").trim();
+  const notifyTeam =
+    senderRoleFromContext(context) === PortalMessageSenderRole.CAPTAIN &&
+    payload?.notifyTeam === true;
 
   if (message.length < 1) {
     return jsonError("Type a message first.", 400);
@@ -525,9 +540,7 @@ export async function POST(
   if ("error" in selected) return jsonError(selected.error, selected.status);
 
   const now = new Date();
-  const senderRole = isCaptainRole(context.membershipRole)
-    ? PortalMessageSenderRole.CAPTAIN
-    : PortalMessageSenderRole.PLAYER;
+  const senderRole = senderRoleFromContext(context);
 
   const entry = await prisma.$transaction(async (tx) => {
     const created = await tx.portalMessage.create({
@@ -564,6 +577,123 @@ export async function POST(
 
     return created;
   });
+
+  try {
+    const team = await prisma.team.findUnique({
+      where: { id: teamid },
+      select: {
+        name: true,
+        members: {
+          select: {
+            userId: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (team) {
+      const targets: Array<{
+        userId: string;
+        title: string;
+        body: string;
+        url: string;
+        tag: string;
+        sourceType: string;
+        sourceId: string;
+      }> = [];
+      const bodyPreview = `${context.effectiveName}: ${pushPreview(message)}`;
+
+      if (selected.conversation.type === PortalConversationType.CAPTAIN_PLAYER) {
+        if (senderRole === PortalMessageSenderRole.CAPTAIN) {
+          const playerUserId = selected.conversation.participantUserId;
+
+          if (playerUserId && playerUserId !== context.effectiveUserId) {
+            targets.push({
+              userId: playerUserId,
+              title: `${team.name} · Private message`,
+              body: bodyPreview,
+              url: `/player/team/${teamid}/chat?conversation=captain`,
+              tag: `sixfl-private-${selected.conversation.id}`,
+              sourceType: "PORTAL_PRIVATE_MESSAGE",
+              sourceId: entry.id,
+            });
+          }
+        } else {
+          for (const member of team.members) {
+            if (
+              member.role === TeamRole.CAPTAIN &&
+              member.userId !== context.effectiveUserId
+            ) {
+              targets.push({
+                userId: member.userId,
+                title: `${team.name} · Private player message`,
+                body: bodyPreview,
+                url: `/captain/team/${teamid}/chat?conversation=${encodeURIComponent(
+                  privateChatRef(context.effectiveUserId),
+                )}`,
+                tag: `sixfl-private-${selected.conversation.id}`,
+                sourceType: "PORTAL_PRIVATE_MESSAGE",
+                sourceId: entry.id,
+              });
+            }
+          }
+        }
+      } else if (
+        selected.conversation.type === PortalConversationType.TEAM &&
+        senderRole === PortalMessageSenderRole.CAPTAIN &&
+        notifyTeam
+      ) {
+        for (const member of team.members) {
+          if (member.userId === context.effectiveUserId) continue;
+
+          const isCaptain = member.role === TeamRole.CAPTAIN;
+          targets.push({
+            userId: member.userId,
+            title: `${team.name} · Important team message`,
+            body: bodyPreview,
+            url: isCaptain
+              ? `/captain/team/${teamid}/chat?conversation=team`
+              : `/player/team/${teamid}/chat?conversation=team`,
+            tag: `sixfl-team-${teamid}`,
+            sourceType: "PORTAL_TEAM_NOTIFICATION",
+            sourceId: entry.id,
+          });
+        }
+      } else if (
+        selected.conversation.type === PortalConversationType.TEAM &&
+        senderRole === PortalMessageSenderRole.PLAYER &&
+        /(^|\s)@captain\b/i.test(message)
+      ) {
+        for (const member of team.members) {
+          if (
+            member.role === TeamRole.CAPTAIN &&
+            member.userId !== context.effectiveUserId
+          ) {
+            targets.push({
+              userId: member.userId,
+              title: `${team.name} · @Captain`,
+              body: bodyPreview,
+              url: `/captain/team/${teamid}/chat?conversation=team`,
+              tag: `sixfl-team-${teamid}`,
+              sourceType: "PORTAL_CAPTAIN_MENTION",
+              sourceId: entry.id,
+            });
+          }
+        }
+      }
+
+      if (targets.length > 0) {
+        await queuePushNotifications(targets);
+      }
+    }
+  } catch (error) {
+    console.warn("Portal message saved but push notification failed", {
+      teamId: teamid,
+      messageId: entry.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   return NextResponse.json({ ok: true, messageId: entry.id }, { status: 201 });
 }
