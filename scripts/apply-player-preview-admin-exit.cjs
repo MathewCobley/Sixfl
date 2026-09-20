@@ -16,7 +16,9 @@ function replaceRequired(before, after, label) {
 }
 
 const pageContainer =
-  '      <div className="mx-auto max-w-6xl space-y-8">';
+  source.includes('      <div className="player-web-home mx-auto max-w-6xl space-y-8">')
+    ? '      <div className="player-web-home mx-auto max-w-6xl space-y-8">'
+    : '      <div className="mx-auto max-w-6xl space-y-8">';
 const pageContainerWithAdminPreview = [
   pageContainer,
   "        {previewMembershipId ? (",
