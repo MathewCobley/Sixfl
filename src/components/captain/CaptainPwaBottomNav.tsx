@@ -59,8 +59,8 @@ export default function CaptainPwaBottomNav({
       icon: BanknotesIcon,
     },
     {
-      href: `/captain/team/${teamId}/messages`,
-      label: "Messages",
+      href: `/captain/team/${teamId}/chat`,
+      label: "Chat",
       unreadCount: unreadMessageCount,
       icon: ChatBubbleLeftRightIcon,
     },

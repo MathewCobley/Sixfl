@@ -25,6 +25,7 @@ import PendingActivationReturnLinks from "@/components/captain/PendingActivation
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
 import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
+import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
@@ -300,6 +301,14 @@ export default async function CaptainTeamLayout({
   }
 
   const unreadMessageCount = await getCaptainUnreadMessageCount(teamid);
+  const portalChatUnreadCount =
+    access.user?.id && access.membership && access.accessMode === "captain"
+      ? await getPortalChatUnreadCount({
+          teamId: teamid,
+          userId: access.user.id,
+          role: access.membership.role,
+        })
+      : 0;
   const priorityScore = await getSixflTvPriorityScore(teamid);
 
   const displayCompetition = team.league?.competition ?? null;
@@ -366,11 +375,16 @@ export default async function CaptainTeamLayout({
         { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
         { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
         {
+          href: `/captain/team/${teamid}/chat`,
+          label: "Team chat",
+          unreadCount: portalChatUnreadCount,
+        },
+        {
           href: `/captain/team/${teamid}/messages`,
-          label: "Messages",
+          label: "SIXFL inbox",
           unreadCount: unreadMessageCount,
         },
-        { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp" },
+        { href: `/captain/team/${teamid}/whatsapp`, label: "WhatsApp tools" },
       ],
     },
     {
@@ -598,7 +612,7 @@ export default async function CaptainTeamLayout({
       <CaptainPwaBottomNav
         teamId={team.id}
         squadHref={squadHref}
-        unreadMessageCount={unreadMessageCount}
+        unreadMessageCount={portalChatUnreadCount}
       />
     </div>
   );
