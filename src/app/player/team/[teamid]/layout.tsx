@@ -2,7 +2,6 @@
 // File: src/app/player/team/[teamid]/layout.tsx
 // ========================================
 
-import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { Suspense, type ReactNode } from "react";
 import { UserRole } from "@prisma/client";
