@@ -148,7 +148,7 @@ export default function PushNotificationControl() {
 
   if (state === "unsupported") return null;
 
-  if (state === "on") {
+  if (state === "on" || state === "disabling") {
     return (
       <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.08] p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
@@ -168,7 +168,7 @@ export default function PushNotificationControl() {
           disabled={state === "disabling"}
           className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/60 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          Turn off
+          {state === "disabling" ? "Turning off…" : "Turn off"}
         </button>
         {feedback ? (
           <div className="text-xs text-emerald-100/60 sm:hidden">{feedback}</div>
