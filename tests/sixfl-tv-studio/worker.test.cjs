@@ -323,12 +323,13 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.ok(overlayStart >= 0 && overlayEnd > overlayStart);
   const thumbnail = graphics.slice(thumbnailStart, introStart);
   const overlay = graphics.slice(overlayStart, overlayEnd);
-  assert.ok(thumbnail.includes('fontSize: 62'));
+  assert.ok(thumbnail.includes('fontSize: 52'));
   assert.ok(thumbnail.includes('thumbnailTextPng'));
   assert.ok(thumbnail.includes('MATCHWEEK'));
-  assert.ok(thumbnail.includes('GOAL'));
-  assert.ok(thumbnail.includes('OF THE MONTH'));
+  assert.ok(thumbnail.includes('GOAL OF THE MONTH'));
   assert.ok(thumbnail.includes('NOMINEE'));
+  assert.ok(thumbnail.includes('top: 445'));
+  assert.equal(thumbnail.includes('top: 598'), false);
   assert.equal(thumbnail.includes('homeTeamName'), false);
   assert.equal(thumbnail.includes('homeScore'), false);
   assert.equal(thumbnail.includes('awayScore'), false);
