@@ -355,9 +355,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
-      {membership ? <div className="mx-auto mb-4 max-w-6xl"><Link className="text-emerald-200 underline" href={`/player/team/${teamid}/ledger`}>Your balance, repayment arrangements and payment history</Link></div> : null}
       <div className="mx-auto max-w-6xl space-y-8">
-        <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
+        <section className="player-overview-identity overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-emerald-400/20 bg-black/30 shadow-[0_14px_40px_rgba(0,0,0,0.35)] sm:h-24 sm:w-24">
@@ -522,6 +521,14 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
               <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
                 See what you need to pay, what you’ve already paid and any fees where no payment was needed.
               </p>
+              {membership ? (
+                <Link
+                  href={`/player/team/${teamid}/ledger`}
+                  className="mt-3 inline-flex text-sm font-semibold text-amber-100 underline decoration-amber-200/40 underline-offset-4 transition hover:text-white"
+                >
+                  Balance, repayment arrangements & payment history
+                </Link>
+              ) : null}
             </div>
 
             <div className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[28rem]">
