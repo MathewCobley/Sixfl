@@ -42,6 +42,7 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
       BanknotesIcon: icon,
       CalendarDaysIcon: icon,
       ChartBarSquareIcon: icon,
+      ChatBubbleLeftRightIcon: icon,
       HomeIcon: icon,
       PlayCircleIcon: icon,
     },
