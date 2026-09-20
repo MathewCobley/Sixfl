@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";
 import { PlayerContributionTable, PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
 import { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
@@ -8,7 +9,7 @@ import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/
 // File: src/app/captain/team/[teamid]/payments/page.tsx
 // ========================================
 
-import { pausePlayerFeeCollection } from "@/lib/payments/player-ledger";
+import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";
 import { revalidatePath } from "next/cache";
@@ -343,6 +344,18 @@ export default async function CaptainPaymentsPage({
   }
 
   const paymentOrder = await getTeamPaymentOrder(teamid, ledger);
+  const [outstandingPlayerSummary] = await prisma.$queryRaw<Array<{ feeCount: number; balancePence: number }>>(Prisma.sql`
+    SELECT
+      COUNT(*)::int AS "feeCount",
+      COALESCE(SUM(s."balancePence"), 0)::int AS "balancePence"
+    FROM "PlayerFeeLedgerState" s
+    JOIN "PlayerMatchFee" fee ON fee.id = s."feeId"
+    WHERE s."teamId" = ${teamid}
+      AND s."balancePence" > 0
+      AND s."deletedAt" IS NULL
+      AND fee.status::text = 'OPEN'
+      AND ${visiblePlayerLedgerStateSql()}
+  `);
   const olderTeamBalancePence = paymentOrder.overdue.reduce((sum, entry) => sum + entry.outstandingPence, 0);
   const creditLedger = await getTeamCreditLedger(ledger.relatedTeamIds);
   const kitFundLedger = await getKitFundLedger(teamid);
@@ -823,6 +836,30 @@ export default async function CaptainPaymentsPage({
                 </div>
               );
             })}
+          </div>
+        </section>
+      ) : null}
+
+      {(outstandingPlayerSummary?.feeCount ?? 0) > 0 ? (
+        <section className="overflow-hidden rounded-3xl border border-amber-400/20 bg-amber-500/[0.08]">
+          <div className="flex flex-col gap-5 px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/70">
+                Player payments
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">
+                Outstanding player payment links
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-amber-50/75">
+                {outstandingPlayerSummary.feeCount} unpaid player fee{outstandingPlayerSummary.feeCount === 1 ? "" : "s"} · {formatMoney(outstandingPlayerSummary.balancePence)} outstanding. View every open payment link grouped by player, then open that player&apos;s ledger for their full balance and history.
+              </p>
+            </div>
+            <Link
+              href={`/captain/team/${team.id}/player-payments/accounts`}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-amber-300 px-5 py-3 text-sm font-bold text-black hover:bg-amber-200"
+            >
+              View player payment links
+            </Link>
           </div>
         </section>
       ) : null}
