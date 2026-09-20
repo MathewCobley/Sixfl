@@ -19,6 +19,20 @@ import { prisma } from "@/lib/prisma";
 
 type ViewRole = "CAPTAIN" | "PLAYER";
 
+type ApiError = {
+  error: string;
+  status: number;
+};
+
+type PrivateTarget = {
+  userId: string;
+  title: string;
+};
+
+type PortalConversationResult = {
+  conversation: Awaited<ReturnType<typeof ensureTeamPortalConversation>>;
+};
+
 type AccessContext = {
   actualUserId: string;
   effectiveUserId: string;
@@ -131,7 +145,7 @@ async function getPrivateTarget(input: {
   teamId: string;
   conversationRef: string;
   context: AccessContext;
-}) {
+}): Promise<PrivateTarget | ApiError> {
   const { teamId, context } = input;
   const rawTargetUserId = input.conversationRef.startsWith("player:")
     ? input.conversationRef.slice("player:".length).trim()
@@ -187,7 +201,7 @@ async function getConversationForRef(input: {
   teamId: string;
   conversationRef: string;
   context: AccessContext;
-}) {
+}): Promise<PortalConversationResult | ApiError> {
   if (input.conversationRef === "team") {
     return { conversation: await ensureTeamPortalConversation(input.teamId) };
   }
