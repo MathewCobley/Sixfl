@@ -55,7 +55,7 @@ for(const width of [390,1440]) {
       assert.equal(await page.evaluate(()=>window.posts[0].scorerTeamMemberId),'member-one');
       assert.equal(await page.getByRole('button',{name:'Saving…',exact:true}).isDisabled(),true);
       await page.evaluate(()=>window.release());
-      await page.getByRole('button',{name:'You nominated this goal'}).waitFor();
+      await page.getByRole('button',{name:'You backed this goal'}).waitFor();
       assert.equal(await page.locator('[data-monthly-goal="goal-one"]').count(),1);
       assert.equal(await page.locator('iframe').count(),0);
       await page.getByRole('button',{name:/Play footage for Example FC/}).click();
@@ -63,7 +63,7 @@ for(const width of [390,1440]) {
       await page.evaluate(()=>window.mount('promo'));
       await page.getByRole('heading',{name:'September Goal of the Month',exact:true}).waitFor();
       await page.locator('[data-monthly-goal="goal-one"]').waitFor();
-      assert.equal(await page.getByRole('link',{name:/Nominate \/ view all goals/}).getAttribute('href'),'/goal-of-the-month?from=captain&teamId=team-one');
+      assert.equal(await page.getByRole('link',{name:/Nominate \/ back goals/}).getAttribute('href'),'/goal-of-the-month?from=captain&teamId=team-one');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     }finally{await context.close();}
   });
@@ -78,7 +78,7 @@ for(const width of [390,1440]) {
       await page.getByRole('option',{name:'#10 · Test Scorer',exact:true}).click();
       await page.evaluate(()=>window.mode='fail');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('alert').filter({hasText:'Could not save'}).waitFor();
       assert.equal(await page.getByLabel('Recorded fixture').inputValue(),'fixture-one');assert.equal(await page.getByLabel('Goal number in the match').inputValue(),'1');assert.equal(await page.getByRole('button',{name:'Submit nomination',exact:true}).isEnabled(),true);
-      assert.equal(await page.evaluate(()=>window.posts.length),1);await page.evaluate(()=>window.mode='success');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('button',{name:'You nominated this goal'}).waitFor();assert.equal(await page.evaluate(()=>window.posts.length),2);
+      assert.equal(await page.evaluate(()=>window.posts.length),1);await page.evaluate(()=>window.mode='success');await page.getByRole('button',{name:'Submit nomination',exact:true}).click();await page.getByRole('button',{name:'You backed this goal'}).waitFor();assert.equal(await page.evaluate(()=>window.posts.length),2);
     }finally{await context.close();}
   });
   test(`dashboard month follows overlap, voting and next-round data at ${width}px`,async()=>{
@@ -110,7 +110,19 @@ for(const width of [390,1440]) {
 }
 test('anonymous visitors can watch but cannot nominate or vote',async()=>{
   const {context,page}=await screen(390,payload({eligible:false,voting:true}));
-  try{assert.equal(await page.getByRole('button',{name:'Nominate this goal',exact:true}).isDisabled(),true);assert.equal(await page.getByRole('button',{name:'Vote for this goal',exact:true}).isDisabled(),true);assert.equal(await page.getByRole('link',{name:'Sign in to take part'}).count(),1);assert.equal(await page.evaluate(()=>window.posts.length),0);}finally{await context.close();}
+  try{assert.equal(await page.getByRole('button',{name:'Back this goal',exact:true}).isDisabled(),true);assert.equal(await page.getByRole('button',{name:'Vote for this goal',exact:true}).isDisabled(),true);assert.equal(await page.getByRole('link',{name:'Sign in to take part'}).count(),1);assert.equal(await page.evaluate(()=>window.posts.length),0);}finally{await context.close();}
+});
+test('existing nominee can be backed without opening the winner vote',async()=>{
+  const data=payload({nominees:true,eligible:true,voting:false});
+  const {context,page}=await screen(390,data);
+  try{
+    await page.getByRole('button',{name:'Back this goal',exact:true}).click();
+    await page.getByRole('button',{name:'You backed this goal',exact:true}).waitFor();
+    await page.getByText(/Your backing is saved/).waitFor();
+    assert.equal(await page.evaluate(()=>window.posts.length),1);
+    assert.equal(await page.evaluate(()=>window.posts[0].action),'nominate');
+    assert.equal(await page.getByRole('button',{name:'Vote for this goal',exact:true}).count(),0);
+  }finally{await context.close();}
 });
 test('verified player vote shows saved choice and no duplicate submission',async()=>{
   const {context,page}=await screen(1440,payload({voting:true}));

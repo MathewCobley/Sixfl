@@ -32,9 +32,9 @@ export default function GoalOfWeekDashboardPromo({ teamId, href }: { teamId: str
                 <p className="text-xs font-bold uppercase tracking-widest text-fuchsia-100/70">SIXFL TV · Player chosen · {period.label}</p>
                 <h2 className="mt-2 text-2xl font-bold text-white">{month} Goal of the Month</h2>
                 <p className="mt-2 text-sm font-semibold text-fuchsia-100">{voting ? "Voting is open — choose your winner" : "Current nominees"}</p>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{voting ? "Watch the finalists and choose your winner. One vote per verified player." : `See a great goal from ${month}? Nominate it here. Three nominations per player each month.`}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">{voting ? "Watch the finalists and choose your winner. One vote per verified player." : `See a great goal from ${month}? Nominate a new one or back an existing nominee. Three nomination choices per player each month.`}</p>
               </div>
-              <Link href={target} className="inline-flex rounded-xl bg-fuchsia-200 px-4 py-3 text-sm font-bold text-black">{voting ? "Vote now" : "Nominate / view all goals"} →</Link>
+              <Link href={target} className="inline-flex rounded-xl bg-fuchsia-200 px-4 py-3 text-sm font-bold text-black">{voting ? "Vote now" : "Nominate / back goals"} →</Link>
             </div>
             {periodClips.length ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{periodClips.map(goal => <GoalNomineeCard key={goal.id} goal={goal} />)}</div>
@@ -49,14 +49,14 @@ export default function GoalOfWeekDashboardPromo({ teamId, href }: { teamId: str
             <p className="text-xs font-bold uppercase tracking-widest text-fuchsia-100/70">SIXFL TV · Player chosen</p>
             <h2 className="mt-2 text-2xl font-bold text-white">Goal of the Month</h2>
           </div>
-          <Link href={target} className="inline-flex rounded-xl bg-fuchsia-200 px-4 py-3 text-sm font-bold text-black">Nominate / view all goals →</Link>
+          <Link href={target} className="inline-flex rounded-xl bg-fuchsia-200 px-4 py-3 text-sm font-bold text-black">Nominate / back goals →</Link>
           {data ? <p className="w-full text-sm text-white/55">No monthly competition is open for nominations right now.</p> : null}
         </div>
       )}
       {loading && !data ? <p role="status" className="text-sm text-white/60">Loading nominated goals…</p> : null}
       {error ? <p role="status" className="text-sm text-amber-100">{error} <button type="button" onClick={() => void refresh()} className="underline">Try again</button></p> : null}
       {latestWinner ? <div className="rounded-2xl border border-amber-200/20 p-4"><p className="mb-3 text-sm font-bold text-amber-100">Latest monthly winner</p><div className="max-w-sm"><GoalNomineeCard goal={latestWinner} winner /></div></div> : null}
-      <p className="text-xs leading-5 text-white/45">Nominate through the month and until the 5th of the next month. Vote from the 6th–12th. Footage links may show match highlights; each card identifies the nominated goal number.</p>
+      <p className="text-xs leading-5 text-white/45">Nominate a new goal or back an existing nominee through the month and until the 5th of the next month. The six most-backed nominees go to the player vote from the 6th–12th.</p>
     </section>
   );
 }

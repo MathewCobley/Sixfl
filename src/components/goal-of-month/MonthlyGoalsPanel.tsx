@@ -23,7 +23,7 @@ export default function MonthlyGoalsPanel() {
   const [feedback, setFeedback] = useState("");
   const [failed, setFailed] = useState(false);
 
-  async function save(payload: Record<string, unknown>) {
+  async function save(payload: Record<string, unknown>, mode?: "back") {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true); setFeedback("Saving…"); setFailed(false);
@@ -33,7 +33,17 @@ export default function MonthlyGoalsPanel() {
       const response = await fetch("/api/goal-of-month/community", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || "Could not save your selection.");
-      setFeedback(payload.action === "vote" ? "Your vote is saved. You can change it before voting closes." : result.alreadyNominated ? "You have already nominated this goal." : "Nomination saved. The exact SIXFL TV clip is now attached to this goal.");
+      setFeedback(
+        payload.action === "vote"
+          ? "Your vote is saved. You can change it before voting closes."
+          : mode === "back"
+            ? result.alreadyNominated
+              ? "You already backed this goal."
+              : "Your backing is saved. It now counts towards this goal’s nomination total."
+            : result.alreadyNominated
+              ? "You have already nominated this goal."
+              : "Nomination saved. The exact SIXFL TV clip is now attached to this goal.",
+      );
       await refresh();
     } catch (failure) {
       setFailed(true);
@@ -41,14 +51,14 @@ export default function MonthlyGoalsPanel() {
     } finally { clearTimeout(timeout); inFlight.current = false; setBusy(false); }
   }
 
-  const nominate = (goal: GoalNominee) => void save({
+  const backGoal = (goal: GoalNominee) => void save({
     action: "nominate",
     fixtureId: goal.fixtureId,
     scoringTeamId: goal.teamId,
     clipAssetId: goal.clipAssetId,
     goalNumber: goal.goalNumber,
     scorerTeamMemberId: goal.scorerTeamMemberId,
-  });
+  }, "back");
 
   if (loading && !data) return <p role="status" className="p-6 text-white/70">Loading Goal of the Month…</p>;
   if (!data) return <div className="rounded-2xl border border-red-300/20 p-6"><p role="alert">{error || "Competition unavailable."}</p><button type="button" onClick={() => void refresh()} className="mt-3 underline">Try again</button></div>;
@@ -89,8 +99,8 @@ export default function MonthlyGoalsPanel() {
             {data.nominations.length > 1 ? <label className="text-sm">Award month<select aria-label="Award month" value={selected.key} onChange={event => { setMonth(event.target.value); setFixtureId(""); setClipAssetId(""); setScoringTeamId(""); setScorerTeamMemberId(""); }} className={field}>{data.nominations.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label> : null}
           </div>
 
-          <p className="text-sm text-white/60">New nominations use the exact SIXFL TV clip, so everyone can watch the goal directly here. Older nominations keep their original match-video links.</p>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{selected.candidates.map(goal => <GoalNomineeCard key={goal.id} goal={goal} onAction={() => nominate(goal)} actionLabel={selected.nominatedCandidateIds.includes(goal.id) ? "You nominated this goal" : "Nominate this goal"} disabled={busy || !eligible || !available || selected.nominatedCandidateIds.includes(goal.id)} />)}</div>
+          <p className="text-sm text-white/60">Nominate a new goal below, or back one that is already listed. Each different player who backs a goal adds to its nomination total and helps decide the six finalists. Backing a goal uses one of your three monthly nominations.</p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{selected.candidates.map(goal => <GoalNomineeCard key={goal.id} goal={goal} onAction={() => backGoal(goal)} actionLabel={selected.nominatedCandidateIds.includes(goal.id) ? "You backed this goal" : "Back this goal"} disabled={busy || !eligible || !available || selected.nominatedCandidateIds.includes(goal.id)} />)}</div>
           {!selected.candidates.length ? <p className="rounded-xl border border-white/10 p-4 text-white/60">No nominations yet. Choose a goal below to get this month started.</p> : null}
 
           <details className="rounded-2xl border border-white/10 p-4" open>

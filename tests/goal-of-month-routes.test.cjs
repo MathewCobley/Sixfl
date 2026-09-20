@@ -95,7 +95,8 @@ for(const from of ['captain','player']) {
     const html=renderPromo(competition([period('2026-09','September 2026',[candidate('sep','2026-09')])]),{from});
     assert.match(html,/<h2[^>]*>September Goal of the Month<\/h2>/);
     assert.match(html,/Current nominees/);
-    assert.match(plain(html),/See a great goal from September\? Nominate it here\./);
+    assert.match(plain(html),/See a great goal from September\? Nominate a new one or back an existing nominee\./);
+    assert.match(plain(html),/Nominate \/ back goals/);
     assert.ok(html.includes(`/goal-of-the-month?from=${from}&amp;teamId=team-one&amp;previewMembershipId=membership-one`));
     assert.equal((html.match(/data-goal="sep"/g)||[]).length,1);
   });
