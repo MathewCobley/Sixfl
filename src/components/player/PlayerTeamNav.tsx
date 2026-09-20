@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
-  BanknotesIcon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
   ChatBubbleLeftRightIcon,
+  EllipsisHorizontalCircleIcon,
   HomeIcon,
   PlayCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -112,7 +112,7 @@ const appTabs = (
       `/player/team/${teamId}/availability`,
       previewMembershipId,
     ),
-    label: "Matches",
+    label: "Fixtures",
     exact: false,
     icon: CalendarDaysIcon,
   },
@@ -137,10 +137,10 @@ const appTabs = (
     icon: PlayCircleIcon,
   },
   {
-    href: addPreviewMembershipId(`/player/team/${teamId}/ledger`, previewMembershipId),
-    label: "Pay",
+    href: addPreviewMembershipId(`/player/team/${teamId}/more`, previewMembershipId),
+    label: "More",
     exact: false,
-    icon: BanknotesIcon,
+    icon: EllipsisHorizontalCircleIcon,
   },
 ];
 
