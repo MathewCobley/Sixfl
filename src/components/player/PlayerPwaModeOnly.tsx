@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+// Keep app-vs-web rendering explicit; do not rely on CSS selectors to swap dashboards.
 type PlayerViewMode = "app" | "web";
 
 function isAdminPhonePreviewFrame() {
