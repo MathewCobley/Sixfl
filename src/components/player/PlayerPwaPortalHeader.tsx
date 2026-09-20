@@ -53,37 +53,47 @@ export default function PlayerPwaPortalHeader({
   return (
     <>
       <style>{`
-        .player-pwa-portal-header {
+        .player-pwa-portal-header,
+        .player-app-home {
           display: none;
         }
 
-        body:has(.player-pwa-mode) .player-pwa-portal-header {
+        body:has(.player-pwa-mode) .player-pwa-portal-header,
+        body:has(.player-pwa-mode) .player-app-home {
           display: block;
         }
 
-        body:has(.player-pwa-mode) .player-overview-identity {
-          display: none !important;
-        }
-
-        body:has(.player-pwa-mode) .player-team-layout main section.sticky.z-50 {
-          display: none !important;
-        }
-
+        body:has(.player-pwa-mode) .player-web-home,
+        body:has(.player-pwa-mode) .player-web-discovery,
+        body:has(.player-pwa-mode) .player-overview-identity,
+        body:has(.player-pwa-mode) .player-team-layout main section.sticky.z-50,
         body:has(.player-pwa-mode) .player-team-layout main section:has(a[href="/player/referrals"]) {
           display: none !important;
         }
 
         body:has(.player-pwa-mode) .player-team-layout > main {
-          padding-top: 0.9rem !important;
+          padding: 0 !important;
+          min-height: auto !important;
+        }
+
+        body:has(.player-pwa-mode) .player-team-layout {
+          padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
         }
       `}</style>
 
       <div className={appMode ? "player-pwa-mode" : "player-pwa-controller"} />
 
-      <section className="player-pwa-portal-header mx-auto w-full max-w-6xl px-4 pt-4">
-        <div className="overflow-hidden rounded-[1.6rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-emerald-400/20 bg-black/30">
+      <header
+        className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#07130f]/95 px-4 pb-3 backdrop-blur-xl"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+      >
+        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+          <div className="text-lg font-black tracking-[-0.04em] text-emerald-300">
+            SIXFL
+          </div>
+          <div className="h-5 w-px bg-white/10" />
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
               {teamLogoUrl ? (
                 <img
                   src={teamLogoUrl}
@@ -91,27 +101,21 @@ export default function PlayerPwaPortalHeader({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-xl font-black text-emerald-100">
+                <span className="text-[11px] font-black text-emerald-100">
                   {initials}
                 </span>
               )}
             </div>
-
             <div className="min-w-0">
-              <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300/80">
-                Player Portal
-              </div>
-              <h1 className="mt-1 truncate text-xl font-black tracking-tight text-white">
-                {teamName}
-              </h1>
-              <p className="mt-1 truncate text-xs text-white/50">
-                {leagueName ?? "SIXFL"}
+              <div className="truncate text-sm font-bold text-white">{teamName}</div>
+              <div className="truncate text-[11px] text-white/40">
+                {leagueName ?? "Player"}
                 {season ? ` · ${season}` : ""}
-              </p>
+              </div>
             </div>
           </div>
         </div>
-      </section>
+      </header>
     </>
   );
 }
