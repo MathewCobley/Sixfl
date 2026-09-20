@@ -52,7 +52,21 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
     'next-auth': { getServerSession: async () => ({ user: { email: 'example@example.invalid' } }) },
     '@prisma/client': { UserRole: { ADMIN: 'ADMIN' } },
     '@/auth': { authOptions: {} },
-    '@/lib/prisma': { prisma: { user: { findUnique: async () => ({ role, teamMembers: role === 'CAPTAIN' ? [{ id: 'example-captain' }] : [] }) } } },
+    '@/lib/prisma': { prisma: {
+      team: {
+        findUnique: async () => ({
+          name: 'Example United',
+          logoUrl: null,
+          league: { name: 'Example League', season: '2026' },
+        }),
+      },
+      user: {
+        findUnique: async () => ({
+          role,
+          teamMembers: role === 'CAPTAIN' ? [{ id: 'example-captain' }] : [],
+        }),
+      },
+    } },
     '@/components/player/PlayerTeamNav': nav,
     '@/components/player/PlayerDashboardOnly': only,
     '@/components/goal-of-week/GoalOfWeekDashboardPromo': panel('goals', 'Goal of the Month — current nominees'),
@@ -63,6 +77,11 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
       default: ({ returnHref, returnLabel, isAdmin }) =>
         h('div', { 'data-player-preview-return': isAdmin ? 'admin' : 'captain' },
           h('a', { href: returnHref }, `← ${returnLabel}`)),
+    },
+    '@/components/player/PlayerPwaPortalHeader': {
+      __esModule: true,
+      default: ({ teamName }) =>
+        h('section', { 'data-player-pwa-header': true }, 'Player Portal · ', teamName),
     },
   }, layoutSource).default;
   const page = h('main', { 'data-dashboard-core': true, className: 'min-h-screen bg-[#07130f] px-4 py-8 text-white' },
