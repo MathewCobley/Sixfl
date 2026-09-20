@@ -329,6 +329,16 @@ test('Goal of the Month nominee render uses shared branding and player identity 
 });
 
 
+test('Goal of the Month overlay aligns the team name with the player name and gives it breathing room', async () => {
+  const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay');
+  const overlayEnd = graphics.indexOf('export async function createGoalOfMonthVoteCard', overlayStart);
+  assert.ok(overlayStart >= 0 && overlayEnd > overlayStart);
+  const overlay = graphics.slice(overlayStart, overlayEnd);
+  assert.match(overlay, /\{ input: scorerText, left: 158, top: 54 \}/);
+  assert.match(overlay, /\{ input: teamText, left: 158, top: 104 \}/);
+});
+
 test('Goal of the Month thumbnail and player overlay stay readable at embedded-player size', async () => {
   const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
   const thumbnailStart = graphics.indexOf('export async function createGoalOfMonthNominationThumbnail');
