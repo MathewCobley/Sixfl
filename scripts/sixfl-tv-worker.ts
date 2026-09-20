@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { AsyncLocalStorage } from "node:async_hooks";
 import sharp from "sharp";
 import { Prisma, PrismaClient } from "@prisma/client";
-import { createGoalOfMonthClipOverlay, createGoalOfMonthNomineeIntro, createGoalOfMonthVoteCard, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvAltHighlightsOverlay, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
+import { createGoalOfMonthClipOverlay, createGoalOfMonthNomineeIntro, createGoalOfMonthVoteCard, createSixflTvGoalOfMonthCard, createSixflTvLeagueTableCard, createSixflTvAltGoalOfMonthCard, createSixflTvAltHighlightsOverlay, createSixflTvAltLeagueTableCard, createSixflTvAltLineupCard, createSixflTvAltVideoCard, createSixflTvLineupCard, createSixflTvScoreBug, createSixflTvThumbnail, createSixflTvVideoCard, type SixflTvGraphicFixture } from "../src/lib/sixfl-tv/graphics";
 import { deleteRailwayObject, fetchRailwayObject, uploadRailwayObject } from "../src/lib/storage/railway-s3";
 import { buildSixflTvVideoValue, parseSixflTvVideoValue } from "../src/lib/sixfl-tv/videos";
 import { sixflTvThumbnailBackgroundKey } from "../src/lib/sixfl-tv/thumbnail-background";
@@ -586,12 +586,12 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     const titlePng = path.join(dir, "title.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
     const leagueTopPng = path.join(dir, "league-table-top.png"), leagueBottomPng = path.join(dir, "league-table-bottom.png");
     const lineupPng = path.join(dir, "lineup.png"), footageOverlayPng = path.join(dir, job.kind === "FULL_MATCH" ? "watermark.png" : job.kind === "HIGHLIGHTS_ALT" ? "alt-score-bug.png" : "score-bug.png");
-    await writeFile(titlePng, await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
-    await writeFile(goalOfMonthPng, await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }));
+    await writeFile(titlePng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltVideoCard({ fixture: metadata.fixture, mode: "TITLE", siteUrl: siteUrl() }) : await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
+    await writeFile(goalOfMonthPng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }) : await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }));
     const [lineupBytes, leagueTopBytes, leagueBottomBytes] = await Promise.all([
-      createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
-      createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }),
-      createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }),
+      job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }) : createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
+      job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }),
+      job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }),
     ]);
     if (lineupBytes) await writeFile(lineupPng, lineupBytes);
     if (leagueTopBytes) await writeFile(leagueTopPng, leagueTopBytes);
