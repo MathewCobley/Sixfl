@@ -822,35 +822,37 @@ export async function createSixflTvAltVideoCard(input: {
   const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
   const heading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH HIGHLIGHTS";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-    <defs><linearGradient id="altBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050505"/><stop offset="0.55" stop-color="#10110d"/><stop offset="1" stop-color="#050505"/></linearGradient><filter id="altShadow"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity=".55"/></filter></defs>
-    ${fontCss}<rect width="1920" height="1080" fill="url(#altBg)"/>
-    <rect x="0" y="0" width="18" height="1080" fill="#f4d000"/>
-    ${logoImage(sixflTvLogoBytes, 1515, 54, 300, 96, 0.96)}
-    <text x="110" y="120" font-size="24" font-weight="800" letter-spacing="5" fill="#f4d000">${xml(heading)}</text>
-    <text x="110" y="182" font-size="28" font-weight="700" fill="#bdbdbd">${xml(fit(input.fixture.leagueName, 62))}${Number.isInteger(input.fixture.matchweekNumber) ? ` · MATCHWEEK ${input.fixture.matchweekNumber}` : ""}</text>
-    <g filter="url(#altShadow)">${badgeImage(firstBadge, 180, 325, 235, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1505, 325, 235, input.fixture.secondTeam.name)}</g>
-    <text x="495" y="430" font-size="62" font-weight="900" fill="#fff">${xml(fit(input.fixture.firstTeam.name, 23))}</text>
-    <text x="1425" y="430" text-anchor="end" font-size="62" font-weight="900" fill="#fff">${xml(fit(input.fixture.secondTeam.name, 23))}</text>
-    ${scoreVisible ? `<text x="960" y="610" text-anchor="middle" font-size="190" font-weight="900" fill="#fff">${input.fixture.firstTeam.score}<tspan fill="#f4d000"> – </tspan>${input.fixture.secondTeam.score}</text>` : `<text x="960" y="610" text-anchor="middle" font-size="150" font-weight="900" fill="#f4d000">VS</text>`}
-    <line x1="110" y1="820" x2="1810" y2="820" stroke="#fff" stroke-opacity=".14"/>
-    <text x="110" y="890" font-size="28" font-weight="700" fill="#fff">${xml(input.fixture.kickoffLabel)}</text>
-    <text x="1810" y="890" text-anchor="end" font-size="22" font-weight="800" letter-spacing="4" fill="#f4d000">SIXFL TV</text>
+    <defs><linearGradient id="altBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050505"/><stop offset=".55" stop-color="#0d0e0b"/><stop offset="1" stop-color="#050505"/></linearGradient><filter id="altShadow"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#000" flood-opacity=".55"/></filter></defs>
+    ${fontCss}<rect width="1920" height="1080" fill="url(#altBg)"/><rect width="16" height="1080" fill="#f4d000"/>
+    ${logoImage(sixflTvLogoBytes,1510,48,300,96,.96)}
+    <text x="100" y="112" font-size="23" font-weight="800" letter-spacing="5" fill="#f4d000">${xml(heading)}</text>
+    <text x="100" y="164" font-size="24" font-weight="650" fill="#a7a7a7">${xml(fit(input.fixture.leagueName,58))}${Number.isInteger(input.fixture.matchweekNumber)?` · MATCHWEEK ${input.fixture.matchweekNumber}`:""}</text>
+    <g filter="url(#altShadow)">${badgeImage(firstBadge,290,340,220,input.fixture.firstTeam.name)}${badgeImage(secondBadge,1410,340,220,input.fixture.secondTeam.name)}</g>
+    <text x="400" y="300" text-anchor="middle" font-size="36" font-weight="850" fill="#fff">${xml(fit(input.fixture.firstTeam.name,22))}</text>
+    <text x="1520" y="300" text-anchor="middle" font-size="36" font-weight="850" fill="#fff">${xml(fit(input.fixture.secondTeam.name,22))}</text>
+    ${scoreVisible?`<text x="960" y="555" text-anchor="middle" font-size="168" font-weight="900" fill="#fff">${input.fixture.firstTeam.score}<tspan fill="#f4d000"> – </tspan>${input.fixture.secondTeam.score}</text>`:`<text x="960" y="555" text-anchor="middle" font-size="128" font-weight="900" fill="#f4d000">VS</text>`}
+    <text x="960" y="655" text-anchor="middle" font-size="24" font-weight="700" fill="#9b9b9b">${xml(input.fixture.kickoffLabel)}</text>
+    <line x1="260" y1="740" x2="1660" y2="740" stroke="#fff" stroke-opacity=".1"/>
+    <text x="960" y="800" text-anchor="middle" font-size="20" font-weight="700" letter-spacing="3" fill="#6f716e">SIXFL · REAL PLAYERS · REAL GOALS</text>
   </svg>`;
-  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
 }
 
-export async function createSixflTvAltLineupCard(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
-  const first=(input.fixture.firstTeamLineup||[]).slice(0,12), second=(input.fixture.secondTeamLineup||[]).slice(0,12);
-  if(!first.length&&!second.length) return null;
+export async function createSixflTvAltLineupCard(input:{fixture:SixflTvGraphicFixture;siteUrl:string}) {
+  const first=(input.fixture.firstTeamLineup||[]).slice(0,12),second=(input.fixture.secondTeamLineup||[]).slice(0,12);
+  if(!first.length&&!second.length)return null;
   const [firstBadge,secondBadge,sixflTvLogoBytes,fontCss]=await Promise.all([fetchSixflTvBadge(input.fixture.firstTeam.logoUrl,input.siteUrl),fetchSixflTvBadge(input.fixture.secondTeam.logoUrl,input.siteUrl),sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
-  const rows=Math.max(first.length,second.length,1), gap=Math.min(58,Math.floor(520/rows));
-  const list=(items:string[],x:number)=>items.map((name,i)=>`<text x="${x}" y="${390+i*gap}" font-size="32" font-weight="700" fill="#fff">${xml(fit(name,28))}</text>`).join("");
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(sixflTvLogoBytes,1515,54,300,96,.96)}
-  <text x="110" y="130" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">MATCHDAY SQUADS</text>
-  <g>${badgeImage(firstBadge,110,210,105,input.fixture.firstTeam.name)}${badgeImage(secondBadge,1010,210,105,input.fixture.secondTeam.name)}</g>
-  <text x="245" y="280" font-size="42" font-weight="900" fill="#fff">${xml(fit(input.fixture.firstTeam.name,26))}</text><text x="1145" y="280" font-size="42" font-weight="900" fill="#fff">${xml(fit(input.fixture.secondTeam.name,26))}</text>
-  <line x1="960" y1="210" x2="960" y2="900" stroke="#fff" stroke-opacity=".12"/>${list(first,110)}${list(second,1010)}
-  <text x="110" y="980" font-size="24" font-weight="700" fill="#aaa">${xml(fit(input.fixture.leagueName,62))}</text></svg>`;
+  const rows=Math.max(first.length,second.length,1),gap=Math.min(58,Math.floor(500/rows));
+  const list=(items:string[],x:number)=>items.map((name,i)=>{const y=410+i*gap;return `<g><circle cx="${x}" cy="${y-10}" r="5" fill="#f4d000"/><text x="${x+25}" y="${y}" font-size="31" font-weight="700" fill="#fff">${xml(fit(name,29))}</text></g>`}).join("");
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="16" height="1080" fill="#f4d000"/>${logoImage(sixflTvLogoBytes,1510,48,300,96,.96)}
+    <text x="100" y="112" font-size="23" font-weight="800" letter-spacing="5" fill="#f4d000">MATCHDAY SQUADS</text>
+    <text x="450" y="225" text-anchor="middle" font-size="30" font-weight="850" fill="#fff">${xml(fit(input.fixture.firstTeam.name,24))}</text>
+    <text x="1470" y="225" text-anchor="middle" font-size="30" font-weight="850" fill="#fff">${xml(fit(input.fixture.secondTeam.name,24))}</text>
+    <g>${badgeImage(firstBadge,385,250,130,input.fixture.firstTeam.name)}${badgeImage(secondBadge,1405,250,130,input.fixture.secondTeam.name)}</g>
+    <line x1="960" y1="195" x2="960" y2="900" stroke="#fff" stroke-opacity=".10"/>
+    ${list(first,135)}${list(second,1055)}
+    <text x="100" y="985" font-size="22" font-weight="650" fill="#777">${xml(fit(input.fixture.leagueName,64))}${Number.isInteger(input.fixture.matchweekNumber)?` · MATCHWEEK ${input.fixture.matchweekNumber}`:""}</text>
+  </svg>`;
   return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
 }
 
