@@ -261,7 +261,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         {(!render || !renderActive(render)) ? <div className="mt-4"><button type="button" className={button} disabled={busy || activeRenders.length > 0} onClick={() => void generate(kind)}>{busy ? "Queuing…" : render?.state === "READY" ? `Regenerate ${kindLabel(kind)} only` : `Generate ${kindLabel(kind)} only`}</button></div> : null}
       </section>;
     })}</div>
-    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
+    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Array<Exclude<Kind, "HIGHLIGHTS_ALT">>).map(kind => {
       const render = renderByKind.get(kind);
       return <ThumbnailEditor
         key={`${kind}-${thumbByKind.get(kind)?.updatedAt || "new"}-${render?.completedAt || render?.id || "no-render"}`}
@@ -275,6 +275,6 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       />;
     })}</div></div>
     <section className="rounded-2xl border border-white/10 p-4 text-sm leading-6 text-white/60"><strong className="text-white/85">YouTube connection</strong><br/>{state.youtube.connected ? <>Connected{state.youtube.channelTitle ? ` to ${state.youtube.channelTitle}` : ""}. Ready videos publish automatically; the controls below remain available for manual retry or correction.</> : state.youtube.configured ? <>The shared SIXFL YouTube connection is not authorised yet. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Manage YouTube from SIXFL TV</a>.</> : <>Google OAuth credentials are not configured yet. Preview generation and thumbnail editing still work without Google. <a className="ml-1 font-semibold text-emerald-300 underline underline-offset-4" href="/admin/sixfl-tv/settings">Open SIXFL TV setup</a>.</>}</section>
-    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnailDraft={thumbnailDrafts[kind]} publish={publishByKind.get(kind)} defaults={state.youtubeDefaults[kind]} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
+    <div><h2 className="mb-3 text-xl font-bold text-white">Review & publish</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Array<Exclude<Kind, "HIGHLIGHTS_ALT">>).map(kind => <PublishEditor key={`${kind}-${publishByKind.get(kind)?.id || "new"}`} fixtureId={fixtureId} kind={kind} render={renderByKind.get(kind)} thumbnailDraft={thumbnailDrafts[kind]} publish={publishByKind.get(kind)} defaults={state.youtubeDefaults[kind]} connected={state.youtube.connected} busy={busy} onRefresh={refresh} />)}</div></div>
   </div>;
 }
