@@ -39,6 +39,7 @@ const fontRefreshMigration = 'prisma/migrations/20260920002000_refresh_goal_mont
 const teamHighlightRefreshMigration = 'prisma/migrations/20260920010500_refresh_goal_month_team_highlight/migration.sql';
 const finalVideoFlowMigration = 'prisma/migrations/20260920014500_refresh_goal_month_final_video_flow/migration.sql';
 const visualPolishMigration = 'prisma/migrations/20260920015200_refresh_goal_month_video_visual_polish/migration.sql';
+const titleReplaySpacingMigration = 'prisma/migrations/20260920175500_refresh_goal_month_title_replay_spacing/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerTeamMemberId: 'member-home' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -288,6 +289,24 @@ test('visual polish refresh requeues completed nominee renders while keeping the
   const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
     FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
   assert.equal(state, 'QUEUED|old-visual-polish-render.mp4|true');
+});
+
+test('title and replay spacing refresh requeues completed nominee renders while preserving the current object', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('title-replay-spacing-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'title-replay-spacing-clip', scorerTeamMemberId: 'member-home',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-title-replay-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(titleReplaySpacingMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-title-replay-render.mp4|true');
 });
 
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
