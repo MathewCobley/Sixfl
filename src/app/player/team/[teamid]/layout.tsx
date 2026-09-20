@@ -101,20 +101,22 @@ export default async function PlayerTeamLayout({
 
       {/* Keep the player's dashboard first; discovery panels must not precede it. */}
       {children}
-      <PlayerDashboardOnly teamId={teamid}>
-        <div className="mx-auto w-full max-w-6xl px-4 pt-6">
-          <GoalOfWeekDashboardPromo
-            teamId={teamid}
-            href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
-          />
-        </div>
-      </PlayerDashboardOnly>
-      <PlayerDashboardOnly teamId={teamid}>
-        <div className="space-y-8 pb-8">
-          <PlayerLeagueMediaPanel teamId={teamid} />
-          <PlayerMessageBox teamId={teamid} />
-        </div>
-      </PlayerDashboardOnly>
+      <div className="player-web-discovery">
+        <PlayerDashboardOnly teamId={teamid}>
+          <div className="mx-auto w-full max-w-6xl px-4 pt-6">
+            <GoalOfWeekDashboardPromo
+              teamId={teamid}
+              href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
+            />
+          </div>
+        </PlayerDashboardOnly>
+        <PlayerDashboardOnly teamId={teamid}>
+          <div className="space-y-8 pb-8">
+            <PlayerLeagueMediaPanel teamId={teamid} />
+            <PlayerMessageBox teamId={teamid} />
+          </div>
+        </PlayerDashboardOnly>
+      </div>
     </div>
   );
 }
