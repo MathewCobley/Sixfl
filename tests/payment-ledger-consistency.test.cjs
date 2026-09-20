@@ -18,6 +18,10 @@ function loader(mocks={}) {
   const defaults={
     '@/lib/prisma':{prisma:{$queryRaw:async()=>[]}},
     '@/lib/payments/player-ledger':{money},
+    '@/lib/payments/team-credit-policy':{
+      getTeamCreditPolicySnapshot:async()=>({enabled:true,creditHeadroomPence:0}),
+      getMaximumAdditionalCollectionPence:({outstandingFixturePence,creditHeadroomPence})=>Math.max(outstandingFixturePence,0)+Math.max(creditHeadroomPence,0),
+    },
     '@/lib/datetime/london':{formatDateTimeInLondon:()=> '25 Aug 2026'},
   };
   const supplied={...defaults,...mocks};
