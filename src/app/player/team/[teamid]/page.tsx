@@ -399,9 +399,9 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       <PlayerPwaModeOnly mode="app">
         <PlayerAppHome
           teamId={teamid}
-        playerName={membership?.user.name ?? user.name ?? null}
-        leagueName={team.league?.name ?? null}
-        nextFixture={
+          playerName={membership?.user.name ?? user.name ?? null}
+          leagueName={team.league?.name ?? null}
+          nextFixture={
           nextFixture
             ? {
                 id: nextFixture.id,
@@ -414,12 +414,12 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
                 awayTeam: nextFixture.awayTeam,
               }
             : null
-        }
-        nextAvailability={nextAvailability?.response ?? null}
-        outstandingPence={outstandingPence}
-        nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
-        recentResult={recentResult}
-        previewMembershipId={previewMembership?.id ?? null}
+          }
+          nextAvailability={nextAvailability?.response ?? null}
+          outstandingPence={outstandingPence}
+          nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
+          recentResult={recentResult}
+          previewMembershipId={previewMembership?.id ?? null}
           showTeamChat={user.role === UserRole.ADMIN}
         />
       </PlayerPwaModeOnly>
