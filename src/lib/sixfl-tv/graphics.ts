@@ -664,7 +664,7 @@ export async function createGoalOfMonthClipOverlay(input: {
     : null;
   const composites: sharp.OverlayOptions[] = [
     { input: scorerText, left: 158, top: 54 },
-    { input: teamText, left: 160, top: 96 },
+    { input: teamText, left: 158, top: 104 },
   ];
   if (replayText) composites.push({ input: replayText, left: 46 + replayX, top: 63 });
   return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
