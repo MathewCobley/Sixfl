@@ -49,12 +49,10 @@ export default function PwaServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
 
     let cancelled = false;
-    let registration: ServiceWorkerRegistration | null = null;
-
     const register = async () => {
       try {
         if (cancelled) return;
-        registration = await navigator.serviceWorker.register("/sw.js", {
+        await navigator.serviceWorker.register("/sw.js", {
           scope: "/",
         });
       } catch (error) {
