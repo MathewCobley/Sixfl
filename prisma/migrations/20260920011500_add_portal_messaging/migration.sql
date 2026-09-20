@@ -55,7 +55,7 @@ ALTER TABLE "PortalConversation"
 
 ALTER TABLE "PortalConversation"
   ADD CONSTRAINT "PortalConversation_participantUserId_fkey"
-  FOREIGN KEY ("participantUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("participantUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "PortalMessage"
   ADD CONSTRAINT "PortalMessage_conversationId_fkey"
