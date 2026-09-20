@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Kind = "HIGHLIGHTS" | "FULL_MATCH";
+type Kind = "HIGHLIGHTS" | "HIGHLIGHTS_ALT" | "FULL_MATCH";
 type Render = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; createdAt: string; completedAt: string | null; error: string | null; sizeBytes: number | null; durationMs: number | null; progressPercent: number; progressLabel: string; queueAhead: number | null };
 type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: boolean; sizeBytes: number; updatedAt: string };
 type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
@@ -21,7 +21,7 @@ function sizeLabel(bytes: number | null) {
   if (bytes < 1024 ** 2) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
-function kindLabel(kind: Kind) { return kind === "HIGHLIGHTS" ? "Highlights" : "Full match"; }
+function kindLabel(kind: Kind) { return kind === "HIGHLIGHTS" ? "Highlights" : kind === "HIGHLIGHTS_ALT" ? "Highlights test style" : "Full match"; }
 const button = "inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40";
 const stopButton = "inline-flex min-h-11 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40";
 function renderActive(render: Render) { return render.state === "QUEUED" || render.state === "PROCESSING"; }
@@ -126,7 +126,7 @@ function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defau
 export default function StudioControls({ fixtureId, initial }: { fixtureId: string; initial: State }) {
   const [state, setState] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
   const initialThumbs = new Map(initial.thumbnails.map(thumb => [thumb.kind, thumb]));
-  const [thumbnailDrafts, setThumbnailDrafts] = useState<Record<Kind, ThumbnailDraft>>({
+  const [thumbnailDrafts, setThumbnailDrafts] = useState<Record<Exclude<Kind, "HIGHLIGHTS_ALT">, ThumbnailDraft>>({
     HIGHLIGHTS: {
       headline: initialThumbs.get("HIGHLIGHTS")?.headline || "MATCH HIGHLIGHTS",
       strapline: initialThumbs.get("HIGHLIGHTS")?.strapline || "",
@@ -138,7 +138,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       showScore: initialThumbs.get("FULL_MATCH")?.showScore ?? true,
     },
   });
-  const updateThumbnailDraft = useCallback((kind: Kind, draft: ThumbnailDraft) => {
+  const updateThumbnailDraft = useCallback((kind: Exclude<Kind, "HIGHLIGHTS_ALT">, draft: ThumbnailDraft) => {
     setThumbnailDrafts(current => {
       const previous = current[kind];
       if (
@@ -219,10 +219,10 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-white">Create SIXFL TV videos</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">Uses the source files already saved for this fixture. Highlights use your saved individual clips in their chosen order (falling back to a ready-made highlights file only when there are no clips). The full match uses the separate full-match upload. Shared intro/outro, the real SIXFL TV logo, saved badges, final score, recorded scorers, pre-match form, saved matchday squads and any stored pre-match SIXFL Predictor score are added by the renderer. You can regenerate both together here, or update just Highlights or just Full match from its own preview card below.</p></div>{activeRenders.length ? <button type="button" className={stopButton} disabled={busy} onClick={() => void stopRendering()}>{busy ? "Stopping…" : "Stop rendering"}</button> : <button type="button" className={button} disabled={busy} onClick={() => void generate()}>{busy ? "Queuing…" : hasReadyPreview ? "Regenerate all previews" : "Generate all previews"}</button>}</div>
       {message ? <p role="status" className="mt-4 text-sm text-emerald-100">{message}</p> : null}{error ? <p role="alert" className="mt-4 text-sm text-red-200">{error}</p> : null}
     </section>
-    <div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Kind[]).map(kind => {
+    <div className="grid gap-4 lg:grid-cols-3">{(["HIGHLIGHTS", "HIGHLIGHTS_ALT", "FULL_MATCH"] as Kind[]).map(kind => {
       const render = renderByKind.get(kind);
       return <section key={kind} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-white">{kindLabel(kind)} preview</h3><span className="text-xs text-white/50">{renderStateLabel(render)}</span></div>
-        {render?.state === "READY" ? <><video controls preload="metadata" playsInline src={`${endpoint}/render/${encodeURIComponent(render.id)}`} className="mt-4 aspect-video w-full rounded-xl bg-black"/><div className="mt-3 flex flex-wrap gap-2"><a className={button} href={`${endpoint}/render/${encodeURIComponent(render.id)}?download=1`}>Download preview</a><span className="self-center text-xs text-white/45">{sizeLabel(render.sizeBytes)}{render.durationMs ? ` · ${Math.round(render.durationMs / 1000)} sec` : ""}</span></div></> : null}
+        {render?.state === "READY" ? <><video controls preload="metadata" playsInline src={`${endpoint}/render/${encodeURIComponent(render.id)}`} className="mt-4 aspect-video w-full rounded-xl bg-black"/><div className="mt-3 flex flex-wrap gap-2"><a className={button} href={`${endpoint}/render/${encodeURIComponent(render.id)}?download=1`}>Download preview</a><span className="self-center text-xs text-white/45">{sizeLabel(render.sizeBytes)}{render.durationMs ? ` · ${Math.round(render.durationMs / 1000)} sec` : ""}</span></div></> : null}{kind === "HIGHLIGHTS_ALT" ? <p className="mt-3 text-xs leading-5 text-amber-100/75">Test only — uses the same real highlight footage and saved team badges, but does not replace or publish the normal highlights video.</p> : null}
         {renderStopped(render) ? <p role="status" className="mt-3 text-sm text-amber-100">Rendering stopped. Your uploaded footage is unchanged; you can generate a fresh preview whenever you are ready.</p> : render?.state === "FAILED" ? <p role="alert" className="mt-3 text-sm text-red-200">{render.error || "Rendering failed. Generate previews again after checking the source files."}</p> : null}
         {render && renderActive(render) ? <div className="mt-4 space-y-3">
           <div className="flex items-center justify-between gap-3 text-sm">
