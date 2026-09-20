@@ -153,6 +153,7 @@ export default function PortalChat({
   const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const initialConversationApplied = useRef(false);
 
   async function loadConversation(ref: string, silent = false) {
     if (!silent) setLoading(true);
@@ -187,13 +188,16 @@ export default function PortalChat({
   }
 
   useEffect(() => {
-    const requestedConversation = new URLSearchParams(window.location.search)
-      .get("conversation")
-      ?.trim();
+    if (!initialConversationApplied.current) {
+      initialConversationApplied.current = true;
+      const requestedConversation = new URLSearchParams(window.location.search)
+        .get("conversation")
+        ?.trim();
 
-    if (requestedConversation && requestedConversation !== selectedRef) {
-      setSelectedRef(requestedConversation);
-      return;
+      if (requestedConversation && requestedConversation !== selectedRef) {
+        setSelectedRef(requestedConversation);
+        return;
+      }
     }
 
     loadConversation(selectedRef);
