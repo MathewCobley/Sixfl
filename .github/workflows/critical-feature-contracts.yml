@@ -98,6 +98,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check restrained PWA push notifications
+        run: node --test tests/pwa-push-notifications/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
