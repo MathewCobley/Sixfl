@@ -10,8 +10,9 @@ test("captain flexible payment is server-owned, oldest-first and credit-bounded"
   const route = read("src/app/captain/team/[teamid]/payments/make-payment/route.ts");
   assert.match(route, /requireCaptain\(teamid\)/);
   assert.match(route, /getTeamPaymentOrder\(teamid\)/);
-  assert.match(route, /order\.enabled\) return order\.next/);
-  assert.match(route, /order\.ledger\.openEntries\[0\]/);
+  assert.match(route, /if \(!order\.enabled\) return order\.ledger\.openEntries\[0\]/);
+  assert.match(route, /order\.ledger\.entries\.find/);
+  assert.match(route, /order\.next\?\.chargeId/);
   assert.match(route, /applyExistingTeamCreditToChargeFirst/);
   assert.match(route, /getTeamCreditPolicySnapshot/);
   assert.match(route, /getMaximumAdditionalCollectionPence/);
