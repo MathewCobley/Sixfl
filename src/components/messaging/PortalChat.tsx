@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
   ShieldCheckIcon,
+  TrashIcon,
   UserGroupIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
@@ -44,6 +45,7 @@ type ChatResponse = {
   viewRole: "CAPTAIN" | "PLAYER";
   canSend: boolean;
   isPreview: boolean;
+  isAdminTestMode: boolean;
   selected: {
     ref: string;
     id: string;
@@ -58,6 +60,7 @@ type PortalChatProps = {
   teamId: string;
   sixflHref: string;
   previewMembershipId?: string | null;
+  adminTestMode?: boolean;
 };
 
 function formatTime(value: string) {
@@ -73,11 +76,15 @@ function apiUrl(input: {
   teamId: string;
   conversation: string;
   previewMembershipId?: string | null;
+  adminTestMode?: boolean;
 }) {
   const params = new URLSearchParams();
   params.set("conversation", input.conversation);
   if (input.previewMembershipId) {
     params.set("previewMembershipId", input.previewMembershipId);
+  }
+  if (input.adminTestMode) {
+    params.set("adminTest", "1");
   }
   return `/api/portal-chat/team/${input.teamId}?${params.toString()}`;
 }
@@ -144,12 +151,14 @@ export default function PortalChat({
   teamId,
   sixflHref,
   previewMembershipId = null,
+  adminTestMode = false,
 }: PortalChatProps) {
   const [selectedRef, setSelectedRef] = useState("team");
   const [data, setData] = useState<ChatResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -160,7 +169,12 @@ export default function PortalChat({
 
     try {
       const response = await fetch(
-        apiUrl({ teamId, conversation: ref, previewMembershipId }),
+        apiUrl({
+          teamId,
+          conversation: ref,
+          previewMembershipId,
+          adminTestMode,
+        }),
         { cache: "no-store" },
       );
       const payload = (await response.json().catch(() => null)) as
@@ -207,7 +221,7 @@ export default function PortalChat({
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, selectedRef, previewMembershipId]);
+  }, [teamId, selectedRef, previewMembershipId, adminTestMode]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
@@ -223,7 +237,12 @@ export default function PortalChat({
 
     try {
       const response = await fetch(
-        apiUrl({ teamId, conversation: selectedRef, previewMembershipId }),
+        apiUrl({
+          teamId,
+          conversation: selectedRef,
+          previewMembershipId,
+          adminTestMode,
+        }),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -256,6 +275,68 @@ export default function PortalChat({
     }
   }
 
+  async function clearTestMessages() {
+    if (!data?.isAdminTestMode || !data.team.name || clearing) return;
+
+    const confirmation = window.prompt(
+      `This will permanently delete every Team Chat and private chat message for ${data.team.name}. Type the exact team name to continue:`,
+    );
+
+    if (confirmation === null) return;
+    if (confirmation.trim() !== data.team.name) {
+      setFeedback("Team name did not match. Nothing was deleted.");
+      return;
+    }
+
+    setClearing(true);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(
+        apiUrl({
+          teamId,
+          conversation: "team",
+          previewMembershipId,
+          adminTestMode: true,
+        }),
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmTeamName: confirmation.trim() }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            deletedMessages?: number;
+            deletedConversations?: number;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Could not clear test messages.");
+      }
+
+      setSelectedRef("team");
+      setMessage("");
+      setNotifyTeam(false);
+      await loadConversation("team", true);
+      setFeedback(
+        `Cleared ${payload.deletedMessages ?? 0} test message${
+          payload.deletedMessages === 1 ? "" : "s"
+        } for ${data.team.name}.`,
+      );
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "Could not clear test messages.",
+      );
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const selectedItem =
     data?.conversations.find((item) => item.ref === selectedRef) ?? null;
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
@@ -276,7 +357,9 @@ export default function PortalChat({
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
               Team chat is visible to the whole registered squad. Private player chats are only visible to that player and the team captain(s).
             </p>
-            {data?.canSend ? <PushNotificationControl /> : null}
+            {data?.canSend && !data.isAdminTestMode ? (
+              <PushNotificationControl />
+            ) : null}
           </div>
 
           {data?.team ? (
@@ -356,17 +439,34 @@ export default function PortalChat({
                   : "Private between this player and the team captain(s)"}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => loadConversation(selectedRef)}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-              aria-label="Refresh messages"
-            >
-              <ArrowPathIcon className="h-5 w-5" aria-hidden="true" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {data?.isAdminTestMode ? (
+                <button
+                  type="button"
+                  onClick={clearTestMessages}
+                  disabled={clearing}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 text-xs font-semibold text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                  {clearing ? "Clearing…" : "Clear test messages"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => loadConversation(selectedRef)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                aria-label="Refresh messages"
+              >
+                <ArrowPathIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
-          {data?.isPreview ? (
+          {data?.isAdminTestMode ? (
+            <div className="border-b border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-100/80 sm:px-5">
+              Admin Test Mode · messages are sent as SIXFL Admin/Test. No phone push notifications are sent. Clear the test history before Team Chat launches.
+            </div>
+          ) : data?.isPreview ? (
             <div className="border-b border-amber-400/20 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-100/80 sm:px-5">
               Preview mode is read-only. Messages cannot be sent as the person you are previewing.
             </div>
@@ -434,6 +534,7 @@ export default function PortalChat({
           >
             {data?.viewRole === "CAPTAIN" &&
             data.canSend &&
+            !data.isAdminTestMode &&
             selectedRef === "team" ? (
               <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
                 <input
@@ -462,9 +563,13 @@ export default function PortalChat({
                 disabled={!data?.canSend}
                 placeholder={
                   data?.canSend
-                    ? selectedRef === "team"
-                      ? "Message the team…"
-                      : "Private message…"
+                    ? data.isAdminTestMode
+                      ? selectedRef === "team"
+                        ? "Send a test message to Team Chat…"
+                        : "Send a test private message…"
+                      : selectedRef === "team"
+                        ? "Message the team…"
+                        : "Private message…"
                     : "Preview mode is read-only"
                 }
                 className="max-h-32 min-h-12 flex-1 resize-y rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
@@ -480,13 +585,15 @@ export default function PortalChat({
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[11px] text-white/35">
               <span>
-                {selectedRef === "team"
-                  ? data?.viewRole === "PLAYER"
-                    ? "Squad conversation · use @Captain only when you need their attention"
-                    : notifyTeam
-                      ? "Important team notification"
-                      : "Squad conversation · no phone alert"
-                  : "Private captain conversation · phone alert if enabled"}
+                {data?.isAdminTestMode
+                  ? "Admin Test Mode · stored in chat · no phone alert"
+                  : selectedRef === "team"
+                    ? data?.viewRole === "PLAYER"
+                      ? "Squad conversation · use @Captain only when you need their attention"
+                      : notifyTeam
+                        ? "Important team notification"
+                        : "Squad conversation · no phone alert"
+                    : "Private captain conversation · phone alert if enabled"}
               </span>
               <span>{message.length}/2000</span>
             </div>

@@ -42,10 +42,15 @@ type AccessContext = {
   membershipRole: TeamRole | null;
   viewRole: ViewRole;
   isPreview: boolean;
+  isAdminTestMode: boolean;
   canSend: boolean;
 };
 
 function senderRoleFromContext(context: AccessContext) {
+  if (context.isAdminTestMode) {
+    return PortalMessageSenderRole.ADMIN;
+  }
+
   return isCaptainRole(context.membershipRole)
     ? PortalMessageSenderRole.CAPTAIN
     : PortalMessageSenderRole.PLAYER;
@@ -100,6 +105,7 @@ async function getAccessContext(
 
   const url = new URL(request.url);
   const previewMembershipId = url.searchParams.get("previewMembershipId")?.trim() || null;
+  const adminTestRequested = url.searchParams.get("adminTest") === "1";
 
   if (actualUser.role === UserRole.ADMIN) {
     if (previewMembershipId) {
@@ -125,6 +131,7 @@ async function getAccessContext(
         membershipRole: previewMembership.role,
         viewRole: isCaptainRole(previewMembership.role) ? "CAPTAIN" : "PLAYER",
         isPreview: true,
+        isAdminTestMode: false,
         canSend: false,
       } satisfies AccessContext;
     }
@@ -132,12 +139,13 @@ async function getAccessContext(
     return {
       actualUserId: actualUser.id,
       effectiveUserId: actualUser.id,
-      effectiveName: actualUser.name?.trim() || "SIXFL admin",
+      effectiveName: "SIXFL Admin/Test",
       membershipId: null,
       membershipRole: null,
       viewRole: "CAPTAIN",
-      isPreview: true,
-      canSend: false,
+      isPreview: !adminTestRequested,
+      isAdminTestMode: adminTestRequested,
+      canSend: adminTestRequested,
     } satisfies AccessContext;
   }
 
@@ -158,6 +166,7 @@ async function getAccessContext(
     membershipRole: membership.role,
     viewRole: isCaptainRole(membership.role) ? "CAPTAIN" : "PLAYER",
     isPreview: false,
+    isAdminTestMode: false,
     canSend: true,
   } satisfies AccessContext;
 }
@@ -477,6 +486,7 @@ export async function GET(
     viewRole: context.viewRole,
     canSend: context.canSend,
     isPreview: context.isPreview,
+    isAdminTestMode: context.isAdminTestMode,
     selected: {
       ref: conversationRef,
       id: selected.conversation.id,
@@ -493,13 +503,15 @@ export async function GET(
       senderUserId: message.senderUserId,
       senderRole: message.senderRole,
       senderName:
-        message.senderRole === PortalMessageSenderRole.SYSTEM
-          ? "SIXFL"
-          : message.senderUser
-            ? getDisplayName(message.senderUser)
-            : message.senderRole === PortalMessageSenderRole.CAPTAIN
-              ? "Captain"
-              : "Player",
+        message.senderRole === PortalMessageSenderRole.ADMIN
+          ? "SIXFL Admin/Test"
+          : message.senderRole === PortalMessageSenderRole.SYSTEM
+            ? "SIXFL"
+            : message.senderUser
+              ? getDisplayName(message.senderUser)
+              : message.senderRole === PortalMessageSenderRole.CAPTAIN
+                ? "Captain"
+                : "Player",
       createdAt: message.createdAt.toISOString(),
       isMine: message.senderUserId === context.effectiveUserId,
     })),
@@ -514,7 +526,11 @@ export async function POST(
   const context = await getAccessContext(request, teamid);
   if ("error" in context) return jsonError(context.error, context.status);
 
-  if (!context.canSend || context.isPreview || !context.membershipId) {
+  if (
+    !context.canSend ||
+    context.isPreview ||
+    (!context.isAdminTestMode && !context.membershipId)
+  ) {
     return jsonError("Preview mode is read-only.", 403);
   }
 
@@ -523,6 +539,7 @@ export async function POST(
     | null;
   const message = String(payload?.message ?? "").trim();
   const notifyTeam =
+    !context.isAdminTestMode &&
     senderRoleFromContext(context) === PortalMessageSenderRole.CAPTAIN &&
     payload?.notifyTeam === true;
 
@@ -689,7 +706,7 @@ export async function POST(
         }
       }
 
-      if (targets.length > 0) {
+      if (!context.isAdminTestMode && targets.length > 0) {
         await queuePushNotifications(targets);
       }
     }
@@ -702,4 +719,64 @@ export async function POST(
   }
 
   return NextResponse.json({ ok: true, messageId: entry.id }, { status: 201 });
+}
+
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ teamid: string }> },
+) {
+  const { teamid } = await params;
+  const context = await getAccessContext(request, teamid);
+  if ("error" in context) return jsonError(context.error, context.status);
+
+  if (!context.isAdminTestMode || context.isPreview || !context.canSend) {
+    return jsonError("Admin Test Mode is required to clear chat history.", 403);
+  }
+
+  const payload = (await request.json().catch(() => null)) as
+    | { confirmTeamName?: unknown }
+    | null;
+  const confirmTeamName = String(payload?.confirmTeamName ?? "").trim();
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: { id: true, name: true },
+  });
+
+  if (!team) return jsonError("Team not found.", 404);
+
+  if (confirmTeamName !== team.name) {
+    return jsonError("Type the exact team name to clear test messages.", 400);
+  }
+
+  const messageIds = (
+    await prisma.portalMessage.findMany({
+      where: {
+        conversation: { teamId: teamid },
+      },
+      select: { id: true },
+    })
+  ).map((message) => message.id);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const deletedPushNotifications =
+      messageIds.length > 0
+        ? await tx.pushNotification.deleteMany({
+            where: { sourceId: { in: messageIds } },
+          })
+        : { count: 0 };
+
+    const deletedConversations = await tx.portalConversation.deleteMany({
+      where: { teamId: teamid },
+    });
+
+    return {
+      deletedMessages: messageIds.length,
+      deletedConversations: deletedConversations.count,
+      deletedPushNotifications: deletedPushNotifications.count,
+    };
+  });
+
+  return NextResponse.json({ ok: true, ...result });
 }

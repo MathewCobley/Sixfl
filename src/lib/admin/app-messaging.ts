@@ -111,6 +111,7 @@ export async function getAdminAppMessagingDashboard(
         createdAt: { gte: since },
         senderRole: {
           in: [
+            PortalMessageSenderRole.ADMIN,
             PortalMessageSenderRole.CAPTAIN,
             PortalMessageSenderRole.PLAYER,
           ],

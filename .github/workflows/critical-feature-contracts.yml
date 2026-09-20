@@ -107,6 +107,9 @@ jobs:
       - name: Check admin app messaging centre
         run: node --test tests/admin-app-messaging/contract.test.cjs
 
+      - name: Check admin chat test mode
+        run: node --test tests/admin-chat-test-mode/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
