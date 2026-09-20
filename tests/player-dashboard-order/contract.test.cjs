@@ -157,3 +157,13 @@ test('regression catches each original before-children insertion independently',
 });
 
 module.exports = { renderDashboard, assertCoreFirst };
+
+test('player PWA home cannot be hidden by its own utility class and uses the real SIXFL logo', () => {
+  const appHome = read('src/components/player/PlayerAppHome.tsx');
+  const pwaHeader = read('src/components/player/PlayerPwaPortalHeader.tsx');
+  assert.match(appHome, /className="player-app-home px-4/);
+  assert.doesNotMatch(appHome, /className="player-app-home hidden/);
+  assert.match(pwaHeader, /src="\/logo2\.png"/);
+  assert.match(pwaHeader, /body:has\(\.player-pwa-controller\) \.player-app-home/);
+  assert.match(pwaHeader, /body:has\(\.player-pwa-mode\) \.player-app-home/);
+});
