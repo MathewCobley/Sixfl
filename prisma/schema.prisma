@@ -42,6 +42,8 @@ model User {
   portalMessages              PortalMessage[]          @relation("PortalMessageSender")
   portalConversationReads     PortalConversationRead[] @relation("PortalConversationReadUser")
   portalPrivateConversations  PortalConversation[]     @relation("PortalConversationParticipantUser")
+  pushSubscriptions           PushSubscription[]
+  pushNotifications           PushNotification[]
 }
 
 enum UserRole {
@@ -1335,6 +1337,53 @@ model PortalConversationRead {
 
   @@unique([conversationId, userId])
   @@index([userId, lastReadAt])
+}
+
+model PushSubscription {
+  id String @id @default(cuid())
+
+  userId String
+  endpoint String @unique
+  p256dh String?
+  auth String?
+
+  deviceTokenHash String @unique
+  userAgent String?
+
+  lastSeenAt DateTime @default(now())
+  lastDeliveredAt DateTime?
+  failureCount Int @default(0)
+  disabledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, disabledAt])
+  @@index([lastSeenAt])
+}
+
+model PushNotification {
+  id String @id @default(cuid())
+
+  userId String
+  title String
+  body String
+  url String
+  tag String?
+
+  sourceType String?
+  sourceId String?
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([sourceType, sourceId])
+  @@index([expiresAt])
 }
 
 model InboxAlert {
