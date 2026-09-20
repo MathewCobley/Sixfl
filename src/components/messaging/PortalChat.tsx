@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import PushNotificationControl from "@/components/pwa/PushNotificationControl";
@@ -22,7 +21,7 @@ type ConversationItem = {
   unreadCount: number;
   latestMessageAt: string | null;
   preview: string | null;
-  kind: "TEAM" | "PRIVATE";
+  kind: "TEAM" | "PRIVATE" | "SUPPORT";
   disabled?: boolean;
 };
 
@@ -32,6 +31,7 @@ type ChatMessage = {
   senderUserId: string | null;
   senderRole: "ADMIN" | "CAPTAIN" | "PLAYER" | "SYSTEM";
   senderName: string;
+  isAdminTest: boolean;
   createdAt: string;
   isMine: boolean;
 };
@@ -46,10 +46,12 @@ type ChatResponse = {
   canSend: boolean;
   isPreview: boolean;
   isAdminTestMode: boolean;
+  isSimulatedTestMode: boolean;
+  simulatedAsName: string | null;
   selected: {
     ref: string;
     id: string;
-    type: "TEAM" | "CAPTAIN_PLAYER" | "SIXFL";
+    type: "TEAM" | "CAPTAIN_PLAYER" | "CAPTAIN_CAPTAIN" | "SIXFL";
     title: string;
   };
   conversations: ConversationItem[];
@@ -58,9 +60,9 @@ type ChatResponse = {
 
 type PortalChatProps = {
   teamId: string;
-  sixflHref: string;
   previewMembershipId?: string | null;
   adminTestMode?: boolean;
+  simulateTestMode?: boolean;
 };
 
 function formatTime(value: string) {
@@ -77,6 +79,7 @@ function apiUrl(input: {
   conversation: string;
   previewMembershipId?: string | null;
   adminTestMode?: boolean;
+  simulateTestMode?: boolean;
 }) {
   const params = new URLSearchParams();
   params.set("conversation", input.conversation);
@@ -85,6 +88,9 @@ function apiUrl(input: {
   }
   if (input.adminTestMode) {
     params.set("adminTest", "1");
+  }
+  if (input.simulateTestMode) {
+    params.set("simulate", "1");
   }
   return `/api/portal-chat/team/${input.teamId}?${params.toString()}`;
 }
@@ -103,7 +109,12 @@ function ConversationButton({
   selected: boolean;
   onSelect: (ref: string) => void;
 }) {
-  const Icon = item.kind === "TEAM" ? UserGroupIcon : UserIcon;
+  const Icon =
+    item.kind === "TEAM"
+      ? UserGroupIcon
+      : item.kind === "SUPPORT"
+        ? ShieldCheckIcon
+        : UserIcon;
 
   return (
     <button
@@ -149,9 +160,9 @@ function ConversationButton({
 
 export default function PortalChat({
   teamId,
-  sixflHref,
   previewMembershipId = null,
   adminTestMode = false,
+  simulateTestMode = false,
 }: PortalChatProps) {
   const [selectedRef, setSelectedRef] = useState("team");
   const [data, setData] = useState<ChatResponse | null>(null);
@@ -174,6 +185,7 @@ export default function PortalChat({
           conversation: ref,
           previewMembershipId,
           adminTestMode,
+          simulateTestMode,
         }),
         { cache: "no-store" },
       );
@@ -221,7 +233,13 @@ export default function PortalChat({
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, selectedRef, previewMembershipId, adminTestMode]);
+  }, [
+    teamId,
+    selectedRef,
+    previewMembershipId,
+    adminTestMode,
+    simulateTestMode,
+  ]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
@@ -242,6 +260,7 @@ export default function PortalChat({
           conversation: selectedRef,
           previewMembershipId,
           adminTestMode,
+          simulateTestMode,
         }),
         {
           method: "POST",
@@ -342,6 +361,8 @@ export default function PortalChat({
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
   const privateItems =
     data?.conversations.filter((item) => item.kind === "PRIVATE") ?? [];
+  const supportItems =
+    data?.conversations.filter((item) => item.kind === "SUPPORT") ?? [];
 
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
@@ -355,9 +376,13 @@ export default function PortalChat({
               {data?.team.name ?? "Team messaging"}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-              Team chat is visible to the whole registered squad. Private player chats are only visible to that player and the team captain(s).
+              {data?.viewRole === "CAPTAIN"
+                ? "Use Team Chat for your whole squad, or choose someone for a private conversation."
+                : "Use Team Chat for the squad, message your captain privately, or contact SIXFL."}
             </p>
-            {data?.canSend && !data.isAdminTestMode ? (
+            {data?.canSend &&
+            !data.isAdminTestMode &&
+            !data.isSimulatedTestMode ? (
               <PushNotificationControl />
             ) : null}
           </div>
@@ -395,7 +420,7 @@ export default function PortalChat({
 
           <div className="mt-5">
             <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
-              {data?.viewRole === "CAPTAIN" ? "Private player messages" : "Private"}
+              {data?.viewRole === "CAPTAIN" ? "Private messages" : "Private"}
             </div>
             <div className="mt-2 max-h-[310px] space-y-2 overflow-y-auto pr-1">
               {privateItems.map((item) => (
@@ -410,20 +435,19 @@ export default function PortalChat({
           </div>
 
           <div className="mt-5 border-t border-white/10 pt-4">
-            <Link
-              href={sixflHref}
-              className="flex items-start gap-3 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-3 transition hover:bg-sky-500/15"
-            >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-500/10 text-sky-100">
-                <ShieldCheckIcon className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-white">Message SIXFL</span>
-                <span className="mt-0.5 block text-xs leading-5 text-sky-100/60">
-                  Private support and league administration
-                </span>
-              </span>
-            </Link>
+            <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+              SIXFL
+            </div>
+            <div className="mt-2 space-y-2">
+              {supportItems.map((item) => (
+                <ConversationButton
+                  key={item.ref}
+                  item={item}
+                  selected={selectedRef === item.ref}
+                  onSelect={setSelectedRef}
+                />
+              ))}
+            </div>
           </div>
         </aside>
 
@@ -435,8 +459,14 @@ export default function PortalChat({
               </div>
               <div className="mt-0.5 truncate text-xs text-white/40">
                 {selectedRef === "team"
-                  ? "Everyone in the registered squad can read and reply"
-                  : "Private between this player and the team captain(s)"}
+                  ? data?.viewRole === "CAPTAIN"
+                    ? "Everyone in your registered squad can read and reply"
+                    : "Everyone in the registered squad can read and reply"
+                  : selectedRef === "sixfl"
+                    ? "Private between you and SIXFL"
+                    : data?.viewRole === "CAPTAIN"
+                      ? `Private between ${selectedItem?.title ?? "this person"} and you`
+                      : "Private between you and your captain"}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -466,6 +496,10 @@ export default function PortalChat({
             <div className="border-b border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-100/80 sm:px-5">
               Admin Test Mode · messages are sent as SIXFL Admin/Test. No phone push notifications are sent. Clear the test history before Team Chat launches.
             </div>
+          ) : data?.isSimulatedTestMode ? (
+            <div className="border-b border-violet-400/20 bg-violet-500/10 px-4 py-2.5 text-xs font-medium text-violet-100/85 sm:px-5">
+              Simulated Test Reply · you are sending as {data.simulatedAsName || "this user"} for admin testing. No phone push notifications are sent.
+            </div>
           ) : data?.isPreview ? (
             <div className="border-b border-amber-400/20 bg-amber-500/10 px-4 py-2.5 text-xs font-medium text-amber-100/80 sm:px-5">
               Preview mode is read-only. Messages cannot be sent as the person you are previewing.
@@ -494,6 +528,11 @@ export default function PortalChat({
                     >
                       <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
                         <span>{item.isMine ? "You" : item.senderName}</span>
+                        {item.isAdminTest ? (
+                          <span className="rounded-full bg-violet-400/10 px-1.5 py-0.5 text-violet-200/80">
+                            Test
+                          </span>
+                        ) : null}
                         {item.senderRole === "CAPTAIN" && !item.isMine ? (
                           <span className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-emerald-200/80">
                             Captain
@@ -521,8 +560,14 @@ export default function PortalChat({
                 </div>
                 <p className="mt-1 max-w-sm text-xs leading-5 text-white/45">
                   {selectedRef === "team"
-                    ? "Start the team conversation. Everyone currently registered in the squad will be able to see it."
-                    : "Start a private conversation between the player and captain."}
+                    ? data?.viewRole === "CAPTAIN"
+                      ? "Start your team conversation. Everyone currently registered in your squad will be able to see it."
+                      : "Start the team conversation. Everyone currently registered in the squad will be able to see it."
+                    : selectedRef === "sixfl"
+                      ? "Send a private message to SIXFL."
+                      : data?.viewRole === "CAPTAIN"
+                        ? `Start a private conversation with ${selectedItem?.title ?? "this person"}.`
+                        : "Start a private conversation with your captain."}
                 </p>
               </div>
             )}
@@ -535,6 +580,7 @@ export default function PortalChat({
             {data?.viewRole === "CAPTAIN" &&
             data.canSend &&
             !data.isAdminTestMode &&
+            !data.isSimulatedTestMode &&
             selectedRef === "team" ? (
               <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
                 <input
@@ -566,10 +612,18 @@ export default function PortalChat({
                     ? data.isAdminTestMode
                       ? selectedRef === "team"
                         ? "Send a test message to Team Chat…"
-                        : "Send a test private message…"
-                      : selectedRef === "team"
-                        ? "Message the team…"
-                        : "Private message…"
+                        : selectedRef === "sixfl"
+                          ? "Send a test message to SIXFL…"
+                          : "Send a test private message…"
+                      : data.isSimulatedTestMode
+                        ? selectedRef === "sixfl"
+                          ? "Reply to SIXFL as this user…"
+                          : "Send a simulated test reply…"
+                        : selectedRef === "team"
+                          ? "Message the team…"
+                          : selectedRef === "sixfl"
+                            ? "Message SIXFL…"
+                            : "Private message…"
                     : "Preview mode is read-only"
                 }
                 className="max-h-32 min-h-12 flex-1 resize-y rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
@@ -587,13 +641,19 @@ export default function PortalChat({
               <span>
                 {data?.isAdminTestMode
                   ? "Admin Test Mode · stored in chat · no phone alert"
-                  : selectedRef === "team"
-                    ? data?.viewRole === "PLAYER"
-                      ? "Squad conversation · use @Captain only when you need their attention"
-                      : notifyTeam
-                        ? "Important team notification"
-                        : "Squad conversation · no phone alert"
-                    : "Private captain conversation · phone alert if enabled"}
+                  : data?.isSimulatedTestMode
+                    ? "Simulated Test Reply · stored in chat · no phone alert"
+                    : selectedRef === "team"
+                      ? data?.viewRole === "PLAYER"
+                        ? "Squad conversation · use @Captain only when you need their attention"
+                        : notifyTeam
+                          ? "Important team notification"
+                          : "Your squad conversation · no phone alert"
+                      : selectedRef === "sixfl"
+                        ? "Private message to SIXFL"
+                        : data?.viewRole === "CAPTAIN"
+                          ? `Private with ${selectedItem?.title ?? "this person"}`
+                          : "Private with your captain"}
               </span>
               <span>{message.length}/2000</span>
             </div>

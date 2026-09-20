@@ -53,6 +53,7 @@ function chatHref(input: {
   teamId: string;
   type: PortalConversationType;
   participantUserId: string | null;
+  conversationKey: string;
 }) {
   if (
     input.type === PortalConversationType.CAPTAIN_PLAYER &&
@@ -61,6 +62,18 @@ function chatHref(input: {
     return `/captain/team/${input.teamId}/chat?conversation=${encodeURIComponent(
       `player:${input.participantUserId}`,
     )}`;
+  }
+
+  if (input.type === PortalConversationType.CAPTAIN_CAPTAIN) {
+    const captainIds = input.conversationKey.split(":").slice(-2);
+    const targetCaptainId = captainIds[1] || captainIds[0] || "";
+    return `/captain/team/${input.teamId}/chat?conversation=${encodeURIComponent(
+      `captain:${targetCaptainId}`,
+    )}`;
+  }
+
+  if (input.type === PortalConversationType.SIXFL) {
+    return `/captain/team/${input.teamId}/chat?conversation=sixfl`;
   }
 
   return `/captain/team/${input.teamId}/chat?conversation=team`;
@@ -132,6 +145,7 @@ export async function getAdminAppMessagingDashboard(
         deletedAt: null,
         senderRole: {
           in: [
+            PortalMessageSenderRole.ADMIN,
             PortalMessageSenderRole.CAPTAIN,
             PortalMessageSenderRole.PLAYER,
           ],
@@ -145,6 +159,7 @@ export async function getAdminAppMessagingDashboard(
         createdAt: true,
         senderUserId: true,
         senderRole: true,
+        isAdminTest: true,
         senderUser: {
           select: { name: true, email: true },
         },
@@ -153,6 +168,7 @@ export async function getAdminAppMessagingDashboard(
             id: true,
             teamId: true,
             type: true,
+            conversationKey: true,
             participantUserId: true,
             participantUser: {
               select: { name: true, email: true },
@@ -251,7 +267,13 @@ export async function getAdminAppMessagingDashboard(
                 member.userId === conversation.participantUserId,
             )
             .map((member) => member.userId)
-        : conversation.team.members.map((member) => member.userId);
+        : conversation.type === PortalConversationType.CAPTAIN_CAPTAIN
+          ? conversation.conversationKey.split(":").slice(-2)
+          : conversation.type === PortalConversationType.SIXFL
+            ? conversation.participantUserId
+              ? [conversation.participantUserId]
+              : []
+            : conversation.team.members.map((member) => member.userId);
 
     const unreadRecipientCount = recipients.filter((userId) => {
       if (userId === message.senderUserId) return false;
@@ -276,23 +298,30 @@ export async function getAdminAppMessagingDashboard(
       pushTone = status.tone;
     }
 
-    const privateChat =
-      conversation.type === PortalConversationType.CAPTAIN_PLAYER;
+    const conversationLabel =
+      conversation.type === PortalConversationType.CAPTAIN_PLAYER
+        ? `Private · ${displayName(conversation.participantUser)} ↔ captain`
+        : conversation.type === PortalConversationType.CAPTAIN_CAPTAIN
+          ? "Private · captain ↔ captain"
+          : conversation.type === PortalConversationType.SIXFL
+            ? "Message SIXFL"
+            : "Team chat";
 
     return {
       id: message.id,
       teamName: conversation.team.name,
       senderName: displayName(message.senderUser),
       body: preview(message.body),
-      conversationLabel: privateChat
-        ? `Private · ${displayName(conversation.participantUser)} ↔ captain`
-        : "Team chat",
+      conversationLabel: message.isAdminTest
+        ? `${conversationLabel} · test`
+        : conversationLabel,
       createdAt: message.createdAt,
       unreadRecipientCount,
       href: chatHref({
         teamId: conversation.teamId,
         type: conversation.type,
         participantUserId: conversation.participantUserId,
+        conversationKey: conversation.conversationKey,
       }),
       pushLabel,
       pushTone,

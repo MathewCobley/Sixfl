@@ -24,11 +24,8 @@ test("admin test messages never trigger phone push notifications", () => {
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
   const chat = read("src/components/messaging/PortalChat.tsx");
 
-  assert.match(
-    route,
-    /if \(!context\.isAdminTestMode && targets\.length > 0\)[\s\S]*queuePushNotifications/,
-  );
-  assert.match(route, /!context\.isAdminTestMode[\s\S]*notifyTeam/);
+  assert.match(route, /!context\.isAdminTestMode[\s\S]*!context\.isSimulatedTestMode[\s\S]*targets\.length > 0[\s\S]*queuePushNotifications/);
+  assert.match(route, /!context\.isAdminTestMode[\s\S]*!context\.isSimulatedTestMode[\s\S]*notifyTeam/);
   assert.match(chat, /Admin Test Mode/);
   assert.match(chat, /No phone push notifications are sent/);
   assert.match(chat, /Admin Test Mode · stored in chat · no phone alert/);

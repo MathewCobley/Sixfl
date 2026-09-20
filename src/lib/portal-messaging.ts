@@ -8,12 +8,31 @@ export function privateChatRef(userId: string) {
   return `player:${userId}`;
 }
 
+export function captainChatRef(userId: string) {
+  return `captain:${userId}`;
+}
+
+export const SIXFL_CHAT_REF = "sixfl";
+
 export function teamConversationKey(teamId: string) {
   return `TEAM:${teamId}`;
 }
 
 export function captainPlayerConversationKey(teamId: string, playerUserId: string) {
   return `CAPTAIN_PLAYER:${teamId}:${playerUserId}`;
+}
+
+export function captainCaptainConversationKey(
+  teamId: string,
+  firstCaptainUserId: string,
+  secondCaptainUserId: string,
+) {
+  const [first, second] = [firstCaptainUserId, secondCaptainUserId].sort();
+  return `CAPTAIN_CAPTAIN:${teamId}:${first}:${second}`;
+}
+
+export function sixflConversationKey(teamId: string, userId: string) {
+  return `SIXFL:${teamId}:${userId}`;
 }
 
 export function isCaptainRole(role: TeamRole | null | undefined) {
@@ -57,6 +76,48 @@ export async function ensureCaptainPlayerConversation(
   });
 }
 
+export async function ensureCaptainCaptainConversation(
+  teamId: string,
+  firstCaptainUserId: string,
+  secondCaptainUserId: string,
+  title?: string | null,
+) {
+  const conversationKey = captainCaptainConversationKey(
+    teamId,
+    firstCaptainUserId,
+    secondCaptainUserId,
+  );
+
+  return prisma.portalConversation.upsert({
+    where: { conversationKey },
+    update: title ? { title } : {},
+    create: {
+      conversationKey,
+      teamId,
+      type: PortalConversationType.CAPTAIN_CAPTAIN,
+      title: title || "Captain chat",
+    },
+  });
+}
+
+export async function ensureSixflPortalConversation(
+  teamId: string,
+  userId: string,
+  title?: string | null,
+) {
+  return prisma.portalConversation.upsert({
+    where: { conversationKey: sixflConversationKey(teamId, userId) },
+    update: title ? { title } : {},
+    create: {
+      conversationKey: sixflConversationKey(teamId, userId),
+      teamId,
+      type: PortalConversationType.SIXFL,
+      participantUserId: userId,
+      title: title || "Message SIXFL",
+    },
+  });
+}
+
 export async function getPortalChatUnreadCount(input: {
   teamId: string;
   userId: string;
@@ -69,8 +130,15 @@ export async function getPortalChatUnreadCount(input: {
       teamId: input.teamId,
       OR: [
         { type: PortalConversationType.TEAM },
+        {
+          type: PortalConversationType.SIXFL,
+          participantUserId: input.userId,
+        },
         ...(isCaptain
-          ? [{ type: PortalConversationType.CAPTAIN_PLAYER }]
+          ? [
+              { type: PortalConversationType.CAPTAIN_PLAYER },
+              { type: PortalConversationType.CAPTAIN_CAPTAIN },
+            ]
           : [
               {
                 type: PortalConversationType.CAPTAIN_PLAYER,
@@ -81,6 +149,8 @@ export async function getPortalChatUnreadCount(input: {
     },
     select: {
       id: true,
+      type: true,
+      conversationKey: true,
       reads: {
         where: { userId: input.userId },
         select: { lastReadAt: true },
@@ -89,8 +159,17 @@ export async function getPortalChatUnreadCount(input: {
     },
   });
 
+  const relevantConversations = conversations.filter((conversation) => {
+    if (conversation.type !== PortalConversationType.CAPTAIN_CAPTAIN) {
+      return true;
+    }
+
+    const parts = conversation.conversationKey.split(":");
+    return parts.includes(input.userId);
+  });
+
   const counts = await Promise.all(
-    conversations.map((conversation) =>
+    relevantConversations.map((conversation) =>
       prisma.portalMessage.count({
         where: {
           conversationId: conversation.id,
