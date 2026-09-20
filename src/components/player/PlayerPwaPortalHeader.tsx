@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -53,9 +54,12 @@ export default function PlayerPwaPortalHeader({
   return (
     <>
       <style>{`
-        .player-pwa-portal-header,
-        .player-app-home {
+        .player-pwa-portal-header {
           display: none;
+        }
+
+        body:has(.player-pwa-controller) .player-app-home {
+          display: none !important;
         }
 
         body:has(.player-pwa-mode) .player-pwa-portal-header,
@@ -90,9 +94,14 @@ export default function PlayerPwaPortalHeader({
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
       >
         <div className="mx-auto flex w-full max-w-xl items-center gap-3">
-          <div className="text-lg font-black tracking-[-0.04em] text-emerald-300">
-            SIXFL
-          </div>
+          <Image
+            src="/logo2.png"
+            alt="SIXFL"
+            width={180}
+            height={48}
+            priority
+            className="h-6 w-auto object-contain"
+          />
           <div className="h-5 w-px bg-white/10" />
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
