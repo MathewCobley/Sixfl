@@ -418,6 +418,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
         recentResult={recentResult}
         previewMembershipId={previewMembership?.id ?? null}
+        showTeamChat={user.role === UserRole.ADMIN}
       />
       <div className="player-web-home mx-auto max-w-6xl space-y-8">
         <section className="player-overview-identity overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
