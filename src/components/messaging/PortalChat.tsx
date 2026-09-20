@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
+
+import PushNotificationControl from "@/components/pwa/PushNotificationControl";
 import {
   ArrowPathIcon,
+  BellAlertIcon,
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
   ShieldCheckIcon,
@@ -147,6 +150,7 @@ export default function PortalChat({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -183,6 +187,15 @@ export default function PortalChat({
   }
 
   useEffect(() => {
+    const requestedConversation = new URLSearchParams(window.location.search)
+      .get("conversation")
+      ?.trim();
+
+    if (requestedConversation && requestedConversation !== selectedRef) {
+      setSelectedRef(requestedConversation);
+      return;
+    }
+
     loadConversation(selectedRef);
     const interval = window.setInterval(() => {
       loadConversation(selectedRef, true);
@@ -213,6 +226,10 @@ export default function PortalChat({
           body: JSON.stringify({
             conversation: selectedRef,
             message: trimmed,
+            notifyTeam:
+              data.viewRole === "CAPTAIN" &&
+              selectedRef === "team" &&
+              notifyTeam,
           }),
         },
       );
@@ -226,6 +243,7 @@ export default function PortalChat({
       }
 
       setMessage("");
+      setNotifyTeam(false);
       await loadConversation(selectedRef, true);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Could not send message.");
@@ -254,6 +272,7 @@ export default function PortalChat({
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
               Team chat is visible to the whole registered squad. Private player chats are only visible to that player and the team captain(s).
             </p>
+            {data?.canSend ? <PushNotificationControl /> : null}
           </div>
 
           {data?.team ? (
@@ -409,6 +428,27 @@ export default function PortalChat({
             onSubmit={handleSend}
             className="border-t border-white/10 bg-black/15 p-3 sm:p-4"
           >
+            {data?.viewRole === "CAPTAIN" &&
+            data.canSend &&
+            selectedRef === "team" ? (
+              <label className="mb-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                <input
+                  type="checkbox"
+                  checked={notifyTeam}
+                  onChange={(event) => setNotifyTeam(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-emerald-400"
+                />
+                <BellAlertIcon className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300/80" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-white">
+                    Notify team on their phone
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-white/45">
+                    Off by default. Use this only for an important team message — normal chat stays quiet.
+                  </span>
+                </span>
+              </label>
+            ) : null}
             <div className="flex items-end gap-2">
               <textarea
                 value={message}
@@ -437,8 +477,12 @@ export default function PortalChat({
             <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[11px] text-white/35">
               <span>
                 {selectedRef === "team"
-                  ? "Squad conversation"
-                  : "Private captain conversation"}
+                  ? data?.viewRole === "PLAYER"
+                    ? "Squad conversation · use @Captain only when you need their attention"
+                    : notifyTeam
+                      ? "Important team notification"
+                      : "Squad conversation · no phone alert"
+                  : "Private captain conversation · phone alert if enabled"}
               </span>
               <span>{message.length}/2000</span>
             </div>
