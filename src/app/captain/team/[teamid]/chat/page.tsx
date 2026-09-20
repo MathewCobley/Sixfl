@@ -1,4 +1,6 @@
 import PortalChat from "@/components/messaging/PortalChat";
+import { notFound } from "next/navigation";
+
 import { requireCaptain } from "@/lib/requireCaptain";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +16,11 @@ export default async function CaptainTeamChatPage({
   params: Promise<{ teamid: string }>;
 }) {
   const { teamid } = await params;
-  await requireCaptain(teamid);
+  const access = await requireCaptain(teamid);
+
+  if (!access.isAdmin) {
+    notFound();
+  }
 
   return (
     <PortalChat
