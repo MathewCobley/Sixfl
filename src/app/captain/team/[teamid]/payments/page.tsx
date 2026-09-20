@@ -361,6 +361,12 @@ export default async function CaptainPaymentsPage({
   const kitFundLedger = await getKitFundLedger(teamid);
   const creditBalancePence = Math.max(creditLedger.balancePence, 0);
   const recentCreditEntries = creditLedger.entries.slice(0, 6);
+  const olderChargeCount = paymentOrder.overdue.length;
+  const nextOlderChargePence = paymentOrder.next?.outstandingPence ?? 0;
+  const olderBalanceAfterNextPence = Math.max(
+    olderTeamBalancePence - nextOlderChargePence,
+    0,
+  );
   const flexiblePaymentTarget = paymentOrder.enabled
     ? paymentOrder.next
       ? ledger.entries.find((entry) => entry.chargeId === paymentOrder.next?.chargeId) ?? null
@@ -640,10 +646,31 @@ export default async function CaptainPaymentsPage({
     <div className="space-y-8">
       {paymentOrder.enabled ? (
         <section data-team-payment-order="oldest-first" className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
-          <h2 className="font-semibold">{olderTeamBalancePence > 0 ? `Older team balance outstanding: ${formatMoney(olderTeamBalancePence)}` : "Team payments: oldest outstanding charge first"}</h2>
-          <p className="mt-2">Direct team payments and unallocated team credit must clear the oldest eligible charge before a newer one. Paying this week's fixture through squad contributions does not clear an older team debt. Held charges remain owed unless separately waived.</p>
+          <h2 className="font-semibold">
+            {olderTeamBalancePence > 0
+              ? `Older team balance outstanding: ${formatMoney(olderTeamBalancePence)} across ${olderChargeCount} charge${olderChargeCount === 1 ? "" : "s"}`
+              : "Team payments: oldest outstanding charge first"}
+          </h2>
+          {olderTeamBalancePence > 0 && paymentOrder.next ? (
+            <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/15 px-4 py-3">
+              <p>
+                <span className="font-semibold text-white">Oldest charge to clear first:</span>{" "}
+                {formatMoney(nextOlderChargePence)}.
+                {olderBalanceAfterNextPence > 0
+                  ? ` After that, ${formatMoney(olderBalanceAfterNextPence)} will still remain across the other older charge${olderChargeCount - 1 === 1 ? "" : "s"}.`
+                  : " Clearing this charge clears the older balance."}
+              </p>
+              {creditBalancePence > 0 ? (
+                <p className="mt-2">
+                  <span className="font-semibold text-white">Available team credit:</span>{" "}
+                  {formatMoney(creditBalancePence)}. This is separate from the outstanding total until it is applied to an eligible charge.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <p className="mt-3">Direct team payments and unallocated team credit must clear the oldest eligible charge before a newer one. Paying this week's fixture through squad contributions does not clear an older team debt. Held charges remain owed unless separately waived.</p>
           <p className="mt-2">Individual squad payments and player money passed on by the captain remain attached to their original fixture. A newer saved-card matchday payment is paused while an earlier team balance blocks it; arrears are not added to an automatic debit.</p>
-          {paymentOrder.next?.paymentToken ? <Link href={`/pay/charge/${paymentOrder.next.paymentToken}`} className="mt-3 inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black">Pay next outstanding {formatMoney(paymentOrder.next.outstandingPence)}</Link> : null}
+          {paymentOrder.next?.paymentToken ? <Link href={`/pay/charge/${paymentOrder.next.paymentToken}`} className="mt-3 inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black">Pay oldest charge {formatMoney(paymentOrder.next.outstandingPence)}</Link> : null}
         </section>
       ) : null}
       {subscriptionMessage ? (
