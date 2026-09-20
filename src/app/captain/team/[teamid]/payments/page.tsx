@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";
 import { PlayerContributionTable, PaymentReceiptDetails, PlayerCollectionReconciliation, TeamBalanceReconciliation } from "@/components/payments/PaymentLedgerReconciliation";
 import { getPaymentReceiptKind, getPaymentReceiptLabel, getPaymentReceiptPlayerFeeId as extractPlayerFeeId } from "@/lib/payments/payment-receipt-presentation";
