@@ -38,6 +38,7 @@ const scorerLinkMigration = 'prisma/migrations/20260920001000_goal_month_link_sc
 const fontRefreshMigration = 'prisma/migrations/20260920002000_refresh_goal_month_font_renders/migration.sql';
 const teamHighlightRefreshMigration = 'prisma/migrations/20260920010500_refresh_goal_month_team_highlight/migration.sql';
 const finalVideoFlowMigration = 'prisma/migrations/20260920014500_refresh_goal_month_final_video_flow/migration.sql';
+const visualPolishMigration = 'prisma/migrations/20260920015200_refresh_goal_month_video_visual_polish/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerTeamMemberId: 'member-home' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -271,6 +272,24 @@ test('final nominee video flow refresh requeues completed renders while preservi
   assert.equal(state, 'QUEUED|old-final-flow-render.mp4|true');
 });
 
+test('visual polish refresh requeues completed nominee renders while keeping the current object until replacement', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('visual-polish-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'visual-polish-clip', scorerTeamMemberId: 'member-home',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-visual-polish-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(visualPolishMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-visual-polish-render.mp4|true');
+});
+
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
   const results = await Promise.allSettled([1,2,3,4].map(number => awards.nominateMonthlyGoal(input('u1', number), now)));
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 3);
@@ -384,8 +403,8 @@ test('Goal of the Month intro may show the scorer-team score, while the approved
 
   assert.match(intro, /const scorerIsHome =/);
   assert.match(intro, /const scorerIsAway =/);
-  assert.match(intro, /const homeFill = scorerIsHome \? "#2dd4bf" : "#cbd5e1"/);
-  assert.match(intro, /const awayFill = scorerIsAway \? "#2dd4bf" : "#cbd5e1"/);
+  assert.match(intro, /const homeFill = scorerIsHome \? "#10b981" : "#cbd5e1"/);
+  assert.match(intro, /const awayFill = scorerIsAway \? "#10b981" : "#cbd5e1"/);
   assert.match(intro, /String\(input\.homeScore\)/);
   assert.match(intro, /String\(input\.awayScore\)/);
   assert.match(intro, /fill: homeFill/);
@@ -393,6 +412,8 @@ test('Goal of the Month intro may show the scorer-team score, while the approved
   assert.match(intro, /GOAL OF THE MONTH NOMINEE/);
   assert.match(intro, /MATCHWEEK/);
   assert.match(intro, /leagueText/);
+  assert.match(intro, /fixedCanvasTextPng\(\{ text: league/);
+  assert.match(intro, /left: 410, top: 874/);
   assert.match(intro, /align: "center"/);
 });
 
@@ -401,9 +422,32 @@ test('Goal of the Month vote card carries the actual competition dates', () => {
   const worker = read('scripts/sixfl-tv-worker.ts');
   assert.match(graphics, /REMEMBER TO VOTE/);
   assert.match(graphics, /SIXFL\.CO\.UK\/GOAL-OF-THE-MONTH/);
-  assert.match(graphics, /WATCH ALL NOMINEES · CHOOSE YOUR WINNER/);
-  assert.match(worker, /NOMINATIONS CLOSE/);
-  assert.match(worker, /VOTING/);
-  assert.match(worker, /RESULT AVAILABLE FROM/);
+  assert.match(graphics, /WATCH THE NOMINEES\. PICK YOUR FAVOURITE\./);
+  assert.match(worker, /NOMINATIONS CLOSE ·/);
+  assert.match(worker, /VOTING ·/);
+  assert.match(worker, /WINNER ANNOUNCED ·/);
+  assert.doesNotMatch(worker, /23:59/);
   assert.match(worker, /monthlyPeriod\(key\)/);
+});
+
+
+test('Goal of the Month video graphics use restrained SIXFL green and a non-clipping replay label', () => {
+  const graphics = read('src/lib/sixfl-tv/graphics.ts');
+  const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay', introStart);
+  const voteStart = graphics.indexOf('export async function createGoalOfMonthVoteCard', overlayStart);
+  const scoreBugStart = graphics.indexOf('export async function createSixflTvScoreBug', voteStart);
+  const intro = graphics.slice(introStart, overlayStart);
+  const overlay = graphics.slice(overlayStart, voteStart);
+  const vote = graphics.slice(voteStart, scoreBugStart);
+
+  assert.doesNotMatch(intro, /#2dd4bf/);
+  assert.doesNotMatch(overlay, /#2dd4bf/);
+  assert.doesNotMatch(vote, /#2dd4bf/);
+  assert.match(overlay, /const replayWidth = 124/);
+  assert.match(overlay, /const replayHeight = 34/);
+  assert.match(overlay, /fill="#07110d" stroke="#10b981"/);
+  assert.match(overlay, /fontSize: 16/);
+  assert.match(vote, /input\.nominationsCloseLabel/);
+  assert.match(vote, /input\.winnerLabel/);
 });

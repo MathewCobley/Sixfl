@@ -1261,9 +1261,9 @@ function goalOfMonthVoteLabels(key: string) {
   }).format(date).toUpperCase();
   return {
     awardLabel: `${period.label} Goal of the Month`,
-    nominationsCloseLabel: `NOMINATIONS CLOSE ${dayMonth(nominationLastMinute)} · 23:59 UK`,
-    votingWindowLabel: `VOTING ${dayMonth(period.votingOpensAt)} – ${dayMonth(votingLastMinute)} · 23:59 UK`,
-    winnerLabel: `RESULT AVAILABLE FROM ${dayMonth(period.votingClosesAt)}`,
+    nominationsCloseLabel: `NOMINATIONS CLOSE · ${dayMonth(nominationLastMinute)}`,
+    votingWindowLabel: `VOTING · ${dayMonth(period.votingOpensAt)} – ${dayMonth(votingLastMinute)}`,
+    winnerLabel: `WINNER ANNOUNCED · ${dayMonth(period.votingClosesAt)}`,
   };
 }
 
