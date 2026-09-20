@@ -78,7 +78,11 @@ update("src/components/admin/AdminSidebar.tsx", (source) => {
 update("src/app/player/team/[teamid]/page.tsx", (source) => {
   if (source.includes('href="/player/referrals"')) return source;
 
-  const marker = '      <div className="mx-auto max-w-6xl space-y-8">';
+  const marker = source.includes(
+    '      <div className="player-web-home mx-auto max-w-6xl space-y-8">',
+  )
+    ? '      <div className="player-web-home mx-auto max-w-6xl space-y-8">'
+    : '      <div className="mx-auto max-w-6xl space-y-8">';
   if (!source.includes(marker)) {
     throw new Error("Player dashboard content wrapper was not found for referral link insertion.");
   }
