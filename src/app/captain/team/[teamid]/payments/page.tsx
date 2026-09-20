@@ -350,6 +350,8 @@ export default async function CaptainPaymentsPage({
   const recentCreditEntries = creditLedger.entries.slice(0, 6);
   const flexiblePaymentTarget = paymentOrder.enabled
     ? paymentOrder.next
+      ? ledger.entries.find((entry) => entry.chargeId === paymentOrder.next?.chargeId) ?? null
+      : null
     : ledger.openEntries[0] ?? null;
   const flexiblePaymentPolicy = flexiblePaymentTarget
     ? await getTeamCreditPolicySnapshot({
