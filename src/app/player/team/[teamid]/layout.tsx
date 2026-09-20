@@ -4,7 +4,7 @@
 
 import { getServerSession } from "next-auth";
 import { Suspense, type ReactNode } from "react";
-import { TeamRole, UserRole } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
 import GoalOfWeekDashboardPromo from "@/components/goal-of-week/GoalOfWeekDashboardPromo";
@@ -45,11 +45,13 @@ export default async function PlayerTeamLayout({
     ? await prisma.user.findUnique({
         where: { email },
         select: {
-          id: true,
           role: true,
           teamMembers: {
-            where: { teamId: teamid },
-            select: { id: true, role: true },
+            where: {
+              teamId: teamid,
+              role: "CAPTAIN",
+            },
+            select: { id: true },
             take: 1,
           },
         },
@@ -57,8 +59,7 @@ export default async function PlayerTeamLayout({
     : null;
 
   const isAdmin = viewer?.role === UserRole.ADMIN;
-  const membership = viewer?.teamMembers[0] ?? null;
-  const isCaptain = membership?.role === TeamRole.CAPTAIN;
+  const isCaptain = Boolean(viewer?.teamMembers.length);
   const returnHref = isAdmin
     ? `/admin/teams/${teamid}`
     : isCaptain
