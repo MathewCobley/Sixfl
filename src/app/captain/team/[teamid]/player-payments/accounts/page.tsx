@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 
 import CopyPlayerPaymentLinkButton from "@/components/captain/CopyPlayerPaymentLinkButton";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getHistoricalPlayerFeeIdentities } from "@/lib/payments/player-fee-identity";
 import { prisma } from "@/lib/prisma";
 import {
   money,
@@ -25,6 +26,8 @@ type OutstandingRow = {
   kickoffAt: Date;
   homeTeamName: string;
   awayTeamName: string;
+  resolvedName?: string;
+  identityMissing?: boolean;
 };
 
 function fixtureDate(value: Date) {
@@ -86,9 +89,33 @@ export default async function Page({
     ORDER BY s."createdAt", s."feeId"
   `);
 
+  const unresolvedIds = rows
+    .filter((row) => !row.playerName?.trim())
+    .map((row) => row.feeId);
+  const historicalIdentities = await getHistoricalPlayerFeeIdentities(unresolvedIds);
+  rows = rows.map((row) => {
+    const historical = historicalIdentities.get(row.feeId);
+    const resolvedName =
+      row.playerName?.trim() ||
+      historical?.displayName ||
+      historical?.email ||
+      historical?.phone ||
+      "Player identity needs SIXFL review";
+    return {
+      ...row,
+      resolvedName,
+      identityMissing:
+        !row.playerName?.trim() &&
+        !historical?.displayName &&
+        !historical?.email &&
+        !historical?.phone,
+    };
+  });
+
   const missingLinkIds = rows
     .filter(
       (row) =>
+        !row.identityMissing &&
         !row.collectionPaused &&
         !activePlan(row.planStatus) &&
         (!row.paymentToken || !row.paymentUrl),
@@ -119,15 +146,22 @@ export default async function Page({
 
   const accounts = new Map<string, Account>();
   for (const row of rows) {
-    const account = accounts.get(row.owner) ?? {
+    const historical = historicalIdentities.get(row.feeId);
+    const recoveredOwner =
+      !row.playerName?.trim() && historical?.email
+        ? `historical-email:${historical.email.toLowerCase()}`
+        : !row.playerName?.trim() && historical?.phone
+          ? `historical-phone:${historical.phone}`
+          : row.owner;
+    const account = accounts.get(recoveredOwner) ?? {
       feeId: row.feeId,
-      name: row.playerName || "Historical player",
+      name: row.resolvedName || "Player identity needs SIXFL review",
       balance: 0,
       fees: [],
     };
     account.balance += row.balancePence;
     account.fees.push(row);
-    accounts.set(row.owner, account);
+    accounts.set(recoveredOwner, account);
   }
 
   const list = [...accounts.values()].sort(
@@ -138,6 +172,7 @@ export default async function Page({
     (row) =>
       !row.collectionPaused &&
       !activePlan(row.planStatus) &&
+      !row.identityMissing &&
       Boolean(row.paymentUrl),
   ).length;
 
@@ -216,7 +251,9 @@ export default async function Page({
                 {account.fees.map((fee) => {
                   const planActive = activePlan(fee.planStatus);
                   const usableLink =
-                    !fee.collectionPaused && !planActive ? fee.paymentUrl : null;
+                    !fee.identityMissing && !fee.collectionPaused && !planActive
+                      ? fee.paymentUrl
+                      : null;
                   return (
                     <div
                       key={fee.feeId}
@@ -228,11 +265,13 @@ export default async function Page({
                         </div>
                         <div className="mt-1 text-sm text-white/55">
                           <strong className="text-amber-100">{money(fee.balancePence)} due</strong>
-                          {fee.collectionPaused
-                            ? " · collection paused"
-                            : planActive
-                              ? " · repayment arrangement active"
-                              : " · payment link open"}
+                          {fee.identityMissing
+                            ? " · player identity needs SIXFL review"
+                            : fee.collectionPaused
+                              ? " · collection paused"
+                              : planActive
+                                ? " · repayment arrangement active"
+                                : " · payment link open"}
                         </div>
                         {usableLink ? (
                           <div className="mt-2 break-all text-xs text-white/35">
@@ -254,6 +293,10 @@ export default async function Page({
                             </a>
                             <CopyPlayerPaymentLinkButton url={usableLink} />
                           </>
+                        ) : fee.identityMissing ? (
+                          <span className="inline-flex min-h-9 items-center justify-center rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100">
+                            Payment link hidden until identified
+                          </span>
                         ) : (
                           <Link
                             href={`/captain/team/${teamid}/player-payments/account/${account.feeId}`}
