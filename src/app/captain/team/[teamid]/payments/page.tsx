@@ -37,6 +37,10 @@ import {
 } from "@/lib/payments/team-autopay-snapshot";
 import { TeamPaymentOrderNotice } from "@/components/payments/TeamPaymentOrderNotice";
 import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
+import {
+  getMaximumAdditionalCollectionPence,
+  getTeamCreditPolicySnapshot,
+} from "@/lib/payments/team-credit-policy";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -312,7 +316,7 @@ export default async function CaptainPaymentsPage({
   searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string  }>;
+  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string; flexpay?: string; flexAmount?: string; max?: string }>;
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
@@ -344,6 +348,21 @@ export default async function CaptainPaymentsPage({
   const kitFundLedger = await getKitFundLedger(teamid);
   const creditBalancePence = Math.max(creditLedger.balancePence, 0);
   const recentCreditEntries = creditLedger.entries.slice(0, 6);
+  const flexiblePaymentTarget = paymentOrder.enabled
+    ? paymentOrder.next
+    : ledger.openEntries[0] ?? null;
+  const flexiblePaymentPolicy = flexiblePaymentTarget
+    ? await getTeamCreditPolicySnapshot({
+        teamId: teamid,
+        fixtureFeePence: flexiblePaymentTarget.amountPence,
+      })
+    : null;
+  const flexiblePaymentMaxPence = flexiblePaymentTarget
+    ? getMaximumAdditionalCollectionPence({
+        outstandingFixturePence: flexiblePaymentTarget.outstandingPence,
+        creditHeadroomPence: flexiblePaymentPolicy?.creditHeadroomPence ?? 0,
+      })
+    : 0;
 
   const paymentTransactions = await prisma.paymentTransaction.findMany({
     where: getPaymentTransactionWhere(ledger.relatedTeamIds, team.teamMode),
@@ -582,6 +601,24 @@ export default async function CaptainPaymentsPage({
         ? "Saved card setup is incomplete. Continue the setup to enter and confirm the card details."
         : getSubscriptionMessage(sp.autopay ?? sp.subscription);
   const creditMessage = getCreditMessage(sp.credit, sp.amount);
+  const flexiblePaymentMessage =
+    sp.flexpay === "success"
+      ? `Stripe received your payment${sp.flexAmount ? ` of ${formatMoney(Number(sp.flexAmount))}` : ""}. It will appear in the ledger as soon as SIXFL receives Stripe’s confirmation.`
+      : sp.flexpay === "cancelled"
+        ? "That payment was cancelled. No new card payment was recorded."
+        : sp.flexpay === "pending"
+          ? "Stripe has already completed this payment and SIXFL is waiting for its confirmation. Please do not pay it again."
+          : sp.flexpay === "too_much"
+            ? `That amount is above the maximum currently available to pay${sp.max ? ` (${formatMoney(Number(sp.max))})` : ""}.`
+            : sp.flexpay === "covered"
+              ? "Existing team credit covered the outstanding balance before Stripe was needed."
+              : sp.flexpay === "none"
+                ? "There is no eligible outstanding team balance to pay right now."
+                : sp.flexpay === "invalid"
+                  ? "Enter a valid payment amount."
+                  : sp.flexpay === "stripe_error"
+                    ? "Stripe could not open the payment page. Please try again."
+                    : null;
   const canOpenPortal = hasSavedCard;
 
   return (
@@ -614,6 +651,67 @@ export default async function CaptainPaymentsPage({
         <div className={`rounded-2xl border px-5 py-4 text-sm ${sp.credit === "used" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : "border-amber-400/20 bg-amber-500/10 text-amber-100"}`}>
           {creditMessage}
         </div>
+      ) : null}
+
+      {flexiblePaymentMessage ? (
+        <div className={`rounded-2xl border px-5 py-4 text-sm ${
+          sp.flexpay === "success" || sp.flexpay === "covered"
+            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+            : "border-amber-400/20 bg-amber-500/10 text-amber-100"
+        }`}>
+          {flexiblePaymentMessage}
+        </div>
+      ) : null}
+
+      {flexiblePaymentTarget && flexiblePaymentMaxPence > 0 ? (
+        <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.07] p-5 md:p-6">
+          <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                Make a payment
+              </p>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Pay an amount of your choice
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
+                Enter the amount you want to pay, for example £43. SIXFL applies it to your oldest eligible outstanding team balance first.
+                {flexiblePaymentPolicy?.enabled
+                  ? " If that payment is more than the remaining balance, the permitted surplus becomes team credit. Team credit is still capped at one normal match fee."
+                  : " The payment cannot be more than the current outstanding balance."}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-white/45">
+                Current target: {flexiblePaymentTarget.title} · outstanding {formatMoney(flexiblePaymentTarget.outstandingPence)} · maximum payment now {formatMoney(flexiblePaymentMaxPence)}
+              </p>
+            </div>
+            <form
+              action={`/captain/team/${team.id}/payments/make-payment`}
+              method="post"
+              className="flex w-full max-w-sm flex-col gap-2 sm:flex-row lg:w-auto"
+            >
+              <label className="relative block min-w-[150px] flex-1">
+                <span className="sr-only">Payment amount</span>
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/60">£</span>
+                <input
+                  name="amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max={(flexiblePaymentMaxPence / 100).toFixed(2)}
+                  step="0.01"
+                  placeholder="43.00"
+                  required
+                  className="h-12 w-full rounded-2xl border border-white/15 bg-black/30 pl-8 pr-4 text-base font-semibold text-white outline-none transition placeholder:text-white/25 focus:border-emerald-300/50"
+                />
+              </label>
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300"
+              >
+                Continue to payment
+              </button>
+            </form>
+          </div>
+        </section>
       ) : null}
 
       {creditBalancePence > 0 ? (
