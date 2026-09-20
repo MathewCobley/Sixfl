@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getHistoricalPlayerFeeIdentities } from "@/lib/payments/player-fee-identity";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -230,6 +231,10 @@ export default async function OrphanedPlayerFeesPage({
     },
   });
 
+  const historicalIdentities = await getHistoricalPlayerFeeIdentities(
+    orphanedFees.map((fee) => fee.id),
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -272,6 +277,12 @@ export default async function OrphanedPlayerFeesPage({
             orphanedFees.map((fee) => {
               const fixtureName = `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name}`;
               const highlighted = sp.feeId === fee.id;
+              const historical = historicalIdentities.get(fee.id);
+              const recoveredIdentity = [
+                historical?.displayName,
+                historical?.email,
+                historical?.phone,
+              ].filter(Boolean).join(" · ");
 
               return (
                 <article
@@ -297,6 +308,16 @@ export default async function OrphanedPlayerFeesPage({
                           Missing player link
                         </span>
                       </div>
+                      {historical ? (
+                        <div className="mt-3 rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
+                          <span className="font-semibold">Original payment recipient recovered:</span>{" "}
+                          {recoveredIdentity || "Historical recipient record found"}
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                          No surviving recipient identity was found. Check the fixture squad and payment history before reattaching.
+                        </div>
+                      )}
                     </div>
 
                     <form action={attachOrphanedPlayerFeeAction} className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -307,7 +328,7 @@ export default async function OrphanedPlayerFeesPage({
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <input
                           name="userLookup"
-                          defaultValue={sp.feeId === fee.id ? sp.user ?? "" : ""}
+                          defaultValue={sp.feeId === fee.id ? sp.user ?? historical?.email ?? historical?.displayName ?? "" : historical?.email ?? ""}
                           placeholder="e.g. Liam Craig user ID or email"
                           className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40"
                         />
