@@ -61,3 +61,14 @@ test("push delivery uses device opt-in storage and expires queued notification e
   assert.match(helper, /WEB_PUSH_VAPID_PRIVATE_KEY/);
   assert.match(helper, /disabledAt: new Date\(\)/);
 });
+
+
+test("sign-out guard removes the browser push subscription", () => {
+  const guard = read("src/components/pwa/PushSubscriptionSessionGuard.tsx");
+  const providers = read("src/app/providers.tsx");
+
+  assert.match(guard, /status !== "unauthenticated"/);
+  assert.match(guard, /subscription\.unsubscribe\(\)/);
+  assert.match(guard, /SIXFL_CLEAR_PUSH_DEVICE_TOKEN/);
+  assert.match(providers, /<PushSubscriptionSessionGuard \/>/);
+});
