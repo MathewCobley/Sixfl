@@ -8,8 +8,8 @@ import { getLeagueStandings } from "@/lib/standings";
 import { sixflTvThumbnailBackgroundKey } from "./thumbnail-background";
 import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
-export type SixflTvRenderKind = "HIGHLIGHTS" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 16;
+export type SixflTvRenderKind = "HIGHLIGHTS" | "HIGHLIGHTS_ALT" | "FULL_MATCH";
+const SIXFL_TV_RENDER_VERSION = 17;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
@@ -335,7 +335,7 @@ function readyAsset(rows: FootageAsset[], kind: string) {
 
 export async function cancelRenders(fixtureId: string, actor: string, kind?: SixflTvRenderKind) {
   await studioFixture(fixtureId);
-  if (kind && kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
+  if (kind && kind !== "HIGHLIGHTS" && kind !== "HIGHLIGHTS_ALT" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
   const reason = "Stopped by SIXFL admin.";
   const rows = kind
     ? await prisma.$queryRaw<RenderJobRow[]>`
@@ -351,7 +351,7 @@ export async function cancelRenders(fixtureId: string, actor: string, kind?: Six
   return { stopped: rows.map(renderDto), actor: safeText(actor, 120) || "admin" };
 }
 export async function requestRenders(fixtureId: string, actor: string, kind?: SixflTvRenderKind) {
-  if (kind && kind !== "HIGHLIGHTS" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
+  if (kind && kind !== "HIGHLIGHTS" && kind !== "HIGHLIGHTS_ALT" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
   const fixture = await studioFixture(fixtureId);
   if (!fixture.result) throw new StudioError("Enter the final result before generating SIXFL TV previews.", 409);
   if (fixture.result.isDisputed) throw new StudioError("This result is disputed. Resolve it before generating result-branded videos.", 409);
@@ -367,12 +367,17 @@ export async function requestRenders(fixtureId: string, actor: string, kind?: Si
   // Individual clips are the editable highlights source and must win when present,
   // so the renderer can preserve their saved order and insert transitions between them.
   // A ready-made highlights file is only the fallback when no clips have been uploaded.
-  if (clips.length) specs.push({ kind: "HIGHLIGHTS", content: clips });
-  else if (readyHighlights) specs.push({ kind: "HIGHLIGHTS", content: [readyHighlights] });
+  if (clips.length) {
+    specs.push({ kind: "HIGHLIGHTS", content: clips });
+    specs.push({ kind: "HIGHLIGHTS_ALT", content: clips });
+  } else if (readyHighlights) {
+    specs.push({ kind: "HIGHLIGHTS", content: [readyHighlights] });
+    specs.push({ kind: "HIGHLIGHTS_ALT", content: [readyHighlights] });
+  }
   if (fullMatch) specs.push({ kind: "FULL_MATCH", content: [fullMatch] });
   const requestedSpecs = kind ? specs.filter(spec => spec.kind === kind) : specs;
   if (!requestedSpecs.length) {
-    if (kind === "HIGHLIGHTS") throw new StudioError("Upload at least one completed highlight clip or ready-made highlights video first.", 409);
+    if (kind === "HIGHLIGHTS" || kind === "HIGHLIGHTS_ALT") throw new StudioError("Upload at least one completed highlight clip or ready-made highlights video first.", 409);
     if (kind === "FULL_MATCH") throw new StudioError("Upload a completed full match first.", 409);
     throw new StudioError("Upload at least one completed highlight clip, ready-made highlights video, or full match first.", 409);
   }
@@ -382,7 +387,7 @@ export async function requestRenders(fixtureId: string, actor: string, kind?: Si
     const metadata = {
       renderVersion: SIXFL_TV_RENDER_VERSION,
       fixture: graphic,
-      label: spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH",
+      label: spec.kind === "HIGHLIGHTS_ALT" ? "ALT HIGHLIGHTS TEST" : spec.kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH",
       contentAssetIds: spec.content.map(asset => asset.id),
       progressPercent: 0,
       progressLabel: "Waiting for video worker",
@@ -397,7 +402,7 @@ export async function requestRenders(fixtureId: string, actor: string, kind?: Si
       const active = await tx.$queryRaw<RenderJobRow[]>`SELECT * FROM "SixflTvRenderJob" WHERE "fixtureId"=${fixtureId} AND "kind"=${spec.kind} AND "state" IN ('QUEUED','PROCESSING') FOR UPDATE`;
       if (active[0]) {
         if (active[0].sourceFingerprint === fingerprint) return active[0];
-        throw new StudioError(`${spec.kind === "HIGHLIGHTS" ? "Highlights" : "Full match"} rendering is already in progress. Wait for it to finish before changing the source.`, 409);
+        throw new StudioError(`${spec.kind === "FULL_MATCH" ? "Full match" : spec.kind === "HIGHLIGHTS_ALT" ? "Alternative highlights" : "Highlights"} rendering is already in progress. Wait for it to finish before changing the source.`, 409);
       }
       const id = randomUUID();
       const inserted = await tx.$queryRaw<RenderJobRow[]>`
