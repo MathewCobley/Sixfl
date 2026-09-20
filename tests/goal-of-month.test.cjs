@@ -39,6 +39,7 @@ const fontRefreshMigration = 'prisma/migrations/20260920002000_refresh_goal_mont
 const teamHighlightRefreshMigration = 'prisma/migrations/20260920010500_refresh_goal_month_team_highlight/migration.sql';
 const finalVideoFlowMigration = 'prisma/migrations/20260920014500_refresh_goal_month_final_video_flow/migration.sql';
 const visualPolishMigration = 'prisma/migrations/20260920015200_refresh_goal_month_video_visual_polish/migration.sql';
+const titleReplaySpacingMigration = 'prisma/migrations/20260920175500_refresh_goal_month_title_replay_spacing/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerTeamMemberId: 'member-home' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -290,6 +291,24 @@ test('visual polish refresh requeues completed nominee renders while keeping the
   assert.equal(state, 'QUEUED|old-visual-polish-render.mp4|true');
 });
 
+test('title and replay spacing refresh requeues completed nominee renders while preserving the current object', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('title-replay-spacing-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'title-replay-spacing-clip', scorerTeamMemberId: 'member-home',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-title-replay-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(titleReplaySpacingMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-title-replay-render.mp4|true');
+});
+
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
   const results = await Promise.allSettled([1,2,3,4].map(number => awards.nominateMonthlyGoal(input('u1', number), now)));
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 3);
@@ -429,6 +448,16 @@ test('Goal of the Month intro may show the scorer-team score, while the approved
   assert.match(intro, /align: "center"/);
 });
 
+test('Goal of the Month intro keeps the team name clear of the scorer', () => {
+  const graphics = read('src/lib/sixfl-tv/graphics.ts');
+  const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay', introStart);
+  const intro = graphics.slice(introStart, overlayStart);
+  assert.match(intro, /fontSize: 28/);
+  assert.match(intro, /\{ input: scorerText, left: 500, top: 350 \}/);
+  assert.match(intro, /\{ input: teamText, left: 504, top: 482 \}/);
+});
+
 test('Goal of the Month vote card carries the actual competition dates', () => {
   const graphics = read('src/lib/sixfl-tv/graphics.ts');
   const worker = read('scripts/sixfl-tv-worker.ts');
@@ -456,10 +485,10 @@ test('Goal of the Month video graphics use restrained SIXFL green and a non-clip
   assert.doesNotMatch(intro, /#2dd4bf/);
   assert.doesNotMatch(overlay, /#2dd4bf/);
   assert.doesNotMatch(vote, /#2dd4bf/);
-  assert.match(overlay, /const replayWidth = 124/);
-  assert.match(overlay, /const replayHeight = 34/);
+  assert.match(overlay, /const replayWidth = 144/);
+  assert.match(overlay, /const replayHeight = 42/);
   assert.match(overlay, /fill="#07110d" stroke="#10b981"/);
-  assert.match(overlay, /fontSize: 16/);
+  assert.match(overlay, /fontSize: 14/);
   assert.match(vote, /input\.nominationsCloseLabel/);
   assert.match(vote, /input\.winnerLabel/);
 });

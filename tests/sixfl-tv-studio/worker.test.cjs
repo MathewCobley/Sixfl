@@ -339,6 +339,17 @@ test('Goal of the Month overlay aligns the team name with the player name and gi
   assert.match(overlay, /\{ input: teamText, left: 158, top: 104 \}/);
 });
 
+test('Goal of the Month replay label has padded pill geometry', async () => {
+  const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay');
+  const overlayEnd = graphics.indexOf('export async function createGoalOfMonthVoteCard', overlayStart);
+  const overlay = graphics.slice(overlayStart, overlayEnd);
+  assert.match(overlay, /const replayWidth = 144/);
+  assert.match(overlay, /const replayHeight = 42/);
+  assert.match(overlay, /height: 30, fontSize: 14/);
+  assert.match(overlay, /top: 62/);
+});
+
 test('Goal of the Month thumbnail and player overlay stay readable at embedded-player size', async () => {
   const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
   const thumbnailStart = graphics.indexOf('export async function createGoalOfMonthNominationThumbnail');
@@ -364,7 +375,7 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.equal(thumbnail.includes('clipNumber'), false);
   assert.ok(overlay.includes('fontSize: 43'));
   assert.ok(overlay.includes('const height = 116'));
-  assert.ok(overlay.includes('const replayWidth = 124'));
+  assert.ok(overlay.includes('const replayWidth = 144'));
   assert.ok(overlay.includes('thumbnailTextPng'));
   assert.equal(overlay.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(overlay.includes('CLIP '), false);
