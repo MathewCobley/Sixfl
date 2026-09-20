@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const FOREGROUND_REFRESH_AFTER_MS = 30_000;
 const FOREGROUND_REFRESH_THROTTLE_MS = 10_000;
+const VERSION_STORAGE_KEY = "sixfl:pwa-version";
+const PENDING_VERSION_STORAGE_KEY = "sixfl:pwa-pending-version";
+
+type VersionPayload = {
+  version?: string | null;
+};
 
 function isInstalledApp() {
   const iosStandalone =
@@ -39,8 +45,48 @@ function hasActiveEditor() {
   return active instanceof HTMLElement && active.isContentEditable;
 }
 
+function readStoredVersion(key: string) {
+  try {
+    return window.localStorage.getItem(key)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredVersion(key: string, version: string | null) {
+  try {
+    if (version) {
+      window.localStorage.setItem(key, version);
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage can be unavailable in restricted browser modes.
+  }
+}
+
+async function fetchDeploymentVersion() {
+  try {
+    const response = await fetch(`/api/pwa/version?t=${Date.now()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Cache-Control": "no-cache",
+      },
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as VersionPayload;
+    return payload.version?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function PwaServiceWorker() {
   const pathname = usePathname();
+  const router = useRouter();
   const hiddenAtRef = useRef<number | null>(null);
   const lastForegroundCheckRef = useRef(0);
   const reloadingRef = useRef(false);
@@ -83,16 +129,110 @@ export default function PwaServiceWorker() {
     let cancelled = false;
     let controllerChangeHandled = false;
 
-    const safelyReloadOverview = () => {
-      if (cancelled || reloadingRef.current) return false;
-      if (document.visibilityState !== "visible") return false;
-      if (!isSafeAutoRefreshRoute(pathname)) return false;
-      if (hasActiveEditor()) return false;
+    const canRefreshNow = () =>
+      !cancelled &&
+      !reloadingRef.current &&
+      document.visibilityState === "visible" &&
+      isSafeAutoRefreshRoute(pathname) &&
+      !hasActiveEditor();
+
+    const applyVersionAndReload = (version: string | null) => {
+      if (!canRefreshNow()) return false;
+
+      if (version) {
+        writeStoredVersion(VERSION_STORAGE_KEY, version);
+      }
+      writeStoredVersion(PENDING_VERSION_STORAGE_KEY, null);
 
       reloadingRef.current = true;
       window.location.reload();
       return true;
     };
+
+    const applyPendingVersionIfSafe = () => {
+      const pendingVersion = readStoredVersion(PENDING_VERSION_STORAGE_KEY);
+      if (!pendingVersion) return false;
+
+      return applyVersionAndReload(pendingVersion);
+    };
+
+    const checkVersionAndRefresh = async ({
+      refreshDataWhenCurrent,
+      fallbackReloadWhenUnknown,
+    }: {
+      refreshDataWhenCurrent: boolean;
+      fallbackReloadWhenUnknown: boolean;
+    }) => {
+      if (cancelled || document.visibilityState !== "visible") return;
+
+      try {
+        const activeRegistration =
+          await navigator.serviceWorker.getRegistration("/");
+        await activeRegistration?.update();
+      } catch (error) {
+        console.warn("SIXFL app service-worker update check failed", error);
+      }
+
+      const deploymentVersion = await fetchDeploymentVersion();
+      if (cancelled) return;
+
+      const storedVersion = readStoredVersion(VERSION_STORAGE_KEY);
+
+      if (!deploymentVersion) {
+        if (fallbackReloadWhenUnknown) {
+          applyVersionAndReload(null);
+        } else if (refreshDataWhenCurrent && canRefreshNow()) {
+          router.refresh();
+        }
+        return;
+      }
+
+      if (!storedVersion) {
+        writeStoredVersion(VERSION_STORAGE_KEY, deploymentVersion);
+        writeStoredVersion(PENDING_VERSION_STORAGE_KEY, null);
+
+        if (refreshDataWhenCurrent && canRefreshNow()) {
+          router.refresh();
+        }
+        return;
+      }
+
+      if (deploymentVersion !== storedVersion) {
+        writeStoredVersion(PENDING_VERSION_STORAGE_KEY, deploymentVersion);
+
+        if (applyVersionAndReload(deploymentVersion)) {
+          return;
+        }
+
+        return;
+      }
+
+      writeStoredVersion(PENDING_VERSION_STORAGE_KEY, null);
+
+      if (refreshDataWhenCurrent && canRefreshNow()) {
+        router.refresh();
+      }
+    };
+
+    if (applyPendingVersionIfSafe()) {
+      return;
+    }
+
+    void (async () => {
+      const deploymentVersion = await fetchDeploymentVersion();
+      if (cancelled || !deploymentVersion) return;
+
+      const storedVersion = readStoredVersion(VERSION_STORAGE_KEY);
+      if (!storedVersion) {
+        writeStoredVersion(VERSION_STORAGE_KEY, deploymentVersion);
+        return;
+      }
+
+      if (storedVersion !== deploymentVersion) {
+        writeStoredVersion(PENDING_VERSION_STORAGE_KEY, deploymentVersion);
+        applyPendingVersionIfSafe();
+      }
+    })();
 
     const checkOnForeground = async () => {
       if (cancelled || document.visibilityState !== "visible") return;
@@ -114,15 +254,10 @@ export default function PwaServiceWorker() {
       }
       lastForegroundCheckRef.current = now;
 
-      try {
-        const activeRegistration =
-          await navigator.serviceWorker.getRegistration("/");
-        await activeRegistration?.update();
-      } catch (error) {
-        console.warn("SIXFL app update check failed", error);
-      }
-
-      safelyReloadOverview();
+      await checkVersionAndRefresh({
+        refreshDataWhenCurrent: true,
+        fallbackReloadWhenUnknown: true,
+      });
     };
 
     const onVisibilityChange = () => {
@@ -144,7 +279,11 @@ export default function PwaServiceWorker() {
     const onControllerChange = () => {
       if (controllerChangeHandled) return;
       controllerChangeHandled = true;
-      safelyReloadOverview();
+
+      void checkVersionAndRefresh({
+        refreshDataWhenCurrent: false,
+        fallbackReloadWhenUnknown: true,
+      });
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -163,7 +302,7 @@ export default function PwaServiceWorker() {
         onControllerChange,
       );
     };
-  }, [pathname]);
+  }, [pathname, router]);
 
   return null;
 }
