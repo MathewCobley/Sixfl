@@ -13,6 +13,7 @@ import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewReturnBanner from "@/components/player/PlayerPreviewReturnBanner";
 import PlayerPwaPortalHeader from "@/components/player/PlayerPwaPortalHeader";
+import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
 import { prisma } from "@/lib/prisma";
 
@@ -99,24 +100,26 @@ export default async function PlayerTeamLayout({
         <PlayerTeamNav teamId={teamid} showTeamChat={isAdmin} />
       </Suspense>
 
-      {/* Keep the player's dashboard first; discovery panels must not precede it. */}
+      {/* Keep the player's dashboard first; discovery panels belong to the full website only. */}
       {children}
-      <div className="player-web-discovery">
-        <PlayerDashboardOnly teamId={teamid}>
-          <div className="mx-auto w-full max-w-6xl px-4 pt-6">
-            <GoalOfWeekDashboardPromo
-              teamId={teamid}
-              href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
-            />
-          </div>
-        </PlayerDashboardOnly>
-        <PlayerDashboardOnly teamId={teamid}>
-          <div className="space-y-8 pb-8">
-            <PlayerLeagueMediaPanel teamId={teamid} />
-            <PlayerMessageBox teamId={teamid} />
-          </div>
-        </PlayerDashboardOnly>
-      </div>
+      <PlayerPwaModeOnly mode="web">
+        <div className="player-web-discovery">
+          <PlayerDashboardOnly teamId={teamid}>
+            <div className="mx-auto w-full max-w-6xl px-4 pt-6">
+              <GoalOfWeekDashboardPromo
+                teamId={teamid}
+                href={`/goal-of-the-week?from=player&teamId=${encodeURIComponent(teamid)}`}
+              />
+            </div>
+          </PlayerDashboardOnly>
+          <PlayerDashboardOnly teamId={teamid}>
+            <div className="space-y-8 pb-8">
+              <PlayerLeagueMediaPanel teamId={teamid} />
+              <PlayerMessageBox teamId={teamid} />
+            </div>
+          </PlayerDashboardOnly>
+        </div>
+      </PlayerPwaModeOnly>
     </div>
   );
 }
