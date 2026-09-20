@@ -15,7 +15,7 @@ test("captains can privately message another captain", () => {
   assert.match(route, /captainChatRef\(member\.userId\)/);
   assert.match(route, /PortalConversationType\.CAPTAIN_CAPTAIN/);
   assert.match(route, /role: TeamRole\.CAPTAIN/);
-  assert.match(route, /Captain · private with you/);
+  assert.match(route, /\$\{roleLabel\} · private with you/);
 });
 
 test("admin preview can send simulated replies without notifying real users", () => {
