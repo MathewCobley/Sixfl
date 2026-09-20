@@ -81,13 +81,55 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
   const fees = savedFees.map(fee => ({ ...fee, fixture: { ...fee.fixture, feesPreservedAfterAbandonment: preservedFixtureIds.has(fee.fixture.id) } }));
   const contact = fees.find(f => f.teamMember?.user.email || f.prospect?.email);
   const linkedUser=userId?await db.user.findUnique({where:{id:userId},select:{email:true,name:true}}):null;
-  const email = linkedUser?.email?.trim().toLowerCase() || contact?.teamMember?.user.email?.trim().toLowerCase() || contact?.prospect?.email?.trim().toLowerCase() || null;
-  const playerName = linkedUser?.name || contact?.teamMember?.user.name || [contact?.prospect?.firstName, contact?.prospect?.lastName].filter(Boolean).join(" ") || anchor.playerName || "Player";
+  const historicalSourceIds = ids.map(id => `player-match-fee:${id}`);
+  const historicalIdentity = !linkedUser && !contact && historicalSourceIds.length
+    ? (await db.$queryRaw<Array<{displayName:string|null;email:string|null;phone:string|null}>>(Prisma.sql`
+        SELECT "displayName",email,phone
+        FROM "NotificationRecipient"
+        WHERE "sourceType"::text='GENERAL'
+          AND "sourceId" IN (${Prisma.join(historicalSourceIds)})
+        ORDER BY "updatedAt" DESC, id DESC
+        LIMIT 1
+      `))[0] ?? null
+    : null;
+  const email = linkedUser?.email?.trim().toLowerCase()
+    || contact?.teamMember?.user.email?.trim().toLowerCase()
+    || contact?.prospect?.email?.trim().toLowerCase()
+    || historicalIdentity?.email?.trim().toLowerCase()
+    || null;
+  const playerName = linkedUser?.name
+    || contact?.teamMember?.user.name
+    || [contact?.prospect?.firstName, contact?.prospect?.lastName].filter(Boolean).join(" ")
+    || anchor.playerName
+    || historicalIdentity?.displayName?.trim()
+    || historicalIdentity?.email?.trim()
+    || historicalIdentity?.phone?.trim()
+    || "Player identity needs SIXFL review";
   const balancePence = states.reduce((sum,s) => sum+s.balancePence,0);
   // An invariant, not a fallback: never present an invented balance if imports or
   // later maintenance have broken the statement/projection agreement.
   if (entries.reduce((sum,e) => sum+e.amountPence,0) !== balancePence) throw new PlayerLedgerError("Player ledger needs reconciliation. No payment should be requested until SIXFL checks it.");
-  return { teamId, anchorFeeId, userId, playerName, email, teamName: contact?.team.name ?? "Team", states, fees, entries, plans, balancePence };
+  return {
+    teamId,
+    anchorFeeId,
+    userId,
+    playerName,
+    email,
+    teamName: contact?.team.name ?? fees[0]?.team.name ?? "Team",
+    states,
+    fees,
+    entries,
+    plans,
+    balancePence,
+    identityRecoveredFromHistory: Boolean(historicalIdentity),
+    identityNeedsReview:
+      !linkedUser &&
+      !contact &&
+      !anchor.playerName &&
+      !historicalIdentity?.displayName &&
+      !historicalIdentity?.email &&
+      !historicalIdentity?.phone,
+  };
 }
 export type PlayerLedgerAccount = Awaited<ReturnType<typeof getPlayerLedgerAccount>>;
 
