@@ -193,3 +193,15 @@ test('player app layout keeps web discovery panels behind the web-only gate', ()
   assert.match(layout, /<PlayerLeagueMediaPanel/);
   assert.match(layout, /<PlayerMessageBox/);
 });
+
+
+test('player app excludes preview and temporary-player website overlays', () => {
+  const layout = read(LAYOUT);
+  const launcher = read('src/components/captain/TemporaryPlayerPassLauncher.tsx');
+  assert.match(
+    layout,
+    /<PlayerPwaModeOnly mode="web">\s*<PlayerPreviewReturnBanner/,
+  );
+  assert.match(launcher, /explicitPlayerAppPreview/);
+  assert.match(launcher, /standaloneApp \|\| explicitPlayerAppPreview/);
+});
