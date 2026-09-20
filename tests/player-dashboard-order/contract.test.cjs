@@ -58,7 +58,10 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
     'next/navigation': navigation,
     './NewsCard': panel('news-card', 'Example published report'),
   }).default;
-  const template = load(TEMPLATE, { '@/components/news/LatestNews': actualNews }, templateSource).default;
+  const template = load(TEMPLATE, {
+    '@/components/news/LatestNews': actualNews,
+    '@/components/player/PlayerPwaModeOnly': ({ children }) => children,
+  }, templateSource).default;
   const layout = load(LAYOUT, {
     'next-auth': { getServerSession: async () => ({ user: { email: 'example@example.invalid' } }) },
     '@prisma/client': { UserRole: { ADMIN: 'ADMIN' } },
@@ -158,12 +161,19 @@ test('regression catches each original before-children insertion independently',
 
 module.exports = { renderDashboard, assertCoreFirst };
 
-test('player PWA home cannot be hidden by its own utility class and uses the real SIXFL logo', () => {
+test('player PWA home uses an explicit app/web gate and real SIXFL branding', () => {
   const appHome = read('src/components/player/PlayerAppHome.tsx');
+  const page = read('src/app/player/team/[teamid]/page.tsx');
   const pwaHeader = read('src/components/player/PlayerPwaPortalHeader.tsx');
+  const modeGate = read('src/components/player/PlayerPwaModeOnly.tsx');
+  const previewRoute = read('src/app/(admin)/admin/teams/[id]/players/[membershipId]/preview/page.tsx');
+
   assert.match(appHome, /className="player-app-home px-4/);
   assert.doesNotMatch(appHome, /className="player-app-home hidden/);
+  assert.match(page, /<PlayerPwaModeOnly mode="app">\s*<PlayerAppHome/);
+  assert.match(page, /<PlayerPwaModeOnly mode="web">\s*<div className="player-web-home/);
+  assert.match(modeGate, /resolvedMode === mode/);
+  assert.match(previewRoute, /pwaPreview=1/);
   assert.match(pwaHeader, /src="\/logo2\.png"/);
-  assert.match(pwaHeader, /body:has\(\.player-pwa-controller\) \.player-app-home/);
-  assert.match(pwaHeader, /body:has\(\.player-pwa-mode\) \.player-app-home/);
+  assert.doesNotMatch(pwaHeader, /player-pwa-controller\) \.player-app-home/);
 });
