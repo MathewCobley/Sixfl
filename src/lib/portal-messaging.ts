@@ -70,10 +70,10 @@ export async function getPortalChatUnreadCount(input: {
       OR: [
         { type: PortalConversationType.TEAM },
         ...(isCaptain
-          ? [{ type: PortalConversationType.CAPTAIN_PLAYER as const }]
+          ? [{ type: PortalConversationType.CAPTAIN_PLAYER }]
           : [
               {
-                type: PortalConversationType.CAPTAIN_PLAYER as const,
+                type: PortalConversationType.CAPTAIN_PLAYER,
                 participantUserId: input.userId,
               },
             ]),
