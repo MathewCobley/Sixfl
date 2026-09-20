@@ -12,6 +12,7 @@ import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
 import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewReturnBanner from "@/components/player/PlayerPreviewReturnBanner";
+import PlayerPwaPortalHeader from "@/components/player/PlayerPwaPortalHeader";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
 import { prisma } from "@/lib/prisma";
 
@@ -25,6 +26,20 @@ export default async function PlayerTeamLayout({
   const { teamid } = await params;
   const session = await getServerSession(authOptions).catch(() => null);
   const email = session?.user?.email?.trim().toLowerCase() ?? null;
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamid },
+    select: {
+      name: true,
+      logoUrl: true,
+      league: {
+        select: {
+          name: true,
+          season: true,
+        },
+      },
+    },
+  });
 
   const viewer = email
     ? await prisma.user.findUnique({
@@ -60,6 +75,17 @@ export default async function PlayerTeamLayout({
           padding-bottom: 1rem !important;
         }
       `}</style>
+
+      {team ? (
+        <Suspense fallback={null}>
+          <PlayerPwaPortalHeader
+            teamName={team.name}
+            teamLogoUrl={team.logoUrl}
+            leagueName={team.league?.name ?? null}
+            season={team.league?.season ?? null}
+          />
+        </Suspense>
+      ) : null}
 
       {returnHref ? (
         <PlayerPreviewReturnBanner

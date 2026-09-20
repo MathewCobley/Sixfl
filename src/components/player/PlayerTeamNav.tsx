@@ -64,7 +64,7 @@ export default function PlayerTeamNav({ teamId }: { teamId: string }) {
   return (
     <nav
       aria-label="Player team sections"
-      className="mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1"
+      className="mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs(teamId, previewMembershipId).map((tab) => {
         const hrefPath = tab.href.split("?")[0] ?? tab.href;
