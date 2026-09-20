@@ -142,6 +142,7 @@ export default async function Page({
     name: string;
     balance: number;
     fees: OutstandingRow[];
+    identityMissing: boolean;
   };
 
   const accounts = new Map<string, Account>();
@@ -158,9 +159,11 @@ export default async function Page({
       name: row.resolvedName || "Player identity needs SIXFL review",
       balance: 0,
       fees: [],
+      identityMissing: Boolean(row.identityMissing),
     };
     account.balance += row.balancePence;
     account.fees.push(row);
+    account.identityMissing = account.identityMissing && Boolean(row.identityMissing);
     accounts.set(recoveredOwner, account);
   }
 
@@ -239,12 +242,18 @@ export default async function Page({
                     <strong className="text-amber-100">{money(account.balance)} outstanding</strong>
                   </p>
                 </div>
-                <Link
-                  href={`/captain/team/${teamid}/player-payments/account/${account.feeId}`}
-                  className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-400 px-4 py-2 text-sm font-bold text-black"
-                >
-                  Open player ledger
-                </Link>
+                {account.identityMissing ? (
+                  <span className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-2 text-sm font-bold text-amber-100">
+                    SIXFL needs to identify this player
+                  </span>
+                ) : (
+                  <Link
+                    href={`/captain/team/${teamid}/player-payments/account/${account.feeId}`}
+                    className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-400 px-4 py-2 text-sm font-bold text-black"
+                  >
+                    Open player ledger
+                  </Link>
+                )}
               </div>
 
               <div className="divide-y divide-white/10">
