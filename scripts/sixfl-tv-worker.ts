@@ -1376,6 +1376,7 @@ async function failGoalOfMonthClipRender(job: GoalOfMonthRenderJob, message: str
 
 async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
   const detail = await goalOfMonthRenderDetails(job);
+  const voteLabels = goalOfMonthVoteLabels(detail.monthKey);
   const [brandingIntroAsset, brandingOutroAsset] = await Promise.all([
     goalOfMonthBrandingAsset("INTRO"),
     goalOfMonthBrandingAsset("OUTRO"),
@@ -1411,6 +1412,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     const titlePng = path.join(dir, "title.png");
     const clipOverlayPng = path.join(dir, "clip-overlay.png");
     const replayOverlayPng = path.join(dir, "replay-overlay.png");
+    const votePng = path.join(dir, "vote.png");
     await Promise.all([
       writeFile(titlePng, await createGoalOfMonthNomineeIntro({
         siteUrl: siteUrl(),
@@ -1422,6 +1424,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
         homeScore: detail.homeScore,
         awayScore: detail.awayScore,
         kickoffAt: detail.kickoffAt,
+        matchweekNumber: detail.matchweekNumber,
         leagueName: detail.leagueName,
       })),
       writeFile(clipOverlayPng, await createGoalOfMonthClipOverlay({
@@ -1437,21 +1440,50 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
         teamLogoUrl: detail.teamLogoUrl,
         replay: true,
       })),
+      writeFile(votePng, await createGoalOfMonthVoteCard({
+        siteUrl: siteUrl(),
+        ...voteLabels,
+      })),
     ]);
 
     const brandingIntro = path.join(dir, "branding-intro.mp4");
     const title = path.join(dir, "title.mp4");
     const normal = path.join(dir, "normal.mp4");
     const replay = path.join(dir, "replay.mp4");
+    const fullSpeedEnd = path.join(dir, "full-speed-end.mp4");
+    const voteCard = path.join(dir, "vote.mp4");
     const brandingOutro = path.join(dir, "branding-outro.mp4");
+
     await normaliseVideo(brandingIntroSource, brandingIntro);
     await cardVideo(titlePng, title, GOAL_NOMINEE_TITLE_SECONDS);
-    await normaliseVideo(source, normal, clipOverlayPng);
-    await slowMotionReplay(source, replay, replayOverlayPng);
+
+    const replayInfo = await slowMotionReplay(source, replay, replayOverlayPng);
+    const normalReady = await normaliseVideoSegment(source, normal, 0, replayInfo.sourceEnd, clipOverlayPng);
+    if (!normalReady) throw new Error("The Goal of the Month source clip is too short to render.");
+
+    const sourceSeconds = await durationSeconds(source);
+    const hasFullSpeedEnd = await normaliseVideoSegment(
+      source,
+      fullSpeedEnd,
+      replayInfo.sourceEnd,
+      sourceSeconds,
+      clipOverlayPng,
+    );
+
+    await cardVideo(votePng, voteCard, GOAL_VOTE_CARD_SECONDS);
     await normaliseVideo(brandingOutroSource, brandingOutro);
 
+    const segments = [
+      brandingIntro,
+      title,
+      normal,
+      replay,
+      ...(hasFullSpeedEnd ? [fullSpeedEnd] : []),
+      voteCard,
+      brandingOutro,
+    ];
     const concat = path.join(dir, "concat.txt");
-    await writeFile(concat, [brandingIntro, title, normal, replay, brandingOutro].map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
+    await writeFile(concat, segments.map(file => `file '${file.replaceAll("'", "'\\''")}'`).join("\n"));
     const output = path.join(dir, "nominee.mp4");
     await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
     const durationMs = Math.round((await durationSeconds(output)) * 1000);
@@ -1603,7 +1635,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
+export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, normaliseVideoSegment, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;
