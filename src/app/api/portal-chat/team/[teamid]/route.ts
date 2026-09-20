@@ -60,7 +60,10 @@ function normaliseConversationRef(value: string | null, context: AccessContext) 
   return ref;
 }
 
-async function getAccessContext(request: Request, teamId: string) {
+async function getAccessContext(
+  request: Request,
+  teamId: string,
+): Promise<AccessContext | ApiError> {
   const session = await getServerSession(authOptions).catch(() => null);
 
   if (!session?.user?.email) {
