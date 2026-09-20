@@ -96,7 +96,7 @@ export default async function PlayerTeamLayout({
       ) : null}
 
       <Suspense>
-        <PlayerTeamNav teamId={teamid} />
+        <PlayerTeamNav teamId={teamid} showTeamChat={isAdmin} />
       </Suspense>
 
       {/* Keep the player's dashboard first; discovery panels must not precede it. */}

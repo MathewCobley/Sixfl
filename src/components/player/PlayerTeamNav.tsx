@@ -25,18 +25,21 @@ const tabs = (
   teamId: string,
   previewMembershipId: string | null,
   unreadChatCount: number,
+  showTeamChat: boolean,
 ): PlayerNavTab[] => [
   {
     href: addPreviewMembershipId(`/player/team/${teamId}`, previewMembershipId),
     label: "Overview",
     exact: true,
   },
-  {
-    href: addPreviewMembershipId(`/player/team/${teamId}/chat`, previewMembershipId),
-    label: "Chat",
-    exact: false,
-    unreadCount: unreadChatCount,
-  },
+  ...(showTeamChat
+    ? [{
+        href: addPreviewMembershipId(`/player/team/${teamId}/chat`, previewMembershipId),
+        label: "Chat",
+        exact: false,
+        unreadCount: unreadChatCount,
+      }]
+    : []),
   {
     href: addPreviewMembershipId(`/player/team/${teamId}/stats`, previewMembershipId),
     label: "Player stats",
@@ -76,9 +79,11 @@ const tabs = (
 export default function PlayerTeamNav({
   teamId,
   unreadChatCount = 0,
+  showTeamChat = false,
 }: {
   teamId: string;
   unreadChatCount?: number;
+  showTeamChat?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -89,7 +94,7 @@ export default function PlayerTeamNav({
       aria-label="Player team sections"
       className="mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {tabs(teamId, previewMembershipId, unreadChatCount).map((tab) => {
+      {tabs(teamId, previewMembershipId, unreadChatCount, showTeamChat).map((tab) => {
         const hrefPath = tab.href.split("?")[0] ?? tab.href;
         const active = tab.exact
           ? pathname === hrefPath || pathname === `${hrefPath}/`

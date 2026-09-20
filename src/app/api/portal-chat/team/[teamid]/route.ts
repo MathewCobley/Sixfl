@@ -92,6 +92,12 @@ async function getAccessContext(
     return { error: "Your SIXFL account could not be found.", status: 401 } as const;
   }
 
+  // Team chat stays dark-launched until the player/captain app is ready.
+  // Admins can still open the feature in read-only preview mode for testing.
+  if (actualUser.role !== UserRole.ADMIN) {
+    return { error: "Team chat is not available yet.", status: 404 } as const;
+  }
+
   const url = new URL(request.url);
   const previewMembershipId = url.searchParams.get("previewMembershipId")?.trim() || null;
 

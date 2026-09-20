@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   BanknotesIcon,
   CalendarDaysIcon,
-  ChatBubbleLeftRightIcon,
   HomeIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
@@ -13,7 +12,6 @@ import {
 type CaptainPwaBottomNavProps = {
   teamId: string;
   squadHref: string;
-  unreadMessageCount: number;
 };
 
 type NavItem = {
@@ -32,7 +30,6 @@ function isActivePath(pathname: string, item: NavItem) {
 export default function CaptainPwaBottomNav({
   teamId,
   squadHref,
-  unreadMessageCount,
 }: CaptainPwaBottomNavProps) {
   const pathname = usePathname();
 
@@ -58,12 +55,6 @@ export default function CaptainPwaBottomNav({
       label: "Payments",
       icon: BanknotesIcon,
     },
-    {
-      href: `/captain/team/${teamId}/chat`,
-      label: "Chat",
-      unreadCount: unreadMessageCount,
-      icon: ChatBubbleLeftRightIcon,
-    },
   ];
 
   return (
@@ -72,7 +63,7 @@ export default function CaptainPwaBottomNav({
       className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#07130f]/95 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:hidden"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
     >
-      <div className="mx-auto grid max-w-xl grid-cols-5 gap-0.5 px-1 pt-1.5">
+      <div className="mx-auto grid max-w-xl grid-cols-4 gap-0.5 px-1 pt-1.5">
         {items.map((item) => {
           const active = isActivePath(pathname, item);
           const Icon = item.icon;
