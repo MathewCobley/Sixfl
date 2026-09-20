@@ -6,6 +6,7 @@ import {
   BanknotesIcon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
+  ChatBubbleLeftRightIcon,
   HomeIcon,
   PlayCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -97,6 +98,8 @@ const tabs = (
 const appTabs = (
   teamId: string,
   previewMembershipId: string | null,
+  unreadChatCount: number,
+  showTeamChat: boolean,
 ): PlayerAppTab[] => [
   {
     href: addPreviewMembershipId(`/player/team/${teamId}`, previewMembershipId),
@@ -113,12 +116,20 @@ const appTabs = (
     exact: false,
     icon: CalendarDaysIcon,
   },
-  {
-    href: addPreviewMembershipId(`/player/team/${teamId}/stats`, previewMembershipId),
-    label: "Stats",
-    exact: false,
-    icon: ChartBarSquareIcon,
-  },
+  ...(showTeamChat
+    ? [{
+        href: addPreviewMembershipId(`/player/team/${teamId}/chat`, previewMembershipId),
+        label: "Chat",
+        exact: false,
+        unreadCount: unreadChatCount,
+        icon: ChatBubbleLeftRightIcon,
+      }]
+    : [{
+        href: addPreviewMembershipId(`/player/team/${teamId}/stats`, previewMembershipId),
+        label: "Stats",
+        exact: false,
+        icon: ChartBarSquareIcon,
+      }]),
   {
     href: addPreviewMembershipId(`/player/team/${teamId}/tv`, previewMembershipId),
     label: "TV",
@@ -201,7 +212,7 @@ export default function PlayerTeamNav({
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 px-1 pt-1.5">
-          {appTabs(teamId, previewMembershipId).map((tab) => {
+          {appTabs(teamId, previewMembershipId, unreadChatCount, showTeamChat).map((tab) => {
             const active = isActivePath(pathname, tab);
             const Icon = tab.icon;
 
@@ -217,10 +228,20 @@ export default function PlayerTeamNav({
                     : "text-white/40 active:bg-white/[0.05] active:text-white/70",
                 ].join(" ")}
               >
-                <Icon
-                  aria-hidden="true"
-                  className={active ? "h-5 w-5 stroke-[2.2]" : "h-5 w-5"}
-                />
+                <span className="relative">
+                  <Icon
+                    aria-hidden="true"
+                    className={active ? "h-5 w-5 stroke-[2.2]" : "h-5 w-5"}
+                  />
+                  {(tab.unreadCount ?? 0) > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-2.5 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[9px] font-black leading-none text-black"
+                    >
+                      {(tab.unreadCount ?? 0) > 99 ? "99+" : tab.unreadCount}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="truncate">{tab.label}</span>
               </Link>
             );
