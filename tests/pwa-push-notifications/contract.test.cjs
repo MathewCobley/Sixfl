@@ -31,9 +31,14 @@ test("permission is user initiated and ordinary chat is not advertised as noisy"
   assert.match(control, /onClick=\{enableNotifications\}/);
   assert.match(control, /Notification\.requestPermission\(\)/);
   assert.match(control, /Normal chat replies will not pop up on your phone/);
+  const effectStart = control.indexOf("useEffect(() =>");
+  const enableStart = control.indexOf("async function enableNotifications");
+  assert.ok(effectStart >= 0 && enableStart > effectStart);
+  const effectSource = control.slice(effectStart, enableStart);
+
   assert.doesNotMatch(
-    control,
-    /useEffect\([\s\S]{0,800}Notification\.requestPermission\(\)/,
+    effectSource,
+    /Notification\.requestPermission\(\)/,
     "notification permission must not be requested automatically from an effect",
   );
 });
