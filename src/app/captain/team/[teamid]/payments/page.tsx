@@ -700,7 +700,7 @@ export default async function CaptainPaymentsPage({
                   min="0.01"
                   max={(flexiblePaymentMaxPence / 100).toFixed(2)}
                   step="0.01"
-                  placeholder="43.00"
+                  placeholder="0.00"
                   required
                   className="h-12 w-full rounded-2xl border border-white/15 bg-black/30 pl-8 pr-4 text-base font-semibold text-white outline-none transition placeholder:text-white/25 focus:border-emerald-300/50"
                 />
