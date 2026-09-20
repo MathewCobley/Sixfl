@@ -8,7 +8,8 @@ type Thumbnail = { kind: Kind; headline: string; strapline: string; showScore: b
 type Publish = { id: string; kind: Kind; state: "QUEUED" | "PROCESSING" | "READY" | "FAILED"; title: string; description: string; privacyStatus: "private" | "unlisted" | "public"; youtubeVideoId: string | null; youtubeUrl: string | null; error: string | null; createdAt: string; completedAt: string | null };
 type YoutubeDefaults = { title: string; description: string };
 type ThumbnailDraft = { headline: string; strapline: string; showScore: boolean };
-type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null }; youtubeDefaults: Record<Kind, YoutubeDefaults> };
+type PublishableKind = Exclude<Kind, "HIGHLIGHTS_ALT">;
+type State = { renders: Render[]; thumbnails: Thumbnail[]; publishes: Publish[]; youtube: { configured: boolean; connected: boolean; channelId: string | null; channelTitle: string | null }; youtubeDefaults: Record<PublishableKind, YoutubeDefaults> };
 
 async function json<T>(url: string, body?: Record<string, unknown>) {
   const response = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" } : { cache: "no-store" });
@@ -28,7 +29,7 @@ function renderActive(render: Render) { return render.state === "QUEUED" || rend
 function renderStopped(render?: Render) { return render?.state === "FAILED" && /^Stopped by SIXFL admin\./.test(render.error || ""); }
 function renderStateLabel(render?: Render) { return renderStopped(render) ? "STOPPED" : render?.state || "Not generated"; }
 
-function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: Kind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (kind: Kind, draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
+function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDraftChange, onSaved }: { fixtureId: string; kind: PublishableKind; current?: Thumbnail; busy: boolean; renderRevision?: string; onDraftChange: (kind: PublishableKind, draft: ThumbnailDraft) => void; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(current?.headline || (kind === "HIGHLIGHTS" ? "MATCH HIGHLIGHTS" : "FULL MATCH"));
   const [strapline, setStrapline] = useState(current?.strapline || "");
   const [showScore, setShowScore] = useState(current?.showScore ?? true);
@@ -79,7 +80,7 @@ function ThumbnailEditor({ fixtureId, kind, current, busy, renderRevision, onDra
   </section>;
 }
 
-function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defaults, connected, busy, onRefresh }: { fixtureId: string; kind: Kind; render?: Render; thumbnailDraft: ThumbnailDraft; publish?: Publish; defaults: YoutubeDefaults; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
+function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defaults, connected, busy, onRefresh }: { fixtureId: string; kind: PublishableKind; render?: Render; thumbnailDraft: ThumbnailDraft; publish?: Publish; defaults: YoutubeDefaults; connected: boolean; busy: boolean; onRefresh: () => Promise<void> }) {
   const [title, setTitle] = useState(publish?.title || defaults.title);
   const [description, setDescription] = useState(publish?.description || defaults.description);
   const [sending, setSending] = useState(false), [error, setError] = useState("");
@@ -126,7 +127,7 @@ function PublishEditor({ fixtureId, kind, render, thumbnailDraft, publish, defau
 export default function StudioControls({ fixtureId, initial }: { fixtureId: string; initial: State }) {
   const [state, setState] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
   const initialThumbs = new Map(initial.thumbnails.map(thumb => [thumb.kind, thumb]));
-  const [thumbnailDrafts, setThumbnailDrafts] = useState<Record<Exclude<Kind, "HIGHLIGHTS_ALT">, ThumbnailDraft>>({
+  const [thumbnailDrafts, setThumbnailDrafts] = useState<Record<PublishableKind, ThumbnailDraft>>({
     HIGHLIGHTS: {
       headline: initialThumbs.get("HIGHLIGHTS")?.headline || "MATCH HIGHLIGHTS",
       strapline: initialThumbs.get("HIGHLIGHTS")?.strapline || "",
@@ -138,7 +139,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
       showScore: initialThumbs.get("FULL_MATCH")?.showScore ?? true,
     },
   });
-  const updateThumbnailDraft = useCallback((kind: Exclude<Kind, "HIGHLIGHTS_ALT">, draft: ThumbnailDraft) => {
+  const updateThumbnailDraft = useCallback((kind: PublishableKind, draft: ThumbnailDraft) => {
     setThumbnailDrafts(current => {
       const previous = current[kind];
       if (
@@ -261,7 +262,7 @@ export default function StudioControls({ fixtureId, initial }: { fixtureId: stri
         {(!render || !renderActive(render)) ? <div className="mt-4"><button type="button" className={button} disabled={busy || activeRenders.length > 0} onClick={() => void generate(kind)}>{busy ? "Queuing…" : render?.state === "READY" ? `Regenerate ${kindLabel(kind)} only` : `Generate ${kindLabel(kind)} only`}</button></div> : null}
       </section>;
     })}</div>
-    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as Array<Exclude<Kind, "HIGHLIGHTS_ALT">>).map(kind => {
+    <div><h2 className="mb-3 text-xl font-bold text-white">YouTube thumbnails</h2><div className="grid gap-4 lg:grid-cols-2">{(["HIGHLIGHTS", "FULL_MATCH"] as PublishableKind[]).map(kind => {
       const render = renderByKind.get(kind);
       return <ThumbnailEditor
         key={`${kind}-${thumbByKind.get(kind)?.updatedAt || "new"}-${render?.completedAt || render?.id || "no-render"}`}
