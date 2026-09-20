@@ -50,6 +50,7 @@ function previewText(value: string | null | undefined, max = 120) {
 
 function activityLabel(kind: AdminActivityKind) {
   const labels: Record<AdminActivityKind, string> = {
+    APP_MESSAGE: "App message",
     MESSAGE: "Message",
     LEAD: "Lead",
     TEAM_PAYMENT: "Payment",
@@ -64,6 +65,7 @@ function activityLabel(kind: AdminActivityKind) {
 }
 
 function activityTone(kind: AdminActivityKind) {
+  if (kind === "APP_MESSAGE") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
   if (kind === "MESSAGE") return "border-sky-400/20 bg-sky-500/10 text-sky-100";
   if (kind === "LEAD") return "border-violet-400/20 bg-violet-500/10 text-violet-100";
   if (kind === "TEAM_PAYMENT" || kind === "PLAYER_PAYMENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";

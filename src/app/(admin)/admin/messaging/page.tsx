@@ -19,6 +19,8 @@ import CommunicationsLeagueLauncher from "@/components/admin/communications/Comm
 import CommunicationsProspectLauncher from "@/components/admin/communications/CommunicationsProspectLauncher";
 import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
+import AdminAppMessagingPanel from "@/components/admin/messaging/AdminAppMessagingPanel";
+import { getAdminAppMessagingDashboard } from "@/lib/admin/app-messaging";
 
 type LeagueLauncherOption = {
   id: string;
@@ -152,7 +154,15 @@ export default async function AdminMessagesPage({
     error: sp.error,
   });
 
-  const [summary, threads, selectedThread, leagueLauncherOptions, teams, prospects] = await Promise.all([
+  const [
+    summary,
+    threads,
+    selectedThread,
+    leagueLauncherOptions,
+    teams,
+    prospects,
+    appMessaging,
+  ] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
       unreadOnly: selectedFilter === "unread",
@@ -200,6 +210,7 @@ export default async function AdminMessagesPage({
         },
       },
     }),
+    getAdminAppMessagingDashboard(),
   ]);
 
   const fallbackThread =
@@ -342,6 +353,8 @@ export default async function AdminMessagesPage({
             {composeNotice.message}
           </section>
         ) : null}
+
+        <AdminAppMessagingPanel data={appMessaging} />
 
         <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-5">
           <CommunicationsTeamLauncher

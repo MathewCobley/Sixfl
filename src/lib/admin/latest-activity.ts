@@ -1,8 +1,13 @@
-import { Prisma } from "@prisma/client";
+import {
+  PortalConversationType,
+  PortalMessageSenderRole,
+  Prisma,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
 export type AdminActivityKind =
+  | "APP_MESSAGE"
   | "MESSAGE"
   | "LEAD"
   | "TEAM_PAYMENT"
@@ -71,6 +76,7 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
   const sourceLimit = Math.max(5, safeLimit * 2);
 
   const [
+    appMessages,
     messages,
     leads,
     teamPayments,
@@ -81,6 +87,31 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
     results,
     disputes,
   ] = await Promise.all([
+    prisma.portalMessage.findMany({
+      where: {
+        deletedAt: null,
+        senderRole: {
+          in: [
+            PortalMessageSenderRole.CAPTAIN,
+            PortalMessageSenderRole.PLAYER,
+          ],
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: sourceLimit,
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        senderUser: { select: { name: true, email: true } },
+        conversation: {
+          select: {
+            team: { select: { name: true } },
+            type: true,
+          },
+        },
+      },
+    }),
     prisma.messageEntry.findMany({
       where: { direction: "INBOUND" },
       orderBy: [{ createdAt: "desc" }],
@@ -267,6 +298,22 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
   ]);
 
   const activity: AdminActivityItem[] = [];
+
+  for (const item of appMessages) {
+    const sender = personName(item.senderUser ?? {});
+    const teamName = item.conversation.team.name;
+    const privateChat =
+      item.conversation.type === PortalConversationType.CAPTAIN_PLAYER;
+
+    activity.push({
+      id: `app-message:${item.id}`,
+      kind: "APP_MESSAGE",
+      title: `${sender} sent an app message · ${teamName}`,
+      detail: `${privateChat ? "Private captain chat" : "Team chat"} · ${preview(item.body, 100)}`,
+      occurredAt: item.createdAt,
+      href: "/admin/messaging#app-messaging",
+    });
+  }
 
   for (const item of messages) {
     const sender =

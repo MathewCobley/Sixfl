@@ -61,14 +61,34 @@ export async function GET(request: Request) {
     );
   }
 
-  await prisma.pushSubscription.update({
-    where: { id: subscription.id },
-    data: {
-      lastSeenAt: now,
-      lastDeliveredAt: notification.createdAt,
-      failureCount: 0,
-    },
-  });
+  await prisma.$transaction([
+    prisma.pushSubscription.update({
+      where: { id: subscription.id },
+      data: {
+        lastSeenAt: now,
+        lastDeliveredAt: notification.createdAt,
+        failureCount: 0,
+      },
+    }),
+    prisma.pushNotificationDelivery.upsert({
+      where: {
+        notificationId_subscriptionId: {
+          notificationId: notification.id,
+          subscriptionId: subscription.id,
+        },
+      },
+      update: {
+        status: "FETCHED",
+        recordedAt: now,
+      },
+      create: {
+        notificationId: notification.id,
+        subscriptionId: subscription.id,
+        status: "FETCHED",
+        recordedAt: now,
+      },
+    }),
+  ]);
 
   return NextResponse.json(
     {

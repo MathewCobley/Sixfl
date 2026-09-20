@@ -1358,7 +1358,8 @@ model PushSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries PushNotificationDelivery[]
 
   @@index([userId, disabledAt])
   @@index([lastSeenAt])
@@ -1376,14 +1377,33 @@ model PushNotification {
   sourceType String?
   sourceId String?
   expiresAt DateTime?
+  targetedDeviceCount Int @default(0)
 
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries PushNotificationDelivery[]
 
   @@index([userId, createdAt])
   @@index([sourceType, sourceId])
   @@index([expiresAt])
+}
+
+model PushNotificationDelivery {
+  id String @id @default(cuid())
+
+  notificationId String
+  subscriptionId String
+  status String
+  recordedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notification PushNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscription PushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, subscriptionId])
+  @@index([status, recordedAt])
+  @@index([subscriptionId, recordedAt])
 }
 
 model InboxAlert {
