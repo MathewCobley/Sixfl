@@ -21,6 +21,25 @@ test('Night Board SIXFL TV selection confirms the real Veo booking', () => {
   assert.match(helper, /maximum/);
 });
 
+test('Night Board admin can deliberately override Priority when choosing who is filmed', () => {
+  assert.match(helper, /const priorityOverride = !target\.eligible/);
+  assert.doesNotMatch(helper, /if \(!target\.eligible\) \{[\s\S]*Neither team currently has active SIXFL TV Priority/);
+  assert.match(helper, /adminPriorityOverride: priorityOverride/);
+  assert.match(helper, /homePriorityScore: target\.homePriorityScore/);
+  assert.match(helper, /awayPriorityScore: target\.awayPriorityScore/);
+  assert.match(route, /priorityOverride = result\.priorityOverride/);
+  assert.match(toggle, /admin can override Priority/);
+  assert.match(toggle, /admin filming selection/);
+});
+
+test('manual admin filming still keeps camera safety checks', () => {
+  assert.match(helper, /activeBookings\.length >= preview\.settings\.maxMatches/);
+  assert.match(helper, /activeBookings\.some\(\(booking\) => overlaps\(target, booking\)\)/);
+  assert.match(helper, /This fixture is not at the configured Veo venue/);
+  assert.match(helper, /Only a published, upcoming scheduled fixture can be confirmed/);
+  assert.match(helper, /No movable fixture is on/);
+});
+
 test('Night Board contains no legacy Priority charge path', () => {
   assert.match(helper, /noPriorityFees: true/);
   assert.doesNotMatch(helper, /ensureAcceptedVeoCharges|paymentCharge\.create|amountPence:\s*500/);
