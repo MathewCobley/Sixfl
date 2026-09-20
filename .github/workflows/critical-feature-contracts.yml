@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check PWA version-aware updates
+        run: node --test tests/pwa-version-aware-updates.test.cjs
+
       - name: Check native homepage night copy
         run: node --test tests/critical-pages/league-night-copy.test.cjs
 
