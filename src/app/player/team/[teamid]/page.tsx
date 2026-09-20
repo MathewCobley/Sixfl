@@ -18,6 +18,7 @@ import {
 import { authOptions } from "@/auth";
 import PlayerAppHome from "@/components/player/PlayerAppHome";
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
+import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 
@@ -395,8 +396,9 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
-      <PlayerAppHome
-        teamId={teamid}
+      <PlayerPwaModeOnly mode="app">
+        <PlayerAppHome
+          teamId={teamid}
         playerName={membership?.user.name ?? user.name ?? null}
         leagueName={team.league?.name ?? null}
         nextFixture={
@@ -418,9 +420,11 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
         recentResult={recentResult}
         previewMembershipId={previewMembership?.id ?? null}
-        showTeamChat={user.role === UserRole.ADMIN}
-      />
-      <div className="player-web-home mx-auto max-w-6xl space-y-8">
+          showTeamChat={user.role === UserRole.ADMIN}
+        />
+      </PlayerPwaModeOnly>
+      <PlayerPwaModeOnly mode="web">
+        <div className="player-web-home mx-auto max-w-6xl space-y-8">
         <section className="player-overview-identity overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
@@ -762,7 +766,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
             </section>
           </div>
         </section>
-      </div>
+        </div>
+      </PlayerPwaModeOnly>
     </main>
   );
 }
