@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BanknotesIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -71,6 +72,7 @@ export default function PlayerAppHome({
   nextPaymentUrl,
   recentResult,
   previewMembershipId,
+  showTeamChat,
 }: {
   teamId: string;
   playerName: string | null;
@@ -81,6 +83,7 @@ export default function PlayerAppHome({
   nextPaymentUrl: string | null;
   recentResult: RecentResult | null;
   previewMembershipId: string | null;
+  showTeamChat: boolean;
 }) {
   const firstName = playerName?.trim().split(/\s+/)[0] || null;
   const availability = availabilityCopy(nextAvailability);
@@ -88,6 +91,10 @@ export default function PlayerAppHome({
     nextFixture
       ? `/player/team/${teamId}/availability?fixtureId=${encodeURIComponent(nextFixture.id)}`
       : `/player/team/${teamId}/availability`,
+    previewMembershipId,
+  );
+  const chatHref = addPreviewMembershipId(
+    `/player/team/${teamId}/chat`,
     previewMembershipId,
   );
   const statsHref = addPreviewMembershipId(
@@ -210,6 +217,24 @@ export default function PlayerAppHome({
               </span>
               <ChevronRightIcon className="h-5 w-5 text-white/25" />
             </Link>
+
+            {showTeamChat ? (
+              <Link
+                href={chatHref}
+                className="flex min-h-16 items-center gap-4 border-b border-white/[0.06] px-4 py-3 active:bg-white/[0.04]"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-400/10 text-violet-200">
+                  <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-white">Team chat</span>
+                  <span className="mt-0.5 block text-xs text-white/45">
+                    Team conversation and private captain messages
+                  </span>
+                </span>
+                <ChevronRightIcon className="h-5 w-5 text-white/25" />
+              </Link>
+            ) : null}
 
             <Link
               href={nextPaymentUrl || ledgerHref}
