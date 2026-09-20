@@ -811,6 +811,69 @@ export async function createSixflTvAltHighlightsOverlay(input: {
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
+
+export async function createSixflTvAltVideoCard(input: {
+  fixture: SixflTvGraphicFixture;
+  mode: "TITLE" | "FULL_TIME";
+  siteUrl: string;
+}) {
+  const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
+    fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
+    fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(input.siteUrl),
+    embeddedFontStyle(input.siteUrl),
+  ]);
+  const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
+  const heading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH HIGHLIGHTS";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs><linearGradient id="altBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050505"/><stop offset="0.55" stop-color="#10110d"/><stop offset="1" stop-color="#050505"/></linearGradient><filter id="altShadow"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity=".55"/></filter></defs>
+    ${fontCss}<rect width="1920" height="1080" fill="url(#altBg)"/>
+    <rect x="0" y="0" width="18" height="1080" fill="#f4d000"/>
+    ${logoImage(sixflTvLogoBytes, 1515, 54, 300, 96, 0.96)}
+    <text x="110" y="120" font-size="24" font-weight="800" letter-spacing="5" fill="#f4d000">${xml(heading)}</text>
+    <text x="110" y="182" font-size="28" font-weight="700" fill="#bdbdbd">${xml(fit(input.fixture.leagueName, 62))}${Number.isInteger(input.fixture.matchweekNumber) ? ` · MATCHWEEK ${input.fixture.matchweekNumber}` : ""}</text>
+    <g filter="url(#altShadow)">${badgeImage(firstBadge, 180, 325, 235, input.fixture.firstTeam.name)}${badgeImage(secondBadge, 1505, 325, 235, input.fixture.secondTeam.name)}</g>
+    <text x="495" y="430" font-size="62" font-weight="900" fill="#fff">${xml(fit(input.fixture.firstTeam.name, 23))}</text>
+    <text x="1425" y="430" text-anchor="end" font-size="62" font-weight="900" fill="#fff">${xml(fit(input.fixture.secondTeam.name, 23))}</text>
+    ${scoreVisible ? `<text x="960" y="610" text-anchor="middle" font-size="190" font-weight="900" fill="#fff">${input.fixture.firstTeam.score}<tspan fill="#f4d000"> – </tspan>${input.fixture.secondTeam.score}</text>` : `<text x="960" y="610" text-anchor="middle" font-size="150" font-weight="900" fill="#f4d000">VS</text>`}
+    <line x1="110" y1="820" x2="1810" y2="820" stroke="#fff" stroke-opacity=".14"/>
+    <text x="110" y="890" font-size="28" font-weight="700" fill="#fff">${xml(input.fixture.kickoffLabel)}</text>
+    <text x="1810" y="890" text-anchor="end" font-size="22" font-weight="800" letter-spacing="4" fill="#f4d000">SIXFL TV</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
+export async function createSixflTvAltLineupCard(input: { fixture: SixflTvGraphicFixture; siteUrl: string }) {
+  const first=(input.fixture.firstTeamLineup||[]).slice(0,12), second=(input.fixture.secondTeamLineup||[]).slice(0,12);
+  if(!first.length&&!second.length) return null;
+  const [firstBadge,secondBadge,sixflTvLogoBytes,fontCss]=await Promise.all([fetchSixflTvBadge(input.fixture.firstTeam.logoUrl,input.siteUrl),fetchSixflTvBadge(input.fixture.secondTeam.logoUrl,input.siteUrl),sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
+  const rows=Math.max(first.length,second.length,1), gap=Math.min(58,Math.floor(520/rows));
+  const list=(items:string[],x:number)=>items.map((name,i)=>`<text x="${x}" y="${390+i*gap}" font-size="32" font-weight="700" fill="#fff">${xml(fit(name,28))}</text>`).join("");
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(sixflTvLogoBytes,1515,54,300,96,.96)}
+  <text x="110" y="130" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">MATCHDAY SQUADS</text>
+  <g>${badgeImage(firstBadge,110,210,105,input.fixture.firstTeam.name)}${badgeImage(secondBadge,1010,210,105,input.fixture.secondTeam.name)}</g>
+  <text x="245" y="280" font-size="42" font-weight="900" fill="#fff">${xml(fit(input.fixture.firstTeam.name,26))}</text><text x="1145" y="280" font-size="42" font-weight="900" fill="#fff">${xml(fit(input.fixture.secondTeam.name,26))}</text>
+  <line x1="960" y1="210" x2="960" y2="900" stroke="#fff" stroke-opacity=".12"/>${list(first,110)}${list(second,1010)}
+  <text x="110" y="980" font-size="24" font-weight="700" fill="#aaa">${xml(fit(input.fixture.leagueName,62))}</text></svg>`;
+  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+}
+
+export async function createSixflTvAltLeagueTableCard(input:{fixture:SixflTvGraphicFixture;page:"TOP"|"BOTTOM";siteUrl:string}) {
+  const table=input.fixture.leagueTable;if(!table?.rows?.length)return null;
+  const midpoint=Math.ceil(table.rows.length/2), rows=input.page==="TOP"?table.rows.slice(0,midpoint):table.rows.slice(midpoint);if(!rows.length)return null;
+  const [logo,fontCss]=await Promise.all([sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
+  const body=rows.map((row,i)=>{const y=370+i*78;return `<g><text x="130" y="${y}" font-size="30" font-weight="900" fill="#f4d000">${row.position}</text><text x="210" y="${y}" font-size="32" font-weight="800" fill="#fff">${xml(fit(row.teamName,34))}</text><text x="1370" y="${y}" text-anchor="middle" font-size="28" fill="#bbb">${row.played}</text><text x="1540" y="${y}" text-anchor="middle" font-size="28" fill="#bbb">${row.goalDifference>0?"+":""}${row.goalDifference}</text><text x="1740" y="${y}" text-anchor="middle" font-size="34" font-weight="900" fill="#fff">${row.points}</text><line x1="120" y1="${y+27}" x2="1800" y2="${y+27}" stroke="#fff" stroke-opacity=".08"/></g>`}).join("");
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(logo,1515,54,300,96,.96)}<text x="110" y="130" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">CURRENT LEAGUE STANDINGS</text><text x="110" y="205" font-size="52" font-weight="900" fill="#fff">${xml(fit(table.title,55))}</text><text x="1370" y="300" text-anchor="middle" font-size="18" fill="#888">P</text><text x="1540" y="300" text-anchor="middle" font-size="18" fill="#888">GD</text><text x="1740" y="300" text-anchor="middle" font-size="18" fill="#888">PTS</text>${body}</svg>`;
+  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+}
+
+export async function createSixflTvAltGoalOfMonthCard(input:{siteUrl:string;fixture:SixflTvGraphicFixture}) {
+  const d=input.fixture.kickoffIso?new Date(input.fixture.kickoffIso):new Date(), month=new Intl.DateTimeFormat("en-GB",{month:"long",timeZone:"Europe/London"}).format(d).toUpperCase();
+  const [logo,fontCss]=await Promise.all([sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(logo,1515,54,300,96,.96)}<text x="110" y="145" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">SIXFL GOAL OF THE MONTH</text><text x="110" y="345" font-size="112" font-weight="900" fill="#fff">${xml(month)}</text><text x="110" y="455" font-size="64" font-weight="900" fill="#fff">SEEN A WINNER?</text><line x1="110" y1="535" x2="960" y2="535" stroke="#f4d000" stroke-width="8"/><text x="110" y="650" font-size="42" font-weight="800" fill="#fff">Nominate &amp; vote at sixfl.co.uk/goal-of-the-month</text><text x="110" y="735" font-size="28" font-weight="700" fill="#aaa">Nominate until 5 ${xml(month)} · Vote 6–12 ${xml(month)}</text></svg>`;
+  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+}
+
 export async function createSixflTvLeagueTableCard(input: {
   fixture: SixflTvGraphicFixture;
   page: "TOP" | "BOTTOM";
