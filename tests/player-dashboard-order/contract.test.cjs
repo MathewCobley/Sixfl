@@ -43,6 +43,7 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
       CalendarDaysIcon: icon,
       ChartBarSquareIcon: icon,
       ChatBubbleLeftRightIcon: icon,
+      EllipsisHorizontalCircleIcon: icon,
       HomeIcon: icon,
       PlayCircleIcon: icon,
     },
