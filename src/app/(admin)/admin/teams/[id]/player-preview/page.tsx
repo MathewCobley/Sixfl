@@ -33,6 +33,6 @@ export default async function AdminTeamPlayerPreviewPage({
   }
 
   redirect(
-    `/player/team/${id}?previewMembershipId=${encodeURIComponent(firstMembership.id)}`,
+    `/player/team/${id}?previewMembershipId=${encodeURIComponent(firstMembership.id)}&pwaPreview=1`,
   );
 }
