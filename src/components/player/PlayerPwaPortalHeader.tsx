@@ -60,11 +60,13 @@ export default function PlayerPwaPortalHeader({
 
         body:has(.player-pwa-mode) .player-pwa-portal-header,
         body:has(.player-pwa-mode) .player-app-home {
-          display: block;
+          display: block !important;
         }
 
         body:has(.player-pwa-mode) .player-web-home,
         body:has(.player-pwa-mode) .player-web-discovery,
+        body:has(.player-pwa-mode) section[aria-label="Latest League News"],
+        body:has(.player-pwa-mode) .player-temporary-pass-launcher,
         body:has(.player-pwa-mode) .player-overview-identity,
         body:has(.player-pwa-mode) .player-team-layout main section.sticky.z-50,
         body:has(.player-pwa-mode) .player-team-layout main section:has(a[href="/player/referrals"]) {
