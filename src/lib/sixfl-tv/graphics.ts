@@ -445,12 +445,8 @@ export async function createGoalOfMonthNominationThumbnail(input: {
   scorerName: string | null;
   teamName: string;
   teamLogoUrl?: string | null;
-  homeTeamName: string;
-  awayTeamName: string;
-  homeScore?: number | null;
-  awayScore?: number | null;
   kickoffAt: Date | string;
-  leagueName: string;
+  matchweekNumber?: number | null;
   backgroundImage?: Buffer | null;
 }) {
   const [sixflTvLogoBytes, teamBadge] = await Promise.all([
@@ -458,74 +454,57 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     fetchSixflTvBadge(input.teamLogoUrl, input.siteUrl),
   ]);
   const scorer = fit(input.scorerName || input.teamName, 24);
-  const team = fit(input.teamName, 36);
-  const home = fit(input.homeTeamName, 24);
-  const away = fit(input.awayTeamName, 24);
-  const league = fit(input.leagueName, 54);
+  const team = fit(input.teamName, 34);
   const sourceDate = input.kickoffAt instanceof Date ? input.kickoffAt : new Date(input.kickoffAt);
-  const matchDate = Number.isFinite(sourceDate.getTime())
-    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
-    : "";
-  const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
-  const scorerIsHome = input.teamName.trim().toLowerCase() === input.homeTeamName.trim().toLowerCase();
-  const scorerIsAway = input.teamName.trim().toLowerCase() === input.awayTeamName.trim().toLowerCase();
-  const homeFill = scorerIsHome ? "#6ee7b7" : "#cbd5e1";
-  const awayFill = scorerIsAway ? "#6ee7b7" : "#cbd5e1";
+  const validDate = Number.isFinite(sourceDate.getTime()) ? sourceDate : new Date();
+  const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" }).format(validDate).toUpperCase();
+  const matchweek = Number.isInteger(input.matchweekNumber) ? `MATCHWEEK ${input.matchweekNumber}` : "MATCHWEEK";
 
   const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     <defs>
       <linearGradient id="fallback" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07170f"/><stop offset="0.58" stop-color="#03100b"/><stop offset="1" stop-color="#000000"/></linearGradient>
-      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000" stop-opacity="0.90"/><stop offset="0.46" stop-color="#000000" stop-opacity="0.72"/><stop offset="0.72" stop-color="#000000" stop-opacity="0.32"/><stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>
-      <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.62" stop-color="#000000" stop-opacity="0.12"/><stop offset="1" stop-color="#000000" stop-opacity="0.72"/></linearGradient>
-      <filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#000000" flood-opacity="0.72"/></filter>
+      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000" stop-opacity="0.96"/><stop offset="0.50" stop-color="#000000" stop-opacity="0.78"/><stop offset="0.74" stop-color="#000000" stop-opacity="0.28"/><stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>
+      <linearGradient id="brandPanel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#04120d" stop-opacity="0.38"/><stop offset="1" stop-color="#061a13" stop-opacity="0.82"/></linearGradient>
+      <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000000" flood-opacity="0.72"/></filter>
     </defs>
     ${input.backgroundImage?.length ? "" : "<rect width=\"1280\" height=\"720\" fill=\"url(#fallback)\"/>"}
-    <rect width="900" height="720" fill="url(#leftShade)"/>
-    <rect width="1280" height="720" fill="url(#bottomShade)"/>
-    <polygon points="0,0 178,0 128,106 0,106" fill="#10b981"/>
-    <polygon points="102,0 188,0 138,106 52,106" fill="#d1fae5" fill-opacity="0.92"/>
-    <polygon points="167,0 236,0 186,106 117,106" fill="#064e3b"/>
-    ${logoImage(sixflTvLogoBytes, 42, 28, 270, 86)}
-    <g filter="url(#shadow)">${badgeImage(teamBadge, 48, 265, 132, input.teamName)}</g>
-    <rect x="48" y="482" width="790" height="112" rx="22" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.72" stroke-width="3"/>
-    ${hasScore ? "<rect x=\"407\" y=\"494\" width=\"72\" height=\"28\" rx=\"14\" fill=\"#10b981\"/>" : ""}
-    <rect x="48" y="696" width="420" height="6" rx="3" fill="#10b981"/>
+    <rect width="860" height="720" fill="url(#leftShade)"/>
+    <polygon points="0,0 176,0 72,154 0,154" fill="#10b981" fill-opacity="0.25"/>
+    <polygon points="54,0 126,0 24,150 0,150 0,111" fill="#6ee7b7" fill-opacity="0.17"/>
+    <rect x="946" y="0" width="334" height="98" fill="url(#brandPanel)"/>
+    <polygon points="948,0 1060,0 994,98 912,98" fill="#10b981" fill-opacity="0.28"/>
+    <polygon points="1018,0 1088,0 1022,98 976,98" fill="#2dd4bf" fill-opacity="0.70"/>
+    ${logoImage(sixflTvLogoBytes, 1034, 18, 220, 70)}
+    <g filter="url(#shadow)">${badgeImage(teamBadge, 62, 372, 132, input.teamName)}</g>
+    <rect x="62" y="574" width="190" height="5" rx="3" fill="#2dd4bf"/>
   </svg>`;
 
-  const [titleText, nomineeText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, dateText, leagueText] = await Promise.all([
-    thumbnailTextPng({ text: "GOAL OF THE MONTH", width: 680, height: 54, fontSize: 38, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
-    thumbnailTextPng({ text: "NOMINEE", width: 360, height: 42, fontSize: 25, bold: true, fill: "#6ee7b7", letterSpacing: 4 }),
-    thumbnailTextPng({ text: scorer, width: 690, height: 82, fontSize: 58, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: 690, height: 44, fontSize: 27, bold: true, fill: "#a7f3d0" }),
-    thumbnailTextPng({ text: home, width: 290, height: 50, fontSize: 32, bold: true, fill: homeFill, align: "right" }),
-    thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 58, height: 62, fontSize: 42, bold: true, fill: homeFill, align: "center" }),
-    thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 52, height: 62, fontSize: 38, bold: true, fill: "#ffffff", align: "center" }),
-    thumbnailTextPng({ text: hasScore ? String(input.awayScore) : "", width: 58, height: 62, fontSize: 42, bold: true, fill: awayFill, align: "center" }),
-    thumbnailTextPng({ text: away, width: 290, height: 50, fontSize: 32, bold: true, fill: awayFill }),
-    thumbnailTextPng({ text: matchDate, width: 520, height: 38, fontSize: 22, bold: true, fill: "#ffffff", letterSpacing: 2.2 }),
-    thumbnailTextPng({ text: league, width: 720, height: 36, fontSize: 19, bold: true, fill: "#d1fae5" }),
+  const [monthGoalText, ofMonthText, nomineeText, scorerText, teamText, matchweekText] = await Promise.all([
+    thumbnailTextPng({ text: `${month} GOAL`, width: 720, height: 76, fontSize: 54, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: "OF THE MONTH", width: 720, height: 76, fontSize: 54, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: "NOMINEE", width: 620, height: 112, fontSize: 84, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: scorer, width: 760, height: 92, fontSize: 62, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: 650, height: 50, fontSize: 34, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: matchweek, width: 390, height: 52, fontSize: 34, bold: true, fill: "#ffffff" }),
   ]);
-  const ftText = hasScore
-    ? await thumbnailTextPng({ text: "FT", width: 72, height: 24, fontSize: 14, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.4 })
-    : null;
+
   const composites: sharp.OverlayOptions[] = [
     { input: Buffer.from(overlaySvg), left: 0, top: 0 },
-    { input: titleText, left: 48, top: 132 },
-    { input: nomineeText, left: 50, top: 178 },
-    { input: scorerText, left: 210, top: 286 },
-    { input: teamText, left: 212, top: 350 },
-    { input: homeText, left: 62, top: 525 },
-    { input: homeScoreText, left: 376, top: 515 },
-    { input: separatorText, left: 417, top: 515 },
-    { input: awayScoreText, left: 466, top: 515 },
-    { input: awayText, left: 536, top: 525 },
-    { input: dateText, left: 48, top: 617 },
-    { input: leagueText, left: 48, top: 655 },
+    { input: monthGoalText, left: 62, top: 108 },
+    { input: ofMonthText, left: 62, top: 166 },
+    { input: nomineeText, left: 62, top: 224 },
+    { input: scorerText, left: 224, top: 390 },
+    { input: teamText, left: 226, top: 463 },
+    { input: matchweekText, left: 62, top: 598 },
   ];
-  if (ftText) composites.push({ input: ftText, left: 407, top: 496 });
 
   const background = input.backgroundImage?.length
-    ? await sharp(input.backgroundImage).rotate().resize(1280, 720, { fit: "cover", position: "centre" }).modulate({ brightness: 0.98, saturation: 1.08 }).jpeg({ quality: 92 }).toBuffer()
+    ? await sharp(input.backgroundImage)
+        .rotate()
+        .resize(1280, 720, { fit: "cover", position: "centre" })
+        .modulate({ brightness: 0.88, saturation: 1.08 })
+        .jpeg({ quality: 92 })
+        .toBuffer()
     : null;
   return (background ? sharp(background) : sharp({ create: { width: 1280, height: 720, channels: 3, background: "#020504" } }))
     .composite(composites)
