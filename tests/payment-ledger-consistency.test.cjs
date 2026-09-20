@@ -17,7 +17,7 @@ function loader(mocks={}) {
   const cache=new Map();
   const defaults={
     '@/lib/prisma':{prisma:{$queryRaw:async()=>[]}},
-    '@/lib/payments/player-ledger':{money},
+    '@/lib/payments/player-ledger':{money,visiblePlayerLedgerStateSql:()=>require('@prisma/client').Prisma.sql`TRUE`},
     '@/lib/payments/team-credit-policy':{
       getTeamCreditPolicySnapshot:async()=>({enabled:true,creditHeadroomPence:0}),
       getMaximumAdditionalCollectionPence:({outstandingFixturePence,creditHeadroomPence})=>Math.max(outstandingFixturePence,0)+Math.max(creditHeadroomPence,0),
@@ -118,7 +118,7 @@ async function renderPage({isAdmin=true,mismatch=false,fees=fixtureFees(),credit
   if(mismatch)entry.playerPaidPence+=100;
   const ledger={teamId:'test-team',teamName:'Test team',relatedTeamIds:['test-team'],entries:[entry,...extraEntries],openEntries:[entry,...extraEntries].filter(e=>e.outstandingPence>0),outstandingPence:entry.outstandingPence+extraEntries.reduce((s,e)=>s+e.outstandingPence,0),openChargeCount:(entry.outstandingPence?1:0)+extraEntries.length,selectedEntry:entry};
   const db={team:{findUnique:async()=>({id:'test-team',name:'Test team',teamMode:'STANDARD'})},paymentTransaction:{findMany:async()=>[]},
-    playerMatchFee:{findMany:async({where})=>fees.filter(f=>typeof where.status==='string'?f.status===where.status:!where.status?.in||where.status.in.includes(f.status))},$queryRaw:async()=>receiptStates};
+    playerMatchFee:{findMany:async({where})=>fees.filter(f=>typeof where.status==='string'?f.status===where.status:!where.status?.in||where.status.in.includes(f.status))},$queryRaw:async(query)=>String(query).includes('feeCount')?[{feeCount:0,balancePence:0}]:receiptStates};
   const mocks={
     '@/lib/prisma':{prisma:db},
     '@/lib/requireCaptain':{requireCaptain:async()=>({isAdmin,user:{id:'test-actor',role:isAdmin?'ADMIN':'USER'},accessMode:'captain',...accessOverride})},
