@@ -35,7 +35,17 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
   const search = new URLSearchParams(preview ? 'previewMembershipId=example-membership' : '');
   const navigation = { usePathname: () => pathname, useSearchParams: () => search, useParams: () => ({ teamid: TEAM }) };
   const only = load('src/components/player/PlayerDashboardOnly.tsx', { 'next/navigation': navigation }).default;
-  const nav = load('src/components/player/PlayerTeamNav.tsx', { 'next/navigation': navigation }).default;
+  const icon = props => h('svg', props);
+  const nav = load('src/components/player/PlayerTeamNav.tsx', {
+    'next/navigation': navigation,
+    '@heroicons/react/24/outline': {
+      BanknotesIcon: icon,
+      CalendarDaysIcon: icon,
+      ChartBarSquareIcon: icon,
+      HomeIcon: icon,
+      PlayCircleIcon: icon,
+    },
+  }).default;
   const seen = [];
   const panel = (name, title) => props => {
     seen.push({ name, props });
