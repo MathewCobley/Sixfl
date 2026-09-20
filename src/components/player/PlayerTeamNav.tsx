@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
+type PlayerNavTab = {
+  href: string;
+  label: string;
+  exact: boolean;
+  unreadCount?: number;
+};
+
 function addPreviewMembershipId(href: string, previewMembershipId: string | null) {
   if (!previewMembershipId) return href;
 
@@ -18,7 +25,7 @@ const tabs = (
   teamId: string,
   previewMembershipId: string | null,
   unreadChatCount: number,
-) => [
+): PlayerNavTab[] => [
   {
     href: addPreviewMembershipId(`/player/team/${teamId}`, previewMembershipId),
     label: "Overview",
@@ -101,12 +108,12 @@ export default function PlayerTeamNav({
             ].join(" ")}
           >
             <span>{tab.label}</span>
-            {"unreadCount" in tab && tab.unreadCount > 0 ? (
+            {(tab.unreadCount ?? 0) > 0 ? (
               <span
                 aria-hidden="true"
                 className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1.5 text-[10px] font-black leading-none text-black"
               >
-                {tab.unreadCount > 99 ? "99+" : tab.unreadCount}
+                {(tab.unreadCount ?? 0) > 99 ? "99+" : tab.unreadCount}
               </span>
             ) : null}
           </Link>
