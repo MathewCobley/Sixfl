@@ -366,6 +366,18 @@ test('clip nominees hide internal clip numbers and force the current poster vers
   assert.match(thumbnailRoute, /private, no-store, max-age=0/);
 });
 
+test('existing nominees are backed rather than re-nominated before the finalist vote', () => {
+  const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
+  const promo = read('src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx');
+  assert.match(panel, /Back this goal/);
+  assert.match(panel, /You backed this goal/);
+  assert.match(panel, /Each different player who backs a goal adds to its nomination total/);
+  assert.match(panel, /Backing a goal uses one of your three monthly nominations/);
+  assert.match(promo, /Nominate \/ back goals/);
+  assert.match(promo, /six most-backed nominees go to the player vote/);
+  assert.doesNotMatch(panel, /actionLabel=.*Nominate this goal/);
+});
+
 test('native competition and dashboard reuse one clip component and one monthly API', () => {
   const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
   const dashboard = read('src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx');
