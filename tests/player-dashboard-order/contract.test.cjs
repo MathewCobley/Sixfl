@@ -153,7 +153,10 @@ test('regression catches each original before-children insertion independently',
   assert.throws(() => assertCoreFirst(''), /assert/);
   const first = await renderDashboard({ layoutSource: brokenLayout });
   assert.throws(() => assertCoreFirst(first.html), /goals.*must follow/);
-  const brokenTemplate = read(TEMPLATE).replace('{children}<LatestNews scope="player" />', '<LatestNews scope="player" />{children}');
+  const brokenTemplate = read(TEMPLATE).replace(
+    '{children}<PlayerPwaModeOnly mode="web"><LatestNews scope="player" /></PlayerPwaModeOnly>',
+    '<PlayerPwaModeOnly mode="web"><LatestNews scope="player" /></PlayerPwaModeOnly>{children}',
+  );
   assert.notEqual(brokenTemplate, read(TEMPLATE));
   const second = await renderDashboard({ templateSource: brokenTemplate });
   assert.throws(() => assertCoreFirst(second.html), /Latest League News.*must follow/);
