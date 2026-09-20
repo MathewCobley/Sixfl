@@ -1290,7 +1290,7 @@ model PortalConversation {
   updatedAt DateTime @updatedAt
 
   team            Team  @relation("TeamPortalConversations", fields: [teamId], references: [id], onDelete: Cascade)
-  participantUser User? @relation("PortalConversationParticipantUser", fields: [participantUserId], references: [id], onDelete: Cascade)
+  participantUser User? @relation("PortalConversationParticipantUser", fields: [participantUserId], references: [id], onDelete: SetNull)
 
   messages PortalMessage[]
   reads    PortalConversationRead[]
