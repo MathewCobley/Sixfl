@@ -37,6 +37,7 @@ const overlayRefreshMigration = 'prisma/migrations/20260919234000_refresh_goal_m
 const scorerLinkMigration = 'prisma/migrations/20260920001000_goal_month_link_scorer/migration.sql';
 const fontRefreshMigration = 'prisma/migrations/20260920002000_refresh_goal_month_font_renders/migration.sql';
 const teamHighlightRefreshMigration = 'prisma/migrations/20260920010500_refresh_goal_month_team_highlight/migration.sql';
+const finalVideoFlowMigration = 'prisma/migrations/20260920014500_refresh_goal_month_final_video_flow/migration.sql';
 const now = new Date('2026-09-20T12:00:00Z');
 const input = (userId = 'u1', goalNumber = 1, fixtureId = 'fixture') => ({ userId, goalNumber, fixtureId, scoringTeamId: 'home', scorerTeamMemberId: 'member-home' });
 globalThis.fetch = async () => { throw new Error('Real network requests are forbidden in goal award tests'); };
@@ -252,6 +253,24 @@ test('scorer-team highlight refresh requeues completed nominee renders while ret
   assert.equal(state, 'QUEUED|old-team-highlight-render.mp4|true');
 });
 
+test('final nominee video flow refresh requeues completed renders while preserving the old object until replacement', async () => {
+  sql(`UPDATE "Fixture" SET "sixflTvRecorded"=FALSE,"sixflTvUrl"=NULL WHERE id='fixture';
+    INSERT INTO "SixflTvFootageAsset" (id,"fixtureId",kind,filename,state,position,"createdAt","clipNumber")
+    VALUES ('final-flow-clip','fixture','CLIP','goal.mp4','READY',0,NOW(),1);`);
+  const nomination = await awards.nominateMonthlyGoal({
+    userId: 'u1', fixtureId: 'fixture', scoringTeamId: 'home',
+    clipAssetId: 'final-flow-clip', scorerTeamMemberId: 'member-home',
+  }, now);
+  sql(`UPDATE "GoalOfMonthClipRender"
+    SET "state"='READY',"objectKey"='old-final-flow-render.mp4',"sizeBytes"=123,"durationMs"=22000,
+        "completedAt"=NOW()
+    WHERE "candidateId"='${nomination.candidateId}'`);
+  sql(read(finalVideoFlowMigration));
+  const state = sql(`SELECT "state" || '|' || "objectKey" || '|' || ("completedAt" IS NULL)::text
+    FROM "GoalOfMonthClipRender" WHERE "candidateId"='${nomination.candidateId}'`);
+  assert.equal(state, 'QUEUED|old-final-flow-render.mp4|true');
+});
+
 test('concurrent requests cannot exceed three nominations per account and month', async () => {
   const results = await Promise.allSettled([1,2,3,4].map(number => awards.nominateMonthlyGoal(input('u1', number), now)));
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 3);
@@ -365,10 +384,26 @@ test('Goal of the Month intro may show the scorer-team score, while the approved
 
   assert.match(intro, /const scorerIsHome =/);
   assert.match(intro, /const scorerIsAway =/);
-  assert.match(intro, /const homeFill = scorerIsHome \? "#6ee7b7" : "#cbd5e1"/);
-  assert.match(intro, /const awayFill = scorerIsAway \? "#6ee7b7" : "#cbd5e1"/);
+  assert.match(intro, /const homeFill = scorerIsHome \? "#2dd4bf" : "#cbd5e1"/);
+  assert.match(intro, /const awayFill = scorerIsAway \? "#2dd4bf" : "#cbd5e1"/);
   assert.match(intro, /String\(input\.homeScore\)/);
   assert.match(intro, /String\(input\.awayScore\)/);
   assert.match(intro, /fill: homeFill/);
   assert.match(intro, /fill: awayFill/);
+  assert.match(intro, /GOAL OF THE MONTH NOMINEE/);
+  assert.match(intro, /MATCHWEEK/);
+  assert.match(intro, /leagueText/);
+  assert.match(intro, /align: "center"/);
+});
+
+test('Goal of the Month vote card carries the actual competition dates', () => {
+  const graphics = read('src/lib/sixfl-tv/graphics.ts');
+  const worker = read('scripts/sixfl-tv-worker.ts');
+  assert.match(graphics, /REMEMBER TO VOTE/);
+  assert.match(graphics, /SIXFL\.CO\.UK\/GOAL-OF-THE-MONTH/);
+  assert.match(graphics, /WATCH ALL NOMINEES · CHOOSE YOUR WINNER/);
+  assert.match(worker, /NOMINATIONS CLOSE/);
+  assert.match(worker, /VOTING/);
+  assert.match(worker, /RESULT AVAILABLE FROM/);
+  assert.match(worker, /monthlyPeriod\(key\)/);
 });
