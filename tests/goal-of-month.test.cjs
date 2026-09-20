@@ -448,6 +448,6 @@ test('Goal of the Month video graphics use restrained SIXFL green and a non-clip
   assert.match(overlay, /const replayHeight = 34/);
   assert.match(overlay, /fill="#07110d" stroke="#10b981"/);
   assert.match(overlay, /fontSize: 16/);
-  assert.match(vote, /NOMINATIONS CLOSE/);
-  assert.match(vote, /WINNER ANNOUNCED/);
+  assert.match(vote, /input\.nominationsCloseLabel/);
+  assert.match(vote, /input\.winnerLabel/);
 });
