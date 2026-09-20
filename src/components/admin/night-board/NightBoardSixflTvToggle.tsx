@@ -92,6 +92,7 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
         error?: string;
         veoBookingConfirmed?: boolean;
         acceptedVeoRequests?: number;
+        priorityOverride?: boolean;
       } | null;
 
       if (!response.ok) {
@@ -102,10 +103,13 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
       setBookingConfirmed(confirmed);
       if (nextChecked && confirmed) {
         const accepted = payload?.acceptedVeoRequests ?? 0;
+        const override = Boolean(payload?.priorityOverride);
         setMessage(
-          accepted > 0
-            ? `Veo booking confirmed · ${accepted} historic request${accepted === 1 ? "" : "s"} preserved`
-            : "SIXFL TV booking confirmed · score-based priority",
+          override
+            ? "SIXFL TV booking confirmed · admin filming selection"
+            : accepted > 0
+              ? `Veo booking confirmed · ${accepted} historic request${accepted === 1 ? "" : "s"} preserved`
+              : "SIXFL TV booking confirmed · score-based priority",
         );
       } else {
         setMessage(nextChecked ? "Selected for SIXFL TV" : "Not selected for SIXFL TV");
@@ -127,7 +131,7 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
         <span>
           SIXFL TV
           <span className="ml-2 font-normal text-fuchsia-100/55">
-            {locked ? "Veo booking confirmed" : "Record this match"}
+            {locked ? "Filming confirmed" : "Record this match · admin can override Priority"}
           </span>
         </span>
         <input

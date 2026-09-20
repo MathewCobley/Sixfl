@@ -74,12 +74,14 @@ export async function POST(request: Request) {
   const sixflTvRecorded = body?.sixflTvRecorded ?? Boolean(storedLinks);
   let veoBookingConfirmed = false;
   let acceptedVeoRequests = 0;
+  let priorityOverride = false;
 
   if (sixflTvRecorded && suppliedUrl === undefined && user?.id) {
     try {
       const result = await confirmNightBoardVeoFixture({ fixtureId, actorId: user.id });
       veoBookingConfirmed = result.bookingConfirmed;
       acceptedVeoRequests = result.acceptedRequests;
+      priorityOverride = result.priorityOverride;
     } catch (error) {
       if (error instanceof VeoBookingError) {
         return NextResponse.json({ error: error.message }, { status: 409 });
@@ -140,5 +142,6 @@ export async function POST(request: Request) {
     ...rows[0],
     veoBookingConfirmed,
     acceptedVeoRequests,
+    priorityOverride,
   });
 }

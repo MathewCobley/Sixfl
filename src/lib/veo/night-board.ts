@@ -10,6 +10,7 @@ type NightBoardVeoResult = {
   bookingConfirmed: boolean;
   acceptedRequests: number;
   swappedPitch: boolean;
+  priorityOverride: boolean;
 };
 
 type ActiveBooking = {
@@ -73,20 +74,20 @@ export async function confirmNightBoardVeoFixture(input: {
 
     const settings = await readVeoSettings(initial.leagueId, db);
     if (!settings.enabled || !settings.confirmAtFixture) {
-      return { handled: false, bookingConfirmed: false, acceptedRequests: 0, swappedPitch: false };
+      return { handled: false, bookingConfirmed: false, acceptedRequests: 0, swappedPitch: false, priorityOverride: false };
     }
     if (!settings.venueId || initial.venueId !== settings.venueId) {
       throw new VeoBookingError('This fixture is not at the configured Veo venue. Check the fixture venue before selecting SIXFL TV.');
     }
     if (initial.legacy) {
-      return { handled: false, bookingConfirmed: false, acceptedRequests: 0, swappedPitch: false };
+      return { handled: false, bookingConfirmed: false, acceptedRequests: 0, swappedPitch: false, priorityOverride: false };
     }
     if (initial.placeholder || !initial.publishedAt || initial.status !== 'SCHEDULED' || initial.kickoffAt.getTime() <= Date.now()) {
       throw new VeoBookingError('Only a published, upcoming scheduled fixture can be confirmed for Veo from the Night Board.');
     }
     if (initial.bookingState) {
       if (initial.bookingState === 'PLANNED' || initial.bookingState === 'READY') {
-        return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
+        return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false, priorityOverride: false };
       }
       throw new VeoBookingError('This Veo booking has already been closed and cannot be re-opened from the Night Board.');
     }
@@ -113,13 +114,13 @@ export async function confirmNightBoardVeoFixture(input: {
     if (!preview.cameraKey) throw new VeoBookingError('Veo is not available for this league.');
     const target = preview.fixtures.find((fixture) => fixture.id === input.fixtureId);
     if (!target) throw new VeoBookingError('This fixture is not available in the Veo camera schedule.');
-    if (!target.eligible) {
-      throw new VeoBookingError(
-        `Neither team currently has active SIXFL TV Priority for this fixture. Scores: ${target.homeName} ${target.homePriorityScore ?? 0}/100 · ${target.awayName} ${target.awayPriorityScore ?? 0}/100. A qualifying team must also have confirmed the fixture.`,
-      );
-    }
+    // Priority decides the automatic proposal, but the Night Board is the administrator's
+    // final filming decision. An admin may deliberately choose a different fixture even
+    // when neither team currently qualifies or has confirmed. Capacity, overlap, venue,
+    // fixture state and pitch-swap safety still apply below.
+    const priorityOverride = !target.eligible;
     if (target.bookingState === 'PLANNED' || target.bookingState === 'READY') {
-      return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false };
+      return { handled: true, bookingConfirmed: true, acceptedRequests: 0, swappedPitch: false, priorityOverride: false };
     }
 
     const activeBookings = await db.$queryRaw<ActiveBooking[]>`
@@ -186,6 +187,11 @@ export async function confirmNightBoardVeoFixture(input: {
       cameraKey: preview.cameraKey,
       acceptedRequests,
       priorityModel: 'SIXFL_TV_SCORE',
+      adminPriorityOverride: priorityOverride,
+      homePriorityScore: target.homePriorityScore ?? 0,
+      awayPriorityScore: target.awayPriorityScore ?? 0,
+      homePriorityActive: target.homePriority,
+      awayPriorityActive: target.awayPriority,
       noPriorityFees: true,
       swappedPitch: anchor.id !== target.id,
       noBaseFeesChanged: true,
@@ -200,6 +206,7 @@ export async function confirmNightBoardVeoFixture(input: {
       bookingConfirmed: true,
       acceptedRequests,
       swappedPitch: anchor.id !== target.id,
+      priorityOverride,
     };
   });
 }
