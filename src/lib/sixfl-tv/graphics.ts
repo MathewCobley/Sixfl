@@ -458,44 +458,43 @@ export async function createGoalOfMonthNominationThumbnail(input: {
   const sourceDate = input.kickoffAt instanceof Date ? input.kickoffAt : new Date(input.kickoffAt);
   const validDate = Number.isFinite(sourceDate.getTime()) ? sourceDate : new Date();
   const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" }).format(validDate).toUpperCase();
+  const title = `${month} GOAL OF THE MONTH`;
   const matchweek = Number.isInteger(input.matchweekNumber) ? `MATCHWEEK ${input.matchweekNumber}` : "MATCHWEEK";
 
   const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
     <defs>
       <linearGradient id="fallback" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07170f"/><stop offset="0.58" stop-color="#03100b"/><stop offset="1" stop-color="#000000"/></linearGradient>
-      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000" stop-opacity="0.96"/><stop offset="0.50" stop-color="#000000" stop-opacity="0.78"/><stop offset="0.74" stop-color="#000000" stop-opacity="0.28"/><stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>
-      <linearGradient id="brandPanel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#04120d" stop-opacity="0.38"/><stop offset="1" stop-color="#061a13" stop-opacity="0.82"/></linearGradient>
+      <linearGradient id="leftShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000" stop-opacity="0.96"/><stop offset="0.46" stop-color="#000000" stop-opacity="0.78"/><stop offset="0.72" stop-color="#000000" stop-opacity="0.24"/><stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>
+      <linearGradient id="brandPanel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#04120d" stop-opacity="0.20"/><stop offset="1" stop-color="#061a13" stop-opacity="0.76"/></linearGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000000" flood-opacity="0.72"/></filter>
     </defs>
     ${input.backgroundImage?.length ? "" : "<rect width=\"1280\" height=\"720\" fill=\"url(#fallback)\"/>"}
-    <rect width="860" height="720" fill="url(#leftShade)"/>
-    <polygon points="0,0 176,0 72,154 0,154" fill="#10b981" fill-opacity="0.25"/>
-    <polygon points="54,0 126,0 24,150 0,150 0,111" fill="#6ee7b7" fill-opacity="0.17"/>
-    <rect x="946" y="0" width="334" height="98" fill="url(#brandPanel)"/>
-    <polygon points="948,0 1060,0 994,98 912,98" fill="#10b981" fill-opacity="0.28"/>
-    <polygon points="1018,0 1088,0 1022,98 976,98" fill="#2dd4bf" fill-opacity="0.70"/>
-    ${logoImage(sixflTvLogoBytes, 1034, 18, 220, 70)}
-    <g filter="url(#shadow)">${badgeImage(teamBadge, 62, 372, 132, input.teamName)}</g>
-    <rect x="62" y="574" width="190" height="5" rx="3" fill="#2dd4bf"/>
+    <rect width="810" height="720" fill="url(#leftShade)"/>
+    <polygon points="0,0 160,0 70,135 0,135" fill="#10b981" fill-opacity="0.18"/>
+    <polygon points="48,0 118,0 28,134 0,134 0,96" fill="#6ee7b7" fill-opacity="0.14"/>
+    <rect x="954" y="0" width="326" height="92" fill="url(#brandPanel)"/>
+    <polygon points="960,0 1048,0 992,92 924,92" fill="#10b981" fill-opacity="0.22"/>
+    <polygon points="1018,0 1080,0 1024,92 982,92" fill="#2dd4bf" fill-opacity="0.58"/>
+    ${logoImage(sixflTvLogoBytes, 1042, 15, 210, 66)}
+    <g filter="url(#shadow)">${badgeImage(teamBadge, 58, 306, 112, input.teamName)}</g>
+    <rect x="58" y="430" width="150" height="4" rx="2" fill="#2dd4bf"/>
   </svg>`;
 
-  const [monthGoalText, ofMonthText, nomineeText, scorerText, teamText, matchweekText] = await Promise.all([
-    thumbnailTextPng({ text: `${month} GOAL`, width: 720, height: 76, fontSize: 54, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: "OF THE MONTH", width: 720, height: 76, fontSize: 54, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: "NOMINEE", width: 620, height: 112, fontSize: 84, bold: true, fill: "#2dd4bf" }),
-    thumbnailTextPng({ text: scorer, width: 760, height: 92, fontSize: 62, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: 650, height: 50, fontSize: 34, bold: true, fill: "#2dd4bf" }),
-    thumbnailTextPng({ text: matchweek, width: 390, height: 52, fontSize: 34, bold: true, fill: "#ffffff" }),
+  const [titleText, nomineeText, scorerText, teamText, matchweekText] = await Promise.all([
+    thumbnailTextPng({ text: title, width: 790, height: 64, fontSize: 42, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: "NOMINEE", width: 500, height: 88, fontSize: 70, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: scorer, width: 690, height: 74, fontSize: 52, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: 590, height: 42, fontSize: 28, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: matchweek, width: 320, height: 42, fontSize: 26, bold: true, fill: "#ffffff" }),
   ]);
 
   const composites: sharp.OverlayOptions[] = [
     { input: Buffer.from(overlaySvg), left: 0, top: 0 },
-    { input: monthGoalText, left: 62, top: 108 },
-    { input: ofMonthText, left: 62, top: 166 },
-    { input: nomineeText, left: 62, top: 224 },
-    { input: scorerText, left: 224, top: 390 },
-    { input: teamText, left: 226, top: 463 },
-    { input: matchweekText, left: 62, top: 598 },
+    { input: titleText, left: 58, top: 86 },
+    { input: nomineeText, left: 58, top: 151 },
+    { input: scorerText, left: 192, top: 304 },
+    { input: teamText, left: 194, top: 371 },
+    { input: matchweekText, left: 58, top: 445 },
   ];
 
   const background = input.backgroundImage?.length
