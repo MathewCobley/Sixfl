@@ -145,7 +145,7 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   assert.equal(goals[0].goalNumber, null);
   const payload = awards.monthlyCandidatePayload(goals[0]);
   assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
-  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-6`);
+  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-7`);
   assert.equal(payload.scorerTeamMemberId, 'member-home');
   assert.equal(payload.scorerName, 'Test Scorer');
   assert.equal(sql(`SELECT "state" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${result.candidateId}'`), 'QUEUED');
@@ -318,11 +318,11 @@ test('clip nominees hide internal clip numbers and force the current poster vers
     teamName:'Home FC', opponentName:'Away FC', teamLogoUrl:null, leagueName:'Test League',
     kickoffAt:'2026-09-03T19:00:00Z', nominationCount:3, voteCount:0,
     clipVideoUrl:'/api/goal-of-month/clips/clip-goal',
-    thumbnailUrl:'/api/goal-of-month/thumbnails/clip-goal?v=sixfl-gotm-6',
+    thumbnailUrl:'/api/goal-of-month/thumbnails/clip-goal?v=sixfl-gotm-7',
     videoUrls:[],
   } }));
   assert.match(html, /Goal of the Month nominee/);
-  assert.match(html, /sixfl-gotm-6/);
+  assert.match(html, /sixfl-gotm-7/);
   assert.equal(html.includes('Clip 7'), false);
   const thumbnailRoute = read('src/app/api/goal-of-month/thumbnails/[candidateId]/route.ts');
   assert.match(thumbnailRoute, /private, no-store, max-age=0/);
@@ -350,7 +350,7 @@ test('Goal of the Month admin links scorers to squad members instead of free tex
 });
 
 
-test('Goal of the Month graphics highlight the scorer team and its score in SIXFL green', () => {
+test('Goal of the Month intro may show the scorer-team score, while the approved thumbnail stays score-free', () => {
   const graphics = read('src/lib/sixfl-tv/graphics.ts');
   const thumbnailStart = graphics.indexOf('export async function createGoalOfMonthNominationThumbnail');
   const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
@@ -359,14 +359,16 @@ test('Goal of the Month graphics highlight the scorer team and its score in SIXF
   const thumbnail = graphics.slice(thumbnailStart, introStart);
   const intro = graphics.slice(introStart, overlayStart);
 
-  for (const source of [thumbnail, intro]) {
-    assert.match(source, /const scorerIsHome =/);
-    assert.match(source, /const scorerIsAway =/);
-    assert.match(source, /const homeFill = scorerIsHome \? "#6ee7b7" : "#cbd5e1"/);
-    assert.match(source, /const awayFill = scorerIsAway \? "#6ee7b7" : "#cbd5e1"/);
-    assert.match(source, /String\(input\.homeScore\)/);
-    assert.match(source, /String\(input\.awayScore\)/);
-    assert.match(source, /fill: homeFill/);
-    assert.match(source, /fill: awayFill/);
-  }
+  assert.doesNotMatch(thumbnail, /homeScore|awayScore|FT|leagueName|matchDate/);
+  assert.match(thumbnail, /MATCHWEEK/);
+  assert.match(thumbnail, /NOMINEE/);
+
+  assert.match(intro, /const scorerIsHome =/);
+  assert.match(intro, /const scorerIsAway =/);
+  assert.match(intro, /const homeFill = scorerIsHome \? "#6ee7b7" : "#cbd5e1"/);
+  assert.match(intro, /const awayFill = scorerIsAway \? "#6ee7b7" : "#cbd5e1"/);
+  assert.match(intro, /String\(input\.homeScore\)/);
+  assert.match(intro, /String\(input\.awayScore\)/);
+  assert.match(intro, /fill: homeFill/);
+  assert.match(intro, /fill: awayFill/);
 });

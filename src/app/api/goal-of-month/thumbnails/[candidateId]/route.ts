@@ -15,12 +15,8 @@ type Row = {
   scorerName: string | null;
   teamName: string;
   teamLogoUrl: string | null;
-  homeTeamName: string;
-  awayTeamName: string;
-  homeScore: number | null;
-  awayScore: number | null;
   kickoffAt: Date;
-  leagueName: string;
+  matchweekNumber: number | null;
 };
 
 function siteUrl(request: Request) {
@@ -37,19 +33,11 @@ export async function GET(request: Request, context: Context) {
         c."scorerName",
         team."name" AS "teamName",
         team."logoUrl" AS "teamLogoUrl",
-        home."name" AS "homeTeamName",
-        away."name" AS "awayTeamName",
-        result."homeScore"::int AS "homeScore",
-        result."awayScore"::int AS "awayScore",
         f."kickoffAt",
-        league."name" AS "leagueName"
+        f."round"::int AS "matchweekNumber"
       FROM "GoalOfMonthCandidate" c
       JOIN "Fixture" f ON f."id" = c."fixtureId"
       JOIN "Team" team ON team."id" = c."teamId"
-      JOIN "Team" home ON home."id" = f."homeTeamId"
-      JOIN "Team" away ON away."id" = f."awayTeamId"
-      JOIN "League" league ON league."id" = f."leagueId"
-      LEFT JOIN "MatchResult" result ON result."fixtureId" = f."id"
       JOIN "SixflTvFootageAsset" a ON a."id" = c."clipAssetId" AND a."fixtureId" = c."fixtureId"
       WHERE c."id" = ${safeCandidateId}
         AND c."status" = 'ACTIVE'
@@ -83,12 +71,8 @@ export async function GET(request: Request, context: Context) {
       scorerName: row.scorerName,
       teamName: row.teamName,
       teamLogoUrl: row.teamLogoUrl,
-      homeTeamName: row.homeTeamName,
-      awayTeamName: row.awayTeamName,
-      homeScore: row.homeScore,
-      awayScore: row.awayScore,
       kickoffAt: row.kickoffAt,
-      leagueName: row.leagueName,
+      matchweekNumber: row.matchweekNumber,
       backgroundImage,
     });
     return new Response(new Uint8Array(png), {
@@ -96,6 +80,7 @@ export async function GET(request: Request, context: Context) {
         "Content-Type": "image/png",
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
+        "X-SIXFL-Thumbnail-Frame": backgroundImage ? "clip-14s" : "fallback",
       },
     });
   } catch (error) {

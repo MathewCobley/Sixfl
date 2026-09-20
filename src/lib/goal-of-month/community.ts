@@ -57,7 +57,7 @@ export function monthlyCandidatePayload(row: MonthlyCandidate) {
     leagueName: row.leagueName, kickoffAt: row.kickoffAt.toISOString(),
     nominationCount: Number(row.nominationCount), voteCount: Number(row.voteCount),
     clipVideoUrl: row.clipAssetId ? `/api/goal-of-month/clips/${encodeURIComponent(row.id)}` : null,
-    thumbnailUrl: row.clipAssetId ? `/api/goal-of-month/thumbnails/${encodeURIComponent(row.id)}?v=sixfl-gotm-6` : null,
+    thumbnailUrl: row.clipAssetId ? `/api/goal-of-month/thumbnails/${encodeURIComponent(row.id)}?v=sixfl-gotm-7` : null,
     videoUrls: safeVideoLinks(row.sixflTvUrl),
   };
 }
