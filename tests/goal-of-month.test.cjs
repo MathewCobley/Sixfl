@@ -145,7 +145,7 @@ test('new monthly nominations attach to the exact numbered SIXFL TV clip', async
   assert.equal(goals[0].goalNumber, null);
   const payload = awards.monthlyCandidatePayload(goals[0]);
   assert.equal(payload.clipVideoUrl, `/api/goal-of-month/clips/${result.candidateId}`);
-  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-7`);
+  assert.equal(payload.thumbnailUrl, `/api/goal-of-month/thumbnails/${result.candidateId}?v=sixfl-gotm-8`);
   assert.equal(payload.scorerTeamMemberId, 'member-home');
   assert.equal(payload.scorerName, 'Test Scorer');
   assert.equal(sql(`SELECT "state" FROM "GoalOfMonthClipRender" WHERE "candidateId"='${result.candidateId}'`), 'QUEUED');
@@ -318,11 +318,11 @@ test('clip nominees hide internal clip numbers and force the current poster vers
     teamName:'Home FC', opponentName:'Away FC', teamLogoUrl:null, leagueName:'Test League',
     kickoffAt:'2026-09-03T19:00:00Z', nominationCount:3, voteCount:0,
     clipVideoUrl:'/api/goal-of-month/clips/clip-goal',
-    thumbnailUrl:'/api/goal-of-month/thumbnails/clip-goal?v=sixfl-gotm-7',
+    thumbnailUrl:'/api/goal-of-month/thumbnails/clip-goal?v=sixfl-gotm-8',
     videoUrls:[],
   } }));
   assert.match(html, /Goal of the Month nominee/);
-  assert.match(html, /sixfl-gotm-7/);
+  assert.match(html, /sixfl-gotm-8/);
   assert.equal(html.includes('Clip 7'), false);
   const thumbnailRoute = read('src/app/api/goal-of-month/thumbnails/[candidateId]/route.ts');
   assert.match(thumbnailRoute, /private, no-store, max-age=0/);
