@@ -477,14 +477,14 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     <polygon points="1018,0 1080,0 1024,92 982,92" fill="#2dd4bf" fill-opacity="0.58"/>
     ${logoImage(sixflTvLogoBytes, 1042, 15, 210, 66)}
     <g filter="url(#shadow)">${badgeImage(teamBadge, 58, 306, 112, input.teamName)}</g>
-    <rect x="58" y="430" width="150" height="4" rx="2" fill="#2dd4bf"/>
+    <rect x="58" y="438" width="150" height="4" rx="2" fill="#2dd4bf"/>
   </svg>`;
 
   const [titleText, nomineeText, scorerText, teamText, matchweekText] = await Promise.all([
     thumbnailTextPng({ text: title, width: 790, height: 64, fontSize: 42, bold: true, fill: "#ffffff" }),
     thumbnailTextPng({ text: "NOMINEE", width: 500, height: 88, fontSize: 70, bold: true, fill: "#2dd4bf" }),
     thumbnailTextPng({ text: scorer, width: 690, height: 74, fontSize: 52, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: 590, height: 42, fontSize: 28, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: team, width: 590, height: 40, fontSize: 26, bold: true, fill: "#2dd4bf" }),
     thumbnailTextPng({ text: matchweek, width: 320, height: 42, fontSize: 26, bold: true, fill: "#ffffff" }),
   ]);
 
@@ -493,8 +493,8 @@ export async function createGoalOfMonthNominationThumbnail(input: {
     { input: titleText, left: 58, top: 86 },
     { input: nomineeText, left: 58, top: 151 },
     { input: scorerText, left: 192, top: 304 },
-    { input: teamText, left: 194, top: 371 },
-    { input: matchweekText, left: 58, top: 445 },
+    { input: teamText, left: 194, top: 384 },
+    { input: matchweekText, left: 58, top: 452 },
   ];
 
   const background = input.backgroundImage?.length

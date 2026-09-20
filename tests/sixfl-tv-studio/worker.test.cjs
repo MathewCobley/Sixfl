@@ -343,7 +343,7 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.ok(thumbnail.includes('MATCHWEEK'));
   assert.ok(thumbnail.includes('GOAL OF THE MONTH'));
   assert.ok(thumbnail.includes('NOMINEE'));
-  assert.ok(thumbnail.includes('top: 445'));
+  assert.ok(thumbnail.includes('top: 452'));
   assert.equal(thumbnail.includes('top: 598'), false);
   assert.equal(thumbnail.includes('homeTeamName'), false);
   assert.equal(thumbnail.includes('homeScore'), false);
