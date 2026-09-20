@@ -58,6 +58,12 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
     '@/components/goal-of-week/GoalOfWeekDashboardPromo': panel('goals', 'Goal of the Month — current nominees'),
     '@/components/player/PlayerLeagueMediaPanel': panel('media', 'League & form'),
     '@/components/player/PlayerMessageBox': panel('messages', 'Team messages'),
+    '@/components/player/PlayerPreviewReturnBanner': {
+      __esModule: true,
+      default: ({ returnHref, returnLabel, isAdmin }) =>
+        h('div', { 'data-player-preview-return': isAdmin ? 'admin' : 'captain' },
+          h('a', { href: returnHref }, `← ${returnLabel}`)),
+    },
   }, layoutSource).default;
   const page = h('main', { 'data-dashboard-core': true, className: 'min-h-screen bg-[#07130f] px-4 py-8 text-white' },
     h('div', { className: 'mx-auto max-w-6xl space-y-8' },
