@@ -768,6 +768,49 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
+
+export async function createSixflTvAltHighlightsOverlay(input: {
+  fixture: SixflTvGraphicFixture;
+  siteUrl: string;
+  clipNumber?: number | null;
+}) {
+  const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
+    fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
+    fetchSixflTvBadge(input.fixture.secondTeam.logoUrl, input.siteUrl),
+    sixflTvLogo(input.siteUrl),
+    embeddedFontStyle(input.siteUrl),
+  ]);
+  const firstScore = input.fixture.firstTeam.score;
+  const secondScore = input.fixture.secondTeam.score;
+  if (!Number.isInteger(firstScore) || !Number.isInteger(secondScore)) throw new Error("A confirmed final score is required for the SIXFL TV alternative highlights overlay.");
+  const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
+  const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
+  const clipLabel = Number.isInteger(input.clipNumber) ? `CLIP ${input.clipNumber}` : "HIGHLIGHTS";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs>
+      <filter id="softShadow"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#000000" flood-opacity="0.55"/></filter>
+    </defs>
+    ${fontCss}
+    <g transform="translate(48 38)" filter="url(#softShadow)">
+      <rect width="510" height="64" rx="10" fill="#050706" fill-opacity="0.84"/>
+      <g transform="translate(10 6)">${badgeImage(firstBadge, 0, 0, 52, input.fixture.firstTeam.name)}</g>
+      <text x="90" y="42" text-anchor="middle" font-size="22" font-weight="900" fill="#ffffff" letter-spacing="1.5">${xml(firstCode)}</text>
+      <rect x="128" y="0" width="116" height="64" rx="8" fill="#f4d000"/>
+      <text x="186" y="44" text-anchor="middle" font-size="30" font-weight="900" fill="#060606">${firstScore} - ${secondScore}</text>
+      <text x="296" y="42" text-anchor="middle" font-size="22" font-weight="900" fill="#ffffff" letter-spacing="1.5">${xml(secondCode)}</text>
+      <g transform="translate(330 6)">${badgeImage(secondBadge, 0, 0, 52, input.fixture.secondTeam.name)}</g>
+      <text x="428" y="41" text-anchor="middle" font-size="16" font-weight="800" fill="#f4d000" letter-spacing="2">${xml(clipLabel)}</text>
+    </g>
+    ${logoImage(sixflTvLogoBytes, 1615, 36, 245, 78, 0.95)}
+    <g transform="translate(48 968)" filter="url(#softShadow)">
+      <rect width="390" height="62" rx="10" fill="#050706" fill-opacity="0.78"/>
+      <text x="20" y="26" font-size="16" font-weight="800" fill="#f4d000" letter-spacing="2">SIXFL TV</text>
+      <text x="20" y="48" font-size="13" font-weight="700" fill="#ffffff" fill-opacity="0.82" letter-spacing="1.5">REAL PLAYERS · REAL GOALS</text>
+    </g>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+}
+
 export async function createSixflTvLeagueTableCard(input: {
   fixture: SixflTvGraphicFixture;
   page: "TOP" | "BOTTOM";
