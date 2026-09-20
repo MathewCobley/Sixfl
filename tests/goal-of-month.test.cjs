@@ -350,7 +350,7 @@ test('Goal of the Month admin links scorers to squad members instead of free tex
 });
 
 
-test('Goal of the Month graphics highlight the scorer team and its score in SIXFL green', () => {
+test('Goal of the Month intro may show the scorer-team score, while the approved thumbnail stays score-free', () => {
   const graphics = read('src/lib/sixfl-tv/graphics.ts');
   const thumbnailStart = graphics.indexOf('export async function createGoalOfMonthNominationThumbnail');
   const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
@@ -359,14 +359,16 @@ test('Goal of the Month graphics highlight the scorer team and its score in SIXF
   const thumbnail = graphics.slice(thumbnailStart, introStart);
   const intro = graphics.slice(introStart, overlayStart);
 
-  for (const source of [thumbnail, intro]) {
-    assert.match(source, /const scorerIsHome =/);
-    assert.match(source, /const scorerIsAway =/);
-    assert.match(source, /const homeFill = scorerIsHome \? "#6ee7b7" : "#cbd5e1"/);
-    assert.match(source, /const awayFill = scorerIsAway \? "#6ee7b7" : "#cbd5e1"/);
-    assert.match(source, /String\(input\.homeScore\)/);
-    assert.match(source, /String\(input\.awayScore\)/);
-    assert.match(source, /fill: homeFill/);
-    assert.match(source, /fill: awayFill/);
-  }
+  assert.doesNotMatch(thumbnail, /homeScore|awayScore|FT|leagueName|matchDate/);
+  assert.match(thumbnail, /MATCHWEEK/);
+  assert.match(thumbnail, /NOMINEE/);
+
+  assert.match(intro, /const scorerIsHome =/);
+  assert.match(intro, /const scorerIsAway =/);
+  assert.match(intro, /const homeFill = scorerIsHome \? "#6ee7b7" : "#cbd5e1"/);
+  assert.match(intro, /const awayFill = scorerIsAway \? "#6ee7b7" : "#cbd5e1"/);
+  assert.match(intro, /String\(input\.homeScore\)/);
+  assert.match(intro, /String\(input\.awayScore\)/);
+  assert.match(intro, /fill: homeFill/);
+  assert.match(intro, /fill: awayFill/);
 });
