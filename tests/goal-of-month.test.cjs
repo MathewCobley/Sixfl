@@ -429,6 +429,16 @@ test('Goal of the Month intro may show the scorer-team score, while the approved
   assert.match(intro, /align: "center"/);
 });
 
+test('Goal of the Month intro keeps the team name clear of the scorer', () => {
+  const graphics = read('src/lib/sixfl-tv/graphics.ts');
+  const introStart = graphics.indexOf('export async function createGoalOfMonthNomineeIntro');
+  const overlayStart = graphics.indexOf('export async function createGoalOfMonthClipOverlay', introStart);
+  const intro = graphics.slice(introStart, overlayStart);
+  assert.match(intro, /fontSize: 28/);
+  assert.match(intro, /\{ input: scorerText, left: 500, top: 350 \}/);
+  assert.match(intro, /\{ input: teamText, left: 504, top: 482 \}/);
+});
+
 test('Goal of the Month vote card carries the actual competition dates', () => {
   const graphics = read('src/lib/sixfl-tv/graphics.ts');
   const worker = read('scripts/sixfl-tv-worker.ts');
@@ -456,10 +466,10 @@ test('Goal of the Month video graphics use restrained SIXFL green and a non-clip
   assert.doesNotMatch(intro, /#2dd4bf/);
   assert.doesNotMatch(overlay, /#2dd4bf/);
   assert.doesNotMatch(vote, /#2dd4bf/);
-  assert.match(overlay, /const replayWidth = 124/);
-  assert.match(overlay, /const replayHeight = 34/);
+  assert.match(overlay, /const replayWidth = 144/);
+  assert.match(overlay, /const replayHeight = 42/);
   assert.match(overlay, /fill="#07110d" stroke="#10b981"/);
-  assert.match(overlay, /fontSize: 16/);
+  assert.match(overlay, /fontSize: 14/);
   assert.match(vote, /input\.nominationsCloseLabel/);
   assert.match(vote, /input\.winnerLabel/);
 });
