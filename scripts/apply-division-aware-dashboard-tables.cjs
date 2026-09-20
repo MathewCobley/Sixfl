@@ -39,8 +39,12 @@ patchFile(
       );
     }
 
-    const marker = `        </section>\n      </div>\n    </main>`;
-    const insertion = `        </section>\n\n        {team.league?.id ? (\n          <DivisionAwareDashboardTables\n            leagueId={team.league.id}\n            leagueName={team.league.name}\n            season={team.league.season}\n            emptyMessage="This table will populate as completed results are entered."\n          />\n        ) : null}\n      </div>\n    </main>`;
+    const legacyMarker = `        </section>\n      </div>\n    </main>`;
+    const gatedMarker = `        </section>\n        </div>\n      </PlayerPwaModeOnly>\n    </main>`;
+    const marker = source.includes(gatedMarker) ? gatedMarker : legacyMarker;
+    const insertion = source.includes(gatedMarker)
+      ? `        </section>\n\n        {team.league?.id ? (\n          <DivisionAwareDashboardTables\n            leagueId={team.league.id}\n            leagueName={team.league.name}\n            season={team.league.season}\n            emptyMessage="This table will populate as completed results are entered."\n          />\n        ) : null}\n        </div>\n      </PlayerPwaModeOnly>\n    </main>`
+      : `        </section>\n\n        {team.league?.id ? (\n          <DivisionAwareDashboardTables\n            leagueId={team.league.id}\n            leagueName={team.league.name}\n            season={team.league.season}\n            emptyMessage="This table will populate as completed results are entered."\n          />\n        ) : null}\n      </div>\n    </main>`;
 
     if (!source.includes("<DivisionAwareDashboardTables") && source.includes(marker)) {
       source = source.replace(marker, insertion);
