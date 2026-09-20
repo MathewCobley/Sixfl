@@ -54,8 +54,8 @@ export default async function PlayerTeamChatPage({
   return (
     <PortalChat
       teamId={teamid}
-      sixflHref={`/player/team/${teamid}#message-sixfl`}
       previewMembershipId={previewMembershipId}
+      simulateTestMode={Boolean(previewMembershipId)}
     />
   );
 }

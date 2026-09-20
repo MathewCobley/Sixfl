@@ -1266,6 +1266,7 @@ model MessageEntry {
 enum PortalConversationType {
   TEAM
   CAPTAIN_PLAYER
+  CAPTAIN_CAPTAIN
   SIXFL
 }
 
@@ -1310,6 +1311,7 @@ model PortalMessage {
   senderRole     PortalMessageSenderRole
 
   body String
+  isAdminTest Boolean @default(false)
 
   createdAt DateTime @default(now())
   editedAt  DateTime?

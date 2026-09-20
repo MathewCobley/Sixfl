@@ -1,0 +1,4 @@
+ALTER TYPE "PortalConversationType" ADD VALUE IF NOT EXISTS 'CAPTAIN_CAPTAIN';
+
+ALTER TABLE "PortalMessage"
+  ADD COLUMN "isAdminTest" BOOLEAN NOT NULL DEFAULT false;

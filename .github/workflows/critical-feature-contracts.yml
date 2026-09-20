@@ -110,6 +110,9 @@ jobs:
       - name: Check admin chat test mode
         run: node --test tests/admin-chat-test-mode/contract.test.cjs
 
+      - name: Check complete Team Chat test flow
+        run: node --test tests/chat-complete-flow/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 
