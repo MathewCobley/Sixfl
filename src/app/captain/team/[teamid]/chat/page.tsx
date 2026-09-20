@@ -26,6 +26,7 @@ export default async function CaptainTeamChatPage({
     <PortalChat
       teamId={teamid}
       sixflHref={`/captain/team/${teamid}/messages`}
+      adminTestMode
     />
   );
 }
