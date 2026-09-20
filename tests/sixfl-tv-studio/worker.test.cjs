@@ -323,10 +323,16 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.ok(overlayStart >= 0 && overlayEnd > overlayStart);
   const thumbnail = graphics.slice(thumbnailStart, introStart);
   const overlay = graphics.slice(overlayStart, overlayEnd);
-  assert.ok(thumbnail.includes('fontSize: 58'));
+  assert.ok(thumbnail.includes('fontSize: 62'));
   assert.ok(thumbnail.includes('thumbnailTextPng'));
-  assert.ok(thumbnail.includes('homeTeamName'));
-  assert.ok(thumbnail.includes('homeScore'));
+  assert.ok(thumbnail.includes('MATCHWEEK'));
+  assert.ok(thumbnail.includes('GOAL'));
+  assert.ok(thumbnail.includes('OF THE MONTH'));
+  assert.ok(thumbnail.includes('NOMINEE'));
+  assert.equal(thumbnail.includes('homeTeamName'), false);
+  assert.equal(thumbnail.includes('homeScore'), false);
+  assert.equal(thumbnail.includes('awayScore'), false);
+  assert.equal(thumbnail.includes('leagueName'), false);
   assert.equal(thumbnail.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(thumbnail.includes('clipNumber'), false);
   assert.ok(overlay.includes('fontSize: 62'));
@@ -334,4 +340,14 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.ok(overlay.includes('thumbnailTextPng'));
   assert.equal(overlay.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(overlay.includes('CLIP '), false);
+});
+
+
+test('Goal of the Month thumbnail route uses fixture round and the stored 14-second clip poster', async () => {
+  const route = await fs.readFile(path.resolve('src/app/api/goal-of-month/thumbnails/[candidateId]/route.ts'), 'utf8');
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  assert.match(route, /f\."round"::int AS "matchweekNumber"/);
+  assert.match(route, /sixflTvGoalClipPosterKey\(row\.clipAssetId\)/);
+  assert.match(route, /X-SIXFL-Thumbnail-Frame/);
+  assert.match(worker, /sourcePosterCandidate\(source, dir, .*14\)/);
 });
