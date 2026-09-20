@@ -207,20 +207,26 @@ test('highlight normalisation overlays a persistent scorebug without removing ma
   assert.ok(meta.streams.some(stream => stream.codec_type === 'audio'), 'Scorebug overlay must keep the original match audio');
 });
 
-test('Goal of the Month replay slows the 13-16 second goal window to half speed', { timeout: 90000 }, async t => {
+test('Goal of the Month replay slows 13-16 seconds then returns to the full-speed ending', { timeout: 90000 }, async t => {
   const db = memoryDb(), objects = new Map(), w = await loadWorker(db, objects), dir = await temp(t);
-  const source = path.join(dir, 'goal.mp4'), replay = path.join(dir, 'replay.mp4'), overlay = path.join(dir, 'replay.png');
+  const source = path.join(dir, 'goal.mp4'), replay = path.join(dir, 'replay.mp4'), tail = path.join(dir, 'tail.mp4'), overlay = path.join(dir, 'replay.png');
   await w.run('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=25', '-f', 'lavfi', '-i', 'sine=frequency=660:sample_rate=48000', '-t', '18', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', source]);
   await fs.writeFile(overlay, await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="180" height="54" rx="12" fill="#10b981"/><text x="144" y="82" text-anchor="middle" font-size="24" fill="#fff">REPLAY</text></svg>')).png().toBuffer());
   const replayInfo = await w.slowMotionReplay(source, replay, overlay);
   assert.ok(Math.abs(replayInfo.sourceStart - 13) < 0.01);
   assert.ok(Math.abs(replayInfo.sourceEnd - 16) < 0.01);
   assert.ok(Math.abs(replayInfo.outputDuration - 6) < 0.05);
-  const meta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', replay], true));
-  assert.equal(meta.streams.find(stream => stream.codec_type === 'video').width, 1920);
-  assert.equal(meta.streams.find(stream => stream.codec_type === 'video').height, 1080);
-  assert.ok(meta.streams.some(stream => stream.codec_type === 'audio'));
-  assert.ok(Number(meta.format.duration) >= 5.8 && Number(meta.format.duration) <= 6.2);
+
+  const replayMeta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', replay], true));
+  assert.equal(replayMeta.streams.find(stream => stream.codec_type === 'video').width, 1920);
+  assert.equal(replayMeta.streams.find(stream => stream.codec_type === 'video').height, 1080);
+  assert.ok(replayMeta.streams.some(stream => stream.codec_type === 'audio'));
+  assert.ok(Number(replayMeta.format.duration) >= 5.8 && Number(replayMeta.format.duration) <= 6.2);
+
+  assert.equal(await w.normaliseVideoSegment(source, tail, replayInfo.sourceEnd, 18, overlay), true);
+  const tailMeta = JSON.parse(await w.run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', tail], true));
+  assert.ok(tailMeta.streams.some(stream => stream.codec_type === 'audio'));
+  assert.ok(Number(tailMeta.format.duration) >= 1.8 && Number(tailMeta.format.duration) <= 2.2);
 });
 
 test('actual FFmpeg assembly reconstructs saved manifests and produces a decodable private MP4', { timeout: 90000 }, async t => {
@@ -297,17 +303,26 @@ test('Goal of the Month nominee render uses shared branding and player identity 
 
   assert.match(nomineeWorker, /goalOfMonthBrandingAsset\("INTRO"\)/);
   assert.match(nomineeWorker, /goalOfMonthBrandingAsset\("OUTRO"\)/);
-  assert.match(nomineeWorker, /\[brandingIntro, title, normal, replay, brandingOutro\]/);
+  assert.match(nomineeWorker, /const fullSpeedEnd = path\.join\(dir, "full-speed-end\.mp4"\)/);
+  assert.match(nomineeWorker, /normaliseVideoSegment\(source, normal, 0, replayInfo\.sourceEnd/);
+  assert.match(nomineeWorker, /replayInfo\.sourceEnd,[\s\S]*sourceSeconds/);
+  assert.match(nomineeWorker, /voteCard/);
+  assert.match(nomineeWorker, /GOAL_VOTE_CARD_SECONDS/);
+  assert.match(nomineeWorker, /brandingOutro/);
   assert.match(nomineeWorker, /homeTeamName/);
   assert.match(nomineeWorker, /awayTeamName/);
   assert.match(nomineeWorker, /homeScore/);
   assert.match(nomineeWorker, /awayScore/);
   assert.match(nomineeWorker, /kickoffAt/);
+  assert.match(nomineeWorker, /matchweekNumber/);
+  assert.match(nomineeWorker, /goalOfMonthVoteLabels\(detail\.monthKey\)/);
 
   assert.match(nomineeGraphics, /badgeImage\(teamBadge/);
   assert.match(nomineeGraphics, /thumbnailTextPng\(\{ text: scorer/);
   assert.match(nomineeGraphics, /GOAL OF THE MONTH NOMINEE/);
   assert.match(nomineeGraphics, /REPLAY/);
+  assert.match(nomineeGraphics, /REMEMBER TO VOTE/);
+  assert.match(nomineeGraphics, /SIXFL\.CO\.UK\/GOAL-OF-THE-MONTH/);
   assert.doesNotMatch(nomineeGraphics, /embeddedFontStyle\(input\.siteUrl\)/);
   assert.doesNotMatch(nomineeGraphics, /CLIP \$\{input\.clipNumber\}/);
 });
@@ -336,8 +351,9 @@ test('Goal of the Month thumbnail and player overlay stay readable at embedded-p
   assert.equal(thumbnail.includes('leagueName'), false);
   assert.equal(thumbnail.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(thumbnail.includes('clipNumber'), false);
-  assert.ok(overlay.includes('fontSize: 62'));
-  assert.ok(overlay.includes('height="142"'));
+  assert.ok(overlay.includes('fontSize: 46'));
+  assert.ok(overlay.includes('const height = 120'));
+  assert.ok(overlay.includes('const replayWidth = 150'));
   assert.ok(overlay.includes('thumbnailTextPng'));
   assert.equal(overlay.includes('embeddedFontStyle(input.siteUrl)'), false);
   assert.equal(overlay.includes('CLIP '), false);
