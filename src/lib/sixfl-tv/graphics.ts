@@ -522,6 +522,7 @@ export async function createGoalOfMonthNomineeIntro(input: {
   homeScore?: number | null;
   awayScore?: number | null;
   kickoffAt: Date | string;
+  matchweekNumber?: number | null;
   leagueName: string;
 }) {
   const [sixflTvLogoBytes, teamBadge] = await Promise.all([
@@ -534,19 +535,19 @@ export async function createGoalOfMonthNomineeIntro(input: {
   const away = fit(input.awayTeamName, 28);
   const league = fit(input.leagueName, 64);
   const sourceDate = input.kickoffAt instanceof Date ? input.kickoffAt : new Date(input.kickoffAt);
-  const matchDate = Number.isFinite(sourceDate.getTime())
-    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }).format(sourceDate).toUpperCase()
-    : "";
+  const validDate = Number.isFinite(sourceDate.getTime()) ? sourceDate : new Date();
+  const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" }).format(validDate).toUpperCase();
+  const matchweek = Number.isInteger(input.matchweekNumber) ? `MATCHWEEK ${input.matchweekNumber}` : "MATCHWEEK";
   const hasScore = Number.isInteger(input.homeScore) && Number.isInteger(input.awayScore);
   const scorerIsHome = input.teamName.trim().toLowerCase() === input.homeTeamName.trim().toLowerCase();
   const scorerIsAway = input.teamName.trim().toLowerCase() === input.awayTeamName.trim().toLowerCase();
-  const homeFill = scorerIsHome ? "#6ee7b7" : "#cbd5e1";
-  const awayFill = scorerIsAway ? "#6ee7b7" : "#cbd5e1";
+  const homeFill = scorerIsHome ? "#2dd4bf" : "#cbd5e1";
+  const awayFill = scorerIsAway ? "#2dd4bf" : "#cbd5e1";
 
   const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#020805"/><stop offset="0.58" stop-color="#06140f"/><stop offset="1" stop-color="#000000"/></linearGradient>
-      <radialGradient id="glow" cx="67%" cy="42%" r="55%"><stop offset="0" stop-color="#10b981" stop-opacity="0.18"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></radialGradient>
+      <radialGradient id="glow" cx="67%" cy="42%" r="55%"><stop offset="0" stop-color="#10b981" stop-opacity="0.16"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></radialGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.7"/></filter>
     </defs>
     <rect width="1920" height="1080" fill="url(#bg)"/>
@@ -554,42 +555,41 @@ export async function createGoalOfMonthNomineeIntro(input: {
     <polygon points="-120,0 350,0 -155,1080 -625,1080" fill="#10b981"/>
     <polygon points="90,0 220,0 -285,1080 -415,1080" fill="#ecfdf5" fill-opacity="0.96"/>
     <polygon points="300,0 445,0 -60,1080 -205,1080" fill="#064e3b"/>
-    ${logoImage(sixflTvLogoBytes, 720, 62, 480, 154)}
-    <g transform="translate(300 348)" filter="url(#shadow)">${badgeImage(teamBadge, 0, 0, 210, input.teamName)}</g>
-    <rect x="300" y="625" width="1320" height="180" rx="28" fill="#020805" fill-opacity="0.78" stroke="#10b981" stroke-opacity="0.62" stroke-width="3"/>
-    ${hasScore ? "<rect x=\"908\" y=\"647\" width=\"104\" height=\"36\" rx=\"18\" fill=\"#10b981\"/>" : ""}
+    ${logoImage(sixflTvLogoBytes, 720, 52, 480, 154)}
+    <g transform="translate(260 330)" filter="url(#shadow)">${badgeImage(teamBadge, 0, 0, 200, input.teamName)}</g>
+    <rect x="220" y="600" width="1480" height="180" rx="30" fill="#020805" fill-opacity="0.82" stroke="#10b981" stroke-opacity="0.72" stroke-width="3"/>
+    ${hasScore ? '<rect x="910" y="616" width="100" height="38" rx="19" fill="#2dd4bf"/>' : ""}
   </svg>`;
 
-  const [labelText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, dateText, leagueText, siteText] = await Promise.all([
-    thumbnailTextPng({ text: "GOAL OF THE MONTH NOMINEE", width: 1000, height: 52, fontSize: 29, bold: true, fill: "#6ee7b7", align: "center", letterSpacing: 7 }),
-    thumbnailTextPng({ text: scorer, width: 1180, height: 105, fontSize: 82, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: 1120, height: 54, fontSize: 32, bold: true, fill: "#6ee7b7" }),
-    thumbnailTextPng({ text: home, width: 430, height: 66, fontSize: 43, bold: true, fill: homeFill, align: "right" }),
-    thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 90, height: 86, fontSize: 58, bold: true, fill: homeFill, align: "center" }),
-    thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 80, height: 86, fontSize: 52, bold: true, fill: "#ffffff", align: "center" }),
-    thumbnailTextPng({ text: hasScore ? String(input.awayScore) : "", width: 90, height: 86, fontSize: 58, bold: true, fill: awayFill, align: "center" }),
-    thumbnailTextPng({ text: away, width: 430, height: 66, fontSize: 43, bold: true, fill: awayFill }),
-    thumbnailTextPng({ text: matchDate, width: 900, height: 48, fontSize: 27, bold: true, fill: "#ffffff", align: "center", letterSpacing: 4 }),
-    thumbnailTextPng({ text: league, width: 1000, height: 44, fontSize: 23, bold: true, fill: "#a7f3d0", align: "center" }),
-    thumbnailTextPng({ text: "SIXFL.CO.UK", width: 420, height: 34, fontSize: 18, bold: true, fill: "#94a3b8", align: "center", letterSpacing: 4 }),
+  const [headlineText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, ftText, matchweekText, leagueText, siteText] = await Promise.all([
+    thumbnailTextPng({ text: `${month} GOAL OF THE MONTH NOMINEE`, width: 1320, height: 58, fontSize: 34, bold: true, fill: "#2dd4bf", align: "center", letterSpacing: 4.2 }),
+    thumbnailTextPng({ text: scorer, width: 1190, height: 110, fontSize: 82, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: 1120, height: 58, fontSize: 34, bold: true, fill: "#2dd4bf" }),
+    thumbnailTextPng({ text: home, width: 470, height: 68, fontSize: 44, bold: true, fill: homeFill, align: "right" }),
+    thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 92, height: 86, fontSize: 60, bold: true, fill: homeFill, align: "center" }),
+    thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 78, height: 86, fontSize: 54, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: hasScore ? String(input.awayScore) : "", width: 92, height: 86, fontSize: 60, bold: true, fill: awayFill, align: "center" }),
+    thumbnailTextPng({ text: away, width: 470, height: 68, fontSize: 44, bold: true, fill: awayFill }),
+    thumbnailTextPng({ text: "FT", width: 100, height: 30, fontSize: 18, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.8 }),
+    thumbnailTextPng({ text: matchweek, width: 720, height: 60, fontSize: 38, bold: true, fill: "#ffffff", align: "center", letterSpacing: 2.4 }),
+    thumbnailTextPng({ text: league, width: 1200, height: 52, fontSize: 27, bold: true, fill: "#2dd4bf", align: "center" }),
+    thumbnailTextPng({ text: "SIXFL.CO.UK", width: 460, height: 36, fontSize: 19, bold: true, fill: "#94a3b8", align: "center", letterSpacing: 4 }),
   ]);
-  const ftText = hasScore
-    ? await thumbnailTextPng({ text: "FT", width: 104, height: 28, fontSize: 17, bold: true, fill: "#02140d", align: "center", letterSpacing: 2 })
-    : null;
+
   const composites: sharp.OverlayOptions[] = [
-    { input: labelText, left: 460, top: 260 },
-    { input: scorerText, left: 570, top: 382 },
-    { input: teamText, left: 574, top: 470 },
-    { input: homeText, left: 330, top: 697 },
-    { input: homeScoreText, left: 835, top: 682 },
-    { input: separatorText, left: 920, top: 682 },
-    { input: awayScoreText, left: 995, top: 682 },
-    { input: awayText, left: 1160, top: 697 },
-    { input: dateText, left: 510, top: 850 },
-    { input: leagueText, left: 460, top: 910 },
-    { input: siteText, left: 750, top: 980 },
+    { input: headlineText, left: 300, top: 230 },
+    { input: scorerText, left: 520, top: 350 },
+    { input: teamText, left: 524, top: 450 },
+    { input: homeText, left: 260, top: 674 },
+    { input: homeScoreText, left: 820, top: 657 },
+    { input: separatorText, left: 918, top: 657 },
+    { input: awayScoreText, left: 1000, top: 657 },
+    { input: awayText, left: 1190, top: 674 },
+    { input: matchweekText, left: 600, top: 810 },
+    { input: leagueText, left: 360, top: 875 },
+    { input: siteText, left: 730, top: 976 },
   ];
-  if (ftText) composites.push({ input: ftText, left: 908, top: 650 });
+  if (hasScore) composites.push({ input: ftText, left: 910, top: 620 });
   return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
 }
 
@@ -606,33 +606,80 @@ export async function createGoalOfMonthClipOverlay(input: {
   ]);
   const scorer = fit(input.scorerName || input.teamName, 24);
   const team = fit(input.teamName, 32);
-  const replaySpace = input.replay ? 150 : 0;
-  const width = Math.max(560, Math.min(980, 245 + scorer.length * 29 + replaySpace));
-  const replayX = width - 132;
+  const replaySpace = input.replay ? 190 : 0;
+  const width = Math.max(540, Math.min(860, 220 + scorer.length * 23 + replaySpace));
+  const height = 120;
+  const replayWidth = 150;
+  const replayX = width - replayWidth - 18;
+  const nameWidth = Math.max(300, width - 155 - replaySpace);
   const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-    <defs><filter id="overlayShadow"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.70"/></filter></defs>
-    <g transform="translate(54 46)" filter="url(#overlayShadow)">
-      <rect width="${width}" height="142" rx="19" fill="#020805" fill-opacity="0.92" stroke="#10b981" stroke-width="3"/>
-      <rect width="13" height="142" rx="6" fill="#10b981"/>
-      ${badgeImage(teamBadge, 28, 22, 98, input.teamName)}
-      ${input.replay ? `<rect x="${replayX}" y="49" width="106" height="44" rx="22" fill="#10b981"/>` : ""}
+    <defs><filter id="overlayShadow"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000000" flood-opacity="0.72"/></filter></defs>
+    <g transform="translate(46 40)" filter="url(#overlayShadow)">
+      <rect width="${width}" height="${height}" rx="18" fill="#020805" fill-opacity="0.92" stroke="#10b981" stroke-width="3"/>
+      <rect width="11" height="${height}" rx="5" fill="#10b981"/>
+      ${badgeImage(teamBadge, 24, 19, 82, input.teamName)}
+      ${input.replay ? `<rect x="${replayX}" y="39" width="${replayWidth}" height="44" rx="22" fill="#2dd4bf"/>` : ""}
     </g>
-    ${logoImage(sixflTvLogoBytes, 1600, 36, 260, 84, 0.96)}
+    ${logoImage(sixflTvLogoBytes, 1640, 38, 220, 70, 0.95)}
   </svg>`;
   const [scorerText, teamText] = await Promise.all([
-    thumbnailTextPng({ text: scorer, width: Math.max(340, width - 290 - replaySpace), height: 76, fontSize: 62, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: Math.max(340, width - 290), height: 46, fontSize: 31, bold: true, fill: "#a7f3d0" }),
+    thumbnailTextPng({ text: scorer, width: nameWidth, height: 58, fontSize: 46, bold: true, fill: "#ffffff" }),
+    thumbnailTextPng({ text: team, width: Math.max(320, width - 155), height: 38, fontSize: 27, bold: true, fill: "#a7f3d0" }),
   ]);
   const replayText = input.replay
-    ? await thumbnailTextPng({ text: "REPLAY", width: 106, height: 32, fontSize: 19, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.3 })
+    ? await thumbnailTextPng({ text: "REPLAY", width: replayWidth, height: 32, fontSize: 22, bold: true, fill: "#02140d", align: "center", letterSpacing: 1.1 })
     : null;
   const composites: sharp.OverlayOptions[] = [
-    { input: scorerText, left: 205, top: 78 },
-    { input: teamText, left: 207, top: 129 },
+    { input: scorerText, left: 170, top: 55 },
+    { input: teamText, left: 172, top: 101 },
   ];
-  if (replayText) composites.push({ input: replayText, left: 54 + replayX, top: 97 });
+  if (replayText) composites.push({ input: replayText, left: 46 + replayX, top: 85 });
   return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
 }
+
+export async function createGoalOfMonthVoteCard(input: {
+  siteUrl: string;
+  awardLabel: string;
+  nominationsCloseLabel: string;
+  votingWindowLabel: string;
+  winnerLabel: string;
+}) {
+  const sixflTvLogoBytes = await sixflTvLogo(input.siteUrl);
+  const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#020805"/><stop offset="0.55" stop-color="#06140f"/><stop offset="1" stop-color="#000000"/></linearGradient>
+      <radialGradient id="glow" cx="50%" cy="45%" r="54%"><stop offset="0" stop-color="#10b981" stop-opacity="0.18"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></radialGradient>
+    </defs>
+    <rect width="1920" height="1080" fill="url(#bg)"/>
+    <rect width="1920" height="1080" fill="url(#glow)"/>
+    <polygon points="-120,0 350,0 -155,1080 -625,1080" fill="#10b981"/>
+    <polygon points="90,0 220,0 -285,1080 -415,1080" fill="#ecfdf5" fill-opacity="0.96"/>
+    <polygon points="300,0 445,0 -60,1080 -205,1080" fill="#064e3b"/>
+    ${logoImage(sixflTvLogoBytes, 720, 62, 480, 154)}
+    <rect x="380" y="690" width="1160" height="3" rx="2" fill="#10b981" fill-opacity="0.68"/>
+  </svg>`;
+
+  const [awardText, headlineText, promptText, urlText, nominationsText, votingText, winnerText] = await Promise.all([
+    thumbnailTextPng({ text: input.awardLabel.toUpperCase(), width: 1280, height: 56, fontSize: 30, bold: true, fill: "#2dd4bf", align: "center", letterSpacing: 4 }),
+    thumbnailTextPng({ text: "REMEMBER TO VOTE", width: 1400, height: 116, fontSize: 88, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: "WATCH ALL NOMINEES · CHOOSE YOUR WINNER", width: 1220, height: 58, fontSize: 30, bold: true, fill: "#a7f3d0", align: "center", letterSpacing: 2 }),
+    thumbnailTextPng({ text: "SIXFL.CO.UK/GOAL-OF-THE-MONTH", width: 1380, height: 72, fontSize: 42, bold: true, fill: "#2dd4bf", align: "center", letterSpacing: 1.2 }),
+    thumbnailTextPng({ text: input.nominationsCloseLabel, width: 1320, height: 52, fontSize: 26, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: input.votingWindowLabel, width: 1320, height: 52, fontSize: 26, bold: true, fill: "#ffffff", align: "center" }),
+    thumbnailTextPng({ text: input.winnerLabel, width: 1320, height: 52, fontSize: 26, bold: true, fill: "#ffffff", align: "center" }),
+  ]);
+
+  return sharp(Buffer.from(baseSvg)).composite([
+    { input: awardText, left: 320, top: 250 },
+    { input: headlineText, left: 260, top: 350 },
+    { input: promptText, left: 350, top: 478 },
+    { input: urlText, left: 270, top: 575 },
+    { input: nominationsText, left: 300, top: 735 },
+    { input: votingText, left: 300, top: 795 },
+    { input: winnerText, left: 300, top: 855 },
+  ]).png({ compressionLevel: 9 }).toBuffer();
+}
+
 export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixture; kind: "HIGHLIGHTS" | "FULL_MATCH"; siteUrl: string; clipNumber?: number | null }) {
   const [firstBadge, secondBadge, sixflTvLogoBytes, fontCss] = await Promise.all([
     fetchSixflTvBadge(input.fixture.firstTeam.logoUrl, input.siteUrl),
