@@ -16,6 +16,7 @@ import {
 } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import PlayerAppHome from "@/components/player/PlayerAppHome";
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -351,11 +352,74 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
   const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
   const nextFixture = upcomingFixtures[0] ?? null;
+  const nextAvailability =
+    nextFixture && membership
+      ? await prisma.fixtureAvailability.findUnique({
+          where: {
+            fixtureId_teamMemberId: {
+              fixtureId: nextFixture.id,
+              teamMemberId: membership.id,
+            },
+          },
+          select: { response: true },
+        })
+      : null;
+  const recentResultFixture =
+    recentFixtures.find((fixture) => Boolean(fixture.result)) ?? null;
+  const recentResult = recentResultFixture?.result
+    ? (() => {
+        const isHome = recentResultFixture.homeTeamId === teamid;
+        const goalsFor = isHome
+          ? recentResultFixture.result.homeScore
+          : recentResultFixture.result.awayScore;
+        const goalsAgainst = isHome
+          ? recentResultFixture.result.awayScore
+          : recentResultFixture.result.homeScore;
+        return {
+          opponent: isHome
+            ? recentResultFixture.awayTeam.name
+            : recentResultFixture.homeTeam.name,
+          dateLabel: formatFixtureDate(recentResultFixture.kickoffAt),
+          goalsFor,
+          goalsAgainst,
+          outcome:
+            goalsFor > goalsAgainst
+              ? ("W" as const)
+              : goalsFor < goalsAgainst
+                ? ("L" as const)
+                : ("D" as const),
+        };
+      })()
+    : null;
   const playerReceiptStates = await getPlayerReceiptStates(playerFees.map(fee => fee.id));
 
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
-      <div className="mx-auto max-w-6xl space-y-8">
+      <PlayerAppHome
+        teamId={teamid}
+        playerName={membership?.user.name ?? user.name ?? null}
+        leagueName={team.league?.name ?? null}
+        nextFixture={
+          nextFixture
+            ? {
+                id: nextFixture.id,
+                dateLabel: formatFixtureDate(nextFixture.kickoffAt),
+                venueLabel: [
+                  nextFixture.venue?.name,
+                  nextFixture.pitch,
+                ].filter(Boolean).join(" · ") || null,
+                homeTeam: nextFixture.homeTeam,
+                awayTeam: nextFixture.awayTeam,
+              }
+            : null
+        }
+        nextAvailability={nextAvailability?.response ?? null}
+        outstandingPence={outstandingPence}
+        nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
+        recentResult={recentResult}
+        previewMembershipId={previewMembership?.id ?? null}
+      />
+      <div className="player-web-home mx-auto max-w-6xl space-y-8">
         <section className="player-overview-identity overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
