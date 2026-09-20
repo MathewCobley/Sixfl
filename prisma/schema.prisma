@@ -38,6 +38,10 @@ model User {
 
   assignedMessageThreads MessageThread[] @relation("UserAssignedMessageThreads")
   createdMessageEntries  MessageEntry[]  @relation("UserCreatedMessageEntries")
+
+  portalMessages              PortalMessage[]          @relation("PortalMessageSender")
+  portalConversationReads     PortalConversationRead[] @relation("PortalConversationReadUser")
+  portalPrivateConversations  PortalConversation[]     @relation("PortalConversationParticipantUser")
 }
 
 enum UserRole {
@@ -268,8 +272,9 @@ model Team {
   playerMatchFees      PlayerMatchFee[]
   fixtureConfirmations FixtureCaptainConfirmation[]
 
-  convertedFromLead InterestLead?   @relation("LeadConvertedTeam")
-  messageThreads    MessageThread[] @relation("TeamMessageThreads")
+  convertedFromLead    InterestLead?        @relation("LeadConvertedTeam")
+  messageThreads       MessageThread[]       @relation("TeamMessageThreads")
+  portalConversations  PortalConversation[] @relation("TeamPortalConversations")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1254,6 +1259,82 @@ model MessageEntry {
   @@index([createdByUserId])
   @@index([receivedAt])
   @@index([sentAt])
+}
+
+enum PortalConversationType {
+  TEAM
+  CAPTAIN_PLAYER
+  SIXFL
+}
+
+enum PortalMessageSenderRole {
+  ADMIN
+  CAPTAIN
+  PLAYER
+  SYSTEM
+}
+
+model PortalConversation {
+  id String @id @default(cuid())
+
+  conversationKey String @unique
+  teamId          String
+  type            PortalConversationType
+  participantUserId String?
+
+  title              String?
+  lastMessagePreview String?
+  latestMessageAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team            Team  @relation("TeamPortalConversations", fields: [teamId], references: [id], onDelete: Cascade)
+  participantUser User? @relation("PortalConversationParticipantUser", fields: [participantUserId], references: [id], onDelete: Cascade)
+
+  messages PortalMessage[]
+  reads    PortalConversationRead[]
+
+  @@index([teamId, type])
+  @@index([participantUserId])
+  @@index([latestMessageAt])
+}
+
+model PortalMessage {
+  id String @id @default(cuid())
+
+  conversationId String
+  senderUserId   String?
+  senderRole     PortalMessageSenderRole
+
+  body String
+
+  createdAt DateTime @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  conversation PortalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUser   User?              @relation("PortalMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId, createdAt])
+}
+
+model PortalConversationRead {
+  id String @id @default(cuid())
+
+  conversationId String
+  userId         String
+  lastReadAt     DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversation PortalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User               @relation("PortalConversationReadUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, lastReadAt])
 }
 
 model InboxAlert {
