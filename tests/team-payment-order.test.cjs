@@ -304,6 +304,11 @@ test("prepared source retains gates on UI, POST, saved card and unallocated cred
   assert.ok(captain.includes("const canUseCredit = paymentDecision.allowed"));
   assert.ok(captain.includes("<TeamPaymentOrderNotice decision={paymentDecision} />"));
   assert.ok(captain.includes("Older team balance outstanding"));
+  assert.ok(captain.includes("Oldest charge to clear first"));
+  assert.ok(captain.includes("Available team credit"));
+  assert.ok(captain.includes("After that"));
+  assert.ok(captain.includes("Pay oldest charge"));
+  assert.equal(captain.includes("Pay next outstanding"), false);
   const publicPage = read("src/app/pay/charge/[token]/page.tsx");
   assert.ok(publicPage.includes("const canPay = paymentDecision.allowed"));
   const auto = read("src/lib/payments/team-autopay.ts");
