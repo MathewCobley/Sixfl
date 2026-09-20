@@ -25,7 +25,7 @@ test("captain flexible payment is server-owned, oldest-first and credit-bounded"
   assert.doesNotMatch(route, /formData\.get\("chargeId"\)/);
 });
 
-test("captain payments page offers an amount field with a concrete £43 example", () => {
+test("captain payments page offers an amount field with a zero-value placeholder", () => {
   const page = read("src/app/captain/team/[teamid]/payments/page.tsx");
   assert.match(page, /Pay an amount of your choice/);
   assert.match(page, /for example £43/);
