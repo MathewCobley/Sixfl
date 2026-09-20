@@ -120,7 +120,7 @@ export default function PlayerAppHome({
   }`;
 
   return (
-    <section className="player-app-home hidden px-4 pb-28 pt-3 text-white">
+    <section className="player-app-home px-4 pb-28 pt-3 text-white">
       <div className="mx-auto w-full max-w-xl">
         <div className="mb-5">
           <p className="text-sm font-medium text-white/50">
