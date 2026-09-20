@@ -63,7 +63,7 @@ for(const width of [390,1440]) {
       await page.evaluate(()=>window.mount('promo'));
       await page.getByRole('heading',{name:'September Goal of the Month',exact:true}).waitFor();
       await page.locator('[data-monthly-goal="goal-one"]').waitFor();
-      assert.equal(await page.getByRole('link',{name:/Nominate \/ view all goals/}).getAttribute('href'),'/goal-of-the-month?from=captain&teamId=team-one');
+      assert.equal(await page.getByRole('link',{name:/Nominate \/ back goals/}).getAttribute('href'),'/goal-of-the-month?from=captain&teamId=team-one');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     }finally{await context.close();}
   });
