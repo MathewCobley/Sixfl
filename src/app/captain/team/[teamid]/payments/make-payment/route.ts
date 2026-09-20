@@ -28,8 +28,9 @@ function parsePounds(value: FormDataEntryValue | null) {
 }
 
 function targetForOrder(order: Awaited<ReturnType<typeof getTeamPaymentOrder>>) {
-  if (order.enabled) return order.next;
-  return order.ledger.openEntries[0] ?? null;
+  if (!order.enabled) return order.ledger.openEntries[0] ?? null;
+  if (!order.next) return null;
+  return order.ledger.entries.find((entry) => entry.chargeId === order.next?.chargeId) ?? null;
 }
 
 export async function POST(
