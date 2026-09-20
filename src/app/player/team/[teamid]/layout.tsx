@@ -14,7 +14,6 @@ import PlayerMessageBox from "@/components/player/PlayerMessageBox";
 import PlayerPreviewReturnBanner from "@/components/player/PlayerPreviewReturnBanner";
 import PlayerPwaPortalHeader from "@/components/player/PlayerPwaPortalHeader";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
-import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
 import { prisma } from "@/lib/prisma";
 
 export default async function PlayerTeamLayout({
@@ -60,14 +59,6 @@ export default async function PlayerTeamLayout({
   const isAdmin = viewer?.role === UserRole.ADMIN;
   const membership = viewer?.teamMembers[0] ?? null;
   const isCaptain = membership?.role === TeamRole.CAPTAIN;
-  const unreadChatCount =
-    viewer?.id && membership && !isAdmin
-      ? await getPortalChatUnreadCount({
-          teamId: teamid,
-          userId: viewer.id,
-          role: membership.role,
-        })
-      : 0;
   const returnHref = isAdmin
     ? `/admin/teams/${teamid}`
     : isCaptain
@@ -104,7 +95,7 @@ export default async function PlayerTeamLayout({
       ) : null}
 
       <Suspense>
-        <PlayerTeamNav teamId={teamid} unreadChatCount={unreadChatCount} />
+        <PlayerTeamNav teamId={teamid} />
       </Suspense>
 
       {/* Keep the player's dashboard first; discovery panels must not precede it. */}
