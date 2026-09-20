@@ -594,7 +594,7 @@ export async function createGoalOfMonthNomineeIntro(input: {
   const [headlineText, scorerText, teamText, homeText, homeScoreText, separatorText, awayScoreText, awayText, ftText, matchweekText, leagueText, siteText] = await Promise.all([
     fixedCanvasTextPng({ text: `${month} GOAL OF THE MONTH NOMINEE`, width: 1400, height: 58, fontSize: 32, bold: true, fill: "#ffffff", align: "center", letterSpacing: 3.4 }),
     thumbnailTextPng({ text: scorer, width: 1190, height: 108, fontSize: 78, bold: true, fill: "#ffffff" }),
-    thumbnailTextPng({ text: team, width: 1080, height: 54, fontSize: 31, bold: true, fill: "#d1fae5" }),
+    thumbnailTextPng({ text: team, width: 1080, height: 48, fontSize: 28, bold: true, fill: "#d1fae5" }),
     thumbnailTextPng({ text: home, width: 470, height: 68, fontSize: 43, bold: true, fill: homeFill, align: "right" }),
     thumbnailTextPng({ text: hasScore ? String(input.homeScore) : "", width: 92, height: 86, fontSize: 58, bold: true, fill: homeFill, align: "center" }),
     thumbnailTextPng({ text: hasScore ? "–" : "VS", width: 78, height: 86, fontSize: 50, bold: true, fill: "#f8fafc", align: "center" }),
@@ -609,7 +609,7 @@ export async function createGoalOfMonthNomineeIntro(input: {
   const composites: sharp.OverlayOptions[] = [
     { input: headlineText, left: 260, top: 222 },
     { input: scorerText, left: 500, top: 350 },
-    { input: teamText, left: 504, top: 446 },
+    { input: teamText, left: 504, top: 482 },
     { input: homeText, left: 260, top: 670 },
     { input: homeScoreText, left: 820, top: 654 },
     { input: separatorText, left: 918, top: 654 },
@@ -636,13 +636,13 @@ export async function createGoalOfMonthClipOverlay(input: {
   ]);
   const scorer = fit(input.scorerName || input.teamName, 24);
   const team = fit(input.teamName, 32);
-  const replaySpace = input.replay ? 154 : 0;
+  const replaySpace = input.replay ? 176 : 0;
   const width = input.replay
     ? Math.max(720, Math.min(880, 250 + scorer.length * 21 + replaySpace))
     : Math.max(560, Math.min(760, 220 + scorer.length * 22));
   const height = 116;
-  const replayWidth = 124;
-  const replayHeight = 34;
+  const replayWidth = 144;
+  const replayHeight = 42;
   const replayX = width - replayWidth - 20;
   const nameWidth = Math.max(320, width - 150 - replaySpace);
   const baseSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
@@ -651,7 +651,7 @@ export async function createGoalOfMonthClipOverlay(input: {
       <rect width="${width}" height="${height}" rx="17" fill="#010503" fill-opacity="0.94" stroke="#065f46" stroke-width="3"/>
       <rect width="9" height="${height}" rx="4" fill="#10b981"/>
       ${badgeImage(teamBadge, 22, 19, 78, input.teamName)}
-      ${input.replay ? `<rect x="${replayX}" y="18" width="${replayWidth}" height="${replayHeight}" rx="17" fill="#07110d" stroke="#10b981" stroke-width="2"/>` : ""}
+      ${input.replay ? `<rect x="${replayX}" y="16" width="${replayWidth}" height="${replayHeight}" rx="21" fill="#07110d" stroke="#10b981" stroke-width="2"/>` : ""}
     </g>
     ${logoImage(sixflTvLogoBytes, 1640, 38, 220, 70, 0.94)}
   </svg>`;
@@ -660,13 +660,13 @@ export async function createGoalOfMonthClipOverlay(input: {
     thumbnailTextPng({ text: team, width: Math.max(320, width - 150), height: 36, fontSize: 25, bold: true, fill: "#d1fae5" }),
   ]);
   const replayText = input.replay
-    ? await fixedCanvasTextPng({ text: "REPLAY", width: replayWidth, height: 24, fontSize: 16, bold: true, fill: "#ffffff", align: "center", letterSpacing: 1.2 })
+    ? await fixedCanvasTextPng({ text: "REPLAY", width: replayWidth, height: 30, fontSize: 14, bold: true, fill: "#ffffff", align: "center", letterSpacing: 1.1 })
     : null;
   const composites: sharp.OverlayOptions[] = [
     { input: scorerText, left: 158, top: 54 },
     { input: teamText, left: 158, top: 104 },
   ];
-  if (replayText) composites.push({ input: replayText, left: 46 + replayX, top: 63 });
+  if (replayText) composites.push({ input: replayText, left: 46 + replayX, top: 62 });
   return sharp(Buffer.from(baseSvg)).composite(composites).png({ compressionLevel: 9 }).toBuffer();
 }
 
