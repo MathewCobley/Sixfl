@@ -6,6 +6,9 @@ import LeagueQuickLinks from "@/components/leagues/LeagueQuickLinks";
 import { getHomepageLeagues } from "@/lib/leagues/homepage-leagues";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function PublicLeagueLayout({
   children,
   params,
