@@ -21,6 +21,7 @@ import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -57,6 +58,13 @@ function formatFixtureDate(value: Date) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatShortDate(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "numeric",
+    month: "short",
   });
 }
 
@@ -352,6 +360,26 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     .slice()
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
   const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
+  const [memberProfiles, playerStatsRows] = membership
+    ? await Promise.all([
+        getTeamMemberProfilesByTeamMemberIds([membership.id]),
+        prisma.$queryRaw<Array<{ appearances: number; goals: number; assists: number }>>`
+          SELECT
+            COUNT(*) FILTER (WHERE performance."played" = TRUE)::int AS appearances,
+            COALESCE(SUM(performance."goals") FILTER (WHERE performance."played" = TRUE), 0)::int AS goals,
+            COALESCE(SUM(performance."assists") FILTER (WHERE performance."played" = TRUE), 0)::int AS assists
+          FROM "PlayerMatchPerformance" performance
+          WHERE performance."teamId" = ${teamid}
+            AND performance."teamMemberId" = ${membership.id}
+        `,
+      ])
+    : [new Map(), []];
+  const memberProfile = membership ? memberProfiles.get(membership.id) ?? null : null;
+  const playerStats = playerStatsRows[0] ?? {
+    appearances: 0,
+    goals: 0,
+    assists: 0,
+  };
   const nextFixture = upcomingFixtures[0] ?? null;
   const nextAvailability =
     nextFixture && membership
@@ -365,33 +393,25 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           select: { response: true },
         })
       : null;
-  const recentResultFixture =
-    recentFixtures.find((fixture) => Boolean(fixture.result)) ?? null;
-  const recentResult = recentResultFixture?.result
-    ? (() => {
-        const isHome = recentResultFixture.homeTeamId === teamid;
-        const goalsFor = isHome
-          ? recentResultFixture.result.homeScore
-          : recentResultFixture.result.awayScore;
-        const goalsAgainst = isHome
-          ? recentResultFixture.result.awayScore
-          : recentResultFixture.result.homeScore;
-        return {
-          opponent: isHome
-            ? recentResultFixture.awayTeam.name
-            : recentResultFixture.homeTeam.name,
-          dateLabel: formatFixtureDate(recentResultFixture.kickoffAt),
-          goalsFor,
-          goalsAgainst,
-          outcome:
-            goalsFor > goalsAgainst
-              ? ("W" as const)
-              : goalsFor < goalsAgainst
-                ? ("L" as const)
-                : ("D" as const),
-        };
-      })()
-    : null;
+  const recentResults = recentFixtures.flatMap((fixture) => {
+    if (!fixture.result) return [];
+    const isHome = fixture.homeTeamId === teamid;
+    const goalsFor = isHome ? fixture.result.homeScore : fixture.result.awayScore;
+    const goalsAgainst = isHome ? fixture.result.awayScore : fixture.result.homeScore;
+    return [{
+      id: fixture.id,
+      opponent: isHome ? fixture.awayTeam.name : fixture.homeTeam.name,
+      dateLabel: formatShortDate(fixture.kickoffAt),
+      goalsFor,
+      goalsAgainst,
+      outcome:
+        goalsFor > goalsAgainst
+          ? ("W" as const)
+          : goalsFor < goalsAgainst
+            ? ("L" as const)
+            : ("D" as const),
+    }];
+  });
   const playerReceiptStates = await getPlayerReceiptStates(playerFees.map(fee => fee.id));
 
   return (
@@ -399,8 +419,13 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       <PlayerPwaModeOnly mode="app">
         <PlayerAppHome
           teamId={teamid}
+          teamName={team.name}
+          teamLogoUrl={team.logoUrl}
           playerName={membership?.user.name ?? user.name ?? null}
-          leagueName={team.league?.name ?? null}
+          playerRole={membership?.role ?? null}
+          squadNumber={memberProfile?.squadNumber ?? null}
+          preferredPosition={memberProfile?.preferredPositions ?? null}
+          playerStats={playerStats}
           nextFixture={
           nextFixture
             ? {
@@ -418,7 +443,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           nextAvailability={nextAvailability?.response ?? null}
           outstandingPence={outstandingPence}
           nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
-          recentResult={recentResult}
+          recentResults={recentResults}
           previewMembershipId={previewMembership?.id ?? null}
           showTeamChat={user.role === UserRole.ADMIN}
         />
