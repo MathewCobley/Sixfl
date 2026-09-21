@@ -160,11 +160,11 @@ export default function PlayerAppHome({
   const FourthIcon = fourthAction.icon;
 
   return (
-    <section className="player-app-home px-4 pb-28 pt-3 text-white">
-      <div className="mx-auto w-full max-w-xl space-y-4">
-        <section className="overflow-hidden rounded-[1.7rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_38%),linear-gradient(145deg,#0b1a22,#09140f)] shadow-[0_18px_55px_rgba(0,0,0,0.32)]">
-          <div className="flex items-center gap-4 px-4 pb-4 pt-5">
-            <div className="flex h-[4.6rem] w-[4.6rem] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-sky-300/25 bg-black/30">
+    <section className="player-app-home px-3 pb-24 pt-2 text-white">
+      <div className="mx-auto w-full max-w-xl space-y-3">
+        <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_38%),linear-gradient(145deg,#0b1a22,#09140f)] shadow-[0_14px_42px_rgba(0,0,0,0.28)]">
+          <div className="flex items-center gap-3 px-3 pb-3 pt-3">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-sky-300/25 bg-black/30">
               {playerImageUrl ? (
                 <img
                   src={playerImageUrl}
@@ -172,30 +172,30 @@ export default function PlayerAppHome({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-xl font-black text-white/60">
+                <span className="text-base font-black text-white/60">
                   {initials(playerName)}
                 </span>
               )}
             </div>
 
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-2xl font-black tracking-tight text-white">
+              <h1 className="truncate text-xl font-black tracking-tight text-white">
                 {playerName || "SIXFL Player"}
               </h1>
-              <p className="mt-0.5 truncate text-base font-medium text-white/65">{teamName}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className="mt-0.5 truncate text-sm font-medium text-white/65">{teamName}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {squadNumber ? (
-                  <span className="rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-xs font-black text-emerald-100">
+                  <span className="rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-100">
                     #{squadNumber}
                   </span>
                 ) : null}
-                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
                   {preferredPosition || playerRoleLabel || "Player"}
                 </span>
               </div>
             </div>
 
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white">
               {teamLogoUrl ? (
                 <img
                   src={teamLogoUrl}
@@ -210,7 +210,7 @@ export default function PlayerAppHome({
             </div>
           </div>
 
-          <div className="mx-3 mb-3 grid grid-cols-[1fr_1fr_1fr_1.45fr] divide-x divide-white/10 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/25">
+          <div className="mx-3 mb-3 grid grid-cols-[1fr_1fr_1fr_1.45fr] divide-x divide-white/10 overflow-hidden rounded-xl border border-white/[0.07] bg-black/25">
             {[
               ["Matches", stats.appearances],
               ["Goals", stats.goals],
@@ -219,44 +219,44 @@ export default function PlayerAppHome({
               <Link
                 key={String(label)}
                 href={statsHref}
-                className="px-2 py-3 text-center active:bg-white/[0.04]"
+                className="px-2 py-2 text-center active:bg-white/[0.04]"
               >
-                <div className="text-xl font-black tabular-nums text-white">{value}</div>
-                <div className="mt-0.5 text-[11px] text-white/45">{label}</div>
+                <div className="text-lg font-black tabular-nums text-white">{value}</div>
+                <div className="text-[9px] text-white/45">{label}</div>
               </Link>
             ))}
             <Link
               href={availabilityHref}
-              className="flex items-center justify-center gap-2 px-2 py-3 active:bg-white/[0.04]"
+              className="flex items-center justify-center gap-1.5 px-2 py-2 active:bg-white/[0.04]"
             >
-              <span className={`h-3 w-3 shrink-0 rounded-full shadow-[0_0_14px_currentColor] ${availability.dot}`} />
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_12px_currentColor] ${availability.dot}`} />
               <span className="min-w-0">
-                <span className={`block truncate text-xs font-bold ${availability.tone}`}>
+                <span className={`block truncate text-[11px] font-bold ${availability.tone}`}>
                   {availability.label}
                 </span>
-                <span className="mt-0.5 block text-[10px] text-white/35">Next match</span>
+                <span className="block text-[9px] text-white/35">Next match</span>
               </span>
             </Link>
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[1.7rem] border border-sky-400/35 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.18),transparent_42%),linear-gradient(145deg,#0b1e2a,#091611)] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.28)]">
+        <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/35 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.18),transparent_42%),linear-gradient(145deg,#0b1e2a,#091611)] p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <CalendarDaysIcon className="h-5 w-5 text-sky-300" />
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-white/65">
+              <CalendarDaysIcon className="h-4 w-4 text-sky-300" />
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/65">
                 Next match
               </p>
             </div>
-            <Link href={fixturesHref} className="text-xs font-semibold text-sky-300">
+            <Link href={fixturesHref} className="text-[11px] font-semibold text-sky-300">
               View all →
             </Link>
           </div>
 
           {nextFixture ? (
-            <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <div className="min-w-0 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
                   {nextFixture.homeTeam.logoUrl ? (
                     <img
                       src={nextFixture.homeTeam.logoUrl}
@@ -269,10 +269,10 @@ export default function PlayerAppHome({
                     </span>
                   )}
                 </div>
-                <div className="mt-2 truncate text-xs font-bold text-white">{nextFixture.homeTeam.name}</div>
+                <div className="mt-1.5 truncate text-[11px] font-bold text-white">{nextFixture.homeTeam.name}</div>
               </div>
 
-              <span className="text-lg font-black text-white/55">VS</span>
+              <span className="text-base font-black text-white/55">VS</span>
 
               <div className="min-w-0 text-center">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white">
@@ -288,10 +288,10 @@ export default function PlayerAppHome({
                     </span>
                   )}
                 </div>
-                <div className="mt-2 truncate text-xs font-bold text-white">{nextFixture.awayTeam.name}</div>
+                <div className="mt-1.5 truncate text-[11px] font-bold text-white">{nextFixture.awayTeam.name}</div>
               </div>
 
-              <div className="col-span-3 mt-2 grid gap-1 border-t border-white/10 pt-3 text-center text-xs text-white/55">
+              <div className="col-span-3 mt-2 grid gap-0.5 border-t border-white/10 pt-2 text-center text-[11px] text-white/55">
                 <div className="font-semibold text-white/75">
                   {nextFixture.dateLabel} · {nextFixture.timeLabel}
                 </div>
@@ -299,86 +299,91 @@ export default function PlayerAppHome({
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-2xl bg-black/20 p-4 text-sm text-white/50">
+            <div className="mt-3 rounded-xl bg-black/20 p-3 text-xs text-white/50">
               Your next fixture will appear here as soon as SIXFL publishes it.
             </div>
           )}
         </section>
 
-        <section className="grid grid-cols-2 gap-2.5">
+        <section className="grid grid-cols-2 gap-2">
           <Link
             href={fixturesHref}
-            className="rounded-[1.4rem] border border-sky-400/40 bg-sky-500/15 p-4 active:scale-[0.99]"
+            className="flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border border-sky-400/40 bg-sky-500/15 p-3 active:scale-[0.99]"
           >
-            <CalendarDaysIcon className="h-7 w-7 text-sky-300" />
-            <div className="mt-4 text-base font-black">My Fixtures</div>
-            <div className="mt-1 text-xs leading-5 text-white/50">Upcoming matches and results</div>
+            <CalendarDaysIcon className="h-6 w-6 shrink-0 text-sky-300" />
+            <div className="min-w-0">
+              <div className="text-sm font-black">My Fixtures</div>
+              <div className="mt-0.5 truncate text-[10px] text-white/45">Matches & results</div>
+            </div>
           </Link>
 
           <Link
             href={availabilityHref}
-            className="rounded-[1.4rem] border border-emerald-400/40 bg-emerald-500/15 p-4 active:scale-[0.99]"
+            className="flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border border-emerald-400/40 bg-emerald-500/15 p-3 active:scale-[0.99]"
           >
-            <CheckCircleIcon className="h-7 w-7 text-emerald-300" />
-            <div className="mt-4 text-base font-black">Availability</div>
-            <div className="mt-1 text-xs leading-5 text-white/50">Set your upcoming availability</div>
+            <CheckCircleIcon className="h-6 w-6 shrink-0 text-emerald-300" />
+            <div className="min-w-0">
+              <div className="text-sm font-black">Availability</div>
+              <div className="mt-0.5 truncate text-[10px] text-white/45">Set your status</div>
+            </div>
           </Link>
 
           <Link
             href={nextPaymentUrl || ledgerHref}
             target={nextPaymentUrl ? "_blank" : undefined}
-            className="rounded-[1.4rem] border border-amber-400/40 bg-amber-500/15 p-4 active:scale-[0.99]"
+            className="flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border border-amber-400/40 bg-amber-500/15 p-3 active:scale-[0.99]"
           >
-            <BanknotesIcon className="h-7 w-7 text-amber-300" />
-            <div className="mt-4 text-base font-black">Match Fees</div>
-            <div className="mt-1 text-xs leading-5 text-white/50">
+            <BanknotesIcon className="h-6 w-6 shrink-0 text-amber-300" />
+            <div className="min-w-0">
+              <div className="text-sm font-black">Match Fees</div>
+              <div className="mt-0.5 truncate text-[10px] text-white/45">
               {outstandingPence > 0
                 ? `${formatMoney(outstandingPence)} outstanding`
                 : "View your payments"}
+              </div>
             </div>
           </Link>
 
           <Link
             href={fourthAction.href}
-            className={`rounded-[1.4rem] border p-4 active:scale-[0.99] ${fourthAction.classes}`}
+            className={`flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border p-3 active:scale-[0.99] ${fourthAction.classes}`}
           >
-            <FourthIcon className="h-7 w-7" />
-            <div className="mt-4 text-base font-black text-white">{showTeamChat ? <span>SIXFL Chat</span> : <span>{fourthAction.title}</span>}</div>
-            <div className="mt-1 text-xs leading-5 text-white/50">{fourthAction.body}</div>
+            <FourthIcon className="h-6 w-6 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-sm font-black text-white">{showTeamChat ? <span>SIXFL Chat</span> : <span>{fourthAction.title}</span>}</div>
+              <div className="mt-0.5 truncate text-[10px] text-white/45">{showTeamChat ? "Messages" : "Goals & assists"}</div>
+            </div>
           </Link>
         </section>
 
-        <section className="rounded-[1.5rem] border border-sky-400/20 bg-white/[0.035] p-3.5">
+        <section className="rounded-[1.35rem] border border-sky-400/20 bg-white/[0.035] p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <ChartBarSquareIcon className="h-5 w-5 text-sky-300" />
-              <h2 className="text-xs font-black uppercase tracking-[0.16em] text-white/65">Recent form</h2>
+              <ChartBarSquareIcon className="h-4 w-4 text-sky-300" />
+              <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-white/65">Recent form</h2>
             </div>
-            <Link href={resultsHref} className="text-xs font-semibold text-sky-300">View all →</Link>
+            <Link href={resultsHref} className="text-[11px] font-semibold text-sky-300">View all →</Link>
           </div>
 
           {recentResults.length ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {recentResults.map((result) => (
+            <div className="mt-2.5 grid grid-cols-5 gap-1.5">
+              {recentResults.slice(0, 5).map((result) => (
                 <div
                   key={result.id}
-                  className="min-w-[8.2rem] rounded-2xl border border-white/[0.06] bg-black/20 px-3 py-3"
+                  title={`${result.dateLabel} · ${result.opponent}`}
+                  className="rounded-xl border border-white/[0.06] bg-black/20 px-1 py-2 text-center"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${resultTone(result.outcome)}`}>
-                      {result.outcome}
-                    </span>
-                    <span className="text-sm font-black tabular-nums text-white">
-                      {result.goalsFor} - {result.goalsAgainst}
-                    </span>
+                  <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${resultTone(result.outcome)}`}>
+                    {result.outcome}
+                  </span>
+                  <div className="mt-1 text-[11px] font-black tabular-nums text-white">
+                    {result.goalsFor}-{result.goalsAgainst}
                   </div>
-                  <div className="mt-2 truncate text-xs font-semibold text-white/70">{result.opponent}</div>
-                  <div className="mt-1 text-[10px] text-white/35">{result.dateLabel}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-white/45">Your recent results will appear here.</p>
+            <p className="mt-2.5 text-xs text-white/45">Your recent results will appear here.</p>
           )}
         </section>
 
