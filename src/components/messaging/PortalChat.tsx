@@ -458,14 +458,16 @@ export default function PortalChat({
     );
     if (!confirmed) return;
 
+    const archivedRef = selectedRef;
     setArchivingGroup(true);
     setFeedback(null);
+    setSelectedRef("team");
 
     try {
       const response = await fetch(
         apiUrl({
           teamId,
-          conversation: selectedRef,
+          conversation: archivedRef,
           previewMembershipId,
           adminTestMode,
           simulateTestMode,
@@ -475,7 +477,7 @@ export default function PortalChat({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "archive-group",
-            conversation: selectedRef,
+            conversation: archivedRef,
           }),
         },
       );
@@ -494,6 +496,7 @@ export default function PortalChat({
         "Chat removed from your list. Its history is kept and it will return if a new message is sent.",
       );
     } catch (error) {
+      setSelectedRef(archivedRef);
       setFeedback(
         error instanceof Error ? error.message : "Could not remove this chat.",
       );
