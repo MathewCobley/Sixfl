@@ -9,6 +9,25 @@ const sharp = require('sharp');
 const PART = 8 * 1024 * 1024;
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
+
+test('full match rendering uses the high quality long-form encode profile', async () => {
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  assert.match(worker, /const videoPreset = premium \? "slow" : "medium"/);
+  assert.match(worker, /const videoCrf = premium \? "10" : "15"/);
+  assert.match(worker, /job\.kind !== "FULL_MATCH"/);
+});
+
+test('short-form renders preserve source resolution up to 4K and keep test highlights out of auto publish', async () => {
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  assert.match(worker, /MAX_SHORT_VIDEO_CANVAS[^\n]+3840[^\n]+2160/);
+  assert.match(worker, /sourceVideoCanvas/);
+  assert.match(worker, /Inspecting source quality/);
+  assert.match(worker, /canvasBaseFilter\(canvas\)/);
+  assert.match(worker, /normaliseVideo\(source, normal,[\s\S]{0,260}renderCanvas\)/);
+  assert.match(worker, /r\."kind" IN \('HIGHLIGHTS','FULL_MATCH'\)/);
+  assert.doesNotMatch(worker, /r\."kind" IN \('HIGHLIGHTS','HIGHLIGHTS_ALT','FULL_MATCH'\)/);
+});
+
 async function loadWorker(db, objects, uploadHook) {
   const file = path.resolve('scripts/sixfl-tv-worker.ts');
   const code = ts.transpileModule(await fs.readFile(file, 'utf8'), {

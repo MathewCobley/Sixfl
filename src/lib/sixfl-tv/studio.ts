@@ -9,7 +9,7 @@ import { sixflTvThumbnailBackgroundKey } from "./thumbnail-background";
 import { sixflTvYoutubeDefaults } from "./youtube-metadata";
 
 export type SixflTvRenderKind = "HIGHLIGHTS" | "HIGHLIGHTS_ALT" | "FULL_MATCH";
-const SIXFL_TV_RENDER_VERSION = 22;
+const SIXFL_TV_RENDER_VERSION = 24;
 export class StudioError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }

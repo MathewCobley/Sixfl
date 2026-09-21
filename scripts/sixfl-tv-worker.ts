@@ -192,6 +192,74 @@ async function hasAudio(file: string) {
   return Boolean(value.trim());
 }
 
+type VideoCanvas = { width: number; height: number; fps: number };
+const DEFAULT_VIDEO_CANVAS: VideoCanvas = { width: 1920, height: 1080, fps: 30 };
+const MAX_SHORT_VIDEO_CANVAS: VideoCanvas = { width: 3840, height: 2160, fps: 30 };
+
+function even(value: number) {
+  return Math.max(2, Math.round(value / 2) * 2);
+}
+
+function fitShortVideoCanvas(sourceWidth: number, sourceHeight: number): VideoCanvas {
+  if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth < 2 || sourceHeight < 2) {
+    return DEFAULT_VIDEO_CANVAS;
+  }
+
+  const sourceScale = Math.min(
+    1,
+    MAX_SHORT_VIDEO_CANVAS.width / sourceWidth,
+    MAX_SHORT_VIDEO_CANVAS.height / sourceHeight,
+  );
+  const width = sourceWidth * sourceScale;
+  const height = sourceHeight * sourceScale;
+  const targetAspect = 16 / 9;
+  const sourceAspect = width / height;
+
+  let targetWidth: number;
+  let targetHeight: number;
+  if (sourceAspect >= targetAspect) {
+    targetWidth = Math.max(DEFAULT_VIDEO_CANVAS.width, even(width));
+    targetHeight = even(targetWidth / targetAspect);
+  } else {
+    targetHeight = Math.max(DEFAULT_VIDEO_CANVAS.height, even(height));
+    targetWidth = even(targetHeight * targetAspect);
+  }
+
+  if (targetWidth > MAX_SHORT_VIDEO_CANVAS.width || targetHeight > MAX_SHORT_VIDEO_CANVAS.height) {
+    return MAX_SHORT_VIDEO_CANVAS;
+  }
+  return { width: targetWidth, height: targetHeight, fps: 30 };
+}
+
+async function sourceVideoCanvas(file: string): Promise<VideoCanvas> {
+  const value = await run("ffprobe", [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=width,height",
+    "-of", "csv=s=x:p=0",
+    file,
+  ], true);
+  const [widthRaw, heightRaw] = value.trim().split("x");
+  const width = Number(widthRaw);
+  const height = Number(heightRaw);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2) {
+    throw new Error("FFprobe could not determine source video dimensions.");
+  }
+  return fitShortVideoCanvas(width, height);
+}
+
+function canvasScalePadFilter(canvas: VideoCanvas) {
+  return `scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${canvas.width}:${canvas.height}:(ow-iw)/2:(oh-ih)/2:black`;
+}
+
+function canvasBaseFilter(canvas: VideoCanvas) {
+  return `${canvasScalePadFilter(canvas)},fps=${canvas.fps},format=yuv420p`;
+}
+
+function overlayFilter(canvas: VideoCanvas, label: string) {
+  return `[1:v]scale=${canvas.width}:${canvas.height}:flags=lanczos,format=rgba[${label}]`;
+}
+
 async function claimJob() {
   return db.$transaction(async tx => {
     // Serialize claims across rolling deployments or accidental duplicate workers.
@@ -325,13 +393,13 @@ async function saveGoalClipPoster(assetId: string, candidate: PosterCandidate | 
   return true;
 }
 
-async function cardVideo(png: string, target: string, seconds = 3) {
+async function cardVideo(png: string, target: string, seconds = 3, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   await run("ffmpeg", ["-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(seconds), "-shortest",
-    "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+    "-vf", canvasBaseFilter(canvas),
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT") {
+async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT", canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   const frameDir = path.join(dir, "swipe-frames");
   await mkdir(frameDir, { recursive: true });
   const palette = style === "ALT_YELLOW"
@@ -352,22 +420,22 @@ async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_Y
   }
   await run("ffmpeg", ["-y", "-framerate", String(SWIPE_FPS), "-i", path.join(frameDir, "frame-%03d.png"),
     "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(SWIPE_FRAMES / SWIPE_FPS), "-shortest",
-    "-vf", "scale=1920:1080,fps=30,format=yuv420p", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+    "-vf", canvasBaseFilter(canvas), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
     "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false) {
+async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
   const ffmpegProgress = onProgress ? { durationSeconds: seconds, onFraction: onProgress } : undefined;
-  const videoPreset = premium ? "slow" : "veryfast";
-  const videoCrf = premium ? "10" : "21";
+  const videoPreset = premium ? "slow" : "medium";
+  const videoCrf = premium ? "10" : "15";
   const videoTune = premium ? ["-tune", "grain"] : [];
   const fadeOutStart = Math.max(0, seconds - 0.18).toFixed(3);
-  const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p`;
+  const base = canvasBaseFilter(canvas);
   const fade = `fade=t=in:st=0:d=0.18,fade=t=out:st=${fadeOutStart}:d=0.18`;
   const audioFilter = `aresample=48000,afade=t=in:st=0:d=0.12,afade=t=out:st=${fadeOutStart}:d=0.12`;
   if (scoreBug) {
-    const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[bug];[base][bug]overlay=0:0:format=auto,${fade},format=yuv420p[v]`;
+    const videoFilter = `[0:v]${base}[base];${overlayFilter(canvas, "bug")};[base][bug]overlay=0:0:format=auto,${fade},format=yuv420p[v]`;
     if (audio) {
       await run("ffmpeg", ["-y", "-i", source, "-loop", "1", "-i", scoreBug, "-filter_complex", videoFilter,
         "-map", "[v]", "-map", "0:a:0", "-af", audioFilter, "-t", String(seconds), "-shortest",
@@ -395,6 +463,7 @@ async function normaliseVideoSegment(
   startSeconds: number,
   endSeconds: number,
   overlay?: string,
+  canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS,
 ) {
   const total = await durationSeconds(source);
   const start = Math.max(0, Math.min(total, startSeconds));
@@ -404,12 +473,12 @@ async function normaliseVideoSegment(
 
   const audio = await hasAudio(source);
   const fadeOutStart = Math.max(0, seconds - 0.14).toFixed(3);
-  const base = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p";
+  const base = canvasBaseFilter(canvas);
   const fade = `fade=t=in:st=0:d=0.10,fade=t=out:st=${fadeOutStart}:d=0.14`;
   const audioFilter = `aresample=48000,afade=t=in:st=0:d=0.08,afade=t=out:st=${fadeOutStart}:d=0.10`;
 
   if (overlay) {
-    const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[tag];[base][tag]overlay=0:0:format=auto,${fade},format=yuv420p[v]`;
+    const videoFilter = `[0:v]${base}[base];${overlayFilter(canvas, "tag")};[base][tag]overlay=0:0:format=auto,${fade},format=yuv420p[v]`;
     if (audio) {
       await run("ffmpeg", [
         "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
@@ -458,7 +527,7 @@ async function normaliseVideoSegment(
 }
 
 
-async function slowMotionReplay(source: string, target: string, overlay: string) {
+async function slowMotionReplay(source: string, target: string, overlay: string, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   const seconds = await durationSeconds(source);
   const audio = await hasAudio(source);
   const end = Math.min(GOAL_REPLAY_END_SECONDS, seconds);
@@ -467,8 +536,8 @@ async function slowMotionReplay(source: string, target: string, overlay: string)
   const sourceDuration = Math.max(0.6, end - start);
   const outputDuration = sourceDuration / GOAL_REPLAY_SPEED;
   const fadeOutStart = Math.max(0, outputDuration - 0.16).toFixed(3);
-  const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS,fps=30,format=yuv420p`;
-  const videoFilter = `[0:v]${base}[base];[1:v]format=rgba[tag];[base][tag]overlay=0:0:format=auto,fade=t=in:st=0:d=0.12,fade=t=out:st=${fadeOutStart}:d=0.16,format=yuv420p[v]`;
+  const base = `${canvasScalePadFilter(canvas)},setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS,fps=${canvas.fps},format=yuv420p`;
+  const videoFilter = `[0:v]${base}[base];${overlayFilter(canvas, "tag")};[base][tag]overlay=0:0:format=auto,fade=t=in:st=0:d=0.12,fade=t=out:st=${fadeOutStart}:d=0.16,format=yuv420p[v]`;
   if (audio) {
     await run("ffmpeg", [
       "-y", "-ss", start.toFixed(3), "-t", sourceDuration.toFixed(3), "-i", source,
@@ -585,9 +654,27 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
   const inputs = await loadInputs(job.id);
   if (inputs.reduce((sum, input) => sum + input.sizeBytes, 0n) > 12n * 1024n ** 3n) throw new Error("Selected source footage exceeds the 12 GiB processing limit.");
   if (!inputs.some(input => input.role === "CONTENT")) throw new Error("No content source is attached to this render job.");
+  const intro = inputs.filter(input => input.role === "INTRO");
+  const content = inputs.filter(input => input.role === "CONTENT");
+  const outro = inputs.filter(input => input.role === "OUTRO");
   const dir = await mkdtemp(path.join(os.tmpdir(), `sixfl-tv-${job.id}-`));
   try {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
+    const preparedSourceIds = new Set<string>();
+    let renderCanvas = DEFAULT_VIDEO_CANVAS;
+    if (job.kind !== "FULL_MATCH") {
+      reportProgress(6, "Inspecting source quality");
+      const inspected: string[] = [];
+      for (const input of content) {
+        const source = path.join(dir, "source", `${input.position}.mp4`);
+        await reconstructAsset(input, source);
+        preparedSourceIds.add(input.assetId);
+        const canvas = await sourceVideoCanvas(source);
+        if (canvas.width * canvas.height > renderCanvas.width * renderCanvas.height) renderCanvas = canvas;
+        inspected.push(`${input.filename}=${canvas.width}x${canvas.height}`);
+      }
+      console.log(`Render source canvas ${job.id}: ${inspected.join(", ")} -> output=${renderCanvas.width}x${renderCanvas.height}@${renderCanvas.fps} kind=${job.kind}`);
+    }
     reportProgress(7, "Creating broadcast graphics");
     const titlePng = path.join(dir, "title.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
     const leagueTopPng = path.join(dir, "league-table-top.png"), leagueBottomPng = path.join(dir, "league-table-bottom.png");
@@ -607,7 +694,6 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       : await createSixflTvScoreBug({ fixture: metadata.fixture, kind: job.kind, siteUrl: siteUrl() }));
     reportProgress(10, "Preparing video segments");
     const segments: string[] = [];
-    const intro = inputs.filter(input => input.role === "INTRO"), content = inputs.filter(input => input.role === "CONTENT"), outro = inputs.filter(input => input.role === "OUTRO");
     const mediaInputs = [...intro, ...content, ...outro];
     const totalMediaBytes = Math.max(1, mediaInputs.reduce((sum, input) => sum + Number(input.sizeBytes), 0));
     let completedMediaBytes = 0;
@@ -630,7 +716,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       const progressFor = (fraction: number) =>
         12 + ((mediaStartBytes + mediaBytes * Math.max(0, Math.min(1, fraction))) / totalMediaBytes) * 70;
       reportProgress(progressFor(0), `Preparing ${label}`);
-      await reconstructAsset(input, source);
+      if (!preparedSourceIds.has(input.assetId)) await reconstructAsset(input, source);
       if (posterLabel || goalClipPosterAssetId) {
         const candidate = await sourcePosterCandidate(
           source,
@@ -646,7 +732,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
         if (posterLabel && candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
       }
       reportProgress(progressFor(0.02), label);
-      await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label), job.kind !== "FULL_MATCH");
+      await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label), job.kind !== "FULL_MATCH", renderCanvas);
       completedMediaBytes = mediaStartBytes + mediaBytes;
       reportProgress(progressFor(1), label);
     };
@@ -656,12 +742,12 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       await normaliseInput(input, source, normal, undefined, "Rendering intro"); segments.push(normal);
     }
     const swipe = content.length ? path.join(dir, "normalised", "swipe.mp4") : null;
-    if (swipe) await swipeVideo(dir, swipe, job.kind === "HIGHLIGHTS_ALT" ? "ALT_YELLOW" : "DEFAULT");
+    if (swipe) await swipeVideo(dir, swipe, job.kind === "HIGHLIGHTS_ALT" ? "ALT_YELLOW" : "DEFAULT", renderCanvas);
 
-    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
+    const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS, renderCanvas); segments.push(title);
     if (lineupBytes) {
       if (swipe) segments.push(swipe);
-      const lineup = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(lineupPng, lineup, LINEUP_SECONDS); segments.push(lineup);
+      const lineup = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(lineupPng, lineup, LINEUP_SECONDS, renderCanvas); segments.push(lineup);
     }
     if (swipe) segments.push(swipe);
     for (let index = 0; index < content.length; index++) {
@@ -706,7 +792,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     if (swipe) segments.push(swipe);
     reportProgress(84, "Adding Goal of the Month card");
     const goalOfMonthEnd = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-    await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS); segments.push(goalOfMonthEnd);
+    await cardVideo(goalOfMonthPng, goalOfMonthEnd, GOAL_OF_MONTH_END_SECONDS, renderCanvas); segments.push(goalOfMonthEnd);
 
     const tableRows = metadata.fixture.leagueTable?.rows || [];
     const tableMidpoint = Math.ceil(tableRows.length / 2);
@@ -719,13 +805,13 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       if (swipe) segments.push(swipe);
       reportProgress(87, "Adding relevant top-half league table");
       const leagueTop = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-      await cardVideo(leagueTopPng, leagueTop, LEAGUE_TABLE_SECONDS); segments.push(leagueTop);
+      await cardVideo(leagueTopPng, leagueTop, LEAGUE_TABLE_SECONDS, renderCanvas); segments.push(leagueTop);
     }
     if (leagueBottomBytes && showBottomHalf) {
       if (swipe) segments.push(swipe);
       reportProgress(89, "Adding relevant bottom-half league table");
       const leagueBottom = path.join(dir, "normalised", `${segmentIndex++}.mp4`);
-      await cardVideo(leagueBottomPng, leagueBottom, LEAGUE_TABLE_SECONDS); segments.push(leagueBottom);
+      await cardVideo(leagueBottomPng, leagueBottom, LEAGUE_TABLE_SECONDS, renderCanvas); segments.push(leagueBottom);
     }
 
     for (const input of outro) {
@@ -1173,6 +1259,7 @@ async function queueAutomaticYoutubePublish() {
         r."createdAt"
       FROM "SixflTvRenderJob" r
       WHERE r."state"='READY'
+        AND r."kind" IN ('HIGHLIGHTS','FULL_MATCH')
         AND r."createdAt" >= NOW() - INTERVAL '7 days'
       ORDER BY r."fixtureId", r."kind", r."createdAt" DESC, r."id" DESC
     )
@@ -1417,6 +1504,8 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     }, source);
     await reconstructAsset(brandingIntroAsset, brandingIntroSource);
     await reconstructAsset(brandingOutroAsset, brandingOutroSource);
+    const renderCanvas = await sourceVideoCanvas(source);
+    console.log(`Goal of the Month source canvas ${detail.candidateId}: source=${detail.filename} output=${renderCanvas.width}x${renderCanvas.height}@${renderCanvas.fps}`);
 
     const poster = await sourcePosterCandidate(source, dir, `gotm-${detail.candidateId}`, 14);
     await saveGoalClipPoster(detail.sourceAssetId, poster).catch(error =>
@@ -1468,11 +1557,11 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     const voteCard = path.join(dir, "vote.mp4");
     const brandingOutro = path.join(dir, "branding-outro.mp4");
 
-    await normaliseVideo(brandingIntroSource, brandingIntro, undefined, undefined, true);
-    await cardVideo(titlePng, title, GOAL_NOMINEE_TITLE_SECONDS);
+    await normaliseVideo(brandingIntroSource, brandingIntro, undefined, undefined, true, renderCanvas);
+    await cardVideo(titlePng, title, GOAL_NOMINEE_TITLE_SECONDS, renderCanvas);
 
-    const replayInfo = await slowMotionReplay(source, replay, replayOverlayPng);
-    const normalReady = await normaliseVideoSegment(source, normal, 0, replayInfo.sourceEnd, clipOverlayPng);
+    const replayInfo = await slowMotionReplay(source, replay, replayOverlayPng, renderCanvas);
+    const normalReady = await normaliseVideoSegment(source, normal, 0, replayInfo.sourceEnd, clipOverlayPng, renderCanvas);
     if (!normalReady) throw new Error("The Goal of the Month source clip is too short to render.");
 
     const sourceSeconds = await durationSeconds(source);
@@ -1482,10 +1571,11 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
       replayInfo.sourceEnd,
       sourceSeconds,
       clipOverlayPng,
+      renderCanvas,
     );
 
-    await cardVideo(votePng, voteCard, GOAL_VOTE_CARD_SECONDS);
-    await normaliseVideo(brandingOutroSource, brandingOutro, undefined, undefined, true);
+    await cardVideo(votePng, voteCard, GOAL_VOTE_CARD_SECONDS, renderCanvas);
+    await normaliseVideo(brandingOutroSource, brandingOutro, undefined, undefined, true, renderCanvas);
 
     const segments = [
       brandingIntro,
