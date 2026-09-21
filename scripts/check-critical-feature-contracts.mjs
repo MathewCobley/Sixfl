@@ -166,8 +166,8 @@ if (standingsViolations.length) {
 }
 
 // ---------------------------------------------------------------------------
-// PLAYER PWA — keep the approved app-style first screen compact, data-backed
-// and chat-dark-launched for real players.
+// PLAYER PWA — keep the approved app-style first screen compact, data-backed,
+// exact in admin player preview, and chat-dark-launched for real players.
 // ---------------------------------------------------------------------------
 const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
 const playerAppPagePath = "src/app/player/team/[teamid]/page.tsx";
@@ -181,7 +181,12 @@ expectText("player pwa", playerAppHomePath, playerAppHome, "Recent form", "playe
 expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "SIXFL Chat"', "admin preview must retain the SIXFL Chat tile");
 expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "My Stats"', "live players must receive a safe non-chat fourth tile");
 expectText("player pwa", playerAppPagePath, playerAppPage, "getTeamMemberProfilesByTeamMemberIds", "player app home must use the existing player profile source");
-expectText("player pwa", playerAppPagePath, playerAppPage, 'showTeamChat={user.role === UserRole.ADMIN}', "real players must not have Team Chat enabled before launch");
+expectText("player pwa", playerAppPagePath, playerAppPage, "getPortalChatUnreadCount", "player app home must use shared portal-chat unread logic");
+expectText("player pwa", playerAppPagePath, playerAppPage, "prisma.fixtureSelection.findFirst", "player app home must use saved fixture selection data");
+expectText("player pwa", playerAppHomePath, playerAppHome, "NOT SELECTED YET", "player app home must keep non-final selection wording safe");
+expectText("player pwa", playerAppHomePath, playerAppHome, "NOT IN SQUAD", "player app home must expose explicit final non-selection when known");
+expectText("player pwa", playerAppHomePath, playerAppHome, "unreadMessageLabel", "player app home must surface unread SIXFL Chat status");
+expectText("player pwa", playerAppPagePath, playerAppPage, 'showTeamChat={user.role === UserRole.ADMIN && !previewMembership}', "admin player preview must match the live player's chat visibility");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
 
