@@ -386,7 +386,7 @@ export default function PlayerAppHome({
             ) : null}
             <FourthIcon className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
-              <div className="text-sm font-black text-white">{fourthAction.title}</div>
+              <div className="text-sm font-black text-white"><span>SIXFL Chat</span></div>
               <div className="mt-0.5 truncate text-[10px] text-white/45">{fourthAction.body}</div>
             </div>
           </Link>
