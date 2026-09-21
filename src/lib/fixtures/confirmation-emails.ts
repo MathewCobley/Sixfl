@@ -129,7 +129,7 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
       kickoffAt: true,
       homeTeam: { select: { id: true, name: true, logoUrl: true } },
       awayTeam: { select: { id: true, name: true, logoUrl: true } },
-      league: { select: { name: true, season: true, publicAt: true } },
+      league: { select: { name: true, season: true } },
       captainConfirmations: {
         where: { teamId: input.teamId },
         select: { status: true },
@@ -142,9 +142,7 @@ export async function queueInitialFixtureConfirmationEmailForTeam(input: {
     !fixture ||
     !fixture.publishedAt ||
     fixture.status !== "SCHEDULED" ||
-    fixture.kickoffAt <= now ||
-    !fixture.league.publicAt ||
-    fixture.league.publicAt > now
+    fixture.kickoffAt <= now
   ) {
     return "skipped";
   }
@@ -268,7 +266,6 @@ export async function runFixtureConfirmationEmailJob() {
     where: {
       publishedAt: { not: null },
       status: "SCHEDULED",
-      league: { publicAt: { lte: now } },
       kickoffAt: { gt: now },
     },
     orderBy: { kickoffAt: "asc" },
