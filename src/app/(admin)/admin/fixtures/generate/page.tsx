@@ -65,7 +65,18 @@ export default async function FixtureGeneratorPage({
 
   const [leagues, venues, referees, allDivisionOptions] = await Promise.all([
     prisma.league.findMany({
-      where: { id: { in: currentLeagueIds } },
+      where: {
+        OR: [
+          { id: { in: currentLeagueIds } },
+          {
+            isActive: true,
+            OR: [
+              { publicAt: null },
+              { publicAt: { gt: new Date() } },
+            ],
+          },
+        ],
+      },
       orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
       select: { id: true, name: true, season: true },
     }),
@@ -134,7 +145,7 @@ export default async function FixtureGeneratorPage({
 
       {noCurrentLeagues ? (
         <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-          No current league seasons are available. Open a league and create or select its current season first.
+          No active league seasons are available. Create or activate a league season first.
         </div>
       ) : null}
 
@@ -185,7 +196,7 @@ export default async function FixtureGeneratorPage({
 
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <label className={labelClass}>League / current season</label>
+              <label className={labelClass}>League / season</label>
               <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>
@@ -370,7 +381,7 @@ export default async function FixtureGeneratorPage({
             </div>
 
             <div>
-              <label className={labelClass}>League / current season to repair</label>
+              <label className={labelClass}>League / season to repair</label>
               <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                 {leagues.map((league) => (
                   <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
@@ -406,7 +417,7 @@ export default async function FixtureGeneratorPage({
 
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <div>
-                <label className={labelClass}>League / current season to repair</label>
+                <label className={labelClass}>League / season to repair</label>
                 <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                   {leagues.map((league) => (
                     <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
@@ -467,7 +478,7 @@ export default async function FixtureGeneratorPage({
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className={labelClass}>League / current season</label>
+                <label className={labelClass}>League / season</label>
                 <select name="leagueId" required disabled={noCurrentLeagues} className={inputClass}>
                   {leagues.map((league) => (
                     <option key={league.id} value={league.id}>{leagueLabel(league)}</option>
