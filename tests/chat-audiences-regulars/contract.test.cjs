@@ -102,6 +102,26 @@ test("selected group chat highlights the exact recipient players", () => {
   assert.match(chat, /recipients highlighted on the left/);
 });
 
+test("old group chats can be removed from one user's list without deleting history", () => {
+  const schema = read("prisma/schema.prisma");
+  const migration = read(
+    "prisma/migrations/20260921151000_archive_portal_group_chats/migration.sql",
+  );
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(schema, /archivedAt\s+DateTime\?/);
+  assert.match(migration, /ADD COLUMN "archivedAt"/);
+  assert.match(route, /action === "archive-group"/);
+  assert.match(route, /archivedAt: now/);
+  assert.match(route, /visibleGroupConversations/);
+  assert.match(route, /latestMessageAt\.getTime\(\) > archivedAt\.getTime\(\)/);
+  assert.match(route, /update: \{ lastReadAt: new Date\(\), archivedAt: null \}/);
+  assert.match(chat, /removeSelectedGroupChat/);
+  assert.match(chat, /Remove chat/);
+  assert.match(chat, /history is kept and it will return if a new message is sent/);
+});
+
 test("group chats are only listed for snapshotted members outside admin test mode", () => {
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
   const unread = read("src/lib/portal-messaging.ts");
