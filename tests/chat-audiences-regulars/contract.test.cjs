@@ -66,6 +66,18 @@ test("group chat UI supports Regulars and multi-select selected players", () => 
   assert.match(chat, /startGroupConversation\("SELECTED"\)/);
 });
 
+test("selected group chat highlights the exact recipient players", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /memberUserIds: selected\.memberUserIds \?\? \[\]/);
+  assert.match(chat, /memberUserIds: string\[\]/);
+  assert.match(chat, /highlightedGroupRecipientIds/);
+  assert.match(chat, /recipientHighlighted=\{Boolean\(/);
+  assert.match(chat, />\s*Included\s*</);
+  assert.match(chat, /recipients highlighted on the left/);
+});
+
 test("group chats are only listed for snapshotted members outside admin test mode", () => {
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
   const unread = read("src/lib/portal-messaging.ts");
