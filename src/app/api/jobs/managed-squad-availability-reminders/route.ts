@@ -52,7 +52,6 @@ async function runManagedSquadAvailabilityReminderJob() {
       publishedAt: {
         not: null,
       },
-      league: { publicAt: { lte: now } },
       kickoffAt: {
         gt: now,
         lte: addDays(now, 14),
