@@ -26,6 +26,7 @@ type AppFixture = {
 type RecentResult = {
   id: string;
   opponent: string;
+  opponentLogoUrl: string | null;
   dateLabel: string;
   goalsFor: number;
   goalsAgainst: number;
@@ -37,6 +38,8 @@ type PlayerStats = {
   goals: number;
   assists: number;
 };
+
+type PlayerSelectionStatus = "SELECTED" | "NOT_SELECTED_YET" | "NOT_IN_SQUAD";
 
 function addPreviewMembershipId(
   href: string,
@@ -78,6 +81,26 @@ function resultTone(outcome: RecentResult["outcome"]) {
   return "bg-white/10 text-white/75";
 }
 
+function selectionCopy(status: PlayerSelectionStatus) {
+  switch (status) {
+    case "SELECTED":
+      return {
+        label: "SELECTED",
+        classes: "border-emerald-400/35 bg-emerald-500/15 text-emerald-100",
+      };
+    case "NOT_IN_SQUAD":
+      return {
+        label: "NOT IN SQUAD",
+        classes: "border-red-400/25 bg-red-500/10 text-red-100",
+      };
+    default:
+      return {
+        label: "NOT SELECTED YET",
+        classes: "border-white/10 bg-white/[0.05] text-white/60",
+      };
+  }
+}
+
 export default function PlayerAppHome({
   teamId,
   teamName,
@@ -93,6 +116,8 @@ export default function PlayerAppHome({
   outstandingPence,
   nextPaymentUrl,
   recentResults,
+  nextSelectionStatus,
+  unreadChatCount,
   previewMembershipId,
   showTeamChat,
 }: {
@@ -110,10 +135,17 @@ export default function PlayerAppHome({
   outstandingPence: number;
   nextPaymentUrl: string | null;
   recentResults: RecentResult[];
+  nextSelectionStatus: PlayerSelectionStatus | null;
+  unreadChatCount: number;
   previewMembershipId: string | null;
   showTeamChat: boolean;
 }) {
   const availability = availabilityCopy(nextAvailability);
+  const selection = nextSelectionStatus ? selectionCopy(nextSelectionStatus) : null;
+  const unreadMessageLabel =
+    unreadChatCount > 0
+      ? `${unreadChatCount} unread message${unreadChatCount === 1 ? "" : "s"}`
+      : "Messages";
   const fixturesHref = addPreviewMembershipId(
     `/player/team/${teamId}/availability`,
     previewMembershipId,
@@ -144,7 +176,7 @@ export default function PlayerAppHome({
     ? {
         href: chatHref,
         title: "SIXFL Chat",
-        body: "Whole Squad Chat and private messages",
+        body: unreadMessageLabel,
         icon: ChatBubbleLeftRightIcon,
         classes: "border-violet-400/35 bg-violet-500/15 text-violet-100",
       }
@@ -191,18 +223,23 @@ export default function PlayerAppHome({
                 <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
                   {preferredPosition || playerRoleLabel || "Player"}
                 </span>
+                {unreadChatCount > 0 ? (
+                  <span className="rounded-full border border-violet-400/30 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold text-violet-100">
+                    {unreadMessageLabel}
+                  </span>
+                ) : null}
               </div>
             </div>
 
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
               {teamLogoUrl ? (
                 <img
                   src={teamLogoUrl}
                   alt={`${teamName} badge`}
-                  className="h-full w-full object-contain"
+                  className="max-h-12 max-w-12 object-contain"
                 />
               ) : (
-                <span className="text-sm font-black text-black/65">
+                <span className="text-sm font-black text-white/40">
                   {initials(teamName)}
                 </span>
               )}
@@ -241,11 +278,16 @@ export default function PlayerAppHome({
 
         <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/35 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.18),transparent_42%),linear-gradient(145deg,#0b1e2a,#091611)] p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)]">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <CalendarDaysIcon className="h-4 w-4 text-sky-300" />
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/65">
+            <div className="flex min-w-0 items-center gap-2">
+              <CalendarDaysIcon className="h-4 w-4 shrink-0 text-sky-300" />
+              <p className="shrink-0 text-[10px] font-black uppercase tracking-[0.16em] text-white/65">
                 Next match
               </p>
+              {selection ? (
+                <span className={`truncate rounded-full border px-2 py-0.5 text-[8px] font-black tracking-[0.04em] ${selection.classes}`}>
+                  {selection.label}
+                </span>
+              ) : null}
             </div>
             <Link href={fixturesHref} className="text-[11px] font-semibold text-sky-300">
               View all →
@@ -255,15 +297,15 @@ export default function PlayerAppHome({
           {nextFixture ? (
             <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <div className="min-w-0 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center">
                   {nextFixture.homeTeam.logoUrl ? (
                     <img
                       src={nextFixture.homeTeam.logoUrl}
                       alt={`${nextFixture.homeTeam.name} badge`}
-                      className="h-full w-full object-contain"
+                      className="max-h-12 max-w-12 object-contain"
                     />
                   ) : (
-                    <span className="text-sm font-black text-black/60">
+                    <span className="text-sm font-black text-white/40">
                       {initials(nextFixture.homeTeam.name)}
                     </span>
                   )}
@@ -274,15 +316,15 @@ export default function PlayerAppHome({
               <span className="text-base font-black text-white/55">VS</span>
 
               <div className="min-w-0 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center">
                   {nextFixture.awayTeam.logoUrl ? (
                     <img
                       src={nextFixture.awayTeam.logoUrl}
                       alt={`${nextFixture.awayTeam.name} badge`}
-                      className="h-full w-full object-contain"
+                      className="max-h-12 max-w-12 object-contain"
                     />
                   ) : (
-                    <span className="text-sm font-black text-black/60">
+                    <span className="text-sm font-black text-white/40">
                       {initials(nextFixture.awayTeam.name)}
                     </span>
                   )}
@@ -345,8 +387,13 @@ export default function PlayerAppHome({
 
           <Link
             href={fourthAction.href}
-            className={`flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border p-3 active:scale-[0.99] ${fourthAction.classes}`}
+            className={`relative flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border p-3 active:scale-[0.99] ${fourthAction.classes}`}
           >
+            {showTeamChat && unreadChatCount > 0 ? (
+              <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1 text-[9px] font-black leading-none text-black">
+                {unreadChatCount > 99 ? "99+" : unreadChatCount}
+              </span>
+            ) : null}
             <FourthIcon className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
               <div className="text-sm font-black text-white">{showTeamChat ? <span>SIXFL Chat</span> : <span>{fourthAction.title}</span>}</div>
@@ -372,7 +419,20 @@ export default function PlayerAppHome({
                   title={`${result.dateLabel} · ${result.opponent}`}
                   className="rounded-xl border border-white/[0.06] bg-black/20 px-1 py-2 text-center"
                 >
-                  <span className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${resultTone(result.outcome)}`}>
+                  <div className="mx-auto flex h-4 w-4 items-center justify-center">
+                    {result.opponentLogoUrl ? (
+                      <img
+                        src={result.opponentLogoUrl}
+                        alt={`${result.opponent} badge`}
+                        className="max-h-4 max-w-4 object-contain"
+                      />
+                    ) : (
+                      <span className="text-[7px] font-black text-white/35">
+                        {initials(result.opponent)}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`mx-auto mt-1 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${resultTone(result.outcome)}`}>
                     {result.outcome}
                   </span>
                   <div className="mt-1 text-[11px] font-black tabular-nums text-white">
