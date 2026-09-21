@@ -191,19 +191,18 @@ export async function sendUnassignedProspectCommunicationMessageAction(formData:
     createdByUserId: user?.id ?? null,
   });
 
-  runAfterResponse("unassigned-prospect-thread-history", async () => {
+  runAfterResponse("unassigned-prospect-bookkeeping", async () => {
     await logNotificationDispatchToThread({
       dispatch,
       recipient,
     });
-  });
-
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
-      lastContactedAt: new Date(),
-    },
+    await prisma.teamPlayerProspect.update({
+      where: { id: prospect.id },
+      data: {
+        ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
+        lastContactedAt: new Date(),
+      },
+    });
   });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
