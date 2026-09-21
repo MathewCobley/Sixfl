@@ -821,21 +821,65 @@ export async function createSixflTvAltVideoCard(input: {
   ]);
   const scoreVisible = Number.isInteger(input.fixture.firstTeam.score) && Number.isInteger(input.fixture.secondTeam.score);
   const heading = input.mode === "FULL_TIME" ? "FULL TIME" : "MATCH HIGHLIGHTS";
+  const firstSquad = (input.fixture.firstTeamLineup || []).slice(0, 10);
+  const secondSquad = (input.fixture.secondTeamLineup || []).slice(0, 10);
+  const maxSquadRows = Math.max(firstSquad.length, secondSquad.length, 1);
+  const squadGap = Math.min(52, Math.floor(430 / maxSquadRows));
+  const squadList = (items: string[], x: number, startY: number, fallback: string) =>
+    items.length
+      ? items.map((name, index) => {
+          const y = startY + index * squadGap;
+          return `<g><circle cx="${x}" cy="${y - 9}" r="5" fill="#f4d000"/><text x="${x + 24}" y="${y}" font-size="27" font-weight="700" fill="#ffffff">${xml(fit(name, 27))}</text></g>`;
+        }).join("")
+      : `<text x="${x}" y="${startY}" font-size="22" font-weight="650" fill="#6f716e">${xml(fallback)}</text>`;
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-    <defs><linearGradient id="altBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050505"/><stop offset=".55" stop-color="#0d0e0b"/><stop offset="1" stop-color="#050505"/></linearGradient><filter id="altShadow"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#000" flood-opacity=".55"/></filter></defs>
-    ${fontCss}<rect width="1920" height="1080" fill="url(#altBg)"/><rect width="16" height="1080" fill="#f4d000"/>
-    ${logoImage(sixflTvLogoBytes,1510,48,300,96,.96)}
-    <text x="100" y="112" font-size="23" font-weight="800" letter-spacing="5" fill="#f4d000">${xml(heading)}</text>
-    <text x="100" y="164" font-size="24" font-weight="650" fill="#a7a7a7">${xml(fit(input.fixture.leagueName,58))}${Number.isInteger(input.fixture.matchweekNumber)?` · MATCHWEEK ${input.fixture.matchweekNumber}`:""}</text>
-    <g filter="url(#altShadow)">${badgeImage(firstBadge,290,340,220,input.fixture.firstTeam.name)}${badgeImage(secondBadge,1410,340,220,input.fixture.secondTeam.name)}</g>
-    <text x="400" y="300" text-anchor="middle" font-size="36" font-weight="850" fill="#fff">${xml(fit(input.fixture.firstTeam.name,22))}</text>
-    <text x="1520" y="300" text-anchor="middle" font-size="36" font-weight="850" fill="#fff">${xml(fit(input.fixture.secondTeam.name,22))}</text>
-    ${scoreVisible?`<text x="960" y="555" text-anchor="middle" font-size="168" font-weight="900" fill="#fff">${input.fixture.firstTeam.score}<tspan fill="#f4d000"> – </tspan>${input.fixture.secondTeam.score}</text>`:`<text x="960" y="555" text-anchor="middle" font-size="128" font-weight="900" fill="#f4d000">VS</text>`}
-    <text x="960" y="655" text-anchor="middle" font-size="24" font-weight="700" fill="#9b9b9b">${xml(input.fixture.kickoffLabel)}</text>
-    <line x1="260" y1="740" x2="1660" y2="740" stroke="#fff" stroke-opacity=".1"/>
-    <text x="960" y="800" text-anchor="middle" font-size="20" font-weight="700" letter-spacing="3" fill="#6f716e">SIXFL · REAL PLAYERS · REAL GOALS</text>
+    <defs>
+      <linearGradient id="altBg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#050505"/>
+        <stop offset="0.55" stop-color="#0d0e0b"/>
+        <stop offset="1" stop-color="#050505"/>
+      </linearGradient>
+      <filter id="altShadow"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#000000" flood-opacity="0.55"/></filter>
+    </defs>
+    ${fontCss}
+    <rect width="1920" height="1080" fill="url(#altBg)"/>
+    <path d="M0 0 H250 L0 250 Z" fill="#f4d000" fill-opacity="0.08"/>
+    <path d="M1670 1080 H1920 V830 Z" fill="#f4d000" fill-opacity="0.07"/>
+    <rect width="14" height="1080" fill="#f4d000"/>
+
+    <text x="92" y="104" font-size="23" font-weight="800" letter-spacing="5" fill="#f4d000">${xml(heading)}</text>
+    <text x="92" y="151" font-size="23" font-weight="650" fill="#a3a3a3">${xml(fit(input.fixture.leagueName, 56))}${Number.isInteger(input.fixture.matchweekNumber) ? ` · MATCHWEEK ${input.fixture.matchweekNumber}` : ""}</text>
+    ${logoImage(sixflTvLogoBytes, 1515, 45, 300, 96, 0.96)}
+
+    <text x="605" y="250" text-anchor="middle" font-size="34" font-weight="850" fill="#ffffff">${xml(fit(input.fixture.firstTeam.name, 22))}</text>
+    <text x="1315" y="250" text-anchor="middle" font-size="34" font-weight="850" fill="#ffffff">${xml(fit(input.fixture.secondTeam.name, 22))}</text>
+
+    <g filter="url(#altShadow)">
+      ${badgeImage(firstBadge, 490, 285, 230, input.fixture.firstTeam.name)}
+      ${badgeImage(secondBadge, 1200, 285, 230, input.fixture.secondTeam.name)}
+    </g>
+
+    ${scoreVisible
+      ? `<text x="960" y="495" text-anchor="middle" font-size="154" font-weight="900" fill="#ffffff">${input.fixture.firstTeam.score}<tspan fill="#f4d000"> – </tspan>${input.fixture.secondTeam.score}</text>`
+      : `<text x="960" y="495" text-anchor="middle" font-size="126" font-weight="900" fill="#f4d000">VS</text>`}
+
+    <text x="605" y="610" text-anchor="middle" font-size="16" font-weight="800" letter-spacing="5" fill="#b7b7b7">RECENT FORM</text>
+    ${formRun(input.fixture.firstTeamForm, 475, 635, "start")}
+    <text x="1315" y="610" text-anchor="middle" font-size="16" font-weight="800" letter-spacing="5" fill="#b7b7b7">RECENT FORM</text>
+    ${formRun(input.fixture.secondTeamForm, 1445, 635, "end")}
+
+    <line x1="430" y1="215" x2="430" y2="860" stroke="#ffffff" stroke-opacity="0.07"/>
+    <line x1="1490" y1="215" x2="1490" y2="860" stroke="#ffffff" stroke-opacity="0.07"/>
+
+    ${squadList(firstSquad, 92, 300, "Squad not submitted")}
+    ${squadList(secondSquad, 1530, 300, "Squad not submitted")}
+
+    <line x1="92" y1="895" x2="1828" y2="895" stroke="#ffffff" stroke-opacity="0.09"/>
+    <text x="92" y="950" font-size="22" font-weight="650" fill="#8a8a8a">${xml(input.fixture.kickoffLabel)}</text>
+    <text x="1828" y="950" text-anchor="end" font-size="18" font-weight="800" letter-spacing="3" fill="#6f716e">REAL PLAYERS · REAL GOALS</text>
   </svg>`;
-  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
 export async function createSixflTvAltLineupCard(input:{fixture:SixflTvGraphicFixture;siteUrl:string}) {
