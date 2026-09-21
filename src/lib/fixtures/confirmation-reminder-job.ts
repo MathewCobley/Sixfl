@@ -120,7 +120,6 @@ export async function runFixtureConfirmationReminderJob() {
     where: {
       publishedAt: { not: null },
       status: "SCHEDULED",
-      league: { publicAt: { lte: now } },
       kickoffAt: { gt: now },
     },
     select: {
@@ -188,7 +187,6 @@ export async function runFixtureConfirmationReminderJob() {
     where: {
       publishedAt: { not: null },
       status: "SCHEDULED",
-      league: { publicAt: { lte: now } },
       kickoffAt: {
         gt: now,
         lte: standardCutoff,
