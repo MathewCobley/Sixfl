@@ -74,3 +74,20 @@ test("player PWA keeps the first-screen actions compact and recent form tidy", (
   assert.match(home, /recentResults\.slice\(0, 5\)/);
   assert.doesNotMatch(home, /min-w-\[8\.2rem\]/);
 });
+
+
+test("player appearances are backfilled from reliable completed-match evidence", () => {
+  const migration = read(
+    "prisma/migrations/20260921233000_backfill_player_appearances/migration.sql",
+  );
+
+  assert.match(migration, /FixtureSelection/);
+  assert.match(migration, /selectionStatus" = 'SELECTED'/);
+  assert.match(migration, /PlayerMatchFee/);
+  assert.match(migration, /'PAID', 'WAIVED'/);
+  assert.match(migration, /source" = 'CAPTAIN_RECORDED'/);
+  assert.match(migration, /MatchResult_sync_inferred_appearances/);
+  assert.match(migration, /FixtureSelection_sync_inferred_appearance/);
+  assert.match(migration, /PlayerMatchFee_sync_inferred_appearance/);
+  assert.doesNotMatch(migration, /'OPEN', 'PAID', 'WAIVED'/);
+});
