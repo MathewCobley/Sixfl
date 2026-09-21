@@ -166,6 +166,42 @@ if (standingsViolations.length) {
 }
 
 // ---------------------------------------------------------------------------
+// LEAGUE PUBLICATION — admins can prepare future leagues without exposing them
+// publicly before the scheduled UK go-live time.
+// ---------------------------------------------------------------------------
+const leagueSchemaPath = "prisma/schema.prisma";
+const leagueMigrationPath = "prisma/migrations/20260921234000_schedule_league_publication/migration.sql";
+const leagueFormPath = "src/components/admin/leagues/LeagueForm.tsx";
+const leagueActionsPath = "src/app/(admin)/admin/leagues/actions.ts";
+const publicLeagueLayoutPath = "src/app/(public)/leagues/[slug]/layout.tsx";
+const publicLeagueDirectoryPath = "src/app/(public)/leagues/page.tsx";
+const homepageLeaguesPath = "src/lib/leagues/homepage-leagues.ts";
+const fixtureGeneratePath = "src/app/(admin)/admin/fixtures/generate/page.tsx";
+const sitemapPath = "src/app/sitemap.ts";
+
+const leagueSchema = read(leagueSchemaPath);
+const leagueMigration = read(leagueMigrationPath);
+const leagueForm = read(leagueFormPath);
+const leagueActions = read(leagueActionsPath);
+const publicLeagueLayout = read(publicLeagueLayoutPath);
+const publicLeagueDirectory = read(publicLeagueDirectoryPath);
+const homepageLeagues = read(homepageLeaguesPath);
+const fixtureGenerate = read(fixtureGeneratePath);
+const sitemap = read(sitemapPath);
+
+expectText("league publication", leagueSchemaPath, leagueSchema, "publicAt DateTime?", "league model must retain a scheduled public go-live");
+expectText("league publication", leagueMigrationPath, leagueMigration, 'SET "publicAt" = "createdAt"', "existing leagues must be backfilled as already public");
+expectText("league publication", leagueFormPath, leagueForm, 'name="publicAt"', "admin league form must expose the go-live control");
+expectText("league publication", leagueFormPath, leagueForm, "Leave blank to keep this league private", "admin form must explain private pre-launch behaviour");
+expectText("league publication", leagueActionsPath, leagueActions, "parsePublicAt", "server action must parse the scheduled UK go-live");
+expectText("league publication", publicLeagueLayoutPath, publicLeagueLayout, "publicAt: { lte: new Date() }", "direct public league routes must stay closed before go-live");
+expectText("league publication", publicLeagueDirectoryPath, publicLeagueDirectory, "publicAt: { lte: new Date() }", "public league directory must exclude scheduled leagues");
+expectText("league publication", homepageLeaguesPath, homepageLeagues, 'league."publicAt" <= NOW()', "homepage league directory must respect go-live");
+expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ publicAt: null }", "private active leagues must remain available in admin fixture generation");
+expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ publicAt: { gt: new Date() } }", "future scheduled leagues must remain available in admin fixture generation");
+expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Date() }", "scheduled leagues must stay out of the public sitemap");
+
+// ---------------------------------------------------------------------------
 // PLAYER PWA — keep the approved app-style first screen compact, data-backed
 // and chat-dark-launched for real players.
 // ---------------------------------------------------------------------------
