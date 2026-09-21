@@ -213,6 +213,32 @@ expectText("captain fixture planning", captainWeeksUnavailablePath, captainWeeks
 expectText("captain fixture planning", captainWeeksUnavailablePath, captainWeeksUnavailable, "Temporary time restriction", "fixture-planning page must retain the actual time-restriction control");
 
 // ---------------------------------------------------------------------------
+// PLAYER PWA HOME — keep the approved dashboard-style mobile template and the
+// five-item app navigation without exposing dark-launched Team Chat.
+// ---------------------------------------------------------------------------
+const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
+const playerTeamPagePath = "src/app/player/team/[teamid]/page.tsx";
+const playerTeamNavPathForPwa = "src/components/player/PlayerTeamNav.tsx";
+const playerPwaHeaderPath = "src/components/player/PlayerPwaPortalHeader.tsx";
+const playerAppHome = read(playerAppHomePath);
+const playerTeamPage = read(playerTeamPagePath);
+const playerTeamNavForPwa = read(playerTeamNavPathForPwa);
+const playerPwaHeader = read(playerPwaHeaderPath);
+
+expectText("player PWA home", playerAppHomePath, playerAppHome, "playerStats.appearances", "player app home must show real appearance totals");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "teamLogoUrl", "player app home must show the real team badge");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "My Fixtures", "player app home must keep the Fixtures shortcut");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "Availability", "player app home must keep the Availability shortcut");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "Match Fees", "player app home must keep the Match Fees shortcut");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "Recent form", "player app home must keep recent form visible");
+expectText("player PWA home", playerAppHomePath, playerAppHome, "Refer a new team and earn £75", "player app home must retain the referral banner");
+expectText("player PWA home", playerTeamPagePath, playerTeamPage, 'FROM "PlayerMatchPerformance"', "player home stats must come from recorded match performance data");
+expectText("player PWA home", playerTeamPagePath, playerTeamPage, "getTeamMemberProfilesByTeamMemberIds", "player home must use saved squad number and position data when available");
+expectText("player PWA home", playerTeamNavPathForPwa, playerTeamNavForPwa, 'label: "Payments"', "five-item app navigation must include Payments");
+expectText("player PWA home", playerTeamNavPathForPwa, playerTeamNavForPwa, 'showTeamChat', "dark-launched Chat must remain conditional");
+expectText("player PWA home", playerPwaHeaderPath, playerPwaHeader, "Player Portal", "compact app header must retain Player Portal identity");
+
+// ---------------------------------------------------------------------------
 // TEAM REFERRALS — the £75 scheme must stay discoverable and the registration
 // handoff must continue carrying the referring player's code into the lead.
 // ---------------------------------------------------------------------------
