@@ -19,13 +19,9 @@ function isPwaPhonePreviewFrame() {
 export default function PlayerPwaPortalHeader({
   teamName,
   teamLogoUrl,
-  leagueName,
-  season,
 }: {
   teamName: string;
   teamLogoUrl: string | null;
-  leagueName: string | null;
-  season: string | null;
 }) {
   const searchParams = useSearchParams();
   const [appMode, setAppMode] = useState(false);
