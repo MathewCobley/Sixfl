@@ -22,7 +22,6 @@ import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
-import { ensurePlayerMatchPerformanceTable } from "@/lib/playerMatchPerformances";
 import {
   getTeamMemberProfilesByTeamMemberIds,
   type TeamMemberProfile,
@@ -376,7 +375,6 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   let playerProfile: TeamMemberProfile | null = null;
   let playerAppStats = { appearances: 0, goals: 0, assists: 0 };
   if (membership) {
-    await ensurePlayerMatchPerformanceTable();
     const [profiles, statRows] = await Promise.all([
       getTeamMemberProfilesByTeamMemberIds([membership.id]),
       prisma.$queryRaw<Array<{ appearances: number; goals: number; assists: number }>>(Prisma.sql`
