@@ -64,7 +64,12 @@ export async function getPublishedNews(slug: string, date: string): Promise<Publ
 export async function getNewsSitemap() {
   const rows = await prisma.$queryRaw<Array<{ slug: string; matchDate: string; updatedAt: Date }>>`
     SELECT l."slug", n."matchDate", n."publishedUpdatedAt" AS "updatedAt" FROM "LeagueNewsArticle" n
-    JOIN "League" l ON l."id"=n."leagueId" WHERE n."status"='PUBLISHED' AND n."snapshot" IS NOT NULL
+    JOIN "League" l ON l."id"=n."leagueId"
+    WHERE n."status"='PUBLISHED'
+      AND n."snapshot" IS NOT NULL
+      AND l."isActive" = true
+      AND l."publicAt" IS NOT NULL
+      AND l."publicAt" <= NOW()
     ORDER BY n."matchDate" DESC LIMIT 20000
   `;
   return rows.map(r => ({ path: newsPath(r.slug, r.matchDate), updatedAt: r.updatedAt }));
