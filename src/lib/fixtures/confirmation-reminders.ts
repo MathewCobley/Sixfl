@@ -238,7 +238,6 @@ export async function queueFixtureConfirmationSmsReminder(input: {
           name: true,
           season: true,
           slug: true,
-          publicAt: true,
         },
       },
       homeTeam: {
@@ -290,14 +289,7 @@ export async function queueFixtureConfirmationSmsReminder(input: {
     return { ok: false, status: "not_available", teamName: team.name };
   }
 
-  const now = new Date();
-  if (
-    fixture.publishedAt === null ||
-    fixture.status !== "SCHEDULED" ||
-    fixture.kickoffAt <= now ||
-    !fixture.league.publicAt ||
-    fixture.league.publicAt > now
-  ) {
+  if (fixture.publishedAt === null || fixture.status !== "SCHEDULED" || fixture.kickoffAt <= new Date()) {
     return { ok: false, status: "not_available", teamName: team.name };
   }
 
