@@ -186,6 +186,21 @@ expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "p
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
 
 // ---------------------------------------------------------------------------
+// ADMIN PWA VIEWER — keep the selected test subject and phone-preview route
+// when an administrator leaves and returns to the diagnostics page.
+// ---------------------------------------------------------------------------
+const adminPwaViewerPath = "src/components/admin/pwa/PwaViewerPicker.tsx";
+const adminPwaDiagnosticsPath = "src/components/admin/PwaDiagnosticsPanel.tsx";
+const adminPwaViewer = read(adminPwaViewerPath);
+const adminPwaDiagnostics = read(adminPwaDiagnosticsPath);
+
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "sixfl-admin-pwa-viewer-selection-v1", "viewer picker must persist the selected captain/player/referee");
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "window.localStorage.getItem", "viewer picker must restore persisted test subjects");
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "storedMembership?.membershipId", "restored player selection must be validated against the restored team");
+expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "sixfl-admin-pwa-preview-path-v1", "phone preview must remember the last selected viewer route");
+expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "previewPathHydrated", "stored preview route must be restored before persistence writes defaults");
+
+// ---------------------------------------------------------------------------
 // PLAYERPOOL — keep the native captain discovery/introduction workflow visible.
 // ---------------------------------------------------------------------------
 const playerPoolPagePath = "src/app/captain/team/[teamid]/player-pool/page.tsx";

@@ -66,6 +66,8 @@ const previewDevices: PreviewDevice[] = [
   { id: "pixel-8", label: "Pixel 8", width: 412, height: 915 },
 ];
 
+const PREVIEW_PATH_STORAGE_KEY = "sixfl-admin-pwa-preview-path-v1";
+
 const previewRoutes = [
   { label: "App launch", path: "/dashboard?app=1" },
   { label: "Public site", path: "/" },
@@ -222,6 +224,31 @@ export default function PwaDiagnosticsPanel({
   const [previewInput, setPreviewInput] = useState("/dashboard?app=1");
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
+  const [previewPathHydrated, setPreviewPathHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(PREVIEW_PATH_STORAGE_KEY);
+      if (!stored) return;
+      const restoredPath = normalisePreviewPath(stored);
+      if (!restoredPath) return;
+      setPreviewPath(restoredPath);
+      setPreviewInput(restoredPath);
+    } catch {
+      // Ignore unavailable/stale local preview state.
+    } finally {
+      setPreviewPathHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!previewPathHydrated) return;
+    try {
+      window.localStorage.setItem(PREVIEW_PATH_STORAGE_KEY, previewPath);
+    } catch {
+      // Preview route persistence is optional; normal previewing still works.
+    }
+  }, [previewPath, previewPathHydrated]);
 
   const previewDevice =
     previewDevices.find((device) => device.id === previewDeviceId) ??
