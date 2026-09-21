@@ -359,8 +359,8 @@ async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_Y
 async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
   const ffmpegProgress = onProgress ? { durationSeconds: seconds, onFraction: onProgress } : undefined;
-  const videoPreset = premium ? "slow" : "veryfast";
-  const videoCrf = premium ? "10" : "21";
+  const videoPreset = premium ? "slow" : "medium";
+  const videoCrf = premium ? "10" : "15";
   const videoTune = premium ? ["-tune", "grain"] : [];
   const fadeOutStart = Math.max(0, seconds - 0.18).toFixed(3);
   const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p`;
