@@ -176,6 +176,28 @@ expectText("PlayerPool", playerPoolPagePath, playerPoolPage, "requestPlayerPoolI
 expectText("PlayerPool", playerPoolPagePath, playerPoolPage, "addPlayerPoolPlayerToSquadAction", "approved PlayerPool introductions must retain the add-to-squad action");
 
 // ---------------------------------------------------------------------------
+// COMMUNICATIONS — queue confirmation must not wait for non-critical history
+// mirroring or immediate provider processing.
+// ---------------------------------------------------------------------------
+const afterResponsePath = "src/lib/server/after-response.ts";
+const teamBulkCommunicationsPath = "src/app/(admin)/admin/communications/team-bulk-actions.ts";
+const allTeamCommunicationsPath = "src/app/(admin)/admin/communications/all-team-actions.ts";
+const sharedTeamBroadcastPath = "src/lib/communications/send-team-broadcast.ts";
+
+const afterResponse = read(afterResponsePath);
+const teamBulkCommunications = read(teamBulkCommunicationsPath);
+const allTeamCommunications = read(allTeamCommunicationsPath);
+const sharedTeamBroadcast = read(sharedTeamBroadcastPath);
+
+expectText("communications", afterResponsePath, afterResponse, 'import { after } from "next/server";', "after-response work must use the supported Next.js lifecycle");
+expectText("communications", afterResponsePath, afterResponse, "await task();", "after-response tasks must remain awaited inside the lifecycle callback");
+expectText("communications", teamBulkCommunicationsPath, teamBulkCommunications, "await Promise.all(", "multi-recipient team communications must queue independent recipients concurrently");
+expectText("communications", teamBulkCommunicationsPath, teamBulkCommunications, 'runAfterResponse("team-communications-history"', "message-thread history must not delay the queue confirmation");
+expectText("communications", sharedTeamBroadcastPath, sharedTeamBroadcast, "deferThreadHistory?: boolean;", "shared team broadcasts must support deferred history mirroring");
+expectText("communications", sharedTeamBroadcastPath, sharedTeamBroadcast, 'runAfterResponse("team-broadcast-thread-history"', "deferred team-broadcast history must use after-response execution");
+expectText("communications", allTeamCommunicationsPath, allTeamCommunications, 'runAfterResponse("selected-team-notification-processing"', "selected-team provider processing must not hold the browser response open");
+
+// ---------------------------------------------------------------------------
 // TEAM REFERRALS — the £75 scheme must stay discoverable and the registration
 // handoff must continue carrying the referring player's code into the lead.
 // ---------------------------------------------------------------------------
