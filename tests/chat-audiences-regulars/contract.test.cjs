@@ -66,6 +66,16 @@ test("group chat UI supports Regulars and multi-select selected players", () => 
   assert.match(chat, /startGroupConversation\("SELECTED"\)/);
 });
 
+test("Regulars are listed first in chat recipient and private-message lists", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+
+  assert.match(chat, /const regularUserIds = new Set/);
+  assert.match(chat, /const sortedAudienceOptions =/);
+  assert.match(chat, /a\.isRegular !== b\.isRegular/);
+  assert.match(chat, /regularDifference/);
+  assert.match(chat, /sortedAudienceOptions\.map\(\(person\) =>/);
+});
+
 test("selected group chat highlights the exact recipient players", () => {
   const chat = read("src/components/messaging/PortalChat.tsx");
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
