@@ -134,13 +134,6 @@ function buildPublishNotice(input: {
     };
   }
 
-  if (publish === "error" && publishError === "league_not_live") {
-    return {
-      tone: "info",
-      message: `${scopeLabel} is still private or scheduled for a future go-live. Draft fixtures are safe to prepare, but publishing, payment setup and automatic fixture messages are locked until the league is live.`,
-    };
-  }
-
   if (publish === "error") {
     return {
       tone: "error",
