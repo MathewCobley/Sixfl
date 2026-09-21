@@ -108,6 +108,13 @@ export async function getHomepageLeagues(options?: {
           ${includeHidden}
           OR COALESCE(league."homepageStage", 'HIDDEN') <> 'HIDDEN'
         )
+        AND (
+          ${includeHidden}
+          OR (
+            league."publicAt" IS NOT NULL
+            AND league."publicAt" <= NOW()
+          )
+        )
       ORDER BY
         CASE COALESCE(league."homepageStage", 'HIDDEN')
           WHEN 'LIVE' THEN 1
