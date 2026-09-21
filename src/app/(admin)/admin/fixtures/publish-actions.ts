@@ -271,9 +271,19 @@ async function publishAndEmailFixtureBatch(input: PublishScope) {
 
   const league = await prisma.league.findUnique({
     where: { id: input.leagueId },
-    select: { id: true, name: true, slug: true, season: true },
+    select: { id: true, name: true, slug: true, season: true, publicAt: true },
   });
   if (!league) throw new Error("League not found.");
+
+  if (!league.publicAt || league.publicAt.getTime() > Date.now()) {
+    redirect(buildAdminFixturesHref({
+      publish: "error",
+      leagueId: input.leagueId,
+      round: input.round,
+      divisionId: input.divisionId,
+      publishError: "league_not_live",
+    }));
+  }
 
   let unpublishedFixtures: PublishFixtureRecord[];
   try {
@@ -458,6 +468,15 @@ export async function repairPublishedLeagueFixtureFeesAction(formData: FormData)
       leagueId,
       divisionId,
       publishError: "fee_repair_league_missing",
+    }));
+  }
+
+  if (!league.publicAt || league.publicAt.getTime() > Date.now()) {
+    redirect(buildAdminFixturesHref({
+      publish: "error",
+      leagueId,
+      divisionId,
+      publishError: "league_not_live",
     }));
   }
 
