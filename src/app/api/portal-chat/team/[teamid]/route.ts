@@ -234,7 +234,6 @@ async function getPrivateTarget(input: {
     select: {
       userId: true,
       role: true,
-      isRegular: true,
       user: { select: { name: true, email: true } },
     },
   });
