@@ -14,6 +14,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runAfterResponse } from "@/lib/server/after-response";
 import { sendTeamBroadcastMessage } from "@/lib/communications/send-team-broadcast";
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -380,7 +381,9 @@ export async function sendTeamCommunicationMessageAction(formData: FormData) {
     createdByUserId: user?.id ?? null,
   });
 
-  await logNotificationDispatchToThread({ dispatch, recipient: context.recipient });
+  runAfterResponse("team-communication-thread-history", async () => {
+    await logNotificationDispatchToThread({ dispatch, recipient: context.recipient });
+  });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
 }
@@ -502,14 +505,15 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     createdByUserId: user?.id ?? null,
   });
 
-  await logNotificationDispatchToThread({ dispatch, recipient });
-
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
-      lastContactedAt: new Date(),
-    },
+  runAfterResponse("prospect-communication-bookkeeping", async () => {
+    await logNotificationDispatchToThread({ dispatch, recipient });
+    await prisma.teamPlayerProspect.update({
+      where: { id: prospect.id },
+      data: {
+        ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
+        lastContactedAt: new Date(),
+      },
+    });
   });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
@@ -601,6 +605,7 @@ export async function sendLeagueCommunicationMessageAction(formData: FormData) {
         originLabel: "Sent from league communications hub",
         metadata: { leagueId, broadcastType: "league" },
         createdByUserId: user?.id ?? null,
+        deferThreadHistory: true,
       });
 
       if (result.skipped) skippedCount += 1;

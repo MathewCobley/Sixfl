@@ -17,6 +17,7 @@ import { upsertNotificationRecipient } from "@/lib/notifications/recipients";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runAfterResponse } from "@/lib/server/after-response";
 
 function getTrimmedValue(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -190,17 +191,18 @@ export async function sendUnassignedProspectCommunicationMessageAction(formData:
     createdByUserId: user?.id ?? null,
   });
 
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient,
-  });
-
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
-      lastContactedAt: new Date(),
-    },
+  runAfterResponse("unassigned-prospect-bookkeeping", async () => {
+    await logNotificationDispatchToThread({
+      dispatch,
+      recipient,
+    });
+    await prisma.teamPlayerProspect.update({
+      where: { id: prospect.id },
+      data: {
+        ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
+        lastContactedAt: new Date(),
+      },
+    });
   });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);

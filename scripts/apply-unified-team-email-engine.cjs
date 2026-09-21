@@ -22,10 +22,16 @@ function replaceOnce(source, anchor, replacement, description) {
 // ---------------------------------------------------------------------------
 let broadcast = fs.readFileSync(broadcastPath, "utf8");
 if (!broadcast.includes("isTransactional?: boolean;")) {
+  const inputAnchor = broadcast.includes("  deferThreadHistory?: boolean;\n};")
+    ? "  deferThreadHistory?: boolean;\n};"
+    : "  createdByUserId?: string | null;\n};";
+  const inputReplacement = broadcast.includes("  deferThreadHistory?: boolean;\n};")
+    ? "  deferThreadHistory?: boolean;\n  isTransactional?: boolean;\n};"
+    : "  createdByUserId?: string | null;\n  isTransactional?: boolean;\n};";
   broadcast = replaceOnce(
     broadcast,
-    "  createdByUserId?: string | null;\n};",
-    "  createdByUserId?: string | null;\n  isTransactional?: boolean;\n};",
+    inputAnchor,
+    inputReplacement,
     "send-team-broadcast input type",
   );
 }
@@ -105,12 +111,30 @@ teamActions = teamActions.replace(
   "      const result = await sendTeamBroadcastMessage({",
   "      const result = await sendSIXFLTeamCommunication({",
 );
-teamActions = replaceOnce(
-  teamActions,
-  "        variables,\n        createdByUserId,\n      });",
-  "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n      });",
-  "Team Messages canonical sender options",
+const canonicalSenderStart = teamActions.indexOf(
+  "const result = await sendSIXFLTeamCommunication({",
 );
+if (canonicalSenderStart === -1) {
+  throw new Error("Unified email patch could not find Team Messages canonical sender call.");
+}
+const canonicalSenderEnd = teamActions.indexOf("\n      });", canonicalSenderStart);
+if (canonicalSenderEnd === -1) {
+  throw new Error("Unified email patch could not find the end of Team Messages canonical sender call.");
+}
+let canonicalSenderCall = teamActions.slice(canonicalSenderStart, canonicalSenderEnd);
+if (!canonicalSenderCall.includes('sendMode: cupSendMode === "test" ? "TEST" : "SEND"')) {
+  if (!canonicalSenderCall.includes("\n        createdByUserId,")) {
+    throw new Error("Unified email patch could not find Team Messages createdByUserId option.");
+  }
+  canonicalSenderCall = canonicalSenderCall.replace(
+    "\n        createdByUserId,",
+    "\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",",
+  );
+  teamActions =
+    teamActions.slice(0, canonicalSenderStart) +
+    canonicalSenderCall +
+    teamActions.slice(canonicalSenderEnd);
+}
 fs.writeFileSync(teamBulkActionsPath, teamActions, "utf8");
 
 for (const [file, markers] of [

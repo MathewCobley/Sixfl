@@ -35,6 +35,7 @@ type Input = {
   cupId?: string | null;
   sendMode?: SendMode;
   isTransactional?: boolean;
+  deferThreadHistory?: boolean;
 };
 
 export type SIXFLTeamCommunicationResult = {

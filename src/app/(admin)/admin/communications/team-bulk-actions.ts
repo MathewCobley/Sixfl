@@ -22,6 +22,7 @@ import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contac
 import { createPlayerInterestResponseToken } from "@/lib/player-interest/response-token";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runAfterResponse } from "@/lib/server/after-response";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
@@ -379,17 +380,23 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "Poll templates can only be sent to the team contact. Untick squad/prospect recipients before sending a poll." }));
   }
 
+  const resolvedRecipients = await Promise.all(
+    parsedRecipients.map(async ({ value, parsed }) => ({
+      value,
+      parsed,
+      recipientContext: await getTeamCommunicationRecipientContext({
+        teamId,
+        recipientType: parsed.type,
+        recipientId: parsed.id || null,
+      }),
+    })),
+  );
+
   let queuedCount = 0;
   let skippedMissingContactCount = 0;
   let duplicateBlockedCount = 0;
 
-  for (const { parsed } of parsedRecipients) {
-    const recipientContext = await getTeamCommunicationRecipientContext({
-      teamId,
-      recipientType: parsed.type,
-      recipientId: parsed.id || null,
-    });
-
+  for (const { parsed, recipientContext } of resolvedRecipients) {
     if (!recipientContext) continue;
     if (channel === NotificationChannel.EMAIL && !recipientContext.recipient.email?.trim()) {
       skippedMissingContactCount += 1;
@@ -463,6 +470,7 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
         },
         variables,
         createdByUserId,
+        deferThreadHistory: true,
       });
 
       if (result.skipped) skippedMissingContactCount += 1;
@@ -517,14 +525,19 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
       continue;
     }
 
-    await logNotificationDispatchToThread({ dispatch, recipient: recipientContext.recipient });
-
-    if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
-      await prisma.teamPlayerProspect.update({
-        where: { id: recipientContext.sourceId },
-        data: { lastContactedAt: new Date() },
+    runAfterResponse("team-communications-history", async () => {
+      await logNotificationDispatchToThread({
+        dispatch,
+        recipient: recipientContext.recipient,
       });
-    }
+
+      if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
+        await prisma.teamPlayerProspect.update({
+          where: { id: recipientContext.sourceId },
+          data: { lastContactedAt: new Date() },
+        });
+      }
+    });
 
     queuedCount += 1;
   }
