@@ -393,7 +393,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const nextSelectionStatus = nextFixture
     ? nextSelection?.selectionStatus === "SELECTED"
       ? ("SELECTED" as const)
-      : nextSelection?.selectionStatus === "NOT_SELECTED"
+      : nextSelection?.selectionStatus === "NOT_IN_SQUAD"
         ? ("NOT_IN_SQUAD" as const)
         : ("NOT_SELECTED_YET" as const)
     : null;
