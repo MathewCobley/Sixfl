@@ -445,10 +445,31 @@ export default function PortalChat({
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
   const groupItems =
     data?.conversations.filter((item) => item.kind === "GROUP") ?? [];
-  const privateItems =
-    data?.conversations.filter((item) => item.kind === "PRIVATE") ?? [];
-  const regularCount =
-    data?.audienceOptions.filter((item) => item.isRegular).length ?? 0;
+  const regularUserIds = new Set(
+    data?.audienceOptions
+      .filter((item) => item.isRegular)
+      .map((item) => item.userId) ?? [],
+  );
+  const privateItems = (
+    data?.conversations.filter((item) => item.kind === "PRIVATE") ?? []
+  )
+    .slice()
+    .sort((a, b) => {
+      const aUserId = userIdFromPrivateRef(a.ref);
+      const bUserId = userIdFromPrivateRef(b.ref);
+      const regularDifference =
+        Number(Boolean(bUserId && regularUserIds.has(bUserId))) -
+        Number(Boolean(aUserId && regularUserIds.has(aUserId)));
+      if (regularDifference !== 0) return regularDifference;
+      return a.title.localeCompare(b.title, "en-GB", { sensitivity: "base" });
+    });
+  const sortedAudienceOptions = (data?.audienceOptions ?? [])
+    .slice()
+    .sort((a, b) => {
+      if (a.isRegular !== b.isRegular) return a.isRegular ? -1 : 1;
+      return a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" });
+    });
+  const regularCount = regularUserIds.size;
   const supportItems =
     data?.conversations.filter((item) => item.kind === "SUPPORT") ?? [];
   const selectableRecipientIds = new Set(
@@ -572,7 +593,7 @@ export default function PortalChat({
                   {showSelectedPlayers ? (
                     <div className="rounded-xl border border-white/10 bg-black/20 p-2">
                       <div className="max-h-64 space-y-1 overflow-y-auto">
-                        {data.audienceOptions.map((person) => (
+                        {sortedAudienceOptions.map((person) => (
                           <label
                             key={person.userId}
                             className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-white/75 hover:bg-white/[0.05]"
