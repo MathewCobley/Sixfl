@@ -523,6 +523,11 @@ async function buildConversationList(teamId: string, context: AccessContext) {
         members: {
           select: { userId: true },
         },
+        reads: {
+          where: { userId: context.effectiveUserId },
+          select: { archivedAt: true },
+          take: 1,
+        },
       },
     }),
   ]);
@@ -564,8 +569,17 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     },
   ];
 
+  const visibleGroupConversations = groupConversations.filter((conversation) => {
+    const archivedAt = conversation.reads[0]?.archivedAt ?? null;
+    if (!archivedAt) return true;
+    return Boolean(
+      conversation.latestMessageAt &&
+        conversation.latestMessageAt.getTime() > archivedAt.getTime(),
+    );
+  });
+
   const groupItems = await Promise.all(
-    groupConversations.map(async (conversation) => ({
+    visibleGroupConversations.map(async (conversation) => ({
       ref: `group:${conversation.id}`,
       title:
         conversation.title ||
@@ -877,7 +891,7 @@ export async function GET(
           userId: context.effectiveUserId,
         },
       },
-      update: { lastReadAt: new Date() },
+      update: { lastReadAt: new Date(), archivedAt: null },
       create: {
         conversationId: selected.conversation.id,
         userId: context.effectiveUserId,
@@ -958,6 +972,42 @@ export async function POST(
         notifyTeam?: unknown;
       }
     | null;
+
+  if (payload?.action === "archive-group") {
+    const conversationRef = normaliseConversationRef(
+      typeof payload?.conversation === "string" ? payload.conversation : null,
+      context,
+    );
+    if (!conversationRef.startsWith("group:")) {
+      return jsonError("Only group chats can be removed from the list.", 400);
+    }
+
+    const selected = await getGroupConversationForRef({
+      teamId: teamid,
+      conversationRef,
+      context,
+    });
+    if ("error" in selected) return jsonError(selected.error, selected.status);
+
+    const now = new Date();
+    await prisma.portalConversationRead.upsert({
+      where: {
+        conversationId_userId: {
+          conversationId: selected.conversation.id,
+          userId: context.effectiveUserId,
+        },
+      },
+      update: { lastReadAt: now, archivedAt: now },
+      create: {
+        conversationId: selected.conversation.id,
+        userId: context.effectiveUserId,
+        lastReadAt: now,
+        archivedAt: now,
+      },
+    });
+
+    return NextResponse.json({ ok: true, archived: true });
+  }
 
   if (payload?.action === "create-group") {
     if (context.viewRole !== "CAPTAIN") {
