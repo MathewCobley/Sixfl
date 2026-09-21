@@ -166,6 +166,26 @@ if (standingsViolations.length) {
 }
 
 // ---------------------------------------------------------------------------
+// PLAYER PWA — keep the approved app-style first screen compact, data-backed
+// and chat-dark-launched for real players.
+// ---------------------------------------------------------------------------
+const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
+const playerAppPagePath = "src/app/player/team/[teamid]/page.tsx";
+const playerAppNavPath = "src/components/player/PlayerTeamNav.tsx";
+const playerAppHome = read(playerAppHomePath);
+const playerAppPage = read(playerAppPagePath);
+const playerAppNav = read(playerAppNavPath);
+
+expectText("player pwa", playerAppHomePath, playerAppHome, "Refer a new team and earn £75", "player app home must retain the referral banner");
+expectText("player pwa", playerAppHomePath, playerAppHome, "Recent form", "player app home must retain compact recent form");
+expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "SIXFL Chat"', "admin preview must retain the SIXFL Chat tile");
+expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "My Stats"', "live players must receive a safe non-chat fourth tile");
+expectText("player pwa", playerAppPagePath, playerAppPage, "getTeamMemberProfilesByTeamMemberIds", "player app home must use the existing player profile source");
+expectText("player pwa", playerAppPagePath, playerAppPage, 'showTeamChat={user.role === UserRole.ADMIN}', "real players must not have Team Chat enabled before launch");
+expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
+expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
+
+// ---------------------------------------------------------------------------
 // PLAYERPOOL — keep the native captain discovery/introduction workflow visible.
 // ---------------------------------------------------------------------------
 const playerPoolPagePath = "src/app/captain/team/[teamid]/player-pool/page.tsx";

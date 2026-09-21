@@ -11,6 +11,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   FixtureStatus,
   PlayerMatchFeeStatus,
+  Prisma,
   TeamRole,
   UserRole,
 } from "@prisma/client";
@@ -21,6 +22,10 @@ import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
+import {
+  getTeamMemberProfilesByTeamMemberIds,
+  type TeamMemberProfile,
+} from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -178,13 +183,14 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       id: true,
       email: true,
       name: true,
+      image: true,
       role: true,
       teamMembers: {
         where: { teamId: teamid },
         select: {
           id: true,
           role: true,
-          user: { select: { email: true, name: true } },
+          user: { select: { id: true, email: true, name: true, image: true } },
           team: { select: teamSelect },
         },
         take: 1,
@@ -205,7 +211,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
-          user: { select: { email: true, name: true } },
+          user: { select: { id: true, email: true, name: true, image: true } },
           team: { select: teamSelect },
         },
       })
@@ -365,33 +371,41 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           select: { response: true },
         })
       : null;
-  const recentResultFixture =
-    recentFixtures.find((fixture) => Boolean(fixture.result)) ?? null;
-  const recentResult = recentResultFixture?.result
-    ? (() => {
-        const isHome = recentResultFixture.homeTeamId === teamid;
-        const goalsFor = isHome
-          ? recentResultFixture.result.homeScore
-          : recentResultFixture.result.awayScore;
-        const goalsAgainst = isHome
-          ? recentResultFixture.result.awayScore
-          : recentResultFixture.result.homeScore;
-        return {
-          opponent: isHome
-            ? recentResultFixture.awayTeam.name
-            : recentResultFixture.homeTeam.name,
-          dateLabel: formatFixtureDate(recentResultFixture.kickoffAt),
-          goalsFor,
-          goalsAgainst,
-          outcome:
-            goalsFor > goalsAgainst
-              ? ("W" as const)
-              : goalsFor < goalsAgainst
-                ? ("L" as const)
-                : ("D" as const),
-        };
-      })()
-    : null;
+
+  let playerProfile: TeamMemberProfile | null = null;
+  let playerAppStats = { appearances: 0, goals: 0, assists: 0 };
+  if (membership) {
+    const [profiles, statRows] = await Promise.all([
+      getTeamMemberProfilesByTeamMemberIds([membership.id]),
+      prisma.$queryRaw<Array<{ appearances: number; goals: number; assists: number }>>(Prisma.sql`
+        SELECT
+          COUNT(*) FILTER (WHERE performance."played" = TRUE)::int AS "appearances",
+          COALESCE(SUM(performance."goals"), 0)::int AS "goals",
+          COALESCE(SUM(performance."assists"), 0)::int AS "assists"
+        FROM "PlayerMatchPerformance" performance
+        WHERE performance."teamMemberId" = ${membership.id}
+          AND performance."teamId" = ${teamid}
+      `),
+    ]);
+    playerProfile = profiles.get(membership.id) ?? null;
+    playerAppStats = statRows[0] ?? playerAppStats;
+  }
+
+  const recentResults = recentFixtures.flatMap((fixture) => {
+    if (!fixture.result) return [];
+    const isHome = fixture.homeTeamId === teamid;
+    const goalsFor = isHome ? fixture.result.homeScore : fixture.result.awayScore;
+    const goalsAgainst = isHome ? fixture.result.awayScore : fixture.result.homeScore;
+    return [{
+      id: fixture.id,
+      opponent: isHome ? fixture.awayTeam.name : fixture.homeTeam.name,
+      dateLabel: formatDateTimeInLondon(fixture.kickoffAt, { day: "numeric", month: "short" }),
+      goalsFor,
+      goalsAgainst,
+      outcome: goalsFor > goalsAgainst ? ("W" as const) : goalsFor < goalsAgainst ? ("L" as const) : ("D" as const),
+    }];
+  });
+
   const playerReceiptStates = await getPlayerReceiptStates(playerFees.map(fee => fee.id));
 
   return (
@@ -399,26 +413,41 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       <PlayerPwaModeOnly mode="app">
         <PlayerAppHome
           teamId={teamid}
+          teamName={team.name}
+          teamLogoUrl={team.logoUrl}
           playerName={membership?.user.name ?? user.name ?? null}
-          leagueName={team.league?.name ?? null}
+          playerImageUrl={membership?.user.image ?? user.image ?? null}
+          playerRoleLabel={membership?.role ? getRoleLabel(membership.role) : null}
+          squadNumber={playerProfile?.squadNumber ?? null}
+          preferredPosition={playerProfile?.preferredPositions?.split(",")[0]?.trim() || null}
+          stats={playerAppStats}
           nextFixture={
-          nextFixture
-            ? {
-                id: nextFixture.id,
-                dateLabel: formatFixtureDate(nextFixture.kickoffAt),
-                venueLabel: [
-                  nextFixture.venue?.name,
-                  nextFixture.pitch,
-                ].filter(Boolean).join(" · ") || null,
-                homeTeam: nextFixture.homeTeam,
-                awayTeam: nextFixture.awayTeam,
-              }
-            : null
+            nextFixture
+              ? {
+                  id: nextFixture.id,
+                  dateLabel: formatDateTimeInLondon(nextFixture.kickoffAt, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  }),
+                  timeLabel: formatDateTimeInLondon(nextFixture.kickoffAt, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  }),
+                  venueLabel: [
+                    nextFixture.venue?.name,
+                    nextFixture.pitch,
+                  ].filter(Boolean).join(" · ") || null,
+                  homeTeam: nextFixture.homeTeam,
+                  awayTeam: nextFixture.awayTeam,
+                }
+              : null
           }
           nextAvailability={nextAvailability?.response ?? null}
           outstandingPence={outstandingPence}
           nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
-          recentResult={recentResult}
+          recentResults={recentResults}
           previewMembershipId={previewMembership?.id ?? null}
           showTeamChat={user.role === UserRole.ADMIN}
         />

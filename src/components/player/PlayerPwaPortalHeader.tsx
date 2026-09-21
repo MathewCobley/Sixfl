@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { UserCircleIcon } from "@heroicons/react/24/solid";
 
 function isPwaPhonePreviewFrame() {
   try {
@@ -42,14 +43,7 @@ export default function PlayerPwaPortalHeader({
     );
   }, [searchParams]);
 
-  const initials =
-    teamName
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || "S";
+  const teamLabel = [leagueName, season].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -81,8 +75,8 @@ export default function PlayerPwaPortalHeader({
       <div className={appMode ? "player-pwa-mode" : "player-pwa-controller"} />
 
       <header
-        className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#07130f]/95 px-4 pb-3 backdrop-blur-xl"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+        className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
       >
         <div className="mx-auto flex w-full max-w-xl items-center gap-3">
           <Image
@@ -91,30 +85,28 @@ export default function PlayerPwaPortalHeader({
             width={180}
             height={48}
             priority
-            className="h-6 w-auto object-contain"
+            className="h-7 w-auto object-contain"
           />
-          <div className="h-5 w-px bg-white/10" />
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
-              {teamLogoUrl ? (
-                <img
-                  src={teamLogoUrl}
-                  alt={`${teamName} badge`}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-[11px] font-black text-emerald-100">
-                  {initials}
-                </span>
-              )}
+
+          <div className="min-w-0 flex-1 text-center">
+            <div className="text-sm font-black tracking-tight text-white">
+              Player Portal
             </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-white">{teamName}</div>
-              <div className="truncate text-[11px] text-white/40">
-                {leagueName ?? "Player"}
-                {season ? ` · ${season}` : ""}
-              </div>
+            <div className="mt-0.5 truncate text-[10px] text-white/35">
+              {teamLabel || teamName}
             </div>
+          </div>
+
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06]">
+            {teamLogoUrl ? (
+              <img
+                src={teamLogoUrl}
+                alt={`${teamName} badge`}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <UserCircleIcon className="h-7 w-7 text-white/55" />
+            )}
           </div>
         </div>
       </header>
