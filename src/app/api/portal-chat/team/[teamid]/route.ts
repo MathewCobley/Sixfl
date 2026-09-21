@@ -647,6 +647,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     select: {
       userId: true,
       role: true,
+      isRegular: true,
       user: { select: { name: true, email: true } },
     },
   });
