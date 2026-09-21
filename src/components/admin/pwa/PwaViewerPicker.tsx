@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export type PwaViewerData = {
   captainTeams: Array<{
@@ -28,6 +28,20 @@ export type PwaViewerData = {
 };
 
 type PortalType = "captain" | "player" | "referee";
+
+const VIEWER_SELECTION_STORAGE_KEY = "sixfl-admin-pwa-viewer-selection-v1";
+
+type StoredViewerSelection = {
+  portal?: PortalType;
+  captainTeamId?: string;
+  playerTeamId?: string;
+  playerMembershipId?: string;
+  refereeId?: string;
+};
+
+function isPortalType(value: unknown): value is PortalType {
+  return value === "captain" || value === "player" || value === "referee";
+}
 
 type PickerOption = {
   value: string;
@@ -148,6 +162,82 @@ export default function PwaViewerPicker({
     data.playerTeams[0]?.players[0]?.membershipId ?? "",
   );
   const [refereeId, setRefereeId] = useState(data.referees[0]?.id ?? "");
+  const [selectionHydrated, setSelectionHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(VIEWER_SELECTION_STORAGE_KEY);
+      if (!raw) return;
+
+      const stored = JSON.parse(raw) as StoredViewerSelection;
+      if (isPortalType(stored.portal)) {
+        setPortal(stored.portal);
+      }
+
+      if (
+        stored.captainTeamId &&
+        data.captainTeams.some((team) => team.id === stored.captainTeamId)
+      ) {
+        setCaptainTeamId(stored.captainTeamId);
+      }
+
+      const storedPlayerTeam = stored.playerTeamId
+        ? data.playerTeams.find((team) => team.id === stored.playerTeamId)
+        : null;
+      if (storedPlayerTeam) {
+        setPlayerTeamId(storedPlayerTeam.id);
+        const storedMembership = stored.playerMembershipId
+          ? storedPlayerTeam.players.find(
+              (player) => player.membershipId === stored.playerMembershipId,
+            )
+          : null;
+        setPlayerMembershipId(
+          storedMembership?.membershipId ??
+            storedPlayerTeam.players[0]?.membershipId ??
+            "",
+        );
+      }
+
+      if (
+        stored.refereeId &&
+        data.referees.some((referee) => referee.id === stored.refereeId)
+      ) {
+        setRefereeId(stored.refereeId);
+      }
+    } catch {
+      // Ignore stale/corrupt local admin-preview state and use current defaults.
+    } finally {
+      setSelectionHydrated(true);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    if (!selectionHydrated) return;
+
+    const stored: StoredViewerSelection = {
+      portal,
+      captainTeamId,
+      playerTeamId,
+      playerMembershipId,
+      refereeId,
+    };
+
+    try {
+      window.localStorage.setItem(
+        VIEWER_SELECTION_STORAGE_KEY,
+        JSON.stringify(stored),
+      );
+    } catch {
+      // Viewer persistence is a convenience only; previewing must still work.
+    }
+  }, [
+    selectionHydrated,
+    portal,
+    captainTeamId,
+    playerTeamId,
+    playerMembershipId,
+    refereeId,
+  ]);
 
   const captainOptions = useMemo<PickerOption[]>(
     () =>
