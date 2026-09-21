@@ -20,13 +20,9 @@ function isPwaPhonePreviewFrame() {
 export default function PlayerPwaPortalHeader({
   teamName,
   teamLogoUrl,
-  leagueName,
-  season,
 }: {
   teamName: string;
   teamLogoUrl: string | null;
-  leagueName: string | null;
-  season: string | null;
 }) {
   const searchParams = useSearchParams();
   const [appMode, setAppMode] = useState(false);
@@ -43,7 +39,6 @@ export default function PlayerPwaPortalHeader({
     );
   }, [searchParams]);
 
-  const teamLabel = [leagueName, season].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -91,20 +86,17 @@ export default function PlayerPwaPortalHeader({
             <div className="text-sm font-black tracking-tight text-white">
               Player Portal
             </div>
-            <div className="mt-0.5 truncate text-[10px] text-white/35">
-              {teamLabel || teamName}
-            </div>
           </div>
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center">
             {teamLogoUrl ? (
               <img
                 src={teamLogoUrl}
                 alt={`${teamName} badge`}
-                className="h-full w-full object-contain"
+                className="max-h-9 max-w-9 object-contain"
               />
             ) : (
-              <UserCircleIcon className="h-7 w-7 text-white/55" />
+              <UserCircleIcon className="h-7 w-7 text-white/45" />
             )}
           </div>
         </div>
