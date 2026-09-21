@@ -9,6 +9,14 @@ const sharp = require('sharp');
 const PART = 8 * 1024 * 1024;
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
+
+test('full match rendering uses the high quality long-form encode profile', async () => {
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  assert.match(worker, /const videoPreset = premium \? "slow" : "medium"/);
+  assert.match(worker, /const videoCrf = premium \? "10" : "15"/);
+  assert.match(worker, /job\.kind !== "FULL_MATCH"/);
+});
+
 async function loadWorker(db, objects, uploadHook) {
   const file = path.resolve('scripts/sixfl-tv-worker.ts');
   const code = ts.transpileModule(await fs.readFile(file, 'utf8'), {
