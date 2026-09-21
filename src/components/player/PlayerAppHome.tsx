@@ -119,7 +119,6 @@ export default function PlayerAppHome({
   nextSelectionStatus,
   unreadChatCount,
   previewMembershipId,
-  showTeamChat,
 }: {
   teamId: string;
   teamName: string;
@@ -138,7 +137,6 @@ export default function PlayerAppHome({
   nextSelectionStatus: PlayerSelectionStatus | null;
   unreadChatCount: number;
   previewMembershipId: string | null;
-  showTeamChat: boolean;
 }) {
   const availability = availabilityCopy(nextAvailability);
   const selection = nextSelectionStatus ? selectionCopy(nextSelectionStatus) : null;
@@ -172,21 +170,13 @@ export default function PlayerAppHome({
     `/player/team/${teamId}/chat`,
     previewMembershipId,
   );
-  const fourthAction = showTeamChat
-    ? {
-        href: chatHref,
-        title: "SIXFL Chat",
-        body: unreadMessageLabel,
-        icon: ChatBubbleLeftRightIcon,
-        classes: "border-violet-400/35 bg-violet-500/15 text-violet-100",
-      }
-    : {
-        href: statsHref,
-        title: "My Stats",
-        body: "Goals, assists and appearances",
-        icon: ChartBarSquareIcon,
-        classes: "border-violet-400/30 bg-violet-500/10 text-violet-100",
-      };
+  const fourthAction = {
+    href: chatHref,
+    title: "SIXFL Chat",
+    body: unreadMessageLabel,
+    icon: ChatBubbleLeftRightIcon,
+    classes: "border-violet-400/35 bg-violet-500/15 text-violet-100",
+  };
 
   const FourthIcon = fourthAction.icon;
 
@@ -389,15 +379,15 @@ export default function PlayerAppHome({
             href={fourthAction.href}
             className={`relative flex min-h-[4.75rem] items-center gap-3 rounded-[1.2rem] border p-3 active:scale-[0.99] ${fourthAction.classes}`}
           >
-            {showTeamChat && unreadChatCount > 0 ? (
+            {unreadChatCount > 0 ? (
               <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1 text-[9px] font-black leading-none text-black">
                 {unreadChatCount > 99 ? "99+" : unreadChatCount}
               </span>
             ) : null}
             <FourthIcon className="h-6 w-6 shrink-0" />
             <div className="min-w-0">
-              <div className="text-sm font-black text-white">{showTeamChat ? <span>SIXFL Chat</span> : <span>{fourthAction.title}</span>}</div>
-              <div className="mt-0.5 truncate text-[10px] text-white/45">{showTeamChat ? "Messages" : "Goals & assists"}</div>
+              <div className="text-sm font-black text-white">{fourthAction.title}</div>
+              <div className="mt-0.5 truncate text-[10px] text-white/45">{fourthAction.body}</div>
             </div>
           </Link>
         </section>
