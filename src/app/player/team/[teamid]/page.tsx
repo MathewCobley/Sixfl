@@ -286,8 +286,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         kickoffAt: true,
         status: true,
         homeTeamId: true,
-        homeTeam: { select: { name: true } },
-        awayTeam: { select: { name: true } },
+        homeTeam: { select: { name: true, logoUrl: true } },
+        awayTeam: { select: { name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true } },
       },
     }),
@@ -399,6 +399,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     return [{
       id: fixture.id,
       opponent: isHome ? fixture.awayTeam.name : fixture.homeTeam.name,
+      opponentLogoUrl: isHome ? fixture.awayTeam.logoUrl : fixture.homeTeam.logoUrl,
       dateLabel: formatDateTimeInLondon(fixture.kickoffAt, { day: "numeric", month: "short" }),
       goalsFor,
       goalsAgainst,
