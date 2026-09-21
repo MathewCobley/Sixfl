@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Whole Squad Chat | SIXFL",
+  title: "SIXFL Chat | SIXFL",
 };
 
 export default async function PlayerTeamChatPage({
