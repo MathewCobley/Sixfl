@@ -93,13 +93,14 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
         veoBookingConfirmed?: boolean;
         acceptedVeoRequests?: number;
         priorityOverride?: boolean;
+        veoBookingCancelled?: boolean;
       } | null;
 
       if (!response.ok) {
         throw new Error(payload?.error || "Could not save SIXFL TV status.");
       }
 
-      const confirmed = Boolean(payload?.veoBookingConfirmed);
+      const confirmed = nextChecked && Boolean(payload?.veoBookingConfirmed);
       setBookingConfirmed(confirmed);
       if (nextChecked && confirmed) {
         const accepted = payload?.acceptedVeoRequests ?? 0;
@@ -111,6 +112,8 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
               ? `Veo booking confirmed · ${accepted} historic request${accepted === 1 ? "" : "s"} preserved`
               : "SIXFL TV booking confirmed · score-based priority",
         );
+      } else if (!nextChecked && payload?.veoBookingCancelled) {
+        setMessage("SIXFL TV booking cancelled · camera allocation released");
       } else {
         setMessage(nextChecked ? "Selected for SIXFL TV" : "Not selected for SIXFL TV");
       }
@@ -123,21 +126,21 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
     }
   }
 
-  const locked = checked && bookingConfirmed;
-
   return (
     <div className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-3 text-xs text-fuchsia-100">
-      <label className={`flex items-center justify-between gap-3 font-semibold ${locked ? "cursor-default" : "cursor-pointer"}`}>
+      <label className="flex cursor-pointer items-center justify-between gap-3 font-semibold">
         <span>
           SIXFL TV
           <span className="ml-2 font-normal text-fuchsia-100/55">
-            {locked ? "Filming confirmed" : "Record this match · admin can override Priority"}
+            {bookingConfirmed
+              ? "Filming confirmed · untick to move allocation"
+              : "Record this match · admin can override Priority"}
           </span>
         </span>
         <input
           type="checkbox"
           checked={checked}
-          disabled={loading || saving || locked}
+          disabled={loading || saving}
           onChange={(event) => void save(event.target.checked)}
           className="h-4 w-4 accent-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-50"
         />
@@ -146,8 +149,15 @@ export default function NightBoardSixflTvToggle({ fixtureId }: { fixtureId: stri
         {loading
           ? "Loading status…"
           : saving
-            ? "Saving and confirming Veo booking…"
-            : message || (locked ? "Confirmed for filming" : checked ? "Selected for SIXFL TV" : "Not selected")}
+            ? checked
+              ? "Saving and confirming Veo booking…"
+              : "Cancelling filming booking and releasing camera allocation…"
+            : message ||
+              (bookingConfirmed
+                ? "Confirmed for filming · untick to release the camera allocation"
+                : checked
+                  ? "Selected for SIXFL TV"
+                  : "Not selected")}
       </div>
       {checked && !bookingConfirmed && !loading && !saving ? (
         <button

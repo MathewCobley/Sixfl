@@ -62,10 +62,17 @@ test('retirement migration voids only the dedicated £5 Veo pilot fee and credit
   assert.doesNotMatch(retirement, /DELETE FROM "PaymentCharge"|TRUNCATE|DROP TABLE/);
 });
 
-test('confirmed Night Board booking is visibly locked instead of silently unticked', () => {
-  assert.match(toggle, /score-based priority/);
-  assert.match(toggle, /disabled=\{loading \|\| saving \|\| locked\}/);
-  assert.match(route, /league SIXFL TV Priority page/);
+test('confirmed Night Board booking can be unticked to release the camera allocation', () => {
+  assert.match(route, /cancelNightBoardVeoFixture/);
+  assert.match(route, /veoBookingCancelled/);
+  assert.match(helper, /booking\.state !== 'PLANNED'/);
+  assert.match(helper, /state = 'CANCELLED'/);
+  assert.match(helper, /night_board_veo_cancelled/);
+  assert.match(helper, /fixture\.status !== 'SCHEDULED'/);
+  assert.match(toggle, /untick to move allocation/);
+  assert.match(toggle, /camera allocation released/);
+  assert.match(toggle, /disabled=\{loading \|\| saving\}/);
+  assert.doesNotMatch(toggle, /disabled=\{loading \|\| saving \|\| locked\}/);
 });
 
 test('retired captain Veo requests no longer appear on Night Board', () => {
