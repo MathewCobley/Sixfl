@@ -121,7 +121,11 @@ test("next fixture selection status comes from FixtureSelection and uses safe pl
   assert.match(page, /prisma\.fixtureSelection\.findFirst/);
   assert.match(page, /selectionStatus: true/);
   assert.match(page, /nextSelection\?\.selectionStatus === "SELECTED"/);
-  assert.match(page, /nextSelection\?\.selectionStatus === "NOT_SELECTED"/);
+  assert.match(page, /nextSelection\?\.selectionStatus === "NOT_IN_SQUAD"/);
+  assert.doesNotMatch(
+    page,
+    /selectionStatus === "NOT_SELECTED"[\s\S]{0,120}"NOT_IN_SQUAD"/,
+  );
   assert.match(home, /label: "SELECTED"/);
   assert.match(home, /label: "NOT SELECTED YET"/);
   assert.match(home, /label: "NOT IN SQUAD"/);
