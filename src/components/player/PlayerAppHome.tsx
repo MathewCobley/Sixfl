@@ -6,7 +6,6 @@ import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ChevronRightIcon,
-  TrophyIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 
@@ -275,7 +274,7 @@ export default function PlayerAppHome({
               <span className="text-base font-black text-white/55">VS</span>
 
               <div className="min-w-0 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
                   {nextFixture.awayTeam.logoUrl ? (
                     <img
                       src={nextFixture.awayTeam.logoUrl}
