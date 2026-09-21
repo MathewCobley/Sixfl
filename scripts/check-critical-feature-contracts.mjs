@@ -198,6 +198,21 @@ expectText("communications", sharedTeamBroadcastPath, sharedTeamBroadcast, 'runA
 expectText("communications", allTeamCommunicationsPath, allTeamCommunications, 'runAfterResponse("selected-team-notification-processing"', "selected-team provider processing must not hold the browser response open");
 
 // ---------------------------------------------------------------------------
+// CAPTAIN FIXTURE PLANNING — the overview prompt must advertise both full-week
+// unavailability and one-off kick-off time restrictions.
+// ---------------------------------------------------------------------------
+const captainTeamNudgesPath = "src/components/captain/CaptainTeamNudges.tsx";
+const captainWeeksUnavailablePath = "src/app/captain/team/[teamid]/weeks-unavailable/page.tsx";
+const captainTeamNudges = read(captainTeamNudgesPath);
+const captainWeeksUnavailable = read(captainWeeksUnavailablePath);
+
+expectText("captain fixture planning", captainTeamNudgesPath, captainTeamNudges, "need a specific kick-off time?", "captain overview must mention future kick-off time needs");
+expectText("captain fixture planning", captainTeamNudgesPath, captainTeamNudges, "one-off kick-off time such as after 8pm", "captain overview must explain the time restriction example");
+expectText("captain fixture planning", captainTeamNudgesPath, captainTeamNudges, "data-team-week-unavailability-callout", "native planning prompt must suppress stale legacy bridge duplication");
+expectText("captain fixture planning", captainWeeksUnavailablePath, captainWeeksUnavailable, "need a specific kick-off time", "fixture-planning page heading must cover time restrictions");
+expectText("captain fixture planning", captainWeeksUnavailablePath, captainWeeksUnavailable, "Temporary time restriction", "fixture-planning page must retain the actual time-restriction control");
+
+// ---------------------------------------------------------------------------
 // TEAM REFERRALS — the £75 scheme must stay discoverable and the registration
 // handoff must continue carrying the referring player's code into the lead.
 // ---------------------------------------------------------------------------
