@@ -464,8 +464,6 @@ export async function queuePlayerMatchFeeReminder(input: {
         select: {
           id: true,
           kickoffAt: true,
-          publishedAt: true,
-          league: { select: { publicAt: true } },
           homeTeam: { select: { name: true } },
           awayTeam: { select: { name: true } },
         },
@@ -497,16 +495,6 @@ export async function queuePlayerMatchFeeReminder(input: {
 
   if (!fee?.paymentUrl) {
     return { queued: 0, skipped: 1, status: "no_payment_url" as const };
-  }
-
-  const now = new Date();
-  if (
-    !input.force &&
-    (!fee.fixture.publishedAt ||
-      !fee.fixture.league.publicAt ||
-      fee.fixture.league.publicAt > now)
-  ) {
-    return { queued: 0, skipped: 1, status: "league_not_live" as const };
   }
 
   const playerName = getPlayerName({
