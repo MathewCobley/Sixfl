@@ -494,7 +494,7 @@ export default function PortalChat({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/75">
-              SIXFL messages
+              SIXFL Chat
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
               {data?.team.name ?? "Team messaging"}
