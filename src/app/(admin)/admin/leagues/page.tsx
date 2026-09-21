@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
+import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createLeagueAction } from "@/app/(admin)/admin/leagues/actions";
@@ -28,6 +29,7 @@ type SeasonRow = {
   slug: string;
   season: string | null;
   isActive: boolean;
+  publicAt: Date | null;
   isCurrent: boolean;
   teamCount: number;
   fixtureCount: number;
@@ -49,6 +51,20 @@ function normaliseSeasonRows(rows: SeasonRow[]) {
     teamCount: Number(row.teamCount ?? 0),
     fixtureCount: Number(row.fixtureCount ?? 0),
   }));
+}
+
+function publicationLabel(publicAt: Date | null) {
+  if (!publicAt) return "Private · no go-live set";
+  if (publicAt.getTime() > Date.now()) {
+    return `Scheduled · ${formatDateTimeInLondon(publicAt, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  }
+  return "Public";
 }
 
 async function updateCompetitionNameAction(formData: FormData) {
@@ -115,6 +131,7 @@ export default async function AdminLeaguesPage() {
         l."slug",
         l."season",
         l."isActive",
+        l."publicAt",
         (l."id" = c."currentLeagueId") AS "isCurrent",
         COUNT(DISTINCT lst."teamId")::int AS "teamCount",
         COUNT(DISTINCT f."id")::int AS "fixtureCount"
@@ -124,7 +141,7 @@ export default async function AdminLeaguesPage() {
       LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
       WHERE l."competitionId" IS NOT NULL
         AND COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
-      GROUP BY l."id", l."competitionId", l."name", l."slug", l."season", l."isActive", c."currentLeagueId"
+      GROUP BY l."id", l."competitionId", l."name", l."slug", l."season", l."isActive", l."publicAt", l."publicAt", c."currentLeagueId"
       ORDER BY (l."id" = c."currentLeagueId") DESC, COALESCE(l."season", '') DESC, l."createdAt" DESC
     `),
     prisma.$queryRaw<SeasonRow[]>(Prisma.sql`
@@ -135,6 +152,7 @@ export default async function AdminLeaguesPage() {
         l."slug",
         l."season",
         l."isActive",
+        l."publicAt",
         false AS "isCurrent",
         COUNT(DISTINCT t."id")::int AS "teamCount",
         COUNT(DISTINCT f."id")::int AS "fixtureCount"
@@ -251,6 +269,9 @@ export default async function AdminLeaguesPage() {
                           <div className="mt-1 text-xs text-white/45">
                             {season.teamCount} team{season.teamCount === 1 ? "" : "s"} · {season.fixtureCount} fixture{season.fixtureCount === 1 ? "" : "s"}
                           </div>
+                          <div className="mt-1 text-[11px] font-medium text-sky-200/70">
+                            {publicationLabel(season.publicAt)}
+                          </div>
                         </div>
                         <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${season.isCurrent ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-100" : "border border-white/10 bg-white/[0.04] text-white/55"}`}>
                           {season.isCurrent ? "Current" : "Archive"}
@@ -286,6 +307,7 @@ export default async function AdminLeaguesPage() {
               >
                 <span className="font-semibold">{league.name}</span>
                 {league.season ? <span className="text-white/45"> · {league.season}</span> : null}
+                <span className="ml-2 text-xs text-sky-200/70">· {publicationLabel(league.publicAt)}</span>
               </Link>
             ))}
           </div>
