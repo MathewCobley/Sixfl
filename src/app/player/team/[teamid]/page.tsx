@@ -478,7 +478,6 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           nextSelectionStatus={nextSelectionStatus}
           unreadChatCount={unreadChatCount}
           previewMembershipId={previewMembership?.id ?? null}
-          showTeamChat={user.role === UserRole.ADMIN && !previewMembership}
         />
       </PlayerPwaModeOnly>
       <PlayerPwaModeOnly mode="web">
