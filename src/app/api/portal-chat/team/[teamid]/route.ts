@@ -902,6 +902,7 @@ export async function GET(
       id: selected.conversation.id,
       type: selected.conversation.type,
       title: selected.title || selected.conversation.title || "Conversation",
+      memberUserIds: selected.memberUserIds ?? [],
     },
     conversations: list,
     messages: messages.reverse().map((message) => ({
