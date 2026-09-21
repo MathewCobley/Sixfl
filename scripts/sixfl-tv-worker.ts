@@ -248,8 +248,12 @@ async function sourceVideoCanvas(file: string): Promise<VideoCanvas> {
   return fitShortVideoCanvas(width, height);
 }
 
+function canvasScalePadFilter(canvas: VideoCanvas) {
+  return `scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${canvas.width}:${canvas.height}:(ow-iw)/2:(oh-ih)/2:black`;
+}
+
 function canvasBaseFilter(canvas: VideoCanvas) {
-  return `scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${canvas.width}:${canvas.height}:(ow-iw)/2:(oh-ih)/2:black,fps=${canvas.fps},format=yuv420p`;
+  return `${canvasScalePadFilter(canvas)},fps=${canvas.fps},format=yuv420p`;
 }
 
 function overlayFilter(canvas: VideoCanvas, label: string) {
@@ -532,7 +536,7 @@ async function slowMotionReplay(source: string, target: string, overlay: string,
   const sourceDuration = Math.max(0.6, end - start);
   const outputDuration = sourceDuration / GOAL_REPLAY_SPEED;
   const fadeOutStart = Math.max(0, outputDuration - 0.16).toFixed(3);
-  const base = `${canvasBaseFilter(canvas)},setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS`;
+  const base = `${canvasScalePadFilter(canvas)},setpts=${(1 / GOAL_REPLAY_SPEED).toFixed(3)}*PTS,fps=${canvas.fps},format=yuv420p`;
   const videoFilter = `[0:v]${base}[base];${overlayFilter(canvas, "tag")};[base][tag]overlay=0:0:format=auto,fade=t=in:st=0:d=0.12,fade=t=out:st=${fadeOutStart}:d=0.16,format=yuv420p[v]`;
   if (audio) {
     await run("ffmpeg", [
@@ -658,13 +662,18 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     await mkdir(path.join(dir, "source")); await mkdir(path.join(dir, "normalised"));
     const preparedSourceIds = new Set<string>();
     let renderCanvas = DEFAULT_VIDEO_CANVAS;
-    if (job.kind !== "FULL_MATCH" && content[0]) {
-      const firstSource = path.join(dir, "source", `${content[0].position}.mp4`);
+    if (job.kind !== "FULL_MATCH") {
       reportProgress(6, "Inspecting source quality");
-      await reconstructAsset(content[0], firstSource);
-      preparedSourceIds.add(content[0].assetId);
-      renderCanvas = await sourceVideoCanvas(firstSource);
-      console.log(`Render source canvas ${job.id}: source=${content[0].filename} output=${renderCanvas.width}x${renderCanvas.height}@${renderCanvas.fps} kind=${job.kind}`);
+      const inspected: string[] = [];
+      for (const input of content) {
+        const source = path.join(dir, "source", `${input.position}.mp4`);
+        await reconstructAsset(input, source);
+        preparedSourceIds.add(input.assetId);
+        const canvas = await sourceVideoCanvas(source);
+        if (canvas.width * canvas.height > renderCanvas.width * renderCanvas.height) renderCanvas = canvas;
+        inspected.push(`${input.filename}=${canvas.width}x${canvas.height}`);
+      }
+      console.log(`Render source canvas ${job.id}: ${inspected.join(", ")} -> output=${renderCanvas.width}x${renderCanvas.height}@${renderCanvas.fps} kind=${job.kind}`);
     }
     reportProgress(7, "Creating broadcast graphics");
     const titlePng = path.join(dir, "title.png"), goalOfMonthPng = path.join(dir, "goal-of-month.png");
