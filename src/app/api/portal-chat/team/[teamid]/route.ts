@@ -646,6 +646,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     select: {
       userId: true,
       role: true,
+      isRegular: true,
       user: { select: { name: true, email: true } },
     },
   });
@@ -764,11 +765,15 @@ async function buildConversationList(teamId: string, context: AccessContext) {
         preview: conversation?.lastMessagePreview ?? null,
         kind: "PRIVATE" as const,
         disabled,
+        isRegular: member.isRegular,
       };
     }),
   );
 
   privateItems.sort((a, b) => {
+    const aRegular = a.isRegular ? 1 : 0;
+    const bRegular = b.isRegular ? 1 : 0;
+    if (aRegular !== bRegular) return bRegular - aRegular;
     const aHasUnread = a.unreadCount > 0 ? 1 : 0;
     const bHasUnread = b.unreadCount > 0 ? 1 : 0;
     if (aHasUnread !== bHasUnread) return bHasUnread - aHasUnread;
