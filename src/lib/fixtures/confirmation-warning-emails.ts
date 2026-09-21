@@ -67,7 +67,6 @@ async function getUpcomingWarningsWithoutEmail(now: Date) {
       confirmation."confirmedAt"
     FROM "FixtureConfirmationLateFee" warning
     INNER JOIN "Fixture" fixture ON fixture."id" = warning."fixtureId"
-    INNER JOIN "League" league ON league."id" = fixture."leagueId"
     INNER JOIN "Team" team ON team."id" = warning."teamId"
     INNER JOIN "Team" home_team ON home_team."id" = fixture."homeTeamId"
     INNER JOIN "Team" away_team ON away_team."id" = fixture."awayTeamId"
@@ -78,8 +77,6 @@ async function getUpcomingWarningsWithoutEmail(now: Date) {
       AND warning."warningAt" IS NOT NULL
       AND fixture."status"::text = 'SCHEDULED'
       AND fixture."publishedAt" IS NOT NULL
-      AND league."publicAt" IS NOT NULL
-      AND league."publicAt" <= ${now}
       AND fixture."kickoffAt" > ${now}
       AND NOT EXISTS (
         SELECT 1
