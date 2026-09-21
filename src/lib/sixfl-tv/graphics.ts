@@ -984,8 +984,6 @@ export async function createSixflTvAltGoalOfMonthCard(input: { siteUrl: string; 
   const period = monthlyPeriod(monthKey(validDate));
   const awardMonth = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" })
     .format(validDate);
-  const nextMonth = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" })
-    .format(period.votingOpensAt);
   const nominateThrough = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" })
     .format(new Date(period.nominationsCloseAt.getTime() - 1));
   const voteStart = new Intl.DateTimeFormat("en-GB", { day: "numeric", timeZone: "Europe/London" }).format(period.votingOpensAt);
