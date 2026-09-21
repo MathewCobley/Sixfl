@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { queueSixflTvFixtureUploadedEmailsOnce } from "@/lib/sixfl-tv/notifications";
 import { normaliseExistingSixflTvVideoValue } from "@/lib/sixfl-tv/videos";
 import { VeoBookingError } from "@/lib/veo/fixture-bookings";
-import { confirmNightBoardVeoFixture } from "@/lib/veo/night-board";
+import { cancelNightBoardVeoFixture, confirmNightBoardVeoFixture } from "@/lib/veo/night-board";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,6 +75,7 @@ export async function POST(request: Request) {
   let veoBookingConfirmed = false;
   let acceptedVeoRequests = 0;
   let priorityOverride = false;
+  let veoBookingCancelled = false;
 
   if (sixflTvRecorded && suppliedUrl === undefined && user?.id) {
     try {
@@ -95,18 +96,20 @@ export async function POST(request: Request) {
   }
 
   if (!sixflTvRecorded && suppliedUrl === undefined) {
-    const activeBooking = await prisma.$queryRaw<Array<{ state: string }>>(Prisma.sql`
-      SELECT state FROM "VeoMatchBooking"
-      WHERE "fixtureId" = ${fixtureId} AND state IN ('PLANNED', 'READY')
-      LIMIT 1
-    `);
-    if (activeBooking[0]) {
+    if (!user?.id) {
+      return NextResponse.json({ error: "Administrator access is required to change filming." }, { status: 403 });
+    }
+    try {
+      const result = await cancelNightBoardVeoFixture({ fixtureId, actorId: user.id });
+      veoBookingCancelled = result.bookingCancelled;
+    } catch (error) {
+      if (error instanceof VeoBookingError) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+      console.error("Night Board Veo cancellation failed", error);
       return NextResponse.json(
-        {
-          error:
-            "This match is a confirmed Veo booking. Cancel it from the league SIXFL TV Priority page rather than unticking it on the Night Board.",
-        },
-        { status: 409 },
+        { error: "Could not release this filming allocation. Refresh the Night Board and try again." },
+        { status: 500 },
       );
     }
   }
@@ -143,5 +146,6 @@ export async function POST(request: Request) {
     veoBookingConfirmed,
     acceptedVeoRequests,
     priorityOverride,
+    veoBookingCancelled,
   });
 }
