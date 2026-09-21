@@ -505,16 +505,15 @@ export async function sendProspectCommunicationMessageAction(formData: FormData)
     createdByUserId: user?.id ?? null,
   });
 
-  runAfterResponse("prospect-communication-thread-history", async () => {
+  runAfterResponse("prospect-communication-bookkeeping", async () => {
     await logNotificationDispatchToThread({ dispatch, recipient });
-  });
-
-  await prisma.teamPlayerProspect.update({
-    where: { id: prospect.id },
-    data: {
-      ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
-      lastContactedAt: new Date(),
-    },
+    await prisma.teamPlayerProspect.update({
+      where: { id: prospect.id },
+      data: {
+        ...(prospect.status === "NEW" ? { status: "CONTACTED" } : {}),
+        lastContactedAt: new Date(),
+      },
+    });
   });
 
   redirect(`${from}?saved=queued&channel=${channel.toLowerCase()}`);
