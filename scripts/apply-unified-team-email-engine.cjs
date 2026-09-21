@@ -22,10 +22,16 @@ function replaceOnce(source, anchor, replacement, description) {
 // ---------------------------------------------------------------------------
 let broadcast = fs.readFileSync(broadcastPath, "utf8");
 if (!broadcast.includes("isTransactional?: boolean;")) {
+  const inputAnchor = broadcast.includes("  deferThreadHistory?: boolean;\n};")
+    ? "  deferThreadHistory?: boolean;\n};"
+    : "  createdByUserId?: string | null;\n};";
+  const inputReplacement = broadcast.includes("  deferThreadHistory?: boolean;\n};")
+    ? "  deferThreadHistory?: boolean;\n  isTransactional?: boolean;\n};"
+    : "  createdByUserId?: string | null;\n  isTransactional?: boolean;\n};";
   broadcast = replaceOnce(
     broadcast,
-    "  createdByUserId?: string | null;\n};",
-    "  createdByUserId?: string | null;\n  isTransactional?: boolean;\n};",
+    inputAnchor,
+    inputReplacement,
     "send-team-broadcast input type",
   );
 }
@@ -105,10 +111,18 @@ teamActions = teamActions.replace(
   "      const result = await sendTeamBroadcastMessage({",
   "      const result = await sendSIXFLTeamCommunication({",
 );
+const teamMessageSenderAnchor = teamActions.includes(
+  "        variables,\n        createdByUserId,\n        deferThreadHistory: true,\n      });",
+)
+  ? "        variables,\n        createdByUserId,\n        deferThreadHistory: true,\n      });"
+  : "        variables,\n        createdByUserId,\n      });";
+const teamMessageSenderReplacement = teamMessageSenderAnchor.includes("deferThreadHistory")
+  ? "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n        deferThreadHistory: true,\n      });"
+  : "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n      });";
 teamActions = replaceOnce(
   teamActions,
-  "        variables,\n        createdByUserId,\n      });",
-  "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n      });",
+  teamMessageSenderAnchor,
+  teamMessageSenderReplacement,
   "Team Messages canonical sender options",
 );
 fs.writeFileSync(teamBulkActionsPath, teamActions, "utf8");
