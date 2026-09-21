@@ -54,3 +54,13 @@ test("player PWA home uses real profile and performance data", () => {
   assert.match(page, /stats=\{playerAppStats\}/);
   assert.match(page, /recentResults=\{recentResults\}/);
 });
+
+
+test("player PWA CSS never hides the dashboard just because it contains the referral link", () => {
+  const header = read("src/components/player/PlayerPwaPortalHeader.tsx");
+
+  assert.doesNotMatch(
+    header,
+    /section:has\(a\[href=["']\\\/player\\\/referrals["']\]\)/,
+  );
+});
