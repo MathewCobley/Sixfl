@@ -122,7 +122,7 @@ if (canonicalSenderEnd === -1) {
   throw new Error("Unified email patch could not find the end of Team Messages canonical sender call.");
 }
 let canonicalSenderCall = teamActions.slice(canonicalSenderStart, canonicalSenderEnd);
-if (!canonicalSenderCall.includes("\n        isTransactional,")) {
+if (!canonicalSenderCall.includes('sendMode: cupSendMode === "test" ? "TEST" : "SEND"')) {
   if (!canonicalSenderCall.includes("\n        createdByUserId,")) {
     throw new Error("Unified email patch could not find Team Messages createdByUserId option.");
   }
