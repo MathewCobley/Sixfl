@@ -210,3 +210,88 @@ export async function confirmNightBoardVeoFixture(input: {
     };
   });
 }
+
+
+/**
+ * Release a confirmed upcoming Night Board filming allocation so the administrator
+ * can assign the shared camera to a different fixture. Only PLANNED, future,
+ * scheduled bookings can be released here; recording outcomes stay on the full
+ * SIXFL TV Priority controls.
+ */
+export async function cancelNightBoardVeoFixture(input: {
+  fixtureId: string;
+  actorId: string;
+}): Promise<{ handled: boolean; bookingCancelled: boolean }> {
+  return veoTransaction(async (db) => {
+    const admins = await db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "User" WHERE id = ${input.actorId} AND role::text = 'ADMIN'
+    `;
+    if (!admins.length) throw new VeoBookingError('Administrator access is required to change filming.');
+
+    const fixtures = await db.$queryRaw<Array<{
+      id: string;
+      leagueId: string;
+      kickoffAt: Date;
+      status: string;
+    }>>`
+      SELECT id, "leagueId", "kickoffAt", status::text
+      FROM "Fixture"
+      WHERE id = ${input.fixtureId}
+      FOR UPDATE
+    `;
+    const fixture = fixtures[0];
+    if (!fixture) throw new VeoBookingError('Fixture not found.');
+
+    const bookings = await db.$queryRaw<Array<{ state: string }>>`
+      SELECT state
+      FROM "VeoMatchBooking"
+      WHERE "fixtureId" = ${input.fixtureId}
+      FOR UPDATE
+    `;
+    const booking = bookings[0];
+    if (!booking) {
+      return { handled: false, bookingCancelled: false };
+    }
+    if (booking.state !== 'PLANNED') {
+      throw new VeoBookingError(
+        'Only a planned upcoming filming booking can be moved from the Night Board. Use the league SIXFL TV Priority page for recording outcomes.',
+      );
+    }
+    if (fixture.status !== 'SCHEDULED' || fixture.kickoffAt.getTime() <= Date.now()) {
+      throw new VeoBookingError('Only an upcoming scheduled filming booking can be moved from the Night Board.');
+    }
+
+    await db.$executeRaw`
+      UPDATE "VeoMatchBooking"
+      SET state = 'CANCELLED',
+          "recordingNote" = 'Cancelled from Night Board to move SIXFL TV allocation.',
+          "updatedAt" = NOW()
+      WHERE "fixtureId" = ${fixture.id}
+    `;
+    await db.$executeRaw`
+      UPDATE "VeoFixtureRequest"
+      SET status = 'CANCELLED', "agreedPence" = 0, revision = revision + 1
+      WHERE "fixtureId" = ${fixture.id} AND status = 'ACCEPTED'
+    `;
+    await db.$executeRaw`
+      UPDATE "Fixture"
+      SET "sixflTvRecorded" = false, "updatedAt" = NOW()
+      WHERE id = ${fixture.id}
+    `;
+
+    const details = JSON.stringify({
+      kind: 'night_board_veo_cancelled',
+      fixtureId: fixture.id,
+      reason: 'reallocation',
+      priorBookingState: booking.state,
+      noPriorityFees: true,
+      noBaseFeesChanged: true,
+    });
+    await db.$executeRaw`
+      INSERT INTO "VeoSettingsAudit" (id, "leagueId", "actorId", details)
+      VALUES (${randomUUID()}, ${fixture.leagueId}, ${input.actorId}, ${details}::jsonb)
+    `;
+
+    return { handled: true, bookingCancelled: true };
+  });
+}
