@@ -254,6 +254,31 @@ export default async function CaptainTeamNudges({ teamId }: { teamId: string }) 
 
   return (
     <div className="space-y-4">
+      <section
+        data-team-week-unavailability-callout="true"
+        className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.08] p-5 sm:p-6"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100/65">
+              Advance fixture planning
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Know a week you cannot play, or need a specific kick-off time?
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/70">
+              Your team is assumed available. Tell SIXFL before fixtures are published if you already know you cannot field a team that week, or if you need a one-off kick-off time such as after 8pm.
+            </p>
+          </div>
+          <Link
+            href={`/captain/team/${teamId}/weeks-unavailable`}
+            className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black transition hover:bg-emerald-300"
+          >
+            Tell SIXFL
+          </Link>
+        </div>
+      </section>
+
       {pendingFixture && confirmationCopy ? (
         <section
           className={`overflow-hidden rounded-3xl border p-5 shadow-[0_22px_75px_rgba(0,0,0,0.28)] sm:p-6 ${confirmationCopy.classes}`}

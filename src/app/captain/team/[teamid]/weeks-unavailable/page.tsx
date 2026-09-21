@@ -115,7 +115,7 @@ export default async function TeamWeeksUnavailablePage({
               Advance fixture planning
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Tell us about a week you cannot play normally
+              Tell us if you cannot play, or need a specific kick-off time
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
               Your team is assumed available every week. Use this page only when you already know a specific future week will be different — either you cannot field a team, or you need a temporary kick-off restriction such as “after 8pm”.
