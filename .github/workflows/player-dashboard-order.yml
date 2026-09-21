@@ -50,6 +50,8 @@ jobs:
           /tmp/player-order-browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Mobile and desktop layout order with synthetic content
         run: PLAYER_ORDER_PLAYWRIGHT=/tmp/player-order-browser/node_modules/playwright node tests/player-dashboard-order/browser.cjs
+      - name: Render finished Player PWA Home preview
+        run: PLAYER_ORDER_PLAYWRIGHT=/tmp/player-order-browser/node_modules/playwright node tests/player-pwa-dashboard/render-preview.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
