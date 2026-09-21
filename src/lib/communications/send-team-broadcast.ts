@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 
 import { logNotificationDispatchToThread } from "@/lib/communications/log-dispatch";
+import { runAfterResponse } from "@/lib/server/after-response";
 import { prisma } from "@/lib/prisma";
 import { getSixflTvPriorityScore } from "@/lib/sixfl-tv/priority-score";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
@@ -39,6 +40,7 @@ type Input = {
   metadata?: Record<string, unknown>;
   variables?: BroadcastVariables;
   createdByUserId?: string | null;
+  deferThreadHistory?: boolean;
 };
 
 type TeamForPoll = {
@@ -360,10 +362,16 @@ export async function sendTeamBroadcastMessage(input: Input) {
     createdByUserId: input.createdByUserId ?? null,
   });
 
-  await logNotificationDispatchToThread({
-    dispatch,
-    recipient,
-  });
+  if (input.deferThreadHistory) {
+    runAfterResponse("team-broadcast-thread-history", async () => {
+      await logNotificationDispatchToThread({ dispatch, recipient });
+    });
+  } else {
+    await logNotificationDispatchToThread({
+      dispatch,
+      recipient,
+    });
+  }
 
   return {
     skipped: dispatch.status === NotificationDispatchStatus.SKIPPED,
