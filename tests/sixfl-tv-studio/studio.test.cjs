@@ -152,7 +152,7 @@ test('studio queues saved sources in editing order and requires confirmed result
     const highlightsOnly=await studio.requestRenders('match-a','admin','HIGHLIGHTS');assert.equal(highlightsOnly.renders.length,1);assert.equal(highlightsOnly.renders[0].id,firstHighlights.id,'A targeted highlights request must not create a second job while the existing highlights render is active');
     const jobs=await db.$queryRaw`SELECT "id","kind","state","error","metadataJson" FROM "SixflTvRenderJob" WHERE "fixtureId"='match-a' ORDER BY "kind","createdAt"`;assert.equal(jobs.length,4);
     assert.equal(jobs.find(x=>x.id===firstFull.id).state,'FAILED');assert.match(jobs.find(x=>x.id===firstFull.id).error,/Stopped by SIXFL admin/);
-    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===18),'Renderer version must invalidate old finished previews after alternative highlights V2');
+    assert.ok(jobs.every(x=>Number(x.metadataJson.renderVersion)===21),'Renderer version must invalidate old finished previews after faithful alternative highlights match-card redesign');
     const high=jobs.find(x=>x.kind==='HIGHLIGHTS');const inputs=await db.$queryRaw`SELECT i."assetId",i."role",i."position" FROM "SixflTvRenderInput" i WHERE i."jobId"=${high.id} ORDER BY i."position"`;
     assert.deepEqual(inputs.map(x=>x.assetId),['intro','clip-a','clip-b','outro'],'Ordered clips must take priority over a ready-made highlights file so transitions can be inserted');assert.deepEqual(inputs.map(x=>x.role),['INTRO','CONTENT','CONTENT','OUTRO']);
     const graphic=await studio.studioGraphicFixture('match-a');assert.deepEqual(graphic.scorers,['Town Hall 6s: Alex One x2, Sam Two','Ballerz FC: Chris Three']);

@@ -331,18 +331,21 @@ async function cardVideo(png: string, target: string, seconds = 3) {
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function swipeVideo(dir: string, target: string) {
+async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT") {
   const frameDir = path.join(dir, "swipe-frames");
   await mkdir(frameDir, { recursive: true });
+  const palette = style === "ALT_YELLOW"
+    ? { background: "#050505", primary: "#f4d000", secondary: "#8f7800" }
+    : { background: "#020805", primary: "#10b981", secondary: "#064e3b" };
   for (let frame = 0; frame < SWIPE_FRAMES; frame++) {
     checkAbort();
     const progress = frame / Math.max(1, SWIPE_FRAMES - 1);
     const x = Math.round(-900 + progress * 3720);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-      <rect width="1920" height="1080" fill="#020805"/>
-      <polygon points="${x},0 ${x + 760},0 ${x + 260},1080 ${x - 500},1080" fill="#10b981"/>
+      <rect width="1920" height="1080" fill="${palette.background}"/>
+      <polygon points="${x},0 ${x + 760},0 ${x + 260},1080 ${x - 500},1080" fill="${palette.primary}"/>
       <polygon points="${x + 210},0 ${x + 430},0 ${x - 70},1080 ${x - 290},1080" fill="#ffffff" opacity="0.92"/>
-      <polygon points="${x + 520},0 ${x + 680},0 ${x + 180},1080 ${x + 20},1080" fill="#064e3b" opacity="0.85"/>
+      <polygon points="${x + 520},0 ${x + 680},0 ${x + 180},1080 ${x + 20},1080" fill="${palette.secondary}" opacity="0.86"/>
     </svg>`;
     const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 6 }).toBuffer();
     await writeFile(path.join(frameDir, `frame-${String(frame).padStart(3, "0")}.png`), png);
@@ -589,7 +592,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     await writeFile(titlePng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltVideoCard({ fixture: metadata.fixture, mode: "TITLE", siteUrl: siteUrl() }) : await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(goalOfMonthPng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }) : await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }));
     const [lineupBytes, leagueTopBytes, leagueBottomBytes] = await Promise.all([
-      job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }) : createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
+      job.kind === "HIGHLIGHTS_ALT" ? null : createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
       job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }),
       job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }),
     ]);
@@ -650,7 +653,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
       await normaliseInput(input, source, normal, undefined, "Rendering intro"); segments.push(normal);
     }
     const swipe = content.length ? path.join(dir, "normalised", "swipe.mp4") : null;
-    if (swipe) await swipeVideo(dir, swipe);
+    if (swipe) await swipeVideo(dir, swipe, job.kind === "HIGHLIGHTS_ALT" ? "ALT_YELLOW" : "DEFAULT");
 
     const title = path.join(dir, "normalised", `${segmentIndex++}.mp4`); await cardVideo(titlePng, title, TITLE_SECONDS); segments.push(title);
     if (lineupBytes) {
