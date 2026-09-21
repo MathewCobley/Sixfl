@@ -59,6 +59,7 @@ type ChatResponse = {
       | "SELECTED_GROUP"
       | "SIXFL";
     title: string;
+    memberUserIds: string[];
   };
   conversations: ConversationItem[];
   audienceOptions: Array<{
@@ -115,10 +116,12 @@ function initials(name: string) {
 function ConversationButton({
   item,
   selected,
+  recipientHighlighted = false,
   onSelect,
 }: {
   item: ConversationItem;
   selected: boolean;
+  recipientHighlighted?: boolean;
   onSelect: (ref: string) => void;
 }) {
   const Icon =
@@ -137,7 +140,9 @@ function ConversationButton({
         "w-full rounded-2xl border p-3 text-left transition",
         selected
           ? "border-emerald-400/30 bg-emerald-500/12"
-          : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.05]",
+          : recipientHighlighted
+            ? "border-emerald-400/25 bg-emerald-500/[0.07]"
+            : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.05]",
         item.disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -145,7 +150,7 @@ function ConversationButton({
         <span
           className={[
             "mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
-            selected
+            selected || recipientHighlighted
               ? "border-emerald-400/25 bg-emerald-500/15 text-emerald-200"
               : "border-white/10 bg-white/[0.04] text-white/55",
           ].join(" ")}
@@ -155,6 +160,11 @@ function ConversationButton({
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-semibold text-white">{item.title}</span>
+            {recipientHighlighted && !selected ? (
+              <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-200/85">
+                Included
+              </span>
+            ) : null}
             {item.unreadCount > 0 ? (
               <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400 px-1.5 text-[10px] font-black text-black">
                 {item.unreadCount > 99 ? "99+" : item.unreadCount}
@@ -441,6 +451,21 @@ export default function PortalChat({
     data?.audienceOptions.filter((item) => item.isRegular).length ?? 0;
   const supportItems =
     data?.conversations.filter((item) => item.kind === "SUPPORT") ?? [];
+  const selectableRecipientIds = new Set(
+    data?.audienceOptions.map((item) => item.userId) ?? [],
+  );
+  const highlightedGroupRecipientIds = new Set(
+    selectedRef.startsWith("group:")
+      ? (data?.selected.memberUserIds ?? []).filter((userId) =>
+          selectableRecipientIds.has(userId),
+        )
+      : [],
+  );
+  function userIdFromPrivateRef(ref: string) {
+    if (ref.startsWith("player:")) return ref.slice("player:".length);
+    if (ref.startsWith("captain:")) return ref.slice("captain:".length);
+    return null;
+  }
 
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
@@ -620,14 +645,20 @@ export default function PortalChat({
               {data?.viewRole === "CAPTAIN" ? "Private messages" : "Private"}
             </div>
             <div className="mt-2 max-h-[310px] space-y-2 overflow-y-auto pr-1">
-              {privateItems.map((item) => (
-                <ConversationButton
-                  key={item.ref}
-                  item={item}
-                  selected={selectedRef === item.ref}
-                  onSelect={setSelectedRef}
-                />
-              ))}
+              {privateItems.map((item) => {
+                const userId = userIdFromPrivateRef(item.ref);
+                return (
+                  <ConversationButton
+                    key={item.ref}
+                    item={item}
+                    selected={selectedRef === item.ref}
+                    recipientHighlighted={Boolean(
+                      userId && highlightedGroupRecipientIds.has(userId),
+                    )}
+                    onSelect={setSelectedRef}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -660,7 +691,10 @@ export default function PortalChat({
                     ? "Everyone in your squad can read and reply"
                     : "Everyone in the active squad can read and reply"
                   : selectedRef.startsWith("group:")
-                    ? selectedItem?.subtitle || "Private group conversation"
+                    ? data?.viewRole === "CAPTAIN" &&
+                      highlightedGroupRecipientIds.size > 0
+                      ? `${selectedItem?.subtitle || "Private group conversation"} · recipients highlighted on the left`
+                      : selectedItem?.subtitle || "Private group conversation"
                     : selectedRef === "sixfl"
                     ? "Private between you and SIXFL"
                     : data?.viewRole === "CAPTAIN"
