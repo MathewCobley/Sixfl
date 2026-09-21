@@ -794,24 +794,25 @@ export async function createSixflTvAltHighlightsOverlay(input: {
     ${fontCss}
 
     <g transform="translate(48 38)" filter="url(#softShadow)">
-      <rect width="420" height="62" rx="9" fill="#050505" fill-opacity="0.88"/>
+      <rect width="420" height="62" rx="9" fill="#050505" fill-opacity="0.90"/>
       <g transform="translate(8 7)">${badgeImage(firstBadge, 0, 0, 48, input.fixture.firstTeam.name)}</g>
       <text x="91" y="41" text-anchor="middle" font-size="21" font-weight="900" fill="#ffffff" letter-spacing="1.2">${xml(firstCode)}</text>
       <rect x="130" y="0" width="116" height="62" rx="8" fill="#f4d000"/>
       <text x="188" y="42" text-anchor="middle" font-size="29" font-weight="900" fill="#050505">${firstScore} - ${secondScore}</text>
       <text x="289" y="41" text-anchor="middle" font-size="21" font-weight="900" fill="#ffffff" letter-spacing="1.2">${xml(secondCode)}</text>
       <g transform="translate(344 7)">${badgeImage(secondBadge, 0, 0, 48, input.fixture.secondTeam.name)}</g>
+      <rect x="0" y="66" width="420" height="30" rx="7" fill="#050505" fill-opacity="0.86"/>
+      <text x="210" y="87" text-anchor="middle" font-size="13" font-weight="850" fill="#d1d5db" letter-spacing="2.4">MATCH HIGHLIGHTS</text>
     </g>
 
     ${logoImage(sixflTvLogoBytes, 1640, 34, 220, 70, 0.93)}
 
-    ${showGoal ? `<g transform="translate(1660 972)" filter="url(#softShadow)">
-      <rect width="200" height="54" rx="9" fill="#050505" fill-opacity="0.90"/>
-      <rect width="72" height="54" rx="9" fill="#f4d000"/>
-      <rect x="63" width="12" height="54" fill="#f4d000"/>
-      <text x="36" y="36" text-anchor="middle" font-size="27" font-weight="900" fill="#050505">${input.clipNumber}</text>
-      <text x="90" y="23" font-size="12" font-weight="800" fill="#8f948f" letter-spacing="1.5">GOAL</text>
-      <text x="90" y="42" font-size="12" font-weight="800" fill="#ffffff" letter-spacing="1.5">NO.</text>
+    ${showGoal ? `<g transform="translate(1700 982)" filter="url(#softShadow)">
+      <rect width="160" height="44" rx="9" fill="#050505" fill-opacity="0.90"/>
+      <rect width="58" height="44" rx="9" fill="#f4d000"/>
+      <rect x="50" width="10" height="44" fill="#f4d000"/>
+      <text x="29" y="30" text-anchor="middle" font-size="23" font-weight="900" fill="#050505">${input.clipNumber}</text>
+      <text x="108" y="29" text-anchor="middle" font-size="14" font-weight="850" fill="#ffffff" letter-spacing="1.8">GOAL</text>
     </g>` : ""}
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
