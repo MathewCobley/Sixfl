@@ -13,6 +13,7 @@ import { extractNotificationTokens } from "@/lib/notifications/renderer";
 import { processNotificationQueue } from "@/lib/notifications/processor";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runAfterResponse } from "@/lib/server/after-response";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 
 const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
@@ -405,6 +406,7 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
           pollToken,
         },
         createdByUserId: user?.id ?? null,
+        deferThreadHistory: true,
       });
 
       if (result.skipped) {
@@ -427,7 +429,9 @@ export async function sendAllTeamsCommunicationMessageAction(formData: FormData)
   }
 
   if (queuedCount > 0) {
-    await processQueuedTeamMessages(queuedCount);
+    runAfterResponse("selected-team-notification-processing", async () => {
+      await processQueuedTeamMessages(queuedCount);
+    });
   }
 
   if (queuedCount === 0 && failedCount > 0) {
