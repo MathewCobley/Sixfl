@@ -589,7 +589,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
     await writeFile(titlePng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltVideoCard({ fixture: metadata.fixture, mode: "TITLE", siteUrl: siteUrl() }) : await createSixflTvVideoCard({ fixture: metadata.fixture, mode: "TITLE", label: metadata.label, siteUrl: siteUrl() }));
     await writeFile(goalOfMonthPng, job.kind === "HIGHLIGHTS_ALT" ? await createSixflTvAltGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }) : await createSixflTvGoalOfMonthCard({ siteUrl: siteUrl(), fixture: metadata.fixture }));
     const [lineupBytes, leagueTopBytes, leagueBottomBytes] = await Promise.all([
-      job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }) : createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
+      job.kind === "HIGHLIGHTS_ALT" ? null : createSixflTvLineupCard({ fixture: metadata.fixture, siteUrl: siteUrl() }),
       job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "TOP", siteUrl: siteUrl() }),
       job.kind === "HIGHLIGHTS_ALT" ? createSixflTvAltLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }) : createSixflTvLeagueTableCard({ fixture: metadata.fixture, page: "BOTTOM", siteUrl: siteUrl() }),
     ]);
