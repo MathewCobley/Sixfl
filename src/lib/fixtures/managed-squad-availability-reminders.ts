@@ -307,8 +307,6 @@ export async function queueManagedSquadAvailabilityReminder(
     where: {
       id: input.fixtureId,
       status: "SCHEDULED",
-      publishedAt: { not: null },
-      league: { publicAt: { lte: new Date() } },
       kickoffAt: {
         gt: new Date(),
       },
