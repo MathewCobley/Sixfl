@@ -53,6 +53,15 @@ test("Regulars and Selected Players create snapshot group conversations", () => 
   assert.match(route, /SELECTED_GROUP:\$\{teamid\}:\$\{conversationUserIds\.join\(":"\)\}/);
 });
 
+test("Regulars are listed before other private chat players", () => {
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /isRegular: member\.isRegular/);
+  assert.match(route, /const aRegular = a\.isRegular \? 1 : 0/);
+  assert.match(route, /const bRegular = b\.isRegular \? 1 : 0/);
+  assert.match(route, /if \(aRegular !== bRegular\) return bRegular - aRegular/);
+});
+
 test("group chat UI supports Regulars and multi-select selected players", () => {
   const chat = read("src/components/messaging/PortalChat.tsx");
 
