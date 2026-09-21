@@ -356,9 +356,12 @@ async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_Y
     "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void) {
+async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
   const ffmpegProgress = onProgress ? { durationSeconds: seconds, onFraction: onProgress } : undefined;
+  const videoPreset = premium ? "slow" : "veryfast";
+  const videoCrf = premium ? "10" : "21";
+  const videoTune = premium ? ["-tune", "grain"] : [];
   const fadeOutStart = Math.max(0, seconds - 0.18).toFixed(3);
   const base = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p`;
   const fade = `fade=t=in:st=0:d=0.18,fade=t=out:st=${fadeOutStart}:d=0.18`;
@@ -368,21 +371,21 @@ async function normaliseVideo(source: string, target: string, scoreBug?: string,
     if (audio) {
       await run("ffmpeg", ["-y", "-i", source, "-loop", "1", "-i", scoreBug, "-filter_complex", videoFilter,
         "-map", "[v]", "-map", "0:a:0", "-af", audioFilter, "-t", String(seconds), "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target], false, MAX_RENDER_MS, ffmpegProgress);
+        "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, ...videoTune, "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target], false, MAX_RENDER_MS, ffmpegProgress);
     } else {
       await run("ffmpeg", ["-y", "-i", source, "-loop", "1", "-i", scoreBug, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
         "-filter_complex", videoFilter, "-map", "[v]", "-map", "2:a:0", "-t", String(seconds), "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+        "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, ...videoTune, "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
     }
     return;
   }
   const videoFilter = `${base},${fade}`;
   if (audio) {
     await run("ffmpeg", ["-y", "-i", source, "-map", "0:v:0", "-map", "0:a:0", "-vf", videoFilter, "-af", audioFilter,
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+      "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, ...videoTune, "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
   } else {
     await run("ffmpeg", ["-y", "-i", source, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-map", "0:v:0", "-map", "1:a:0", "-t", String(seconds), "-shortest", "-vf", videoFilter,
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
+      "-c:v", "libx264", "-preset", videoPreset, "-crf", videoCrf, ...videoTune, "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
   }
 }
 
@@ -414,7 +417,7 @@ async function normaliseVideoSegment(
         "-filter_complex", videoFilter,
         "-map", "[v]", "-map", "0:a:0", "-af", audioFilter,
         "-t", seconds.toFixed(3), "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
       ]);
     } else {
@@ -425,7 +428,7 @@ async function normaliseVideoSegment(
         "-filter_complex", videoFilter,
         "-map", "[v]", "-map", "2:a:0",
         "-t", seconds.toFixed(3), "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+        "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
       ]);
     }
@@ -438,7 +441,7 @@ async function normaliseVideoSegment(
       "-y", "-ss", start.toFixed(3), "-t", seconds.toFixed(3), "-i", source,
       "-map", "0:v:0", "-map", "0:a:0", "-vf", videoFilter, "-af", audioFilter,
       "-t", seconds.toFixed(3), "-shortest",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
       "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
     ]);
   } else {
@@ -447,7 +450,7 @@ async function normaliseVideoSegment(
       "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
       "-map", "0:v:0", "-map", "1:a:0", "-vf", videoFilter,
       "-t", seconds.toFixed(3), "-shortest",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
       "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
     ]);
   }
@@ -472,7 +475,7 @@ async function slowMotionReplay(source: string, target: string, overlay: string)
       "-loop", "1", "-i", overlay,
       "-filter_complex", `${videoFilter};[0:a]atempo=${GOAL_REPLAY_SPEED},aresample=48000,afade=t=in:st=0:d=0.08,afade=t=out:st=${fadeOutStart}:d=0.12[a]`,
       "-map", "[v]", "-map", "[a]", "-t", outputDuration.toFixed(3), "-shortest",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
       "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
     ]);
   } else {
@@ -482,7 +485,7 @@ async function slowMotionReplay(source: string, target: string, overlay: string)
       "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
       "-filter_complex", videoFilter,
       "-map", "[v]", "-map", "2:a:0", "-t", outputDuration.toFixed(3), "-shortest",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+      "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-tune", "grain",
       "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target,
     ]);
   }
@@ -643,7 +646,7 @@ async function renderJob(job: Job, reportProgress: RenderProgressReporter) {
         if (posterLabel && candidate && (!bestPoster || candidate.score > bestPoster.score)) bestPoster = candidate;
       }
       reportProgress(progressFor(0.02), label);
-      await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label));
+      await normaliseVideo(source, normal, overlay, fraction => reportProgress(progressFor(fraction), label), job.kind !== "FULL_MATCH");
       completedMediaBytes = mediaStartBytes + mediaBytes;
       reportProgress(progressFor(1), label);
     };
@@ -1465,7 +1468,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     const voteCard = path.join(dir, "vote.mp4");
     const brandingOutro = path.join(dir, "branding-outro.mp4");
 
-    await normaliseVideo(brandingIntroSource, brandingIntro);
+    await normaliseVideo(brandingIntroSource, brandingIntro, undefined, undefined, true);
     await cardVideo(titlePng, title, GOAL_NOMINEE_TITLE_SECONDS);
 
     const replayInfo = await slowMotionReplay(source, replay, replayOverlayPng);
@@ -1482,7 +1485,7 @@ async function processGoalOfMonthClipRender(job: GoalOfMonthRenderJob) {
     );
 
     await cardVideo(votePng, voteCard, GOAL_VOTE_CARD_SECONDS);
-    await normaliseVideo(brandingOutroSource, brandingOutro);
+    await normaliseVideo(brandingOutroSource, brandingOutro, undefined, undefined, true);
 
     const segments = [
       brandingIntro,
