@@ -909,13 +909,72 @@ export async function createSixflTvAltLineupCard(input:{fixture:SixflTvGraphicFi
   return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
 }
 
-export async function createSixflTvAltLeagueTableCard(input:{fixture:SixflTvGraphicFixture;page:"TOP"|"BOTTOM";siteUrl:string}) {
-  const table=input.fixture.leagueTable;if(!table?.rows?.length)return null;
-  const midpoint=Math.ceil(table.rows.length/2), rows=input.page==="TOP"?table.rows.slice(0,midpoint):table.rows.slice(midpoint);if(!rows.length)return null;
-  const [logo,fontCss]=await Promise.all([sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
-  const body=rows.map((row,i)=>{const y=370+i*78;return `<g><text x="130" y="${y}" font-size="30" font-weight="900" fill="#f4d000">${row.position}</text><text x="210" y="${y}" font-size="32" font-weight="800" fill="#fff">${xml(fit(row.teamName,34))}</text><text x="1370" y="${y}" text-anchor="middle" font-size="28" fill="#bbb">${row.played}</text><text x="1540" y="${y}" text-anchor="middle" font-size="28" fill="#bbb">${row.goalDifference>0?"+":""}${row.goalDifference}</text><text x="1740" y="${y}" text-anchor="middle" font-size="34" font-weight="900" fill="#fff">${row.points}</text><line x1="120" y1="${y+27}" x2="1800" y2="${y+27}" stroke="#fff" stroke-opacity=".08"/></g>`}).join("");
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(logo,1515,54,300,96,.96)}<text x="110" y="130" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">CURRENT LEAGUE STANDINGS</text><text x="110" y="205" font-size="52" font-weight="900" fill="#fff">${xml(fit(table.title,55))}</text><text x="1370" y="300" text-anchor="middle" font-size="18" fill="#888">P</text><text x="1540" y="300" text-anchor="middle" font-size="18" fill="#888">GD</text><text x="1740" y="300" text-anchor="middle" font-size="18" fill="#888">PTS</text>${body}</svg>`;
-  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+export async function createSixflTvAltLeagueTableCard(input: {
+  fixture: SixflTvGraphicFixture;
+  page: "TOP" | "BOTTOM";
+  siteUrl: string;
+}) {
+  const table = input.fixture.leagueTable;
+  if (!table?.rows?.length) return null;
+  const midpoint = Math.ceil(table.rows.length / 2);
+  const rows = input.page === "TOP" ? table.rows.slice(0, midpoint) : table.rows.slice(midpoint);
+  if (!rows.length) return null;
+
+  const [logo, fontCss] = await Promise.all([sixflTvLogo(input.siteUrl), embeddedFontStyle(input.siteUrl)]);
+  const currentTeams = new Set([
+    input.fixture.firstTeam.name.toLowerCase(),
+    input.fixture.secondTeam.name.toLowerCase(),
+  ]);
+  const rowHeight = Math.min(82, Math.floor(540 / Math.max(1, rows.length)));
+  const startY = 390;
+
+  const body = rows.map((row, index) => {
+    const y = startY + index * rowHeight;
+    const highlighted = currentTeams.has(row.teamName.toLowerCase());
+    const movement =
+      row.movement === "UP" ? { symbol: "↑", colour: "#43d17d" } :
+      row.movement === "DOWN" ? { symbol: "↓", colour: "#ff5a63" } :
+      row.movement === "SAME" ? { symbol: "→", colour: "#9b9b9b" } :
+      { symbol: "•", colour: "#5f615e" };
+    const background = highlighted
+      ? `<rect x="105" y="${y - 43}" width="1710" height="${rowHeight - 5}" rx="13" fill="#f4d000" fill-opacity="0.10" stroke="#f4d000" stroke-opacity="0.55" stroke-width="2"/>`
+      : `<rect x="105" y="${y - 43}" width="1710" height="${rowHeight - 5}" rx="13" fill="#ffffff" fill-opacity="${index % 2 === 0 ? "0.040" : "0.018"}"/>`;
+    return `<g>
+      ${background}
+      <text x="150" y="${y}" font-size="30" font-weight="900" fill="${highlighted ? "#f4d000" : "#ffffff"}">${row.position}</text>
+      <text x="235" y="${y}" text-anchor="middle" font-size="31" font-weight="900" fill="${movement.colour}">${movement.symbol}</text>
+      <text x="300" y="${y}" font-size="31" font-weight="${highlighted ? "900" : "720"}" fill="#ffffff">${xml(fit(row.teamName, 34))}</text>
+      <text x="1370" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="#c8c8c8">${row.played}</text>
+      <text x="1550" y="${y}" text-anchor="middle" font-size="27" font-weight="700" fill="${row.goalDifference < 0 ? "#ff848a" : "#d8d8d8"}">${row.goalDifference > 0 ? "+" : ""}${row.goalDifference}</text>
+      <text x="1740" y="${y}" text-anchor="middle" font-size="32" font-weight="900" fill="#ffffff">${row.points}</text>
+    </g>`;
+  }).join("");
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${fontCss}
+    <rect width="1920" height="1080" fill="#070807"/>
+    <rect width="14" height="1080" fill="#f4d000"/>
+    <path d="M0 0 H250 L0 250 Z" fill="#f4d000" fill-opacity="0.07"/>
+    <path d="M1670 1080 H1920 V830 Z" fill="#f4d000" fill-opacity="0.06"/>
+    ${logoImage(logo, 1515, 45, 300, 96, 0.96)}
+
+    <text x="105" y="112" font-size="23" font-weight="800" letter-spacing="5" fill="#f4d000">CURRENT LEAGUE STANDINGS</text>
+    <text x="105" y="176" font-size="46" font-weight="900" fill="#ffffff">${xml(fit(table.title, 58))}</text>
+    <text x="105" y="222" font-size="19" font-weight="750" letter-spacing="3" fill="#7f817e">${input.page === "TOP" ? "TOP HALF" : "BOTTOM HALF"}</text>
+
+    <line x1="105" y1="275" x2="1815" y2="275" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="150" y="325" font-size="17" font-weight="800" letter-spacing="2" fill="#777a76">POS</text>
+    <text x="235" y="325" text-anchor="middle" font-size="17" font-weight="800" fill="#777a76">↕</text>
+    <text x="300" y="325" font-size="17" font-weight="800" letter-spacing="2" fill="#777a76">TEAM</text>
+    <text x="1370" y="325" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#777a76">P</text>
+    <text x="1550" y="325" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#777a76">GD</text>
+    <text x="1740" y="325" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#777a76">PTS</text>
+    ${body}
+
+    <text x="105" y="988" font-size="18" font-weight="700" fill="#70726f">↑ moved up · ↓ moved down · → unchanged</text>
+    <text x="1815" y="988" text-anchor="end" font-size="18" font-weight="750" fill="#f4d000">MATCH TEAMS HIGHLIGHTED</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
 export async function createSixflTvAltGoalOfMonthCard(input:{siteUrl:string;fixture:SixflTvGraphicFixture}) {
