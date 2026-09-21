@@ -2,12 +2,12 @@ import Link from "next/link";
 import {
   BanknotesIcon,
   CalendarDaysIcon,
+  ChartBarSquareIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ChevronRightIcon,
   ClockIcon,
-  PlayCircleIcon,
-  TrophyIcon,
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
@@ -26,11 +26,18 @@ type AppFixture = {
 };
 
 type RecentResult = {
+  id: string;
   opponent: string;
   dateLabel: string;
   goalsFor: number;
   goalsAgainst: number;
   outcome: "W" | "D" | "L";
+};
+
+type PlayerStats = {
+  appearances: number;
+  goals: number;
+  assists: number;
 };
 
 function addPreviewMembershipId(
@@ -45,13 +52,13 @@ function addPreviewMembershipId(
 function availabilityCopy(response: string | null) {
   switch (response) {
     case "AVAILABLE":
-      return { label: "You're available", tone: "text-emerald-200", dot: "bg-emerald-400" };
+      return { label: "Available", dot: "bg-emerald-400" };
     case "MAYBE":
-      return { label: "You said maybe", tone: "text-amber-100", dot: "bg-amber-300" };
+      return { label: "Maybe", dot: "bg-amber-300" };
     case "UNAVAILABLE":
-      return { label: "You're unavailable", tone: "text-red-100", dot: "bg-red-400" };
+      return { label: "Unavailable", dot: "bg-red-400" };
     default:
-      return { label: "Availability needed", tone: "text-amber-100", dot: "bg-amber-300" };
+      return { label: "Respond", dot: "bg-amber-300" };
   }
 }
 
@@ -62,31 +69,64 @@ function formatMoney(amountPence: number) {
   }).format(amountPence / 100);
 }
 
+function initials(name: string | null) {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "P";
+}
+
+function roleLabel(value: string | null) {
+  if (!value) return "Player";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function resultTone(outcome: RecentResult["outcome"]) {
+  if (outcome === "W") return "bg-emerald-500 text-white";
+  if (outcome === "L") return "bg-red-500 text-white";
+  return "bg-slate-500 text-white";
+}
+
 export default function PlayerAppHome({
   teamId,
+  teamName,
+  teamLogoUrl,
   playerName,
-  leagueName,
+  playerRole,
+  squadNumber,
+  preferredPosition,
+  playerStats,
   nextFixture,
   nextAvailability,
   outstandingPence,
   nextPaymentUrl,
-  recentResult,
+  recentResults,
   previewMembershipId,
   showTeamChat,
 }: {
   teamId: string;
+  teamName: string;
+  teamLogoUrl: string | null;
   playerName: string | null;
-  leagueName: string | null;
+  playerRole: string | null;
+  squadNumber: number | null;
+  preferredPosition: string | null;
+  playerStats: PlayerStats;
   nextFixture: AppFixture | null;
   nextAvailability: string | null;
   outstandingPence: number;
   nextPaymentUrl: string | null;
-  recentResult: RecentResult | null;
+  recentResults: RecentResult[];
   previewMembershipId: string | null;
   showTeamChat: boolean;
 }) {
-  const firstName = playerName?.trim().split(/\s+/)[0] || null;
   const availability = availabilityCopy(nextAvailability);
+  const fixturesHref = addPreviewMembershipId(
+    `/player/team/${teamId}/availability`,
+    previewMembershipId,
+  );
   const availabilityHref = addPreviewMembershipId(
     nextFixture
       ? `/player/team/${teamId}/availability?fixtureId=${encodeURIComponent(nextFixture.id)}`
@@ -109,251 +149,230 @@ export default function PlayerAppHome({
     `/player/team/${teamId}/league-results`,
     previewMembershipId,
   );
-  const tvHref = addPreviewMembershipId(
-    `/player/team/${teamId}/tv`,
-    previewMembershipId,
-  );
-  const goalHref = `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
-    previewMembershipId
-      ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
-      : ""
-  }`;
+
+  const secondaryLabel =
+    preferredPosition?.trim() || roleLabel(playerRole);
 
   return (
     <section className="player-app-home px-4 pb-28 pt-3 text-white">
-      <div className="mx-auto w-full max-w-xl">
-        <div className="mb-5">
-          <p className="text-sm font-medium text-white/50">
-            {firstName ? `Hi ${firstName}` : "Your SIXFL app"}
-          </p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight text-white">
-            Here&apos;s what matters next
-          </h1>
-          {leagueName ? (
-            <p className="mt-1 text-sm text-white/40">{leagueName}</p>
-          ) : null}
-        </div>
-
-        {nextFixture ? (
-          <section className="overflow-hidden rounded-[1.8rem] bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_42%),linear-gradient(145deg,#10271f,#0a1713)] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.32)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300/75">
-                  Next match
-                </p>
-                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-white/80">
-                  <CalendarDaysIcon className="h-4 w-4 text-emerald-300" />
-                  <span>{nextFixture.dateLabel}</span>
-                </div>
-              </div>
-              <span className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-bold text-white/55">
-                Upcoming
-              </span>
+      <div className="mx-auto w-full max-w-xl space-y-4">
+        <section className="overflow-hidden rounded-[1.7rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_35%),linear-gradient(145deg,#0b1a20,#07130f)] p-4 shadow-[0_22px_60px_rgba(0,0,0,0.32)]">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-sky-300/25 bg-black/25 text-lg font-black text-white/75">
+              {initials(playerName)}
             </div>
 
-            <div className="my-6 rounded-[1.45rem] bg-black/20 px-4 py-5">
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-black tracking-tight">
+                {playerName?.trim() || "SIXFL player"}
+              </h1>
+              <p className="mt-0.5 truncate text-sm text-white/65">{teamName}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {squadNumber ? (
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-200">
+                    #{squadNumber}
+                  </span>
+                ) : null}
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+                  {secondaryLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04]">
+              {teamLogoUrl ? (
+                <img
+                  src={teamLogoUrl}
+                  alt={`${teamName} badge`}
+                  className="h-full w-full object-contain p-1"
+                />
+              ) : (
+                <UserCircleIcon className="h-10 w-10 text-white/25" />
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/[0.07] bg-black/20 py-3">
+            <div className="px-3">
+              <div className="text-xl font-black tabular-nums">{playerStats.appearances}</div>
+              <div className="mt-0.5 text-[11px] text-white/45">Matches</div>
+            </div>
+            <div className="px-3">
+              <div className="text-xl font-black tabular-nums">{playerStats.goals}</div>
+              <div className="mt-0.5 text-[11px] text-white/45">Goals</div>
+            </div>
+            <div className="px-3">
+              <div className="text-xl font-black tabular-nums">{playerStats.assists}</div>
+              <div className="mt-0.5 text-[11px] text-white/45">Assists</div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-black/20 px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${availability.dot}`} />
+              <div className="min-w-0">
+                <div className="text-sm font-bold">{availability.label}</div>
+                <div className="truncate text-[11px] text-white/40">Next match availability</div>
+              </div>
+            </div>
+            <Link
+              href={availabilityHref}
+              className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-200"
+            >
+              <CalendarDaysIcon className="h-4 w-4" />
+              Edit
+            </Link>
+          </div>
+        </section>
+
+        {nextFixture ? (
+          <section className="overflow-hidden rounded-[1.65rem] border border-sky-400/35 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.18),transparent_38%),rgba(2,13,20,0.92)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.16em] text-sky-200/75">
+                <CalendarDaysIcon className="h-4 w-4 text-sky-300" />
+                Next match
+              </p>
+              <Link href={fixturesHref} className="text-xs font-semibold text-sky-300">
+                View all →
+              </Link>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/[0.06] bg-black/20 px-3 py-4">
               <PlayerFixtureTeams
                 homeTeam={nextFixture.homeTeam}
                 awayTeam={nextFixture.awayTeam}
               />
             </div>
 
-            {nextFixture.venueLabel ? (
-              <div className="flex items-center gap-2 text-sm text-white/55">
-                <ClockIcon className="h-4 w-4" />
-                <span>{nextFixture.venueLabel}</span>
+            <div className="mt-3 grid gap-1.5 text-xs text-white/55">
+              <div className="flex items-center gap-2">
+                <ClockIcon className="h-4 w-4 shrink-0 text-sky-200/70" />
+                <span>{nextFixture.dateLabel}</span>
               </div>
-            ) : null}
-
-            <div className="mt-4 flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${availability.dot}`} />
-              <span className={`text-sm font-semibold ${availability.tone}`}>
-                {availability.label}
-              </span>
+              {nextFixture.venueLabel ? (
+                <div className="pl-6">{nextFixture.venueLabel}</div>
+              ) : null}
             </div>
-
-            <Link
-              href={availabilityHref}
-              className="mt-5 flex min-h-12 w-full items-center justify-center rounded-2xl bg-emerald-400 px-5 text-sm font-black text-black transition active:scale-[0.99]"
-            >
-              {nextAvailability ? "Update availability" : "Confirm availability"}
-            </Link>
           </section>
         ) : (
-          <section className="rounded-[1.8rem] bg-white/[0.05] p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300/75">
+          <section className="rounded-[1.65rem] border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-200/70">
               Next match
             </p>
-            <h2 className="mt-2 text-xl font-bold">Nothing published yet</h2>
-            <p className="mt-2 text-sm leading-6 text-white/50">
-              Your next fixture will appear here as soon as SIXFL publishes it.
+            <h2 className="mt-2 text-lg font-bold">Nothing published yet</h2>
+            <p className="mt-1 text-sm text-white/45">
+              Your next fixture will appear here when SIXFL publishes it.
             </p>
           </section>
         )}
 
-        <section className="mt-6">
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">
-                Your actions
-              </p>
-              <h2 className="mt-1 text-lg font-bold">Keep yourself match-ready</h2>
+        <section className="grid grid-cols-2 gap-3">
+          <Link
+            href={fixturesHref}
+            className="rounded-[1.45rem] border border-sky-400/35 bg-sky-500/10 p-4"
+          >
+            <CalendarDaysIcon className="h-7 w-7 text-sky-300" />
+            <div className="mt-4 text-sm font-black">My Fixtures</div>
+            <div className="mt-1 text-xs leading-5 text-white/45">Upcoming matches</div>
+          </Link>
+
+          <Link
+            href={availabilityHref}
+            className="rounded-[1.45rem] border border-emerald-400/35 bg-emerald-500/10 p-4"
+          >
+            <CheckCircleIcon className="h-7 w-7 text-emerald-300" />
+            <div className="mt-4 text-sm font-black">Availability</div>
+            <div className="mt-1 text-xs leading-5 text-white/45">Set your availability</div>
+          </Link>
+
+          <Link
+            href={nextPaymentUrl || ledgerHref}
+            target={nextPaymentUrl ? "_blank" : undefined}
+            className="rounded-[1.45rem] border border-amber-400/35 bg-amber-500/10 p-4"
+          >
+            <BanknotesIcon className="h-7 w-7 text-amber-300" />
+            <div className="mt-4 text-sm font-black">Match Fees</div>
+            <div className="mt-1 text-xs leading-5 text-white/45">
+              {outstandingPence > 0 ? `${formatMoney(outstandingPence)} due` : "View payment history"}
             </div>
-          </div>
+          </Link>
 
-          <div className="overflow-hidden rounded-[1.5rem] bg-white/[0.045]">
-            <Link
-              href={availabilityHref}
-              className="flex min-h-16 items-center gap-4 border-b border-white/[0.06] px-4 py-3 active:bg-white/[0.04]"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/12 text-emerald-300">
-                <CheckCircleIcon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-white">Availability</span>
-                <span className="mt-0.5 block text-xs text-white/45">
-                  {nextFixture ? availability.label : "No fixture to respond to yet"}
-                </span>
-              </span>
-              <ChevronRightIcon className="h-5 w-5 text-white/25" />
-            </Link>
-
+          <Link
+            href={showTeamChat ? chatHref : statsHref}
+            className="rounded-[1.45rem] border border-violet-400/35 bg-violet-500/10 p-4"
+          >
             {showTeamChat ? (
-              <Link
-                href={chatHref}
-                className="flex min-h-16 items-center gap-4 border-b border-white/[0.06] px-4 py-3 active:bg-white/[0.04]"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-400/10 text-violet-200">
-                  <ChatBubbleLeftRightIcon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-white">Whole Squad Chat</span>
-                  <span className="mt-0.5 block text-xs text-white/45">
-                    Team conversation and private captain messages
-                  </span>
-                </span>
-                <ChevronRightIcon className="h-5 w-5 text-white/25" />
-              </Link>
-            ) : null}
-
-            <Link
-              href={nextPaymentUrl || ledgerHref}
-              target={nextPaymentUrl ? "_blank" : undefined}
-              className="flex min-h-16 items-center gap-4 border-b border-white/[0.06] px-4 py-3 active:bg-white/[0.04]"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-400/12 text-amber-200">
-                <BanknotesIcon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-white">Match fees</span>
-                <span className="mt-0.5 block text-xs text-white/45">
-                  {outstandingPence > 0
-                    ? `${formatMoney(outstandingPence)} waiting to be paid`
-                    : "You're all paid up"}
-                </span>
-              </span>
-              {outstandingPence > 0 ? (
-                <span className="rounded-full bg-amber-300 px-2.5 py-1 text-xs font-black text-black">
-                  Pay
-                </span>
-              ) : (
-                <ChevronRightIcon className="h-5 w-5 text-white/25" />
-              )}
-            </Link>
-
-            <Link
-              href={statsHref}
-              className="flex min-h-16 items-center gap-4 px-4 py-3 active:bg-white/[0.04]"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-400/10 text-sky-200">
-                <TrophyIcon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-white">Your stats</span>
-                <span className="mt-0.5 block text-xs text-white/45">
-                  Goals, appearances and player performance
-                </span>
-              </span>
-              <ChevronRightIcon className="h-5 w-5 text-white/25" />
-            </Link>
-          </div>
+              <ChatBubbleLeftRightIcon className="h-7 w-7 text-violet-300" />
+            ) : (
+              <ChartBarSquareIcon className="h-7 w-7 text-violet-300" />
+            )}
+            <div className="mt-4 text-sm font-black">
+              {showTeamChat ? "Messages" : "My Stats"}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-white/45">
+              {showTeamChat ? "Whole Squad Chat · admin preview" : "Goals, assists and form"}
+            </div>
+          </Link>
         </section>
 
-        <section className="mt-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">
-            Latest
-          </p>
-
-          {recentResult ? (
-            <Link
-              href={resultsHref}
-              className="mt-3 flex items-center justify-between gap-4 rounded-[1.5rem] bg-white/[0.045] px-4 py-4 active:bg-white/[0.07]"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black ${
-                      recentResult.outcome === "W"
-                        ? "bg-emerald-400/15 text-emerald-200"
-                        : recentResult.outcome === "L"
-                          ? "bg-red-400/12 text-red-100"
-                          : "bg-white/[0.08] text-white/70"
-                    }`}
-                  >
-                    {recentResult.outcome}
-                  </span>
-                  <div>
-                    <div className="truncate text-sm font-bold text-white">
-                      vs {recentResult.opponent}
-                    </div>
-                    <div className="mt-0.5 text-xs text-white/40">
-                      {recentResult.dateLabel}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="shrink-0 text-2xl font-black tabular-nums text-white">
-                {recentResult.goalsFor} - {recentResult.goalsAgainst}
-              </div>
+        <section className="overflow-hidden rounded-[1.55rem] border border-white/10 bg-white/[0.035]">
+          <div className="flex items-center justify-between px-4 pt-4">
+            <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.16em] text-white/55">
+              <ChartBarSquareIcon className="h-4 w-4 text-sky-300" />
+              Recent form
+            </p>
+            <Link href={resultsHref} className="text-xs font-semibold text-sky-300">
+              View all →
             </Link>
+          </div>
+
+          {recentResults.length ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {recentResults.map((result) => (
+                <div
+                  key={result.id}
+                  className="min-w-[7.4rem] rounded-2xl border border-white/[0.06] bg-black/20 p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${resultTone(result.outcome)}`}>
+                      {result.outcome}
+                    </span>
+                    <span className="text-sm font-black tabular-nums">
+                      {result.goalsFor} - {result.goalsAgainst}
+                    </span>
+                  </div>
+                  <div className="mt-2 truncate text-xs font-semibold text-white/70">
+                    {result.opponent}
+                  </div>
+                  <div className="mt-1 text-[11px] text-white/35">{result.dateLabel}</div>
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="mt-3 rounded-[1.5rem] bg-white/[0.045] px-4 py-4 text-sm text-white/45">
-              Your latest result will appear here.
+            <div className="px-4 pb-4 pt-3 text-sm text-white/40">
+              Your recent results will appear here.
             </div>
           )}
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <Link
-              href={tvHref}
-              className="rounded-[1.45rem] bg-fuchsia-400/[0.08] p-4 active:bg-fuchsia-400/[0.12]"
-            >
-              <PlayCircleIcon className="h-6 w-6 text-fuchsia-200" />
-              <div className="mt-4 text-sm font-bold text-white">SIXFL TV</div>
-              <div className="mt-1 text-xs leading-5 text-white/40">
-                Highlights and match clips
-              </div>
-            </Link>
-
-            <Link
-              href={goalHref}
-              className="rounded-[1.45rem] bg-emerald-400/[0.08] p-4 active:bg-emerald-400/[0.12]"
-            >
-              <TrophyIcon className="h-6 w-6 text-emerald-200" />
-              <div className="mt-4 text-sm font-bold text-white">Goal of the Month</div>
-              <div className="mt-1 text-xs leading-5 text-white/40">
-                Watch nominees and vote
-              </div>
-            </Link>
-          </div>
         </section>
 
-        <div className="mt-6 flex items-center justify-center gap-4 text-xs text-white/35">
-          <Link href={resultsHref} className="py-2">League results</Link>
-          <span>·</span>
-          <Link href="/player/referrals" className="py-2">Refer a team</Link>
-          <span>·</span>
-          <Link href="/api/auth/signout" className="py-2">Sign out</Link>
-        </div>
+        <Link
+          href="/player/referrals"
+          className="flex items-center justify-between gap-4 rounded-[1.55rem] border border-emerald-400/35 bg-[linear-gradient(120deg,rgba(16,185,129,0.16),rgba(4,120,87,0.10))] p-4"
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-200/70">
+              Team referrals
+            </p>
+            <h2 className="mt-1 text-base font-black">Refer a new team and earn £75</h2>
+            <p className="mt-1 text-xs leading-5 text-emerald-50/55">
+              Share your private referral link.
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-emerald-400 px-3 py-2 text-xs font-black text-black">
+            Get link
+            <ChevronRightIcon className="h-4 w-4" />
+          </span>
+        </Link>
       </div>
     </section>
   );
