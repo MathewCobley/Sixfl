@@ -4,17 +4,22 @@ const fs = require("node:fs");
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("Whole Squad Chat replaces Team Chat in user-facing chat surfaces", () => {
+test("SIXFL Chat brands the messaging feature while Whole Squad Chat remains the team-wide audience", () => {
   const chat = read("src/components/messaging/PortalChat.tsx");
   const helper = read("src/lib/portal-messaging.ts");
   const captainLayout = read("src/app/captain/team/[teamid]/layout.tsx");
   const playerHome = read("src/components/player/PlayerAppHome.tsx");
+  const captainPage = read("src/app/captain/team/[teamid]/chat/page.tsx");
+  const playerPage = read("src/app/player/team/[teamid]/chat/page.tsx");
   const adminPanel = read("src/components/admin/messaging/AdminAppMessagingPanel.tsx");
 
+  assert.match(chat, /SIXFL Chat/);
   assert.match(chat, /Whole Squad Chat/);
   assert.match(helper, /title: "Whole Squad Chat"/);
-  assert.match(captainLayout, /label: "Whole Squad Chat"/);
-  assert.match(playerHome, /Whole Squad Chat/);
+  assert.match(captainLayout, /label: "SIXFL Chat"/);
+  assert.match(playerHome, />SIXFL Chat<\/span>/);
+  assert.match(captainPage, /title: "SIXFL Chat \| SIXFL"/);
+  assert.match(playerPage, /title: "SIXFL Chat \| SIXFL"/);
   assert.match(adminPanel, /Whole Squad Chat control centre/);
 });
 
