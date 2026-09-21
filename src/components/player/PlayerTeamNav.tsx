@@ -8,7 +8,7 @@ import {
   ChatBubbleLeftRightIcon,
   EllipsisHorizontalCircleIcon,
   HomeIcon,
-  PlayCircleIcon,
+  BanknotesIcon,
 } from "@heroicons/react/24/outline";
 
 type PlayerNavTab = {
@@ -131,10 +131,10 @@ const appTabs = (
         icon: ChartBarSquareIcon,
       }]),
   {
-    href: addPreviewMembershipId(`/player/team/${teamId}/tv`, previewMembershipId),
-    label: "TV",
+    href: addPreviewMembershipId(`/player/team/${teamId}/ledger`, previewMembershipId),
+    label: "Payments",
     exact: false,
-    icon: PlayCircleIcon,
+    icon: BanknotesIcon,
   },
   {
     href: addPreviewMembershipId(`/player/team/${teamId}/more`, previewMembershipId),
