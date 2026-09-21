@@ -227,7 +227,7 @@ export default function PlayerAppHome({
                   <ChatBubbleLeftRightIcon className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-white">Whole Squad Chat</span>
+                  <span className="block text-sm font-bold text-white">SIXFL Chat</span>
                   <span className="mt-0.5 block text-xs text-white/45">
                     Team conversation and private captain messages
                   </span>
