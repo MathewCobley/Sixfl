@@ -22,7 +22,7 @@ test("player PWA home follows the approved compact dashboard hierarchy", () => {
   assert.match(home, /Refer a new team and earn £75/);
 });
 
-test("live players keep chat dark-launched while admin preview can see the Messages tile", () => {
+test("live players keep chat dark-launched and admin player preview matches the live player", () => {
   const home = read("src/components/player/PlayerAppHome.tsx");
   const page = read("src/app/player/team/[teamid]/page.tsx");
   const nav = read("src/components/player/PlayerTeamNav.tsx");
@@ -30,7 +30,7 @@ test("live players keep chat dark-launched while admin preview can see the Messa
   assert.match(home, /showTeamChat/);
   assert.match(home, /title: "SIXFL Chat"/);
   assert.match(home, /title: "My Stats"/);
-  assert.match(page, /showTeamChat=\{user\.role === UserRole\.ADMIN\}/);
+  assert.match(page, /showTeamChat=\{user\.role === UserRole\.ADMIN && !previewMembership\}/);
   assert.match(nav, /showTeamChat/);
 });
 
@@ -90,4 +90,53 @@ test("player appearances are backfilled from reliable completed-match evidence",
   assert.match(migration, /FixtureSelection_sync_inferred_appearance/);
   assert.match(migration, /PlayerMatchFee_sync_inferred_appearance/);
   assert.doesNotMatch(migration, /'OPEN', 'PAID', 'WAIVED'/);
+});
+
+
+test("player PWA header stays clean and team badges render without white discs", () => {
+  const header = read("src/components/player/PlayerPwaPortalHeader.tsx");
+  const home = read("src/components/player/PlayerAppHome.tsx");
+
+  assert.doesNotMatch(header, /leagueName|teamLabel|season/);
+  assert.doesNotMatch(header, /rounded-full border border-white\/10 bg-white/);
+  assert.doesNotMatch(home, /rounded-full border border-white\/10 bg-white/);
+  assert.doesNotMatch(home, /rounded-full bg-white/);
+});
+
+test("recent form includes each opponent badge without adding opponent-name clutter", () => {
+  const home = read("src/components/player/PlayerAppHome.tsx");
+  const page = read("src/app/player/team/[teamid]/page.tsx");
+
+  assert.match(home, /opponentLogoUrl/);
+  assert.match(home, /max-h-4 max-w-4 object-contain/);
+  assert.match(page, /opponentLogoUrl: isHome \? fixture\.awayTeam\.logoUrl : fixture\.homeTeam\.logoUrl/);
+  assert.match(page, /homeTeam: \{ select: \{ name: true, logoUrl: true \} \}/);
+  assert.match(page, /awayTeam: \{ select: \{ name: true, logoUrl: true \} \}/);
+});
+
+test("next fixture selection status comes from FixtureSelection and uses safe player wording", () => {
+  const home = read("src/components/player/PlayerAppHome.tsx");
+  const page = read("src/app/player/team/[teamid]/page.tsx");
+
+  assert.match(page, /prisma\.fixtureSelection\.findFirst/);
+  assert.match(page, /selectionStatus: true/);
+  assert.match(page, /nextSelection\?\.selectionStatus === "SELECTED"/);
+  assert.match(page, /nextSelection\?\.selectionStatus === "NOT_SELECTED"/);
+  assert.match(home, /label: "SELECTED"/);
+  assert.match(home, /label: "NOT SELECTED YET"/);
+  assert.match(home, /label: "NOT IN SQUAD"/);
+});
+
+test("player Home uses shared portal-chat unread logic for the previewed player's identity", () => {
+  const home = read("src/components/player/PlayerAppHome.tsx");
+  const page = read("src/app/player/team/[teamid]/page.tsx");
+  const unread = read("src/lib/portal-messaging.ts");
+
+  assert.match(unread, /export async function getPortalChatUnreadCount/);
+  assert.match(page, /getPortalChatUnreadCount/);
+  assert.match(page, /userId: membership\.user\.id/);
+  assert.match(page, /role: membership\.role/);
+  assert.match(home, /unreadChatCount/);
+  assert.match(home, /unread message/);
+  assert.match(home, /unreadChatCount > 99 \? "99\+" : unreadChatCount/);
 });
