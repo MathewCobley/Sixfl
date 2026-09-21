@@ -23,7 +23,10 @@ import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { ensurePlayerMatchPerformanceTable } from "@/lib/playerMatchPerformances";
-import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+import {
+  getTeamMemberProfilesByTeamMemberIds,
+  type TeamMemberProfile,
+} from "@/lib/teamMemberProfiles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -181,6 +184,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       id: true,
       email: true,
       name: true,
+      image: true,
       role: true,
       teamMembers: {
         where: { teamId: teamid },
@@ -369,7 +373,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         })
       : null;
 
-  let playerProfile = null as Awaited<ReturnType<typeof getTeamMemberProfilesByTeamMemberIds>> extends Map<string, infer T> ? T | null : null;
+  let playerProfile: TeamMemberProfile | null = null;
   let playerAppStats = { appearances: 0, goals: 0, assists: 0 };
   if (membership) {
     await ensurePlayerMatchPerformanceTable();
@@ -389,33 +393,6 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     playerAppStats = statRows[0] ?? playerAppStats;
   }
 
-  const recentResultFixture =
-    recentFixtures.find((fixture) => Boolean(fixture.result)) ?? null;
-  const recentResult = recentResultFixture?.result
-    ? (() => {
-        const isHome = recentResultFixture.homeTeamId === teamid;
-        const goalsFor = isHome
-          ? recentResultFixture.result.homeScore
-          : recentResultFixture.result.awayScore;
-        const goalsAgainst = isHome
-          ? recentResultFixture.result.awayScore
-          : recentResultFixture.result.homeScore;
-        return {
-          opponent: isHome
-            ? recentResultFixture.awayTeam.name
-            : recentResultFixture.homeTeam.name,
-          dateLabel: formatFixtureDate(recentResultFixture.kickoffAt),
-          goalsFor,
-          goalsAgainst,
-          outcome:
-            goalsFor > goalsAgainst
-              ? ("W" as const)
-              : goalsFor < goalsAgainst
-                ? ("L" as const)
-                : ("D" as const),
-        };
-      })()
-    : null;
   const recentResults = recentFixtures.flatMap((fixture) => {
     if (!fixture.result) return [];
     const isHome = fixture.homeTeamId === teamid;
