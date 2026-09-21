@@ -64,3 +64,13 @@ test("player PWA CSS never hides the dashboard just because it contains the refe
     /section:has\(a\[href=["']\\\/player\\\/referrals["']\]\)/,
   );
 });
+
+
+test("player PWA keeps the first-screen actions compact and recent form tidy", () => {
+  const home = read("src/components/player/PlayerAppHome.tsx");
+
+  assert.match(home, /min-h-\[4\.75rem\]/);
+  assert.match(home, /grid grid-cols-5 gap-1\.5/);
+  assert.match(home, /recentResults\.slice\(0, 5\)/);
+  assert.doesNotMatch(home, /min-w-\[8\.2rem\]/);
+});
