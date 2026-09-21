@@ -11,7 +11,7 @@ test("portal push stays quiet by default", () => {
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
 
   assert.match(chat, /useState\(false\).*notifyTeam|notifyTeam.*useState\(false\)/s);
-  assert.match(chat, /Notify team on their phone/);
+  assert.match(chat, /Notify whole squad on their phone/);
   assert.match(chat, /Off by default/);
   assert.match(chat, /normal chat stays quiet/i);
 

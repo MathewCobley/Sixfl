@@ -10,7 +10,7 @@ test("admin communications includes the dark-launch app messaging centre", () =>
 
   assert.match(page, /getAdminAppMessagingDashboard/);
   assert.match(page, /<AdminAppMessagingPanel data=\{appMessaging\} \/>/);
-  assert.match(panel, /Team Chat control centre/);
+  assert.match(panel, /Whole Squad Chat control centre/);
   assert.match(panel, /Dark launch/);
   assert.match(panel, /SMS and email remain unchanged during the pilot/);
   assert.match(panel, /Recent app messages/);

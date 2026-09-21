@@ -302,14 +302,24 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
   for (const item of appMessages) {
     const sender = personName(item.senderUser ?? {});
     const teamName = item.conversation.team.name;
-    const privateChat =
-      item.conversation.type === PortalConversationType.CAPTAIN_PLAYER;
+    const conversationLabel =
+      item.conversation.type === PortalConversationType.CAPTAIN_PLAYER
+        ? "Private captain chat"
+        : item.conversation.type === PortalConversationType.CAPTAIN_CAPTAIN
+          ? "Private captain chat"
+          : item.conversation.type === PortalConversationType.REGULARS
+            ? "Regulars"
+            : item.conversation.type === PortalConversationType.SELECTED_GROUP
+              ? "Selected Players"
+              : item.conversation.type === PortalConversationType.SIXFL
+                ? "Message SIXFL"
+                : "Whole Squad Chat";
 
     activity.push({
       id: `app-message:${item.id}`,
       kind: "APP_MESSAGE",
       title: `${sender} sent an app message · ${teamName}`,
-      detail: `${privateChat ? "Private captain chat" : "Team chat"} · ${preview(item.body, 100)}`,
+      detail: `${conversationLabel} · ${preview(item.body, 100)}`,
       occurredAt: item.createdAt,
       href: "/admin/messaging#app-messaging",
     });

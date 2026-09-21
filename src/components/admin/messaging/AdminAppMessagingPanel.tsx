@@ -76,10 +76,10 @@ export default function AdminAppMessagingPanel({
           </div>
 
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-            Team Chat control centre
+            Whole Squad Chat control centre
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
-            Monitor app conversations and push delivery while Team Chat remains hidden from normal player and captain navigation.
+            Monitor app conversations and push delivery while Whole Squad Chat remains hidden from normal player and captain navigation.
           </p>
         </div>
 

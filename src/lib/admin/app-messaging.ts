@@ -51,6 +51,7 @@ function preview(value: string, max = 120) {
 
 function chatHref(input: {
   teamId: string;
+  conversationId: string;
   type: PortalConversationType;
   participantUserId: string | null;
   conversationKey: string;
@@ -69,6 +70,15 @@ function chatHref(input: {
     const targetCaptainId = captainIds[1] || captainIds[0] || "";
     return `/captain/team/${input.teamId}/chat?conversation=${encodeURIComponent(
       `captain:${targetCaptainId}`,
+    )}`;
+  }
+
+  if (
+    input.type === PortalConversationType.REGULARS ||
+    input.type === PortalConversationType.SELECTED_GROUP
+  ) {
+    return `/captain/team/${input.teamId}/chat?conversation=${encodeURIComponent(
+      `group:${input.conversationId}`,
     )}`;
   }
 
@@ -190,6 +200,9 @@ export async function getAdminAppMessagingDashboard(
                 lastReadAt: true,
               },
             },
+            members: {
+              select: { userId: true },
+            },
           },
         },
       },
@@ -269,6 +282,9 @@ export async function getAdminAppMessagingDashboard(
             .map((member) => member.userId)
         : conversation.type === PortalConversationType.CAPTAIN_CAPTAIN
           ? conversation.conversationKey.split(":").slice(-2)
+          : conversation.type === PortalConversationType.REGULARS ||
+            conversation.type === PortalConversationType.SELECTED_GROUP
+          ? conversation.members.map((member) => member.userId)
           : conversation.type === PortalConversationType.SIXFL
             ? conversation.participantUserId
               ? [conversation.participantUserId]
@@ -303,9 +319,13 @@ export async function getAdminAppMessagingDashboard(
         ? `Private · ${displayName(conversation.participantUser)} ↔ captain`
         : conversation.type === PortalConversationType.CAPTAIN_CAPTAIN
           ? "Private · captain ↔ captain"
-          : conversation.type === PortalConversationType.SIXFL
-            ? "Message SIXFL"
-            : "Team chat";
+          : conversation.type === PortalConversationType.REGULARS
+          ? "Regulars"
+          : conversation.type === PortalConversationType.SELECTED_GROUP
+            ? "Selected Players"
+            : conversation.type === PortalConversationType.SIXFL
+              ? "Message SIXFL"
+              : "Whole Squad Chat";
 
     return {
       id: message.id,
@@ -319,6 +339,7 @@ export async function getAdminAppMessagingDashboard(
       unreadRecipientCount,
       href: chatHref({
         teamId: conversation.teamId,
+        conversationId: conversation.id,
         type: conversation.type,
         participantUserId: conversation.participantUserId,
         conversationKey: conversation.conversationKey,
