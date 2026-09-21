@@ -156,6 +156,7 @@ export default function PlayerTeamNav({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const previewMembershipId = searchParams.get("previewMembershipId")?.trim() || null;
+  const effectiveShowTeamChat = showTeamChat && !previewMembershipId;
 
   return (
     <>
@@ -177,7 +178,7 @@ export default function PlayerTeamNav({
         aria-label="Player team sections"
         className="player-web-nav mx-auto mt-4 flex w-full max-w-6xl gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {tabs(teamId, previewMembershipId, unreadChatCount, showTeamChat).map((tab) => {
+        {tabs(teamId, previewMembershipId, unreadChatCount, effectiveShowTeamChat).map((tab) => {
           const active = isActivePath(pathname, tab);
 
           return (
@@ -212,7 +213,7 @@ export default function PlayerTeamNav({
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 px-1 pt-1.5">
-          {appTabs(teamId, previewMembershipId, unreadChatCount, showTeamChat).map((tab) => {
+          {appTabs(teamId, previewMembershipId, unreadChatCount, effectiveShowTeamChat).map((tab) => {
             const active = isActivePath(pathname, tab);
             const Icon = tab.icon;
 
