@@ -57,8 +57,7 @@ export default function PlayerPwaPortalHeader({
         }
 
         body:has(.player-pwa-mode) .player-temporary-pass-launcher,
-        body:has(.player-pwa-mode) .player-team-layout main section.sticky.z-50,
-        body:has(.player-pwa-mode) .player-team-layout main section:has(a[href="/player/referrals"]) {
+        body:has(.player-pwa-mode) .player-team-layout main section.sticky.z-50 {
           display: none !important;
         }
 
