@@ -172,13 +172,15 @@ test('player PWA home uses an explicit app/web gate and real SIXFL branding', ()
   const pwaHeader = read('src/components/player/PlayerPwaPortalHeader.tsx');
   const modeGate = read('src/components/player/PlayerPwaModeOnly.tsx');
   const previewRoute = read('src/app/(admin)/admin/teams/[id]/players/[membershipId]/preview/page.tsx');
+  const pwaViewerPicker = read('src/components/admin/pwa/PwaViewerPicker.tsx');
 
   assert.match(appHome, /className="player-app-home px-4/);
   assert.doesNotMatch(appHome, /className="player-app-home hidden/);
   assert.match(page, /<PlayerPwaModeOnly mode="app">\s*<PlayerAppHome/);
   assert.match(page, /<PlayerPwaModeOnly mode="web">\s*<div className="player-web-home/);
   assert.match(modeGate, /resolvedMode === mode/);
-  assert.match(previewRoute, /pwaPreview=1/);
+  assert.doesNotMatch(previewRoute, /pwaPreview=1/);
+  assert.match(pwaViewerPicker, /previewMembershipId=.*pwaPreview=1/);
   assert.match(pwaHeader, /src="\/logo2\.png"/);
   assert.doesNotMatch(pwaHeader, /player-pwa-controller\) \.player-app-home/);
 });

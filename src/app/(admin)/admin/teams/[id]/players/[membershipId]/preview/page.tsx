@@ -23,6 +23,6 @@ export default async function AdminPlayerDashboardPreviewPage({
   const { id: teamid, membershipId } = await params;
 
   redirect(
-    `/player/team/${teamid}?previewMembershipId=${encodeURIComponent(membershipId)}&pwaPreview=1`,
+    `/player/team/${teamid}?previewMembershipId=${encodeURIComponent(membershipId)}`,
   );
 }

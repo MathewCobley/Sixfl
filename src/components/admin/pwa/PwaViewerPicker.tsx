@@ -223,7 +223,7 @@ export default function PwaViewerPicker({
 
     if (portal === "player" && playerTeamId && playerMembershipId) {
       onPreview(
-        `/admin/teams/${playerTeamId}/players/${playerMembershipId}/preview`,
+        `/player/team/${playerTeamId}?previewMembershipId=${encodeURIComponent(playerMembershipId)}&pwaPreview=1`,
       );
       return;
     }
