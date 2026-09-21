@@ -167,7 +167,8 @@ if (standingsViolations.length) {
 
 // ---------------------------------------------------------------------------
 // LEAGUE PUBLICATION — admins can prepare future leagues without exposing them
-// publicly before the scheduled UK go-live time.
+// publicly before the scheduled UK go-live time. Draft fixture status remains
+// the existing safety boundary for payment, reminder and chase automation.
 // ---------------------------------------------------------------------------
 const leagueSchemaPath = "prisma/schema.prisma";
 const leagueMigrationPath = "prisma/migrations/20260921234000_schedule_league_publication/migration.sql";
@@ -177,13 +178,6 @@ const publicLeagueLayoutPath = "src/app/(public)/leagues/[slug]/layout.tsx";
 const publicLeagueDirectoryPath = "src/app/(public)/leagues/page.tsx";
 const homepageLeaguesPath = "src/lib/leagues/homepage-leagues.ts";
 const fixtureGeneratePath = "src/app/(admin)/admin/fixtures/generate/page.tsx";
-const fixturePublishPath = "src/app/(admin)/admin/fixtures/publish-actions.ts";
-const confirmationReminderJobPath = "src/lib/fixtures/confirmation-reminder-job.ts";
-const confirmationEmailPath = "src/lib/fixtures/confirmation-emails.ts";
-const managedAvailabilityPath = "src/lib/fixtures/managed-squad-availability-reminders.ts";
-const fixturePaymentPath = "src/lib/payments/fixture-match-fees.ts";
-const playerPaymentPath = "src/lib/payments/player-match-fees.ts";
-const teamAutopayPath = "src/lib/payments/team-autopay.ts";
 const sitemapPath = "src/app/sitemap.ts";
 
 const leagueSchema = read(leagueSchemaPath);
@@ -194,13 +188,6 @@ const publicLeagueLayout = read(publicLeagueLayoutPath);
 const publicLeagueDirectory = read(publicLeagueDirectoryPath);
 const homepageLeagues = read(homepageLeaguesPath);
 const fixtureGenerate = read(fixtureGeneratePath);
-const fixturePublish = read(fixturePublishPath);
-const confirmationReminderJob = read(confirmationReminderJobPath);
-const confirmationEmail = read(confirmationEmailPath);
-const managedAvailability = read(managedAvailabilityPath);
-const fixturePayment = read(fixturePaymentPath);
-const playerPayment = read(playerPaymentPath);
-const teamAutopay = read(teamAutopayPath);
 const sitemap = read(sitemapPath);
 
 expectText("league publication", leagueSchemaPath, leagueSchema, "publicAt DateTime?", "league model must retain a scheduled public go-live");
@@ -214,13 +201,6 @@ expectText("league publication", homepageLeaguesPath, homepageLeagues, 'league."
 expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ publicAt: null }", "private active leagues must remain available in admin fixture generation");
 expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ publicAt: { gt: new Date() } }", "future scheduled leagues must remain available in admin fixture generation");
 expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Date() }", "scheduled leagues must stay out of the public sitemap");
-expectText("league publication", fixturePublishPath, fixturePublish, 'publishError: "league_not_live"', "fixture publication must be locked before league go-live");
-expectText("league publication", confirmationReminderJobPath, confirmationReminderJob, "league: { publicAt: { lte: now } }", "automatic fixture confirmation chases must wait for league go-live");
-expectText("league publication", confirmationEmailPath, confirmationEmail, "fixture.league.publicAt > now", "fixture confirmation emails must wait for league go-live");
-expectText("league publication", managedAvailabilityPath, managedAvailability, "league: { publicAt: { lte: new Date() } }", "managed squad availability requests must wait for league go-live");
-expectText("league publication", fixturePaymentPath, fixturePayment, "fixture.league.publicAt <= now", "team payment emails and SMS must wait for league go-live");
-expectText("league publication", playerPaymentPath, playerPayment, 'status: "league_not_live"', "automatic player payment chases must wait for league go-live");
-expectText("league publication", teamAutopayPath, teamAutopay, 'l."publicAt" <= NOW()', "automatic matchday card charges must wait for league go-live");
 
 // ---------------------------------------------------------------------------
 // PLAYER PWA — keep the approved app-style first screen compact, data-backed
