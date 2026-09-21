@@ -284,7 +284,7 @@ export async function generateMetadata({
   const { slug } = await params;
 
   const league = await prisma.league.findFirst({
-    where: { slug, isActive: true },
+    where: { slug, isActive: true, publicAt: { lte: new Date() } },
     select: {
       name: true,
       area: true,
@@ -324,6 +324,7 @@ export default async function LeagueLandingPage({ params }: PageProps) {
     where: {
       slug,
       isActive: true,
+      publicAt: { lte: new Date() },
     },
     select: {
       id: true,
