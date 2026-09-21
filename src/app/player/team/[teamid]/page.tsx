@@ -190,7 +190,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
-          user: { select: { email: true, name: true, image: true } },
+          user: { select: { id: true, email: true, name: true, image: true } },
           team: { select: teamSelect },
         },
         take: 1,
@@ -211,7 +211,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
         select: {
           id: true,
           role: true,
-          user: { select: { email: true, name: true, image: true } },
+          user: { select: { id: true, email: true, name: true, image: true } },
           team: { select: teamSelect },
         },
       })
