@@ -84,36 +84,31 @@ export default function PlayerPwaPortalHeader({
         className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#07130f]/95 px-4 pb-3 backdrop-blur-xl"
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
       >
-        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+        <div className="mx-auto grid w-full max-w-xl grid-cols-[1fr_auto_1fr] items-center gap-3">
           <Image
             src="/logo2.png"
             alt="SIXFL"
             width={180}
             height={48}
             priority
-            className="h-6 w-auto object-contain"
+            className="h-7 w-auto object-contain"
           />
-          <div className="h-5 w-px bg-white/10" />
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
+          <div className="text-sm font-black tracking-tight text-white">
+            Player Portal
+          </div>
+          <div className="flex justify-end">
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06]">
               {teamLogoUrl ? (
                 <img
                   src={teamLogoUrl}
                   alt={`${teamName} badge`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain p-0.5"
                 />
               ) : (
                 <span className="text-[11px] font-black text-emerald-100">
                   {initials}
                 </span>
               )}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-white">{teamName}</div>
-              <div className="truncate text-[11px] text-white/40">
-                {leagueName ?? "Player"}
-                {season ? ` · ${season}` : ""}
-              </div>
             </div>
           </div>
         </div>
