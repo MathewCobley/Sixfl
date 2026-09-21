@@ -22,6 +22,7 @@ import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contac
 import { createPlayerInterestResponseToken } from "@/lib/player-interest/response-token";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { runAfterResponse } from "@/lib/server/after-response";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 
 const POLL_OPTIONS_PLACEHOLDER = "{{pollOptions}}";
@@ -379,81 +380,111 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
     redirect(appendRedirectParams(from, { error: "Poll templates can only be sent to the team contact. Untick squad/prospect recipients before sending a poll." }));
   }
 
-  let queuedCount = 0;
-  let skippedMissingContactCount = 0;
-  let duplicateBlockedCount = 0;
-
-  for (const { parsed } of parsedRecipients) {
-    const recipientContext = await getTeamCommunicationRecipientContext({
-      teamId,
-      recipientType: parsed.type,
-      recipientId: parsed.id || null,
-    });
-
-    if (!recipientContext) continue;
-    if (channel === NotificationChannel.EMAIL && !recipientContext.recipient.email?.trim()) {
-      skippedMissingContactCount += 1;
-      continue;
-    }
-    if (channel === NotificationChannel.SMS && !recipientContext.recipient.phone?.trim()) {
-      skippedMissingContactCount += 1;
-      continue;
-    }
-
-    const urls = responseUrls({ teamId, type: parsed.type, id: parsed.id });
-    const variables = {
-      firstName: firstName(recipientContext.displayName),
-      fullName: recipientContext.displayName,
-      teamName: recipientContext.emailBranding.teamName,
-      leagueName: recipientContext.emailBranding.leagueName ?? "",
-      claimCode,
-      claimLink,
-      captainDashboardUrl,
-      yesResponseUrl: urls.yesResponseUrl,
-      noResponseUrl: urls.noResponseUrl,
-    };
-    const isTransactional = !isMarketingMessage;
-    const sendFingerprint = buildSendFingerprint({
-      teamId,
-      recipientId: recipientContext.recipient.id,
-      channel,
-      subject: channel === NotificationChannel.EMAIL ? subject : null,
-      body,
-      templateId,
-      templateKey,
-      isMarketingMessage,
-      variables,
-    });
-
-    const recentMatchingDispatch = await findRecentMatchingDispatch({
-      recipientId: recipientContext.recipient.id,
-      channel,
-      createdByUserId,
-      sendFingerprint,
-    });
-
-    if (recentMatchingDispatch) {
-      duplicateBlockedCount += 1;
-      continue;
-    }
-
-    if (parsed.type === "team" && usesPoll) {
-      const result = await sendTeamBroadcastMessage({
+  const recipientResults = await Promise.all(
+    parsedRecipients.map(async ({ parsed }) => {
+      const recipientContext = await getTeamCommunicationRecipientContext({
         teamId,
+        recipientType: parsed.type,
+        recipientId: parsed.id || null,
+      });
+
+      if (!recipientContext) return "invalid" as const;
+      if (channel === NotificationChannel.EMAIL && !recipientContext.recipient.email?.trim()) {
+        return "skipped" as const;
+      }
+      if (channel === NotificationChannel.SMS && !recipientContext.recipient.phone?.trim()) {
+        return "skipped" as const;
+      }
+
+      const urls = responseUrls({ teamId, type: parsed.type, id: parsed.id });
+      const variables = {
+        firstName: firstName(recipientContext.displayName),
+        fullName: recipientContext.displayName,
+        teamName: recipientContext.emailBranding.teamName,
+        leagueName: recipientContext.emailBranding.leagueName ?? "",
+        claimCode,
+        claimLink,
+        captainDashboardUrl,
+        yesResponseUrl: urls.yesResponseUrl,
+        noResponseUrl: urls.noResponseUrl,
+      };
+      const isTransactional = !isMarketingMessage;
+      const sendFingerprint = buildSendFingerprint({
+        teamId,
+        recipientId: recipientContext.recipient.id,
         channel,
         subject: channel === NotificationChannel.EMAIL ? subject : null,
         body,
         templateId,
         templateKey,
-        ctaLabel,
-        ctaUrl,
-        pollId: selectedPollId,
-        origin: "team_communications_hub",
-        originLabel: isTransactional
-          ? "Sent from communications hub as service message"
-          : "Sent from communications hub as marketing message",
+        isMarketingMessage,
+        variables,
+      });
+
+      const recentMatchingDispatch = await findRecentMatchingDispatch({
+        recipientId: recipientContext.recipient.id,
+        channel,
+        createdByUserId,
+        sendFingerprint,
+      });
+
+      if (recentMatchingDispatch) return "duplicate" as const;
+
+      if (parsed.type === "team" && usesPoll) {
+        const result = await sendTeamBroadcastMessage({
+          teamId,
+          channel,
+          subject: channel === NotificationChannel.EMAIL ? subject : null,
+          body,
+          templateId,
+          templateKey,
+          ctaLabel,
+          ctaUrl,
+          pollId: selectedPollId,
+          origin: "team_communications_hub",
+          originLabel: isTransactional
+            ? "Sent from communications hub as service message"
+            : "Sent from communications hub as marketing message",
+          metadata: {
+            sendFingerprint,
+            isMarketingMessage,
+            isTransactional,
+            yesResponseUrl: urls.yesResponseUrl,
+            noResponseUrl: urls.noResponseUrl,
+            bulkRecipientCount: recipientValues.length,
+            ...recipientContext.metadata,
+          },
+          variables,
+          createdByUserId,
+          deferThreadHistory: true,
+        });
+
+        return result.skipped ? "skipped" as const : "queued" as const;
+      }
+
+      const dispatch = await queueDirectNotification({
+        recipientId: recipientContext.recipient.id,
+        channel,
+        audience: recipientContext.audience,
+        subject: channel === NotificationChannel.EMAIL ? subject : null,
+        body,
+        variables,
+        isTransactional,
+        sourceType: recipientContext.sourceType,
+        sourceId: recipientContext.sourceId,
+        emailBranding: channel === NotificationChannel.EMAIL ? recipientContext.emailBranding : undefined,
+        emailCta: channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl ? { label: ctaLabel, url: ctaUrl } : undefined,
         metadata: {
+          origin: "team_communications_hub",
+          originLabel: isTransactional
+            ? "Sent from communications hub as service message"
+            : "Sent from communications hub as marketing message",
           sendFingerprint,
+          teamId,
+          templateId,
+          templateKey,
+          ctaLabel,
+          ctaUrl,
           isMarketingMessage,
           isTransactional,
           yesResponseUrl: urls.yesResponseUrl,
@@ -461,74 +492,43 @@ export async function sendTeamCommunicationBulkMessageAction(formData: FormData)
           bulkRecipientCount: recipientValues.length,
           ...recipientContext.metadata,
         },
-        variables,
         createdByUserId,
       });
 
-      if (result.skipped) skippedMissingContactCount += 1;
-      else queuedCount += 1;
-      continue;
-    }
+      if (
+        dispatch.status === NotificationDispatchStatus.QUEUED &&
+        (await cancelNewerDuplicateDispatch({
+          dispatchId: dispatch.id,
+          recipientId: recipientContext.recipient.id,
+          channel,
+          createdByUserId,
+          sendFingerprint,
+        }))
+      ) {
+        return "duplicate" as const;
+      }
 
-    const dispatch = await queueDirectNotification({
-      recipientId: recipientContext.recipient.id,
-      channel,
-      audience: recipientContext.audience,
-      subject: channel === NotificationChannel.EMAIL ? subject : null,
-      body,
-      variables,
-      isTransactional,
-      sourceType: recipientContext.sourceType,
-      sourceId: recipientContext.sourceId,
-      emailBranding: channel === NotificationChannel.EMAIL ? recipientContext.emailBranding : undefined,
-      emailCta: channel === NotificationChannel.EMAIL && ctaLabel && ctaUrl ? { label: ctaLabel, url: ctaUrl } : undefined,
-      metadata: {
-        origin: "team_communications_hub",
-        originLabel: isTransactional
-          ? "Sent from communications hub as service message"
-          : "Sent from communications hub as marketing message",
-        sendFingerprint,
-        teamId,
-        templateId,
-        templateKey,
-        ctaLabel,
-        ctaUrl,
-        isMarketingMessage,
-        isTransactional,
-        yesResponseUrl: urls.yesResponseUrl,
-        noResponseUrl: urls.noResponseUrl,
-        bulkRecipientCount: recipientValues.length,
-        ...recipientContext.metadata,
-      },
-      createdByUserId,
-    });
+      runAfterResponse("team-communications-history", async () => {
+        await logNotificationDispatchToThread({
+          dispatch,
+          recipient: recipientContext.recipient,
+        });
 
-    if (
-      dispatch.status === NotificationDispatchStatus.QUEUED &&
-      (await cancelNewerDuplicateDispatch({
-        dispatchId: dispatch.id,
-        recipientId: recipientContext.recipient.id,
-        channel,
-        createdByUserId,
-        sendFingerprint,
-      }))
-    ) {
-      duplicateBlockedCount += 1;
-      continue;
-    }
-
-    await logNotificationDispatchToThread({ dispatch, recipient: recipientContext.recipient });
-
-    if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
-      await prisma.teamPlayerProspect.update({
-        where: { id: recipientContext.sourceId },
-        data: { lastContactedAt: new Date() },
+        if (recipientContext.sourceType === "TEAM_PLAYER_PROSPECT") {
+          await prisma.teamPlayerProspect.update({
+            where: { id: recipientContext.sourceId },
+            data: { lastContactedAt: new Date() },
+          });
+        }
       });
-    }
 
-    queuedCount += 1;
-  }
+      return "queued" as const;
+    }),
+  );
 
+  const queuedCount = recipientResults.filter((result) => result === "queued").length;
+  const skippedMissingContactCount = recipientResults.filter((result) => result === "skipped").length;
+  const duplicateBlockedCount = recipientResults.filter((result) => result === "duplicate").length;
   if (queuedCount === 0) {
     if (duplicateBlockedCount > 0) {
       redirect(
