@@ -22,16 +22,16 @@ test("player PWA home follows the approved compact dashboard hierarchy", () => {
   assert.match(home, /Refer a new team and earn £75/);
 });
 
-test("live players keep chat dark-launched and admin player preview matches the live player", () => {
+test("Player PWA Home always exposes SIXFL Chat while admin preview keeps the same Home content", () => {
   const home = read("src/components/player/PlayerAppHome.tsx");
   const page = read("src/app/player/team/[teamid]/page.tsx");
   const nav = read("src/components/player/PlayerTeamNav.tsx");
 
-  assert.match(home, /showTeamChat/);
   assert.match(home, /title: "SIXFL Chat"/);
-  assert.match(home, /title: "My Stats"/);
-  assert.match(page, /showTeamChat=\{user\.role === UserRole\.ADMIN && !previewMembership\}/);
-  assert.match(nav, /showTeamChat/);
+  assert.match(home, /body: unreadMessageLabel/);
+  assert.doesNotMatch(home, /title: "My Stats"/);
+  assert.doesNotMatch(page, /showTeamChat=/);
+  assert.match(nav, /effectiveShowTeamChat = showTeamChat && !previewMembershipId/);
 });
 
 test("player app bottom navigation stays to five primary destinations", () => {
