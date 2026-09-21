@@ -152,19 +152,11 @@ function blockedPaymentMessageReason(fixture?: {
 async function isFixturePublishedForPaymentMessages(fixtureId: string) {
   const fixture = await prisma.fixture.findUnique({
     where: { id: fixtureId },
-    select: {
-      publishedAt: true,
-      status: true,
-      league: { select: { publicAt: true } },
-    },
+    select: { publishedAt: true, status: true },
   });
 
   if (!fixture) return false;
-  const now = new Date();
-  return (
-    !shouldBlockFixturePaymentMessages(fixture) &&
-    Boolean(fixture.league.publicAt && fixture.league.publicAt <= now)
-  );
+  return !shouldBlockFixturePaymentMessages(fixture);
 }
 
 export function buildChargePaymentPath(paymentToken: string) {
@@ -499,7 +491,7 @@ export async function queueFixtureMatchFeeEmails(
       prisma,
       {
         reason:
-          "Blocked because the fixture or league is not live, has been cancelled, or has been postponed. SIXFL does not send payment messages for it.",
+          "Blocked because the fixture is not published, has been cancelled, or has been postponed. SIXFL does not send payment messages for it.",
       },
     );
 
