@@ -154,7 +154,7 @@ export default function PlayerAppHome({
     preferredPosition?.trim() || roleLabel(playerRole);
 
   return (
-    <section className="player-app-home px-3 pb-28 pt-3 text-white">
+    <section className="player-app-home px-4 pb-28 pt-3 text-white">
       <div className="mx-auto w-full max-w-xl space-y-4">
         <section className="overflow-hidden rounded-[1.7rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_35%),linear-gradient(145deg,#0b1a20,#07130f)] p-4 shadow-[0_22px_60px_rgba(0,0,0,0.32)]">
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
@@ -310,7 +310,7 @@ export default function PlayerAppHome({
               {showTeamChat ? "Messages" : "My Stats"}
             </div>
             <div className="mt-1 text-xs leading-5 text-white/45">
-              {showTeamChat ? "Admin preview of chat" : "Goals, assists and form"}
+              {showTeamChat ? "Whole Squad Chat · admin preview" : "Goals, assists and form"}
             </div>
           </Link>
         </section>
