@@ -21,6 +21,7 @@ import PlayerAppHome from "@/components/player/PlayerAppHome";
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
 import { prisma } from "@/lib/prisma";
 import {
   getTeamMemberProfilesByTeamMemberIds,
@@ -359,9 +360,9 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
     .sort((a, b) => a.fixture.kickoffAt.getTime() - b.fixture.kickoffAt.getTime())[0];
   const feesByFixtureId = new Map(playerFees.map((fee) => [fee.fixtureId, fee]));
   const nextFixture = upcomingFixtures[0] ?? null;
-  const nextAvailability =
+  const [nextAvailability, nextSelection, unreadChatCount] = await Promise.all([
     nextFixture && membership
-      ? await prisma.fixtureAvailability.findUnique({
+      ? prisma.fixtureAvailability.findUnique({
           where: {
             fixtureId_teamMemberId: {
               fixtureId: nextFixture.id,
@@ -370,7 +371,32 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           },
           select: { response: true },
         })
-      : null;
+      : Promise.resolve(null),
+    nextFixture && membership
+      ? prisma.fixtureSelection.findFirst({
+          where: {
+            fixtureId: nextFixture.id,
+            teamMemberId: membership.id,
+          },
+          select: { selectionStatus: true },
+        })
+      : Promise.resolve(null),
+    membership
+      ? getPortalChatUnreadCount({
+          teamId: teamid,
+          userId: membership.user.id,
+          role: membership.role,
+        })
+      : Promise.resolve(0),
+  ]);
+
+  const nextSelectionStatus = nextFixture
+    ? nextSelection?.selectionStatus === "SELECTED"
+      ? ("SELECTED" as const)
+      : nextSelection?.selectionStatus === "NOT_SELECTED"
+        ? ("NOT_IN_SQUAD" as const)
+        : ("NOT_SELECTED_YET" as const)
+    : null;
 
   let playerProfile: TeamMemberProfile | null = null;
   let playerAppStats = { appearances: 0, goals: 0, assists: 0 };
@@ -449,8 +475,10 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           outstandingPence={outstandingPence}
           nextPaymentUrl={nextOpenFee?.paymentUrl ?? null}
           recentResults={recentResults}
+          nextSelectionStatus={nextSelectionStatus}
+          unreadChatCount={unreadChatCount}
           previewMembershipId={previewMembership?.id ?? null}
-          showTeamChat={user.role === UserRole.ADMIN}
+          showTeamChat={user.role === UserRole.ADMIN && !previewMembership}
         />
       </PlayerPwaModeOnly>
       <PlayerPwaModeOnly mode="web">
