@@ -4,17 +4,22 @@ const fs = require("node:fs");
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("Whole Squad Chat replaces Team Chat in user-facing chat surfaces", () => {
+test("SIXFL Chat brands the messaging feature while Whole Squad Chat remains the team-wide audience", () => {
   const chat = read("src/components/messaging/PortalChat.tsx");
   const helper = read("src/lib/portal-messaging.ts");
   const captainLayout = read("src/app/captain/team/[teamid]/layout.tsx");
   const playerHome = read("src/components/player/PlayerAppHome.tsx");
+  const captainPage = read("src/app/captain/team/[teamid]/chat/page.tsx");
+  const playerPage = read("src/app/player/team/[teamid]/chat/page.tsx");
   const adminPanel = read("src/components/admin/messaging/AdminAppMessagingPanel.tsx");
 
+  assert.match(chat, /SIXFL Chat/);
   assert.match(chat, /Whole Squad Chat/);
   assert.match(helper, /title: "Whole Squad Chat"/);
-  assert.match(captainLayout, /label: "Whole Squad Chat"/);
-  assert.match(playerHome, /Whole Squad Chat/);
+  assert.match(captainLayout, /label: "SIXFL Chat"/);
+  assert.match(playerHome, />SIXFL Chat<\/span>/);
+  assert.match(captainPage, /title: "SIXFL Chat \| SIXFL"/);
+  assert.match(playerPage, /title: "SIXFL Chat \| SIXFL"/);
   assert.match(adminPanel, /Whole Squad Chat control centre/);
 });
 
@@ -95,6 +100,26 @@ test("selected group chat highlights the exact recipient players", () => {
   assert.match(chat, /recipientHighlighted=\{Boolean\(/);
   assert.match(chat, />\s*Included\s*</);
   assert.match(chat, /recipients highlighted on the left/);
+});
+
+test("old group chats can be removed from one user's list without deleting history", () => {
+  const schema = read("prisma/schema.prisma");
+  const migration = read(
+    "prisma/migrations/20260921151000_archive_portal_group_chats/migration.sql",
+  );
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(schema, /archivedAt\s+DateTime\?/);
+  assert.match(migration, /ADD COLUMN "archivedAt"/);
+  assert.match(route, /action === "archive-group"/);
+  assert.match(route, /archivedAt: now/);
+  assert.match(route, /visibleGroupConversations/);
+  assert.match(route, /latestMessageAt\.getTime\(\) > archivedAt\.getTime\(\)/);
+  assert.match(route, /update: \{ lastReadAt: new Date\(\), archivedAt: null \}/);
+  assert.match(chat, /removeSelectedGroupChat/);
+  assert.match(chat, /Remove chat/);
+  assert.match(chat, /history is kept and it will return if a new message is sent/);
 });
 
 test("group chats are only listed for snapshotted members outside admin test mode", () => {

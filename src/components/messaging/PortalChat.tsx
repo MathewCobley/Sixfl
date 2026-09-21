@@ -196,6 +196,7 @@ export default function PortalChat({
   const [showSelectedPlayers, setShowSelectedPlayers] = useState(false);
   const [selectedGroupUserIds, setSelectedGroupUserIds] = useState<string[]>([]);
   const [clearing, setClearing] = useState(false);
+  const [archivingGroup, setArchivingGroup] = useState(false);
   const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -440,6 +441,70 @@ export default function PortalChat({
     }
   }
 
+  async function removeSelectedGroupChat() {
+    if (
+      !data?.canSend ||
+      data.isPreview ||
+      !selectedRef.startsWith("group:") ||
+      archivingGroup
+    ) {
+      return;
+    }
+
+    const title =
+      data.selected.title || selectedItem?.title || "this group chat";
+    const confirmed = window.confirm(
+      `Remove "${title}" from your chat list? The message history is kept and the chat will return if a new message is sent.`,
+    );
+    if (!confirmed) return;
+
+    const archivedRef = selectedRef;
+    setArchivingGroup(true);
+    setFeedback(null);
+    setSelectedRef("team");
+
+    try {
+      const response = await fetch(
+        apiUrl({
+          teamId,
+          conversation: archivedRef,
+          previewMembershipId,
+          adminTestMode,
+          simulateTestMode,
+        }),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "archive-group",
+            conversation: archivedRef,
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; archived?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Could not remove this chat.");
+      }
+
+      setSelectedRef("team");
+      await loadConversation("team", true);
+      setFeedback(
+        "Chat removed from your list. Its history is kept and it will return if a new message is sent.",
+      );
+    } catch (error) {
+      setSelectedRef(archivedRef);
+      setFeedback(
+        error instanceof Error ? error.message : "Could not remove this chat.",
+      );
+    } finally {
+      setArchivingGroup(false);
+    }
+  }
+
   const selectedItem =
     data?.conversations.find((item) => item.ref === selectedRef) ?? null;
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
@@ -494,7 +559,7 @@ export default function PortalChat({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/75">
-              SIXFL messages
+              SIXFL Chat
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
               {data?.team.name ?? "Team messaging"}
@@ -733,6 +798,19 @@ export default function PortalChat({
                 >
                   <TrashIcon className="h-4 w-4" aria-hidden="true" />
                   {clearing ? "Clearing…" : "Clear test messages"}
+                </button>
+              ) : null}
+              {selectedRef.startsWith("group:") &&
+              data?.canSend &&
+              !data.isPreview ? (
+                <button
+                  type="button"
+                  onClick={removeSelectedGroupChat}
+                  disabled={archivingGroup}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-white/65 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                  {archivingGroup ? "Removing…" : "Remove chat"}
                 </button>
               ) : null}
               <button
