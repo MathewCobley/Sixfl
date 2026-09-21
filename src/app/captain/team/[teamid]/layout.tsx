@@ -366,7 +366,7 @@ export default async function CaptainTeamLayout({
         { href: `/captain/team/${teamid}/player-pool`, label: "PlayerPool" },
         { href: `/captain/team/${teamid}/kit`, label: "Team kit" },
         ...(access.isAdmin
-          ? [{ href: `/captain/team/${teamid}/chat`, label: "Whole Squad Chat" }]
+          ? [{ href: `/captain/team/${teamid}/chat`, label: "SIXFL Chat" }]
           : []),
         {
           href: `/captain/team/${teamid}/messages`,
