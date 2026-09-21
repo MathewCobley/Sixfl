@@ -11,6 +11,7 @@ import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import TeamBadge from "@/components/admin/TeamBadge";
 import SixflTvPriorityScoreBadge from "@/components/sixfl-tv/SixflTvPriorityScoreBadge";
 import { getSixflTvPriorityScores } from "@/lib/sixfl-tv/priority-score";
+import { formatPaymentMoney, getTeamPaymentLedger } from "@/lib/payments/team-payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { deleteTeamAction } from "./actions";
@@ -342,7 +343,16 @@ export default async function AdminTeamsPage({
   const displayTeams = dedupeTeamsForDisplay(allTeams);
   const groups = groupTeams(allTeams);
   const teamIds = displayTeams.map((team) => team.id);
-  const priorityScores = await getSixflTvPriorityScores(teamIds);
+  const [priorityScores, outstandingEntries] = await Promise.all([
+    getSixflTvPriorityScores(teamIds),
+    Promise.all(
+      teamIds.map(async (teamId) => {
+        const ledger = await getTeamPaymentLedger(teamId);
+        return [teamId, ledger?.outstandingPence ?? 0] as const;
+      }),
+    ),
+  ]);
+  const outstandingByTeamId = new Map(outstandingEntries);
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
@@ -478,6 +488,7 @@ export default async function AdminTeamsPage({
                 )}`;
                 const isManagedTeam = team.teamMode === "MANAGED";
                 const currentSeason = team.league?.competition?.currentLeague?.season;
+                const outstandingPence = outstandingByTeamId.get(team.id) ?? 0;
 
                 return (
                   <div
@@ -509,6 +520,17 @@ export default async function AdminTeamsPage({
                             </span>
                           ) : null}
                           <span className={accessState.className}>{accessState.label}</span>
+                          <span
+                            title="Current unpaid team balance due to SIXFL"
+                            className={[
+                              "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                              outstandingPence > 0
+                                ? "border-red-400/30 bg-red-500/10 text-red-100"
+                                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
+                            ].join(" ")}
+                          >
+                            Outstanding {formatPaymentMoney(outstandingPence)}
+                          </span>
                           {isManagedTeam ? (
                             <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
                               Managed team
