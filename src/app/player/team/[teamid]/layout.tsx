@@ -82,8 +82,6 @@ export default async function PlayerTeamLayout({
           <PlayerPwaPortalHeader
             teamName={team.name}
             teamLogoUrl={team.logoUrl}
-            leagueName={team.league?.name ?? null}
-            season={team.league?.season ?? null}
           />
         </Suspense>
       ) : null}
