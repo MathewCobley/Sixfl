@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { monthKey, monthlyPeriod } from "../goal-of-month/calendar";
 
 export type SixflTvGraphicTeam = {
   name: string;
@@ -977,11 +978,50 @@ export async function createSixflTvAltLeagueTableCard(input: {
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
-export async function createSixflTvAltGoalOfMonthCard(input:{siteUrl:string;fixture:SixflTvGraphicFixture}) {
-  const d=input.fixture.kickoffIso?new Date(input.fixture.kickoffIso):new Date(), month=new Intl.DateTimeFormat("en-GB",{month:"long",timeZone:"Europe/London"}).format(d).toUpperCase();
-  const [logo,fontCss]=await Promise.all([sixflTvLogo(input.siteUrl),embeddedFontStyle(input.siteUrl)]);
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${fontCss}<rect width="1920" height="1080" fill="#070807"/><rect width="18" height="1080" fill="#f4d000"/>${logoImage(logo,1515,54,300,96,.96)}<text x="110" y="145" font-size="25" font-weight="800" letter-spacing="5" fill="#f4d000">SIXFL GOAL OF THE MONTH</text><text x="110" y="345" font-size="112" font-weight="900" fill="#fff">${xml(month)}</text><text x="110" y="455" font-size="64" font-weight="900" fill="#fff">SEEN A WINNER?</text><line x1="110" y1="535" x2="960" y2="535" stroke="#f4d000" stroke-width="8"/><text x="110" y="650" font-size="42" font-weight="800" fill="#fff">Nominate &amp; vote at sixfl.co.uk/goal-of-the-month</text><text x="110" y="735" font-size="28" font-weight="700" fill="#aaa">Nominate until 5 ${xml(month)} · Vote 6–12 ${xml(month)}</text></svg>`;
-  return sharp(Buffer.from(svg)).png({compressionLevel:9}).toBuffer();
+export async function createSixflTvAltGoalOfMonthCard(input: { siteUrl: string; fixture: SixflTvGraphicFixture }) {
+  const sourceDate = input.fixture.kickoffIso ? new Date(input.fixture.kickoffIso) : new Date();
+  const validDate = Number.isFinite(sourceDate.getTime()) ? sourceDate : new Date();
+  const period = monthlyPeriod(monthKey(validDate));
+  const awardMonth = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" })
+    .format(validDate);
+  const nextMonth = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "Europe/London" })
+    .format(period.votingOpensAt);
+  const nominateThrough = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" })
+    .format(new Date(period.nominationsCloseAt.getTime() - 1));
+  const voteStart = new Intl.DateTimeFormat("en-GB", { day: "numeric", timeZone: "Europe/London" }).format(period.votingOpensAt);
+  const voteEnd = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" })
+    .format(new Date(period.votingClosesAt.getTime() - 1));
+  const [logo, fontCss] = await Promise.all([sixflTvLogo(input.siteUrl), embeddedFontStyle(input.siteUrl)]);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+    ${fontCss}
+    <rect width="1920" height="1080" fill="#070807"/>
+    <rect width="14" height="1080" fill="#f4d000"/>
+    <path d="M0 0 H250 L0 250 Z" fill="#f4d000" fill-opacity="0.07"/>
+    <path d="M1670 1080 H1920 V830 Z" fill="#f4d000" fill-opacity="0.06"/>
+    ${logoImage(logo, 1515, 45, 300, 96, 0.96)}
+
+    <text x="105" y="118" font-size="22" font-weight="800" letter-spacing="5" fill="#f4d000">SIXFL TV</text>
+    <text x="105" y="300" font-size="108" font-weight="900" fill="#ffffff">GOAL OF THE MONTH</text>
+    <text x="105" y="385" font-size="34" font-weight="800" letter-spacing="4" fill="#f4d000">${xml(awardMonth.toUpperCase())} EDITION</text>
+
+    <text x="105" y="535" font-size="58" font-weight="900" fill="#ffffff">SEEN A WINNER?</text>
+    <line x1="105" y1="595" x2="1100" y2="595" stroke="#f4d000" stroke-width="7"/>
+
+    <text x="105" y="700" font-size="40" font-weight="800" fill="#ffffff">Nominate now</text>
+    <text x="105" y="760" font-size="30" font-weight="700" fill="#c7c7c7">sixfl.co.uk/goal-of-the-month</text>
+
+    <g transform="translate(105 835)">
+      <rect width="1180" height="108" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.08"/>
+      <text x="30" y="43" font-size="24" font-weight="750" fill="#a4a4a4">NOMINATIONS CLOSE</text>
+      <text x="360" y="43" font-size="27" font-weight="900" fill="#ffffff">${xml(nominateThrough.toUpperCase())}</text>
+      <text x="30" y="82" font-size="24" font-weight="750" fill="#a4a4a4">VOTING</text>
+      <text x="360" y="82" font-size="27" font-weight="900" fill="#ffffff">${xml(`${voteStart}–${voteEnd}`.toUpperCase())}</text>
+    </g>
+
+    <text x="1810" y="1010" text-anchor="end" font-size="18" font-weight="750" letter-spacing="2" fill="#6f716e">REAL PLAYERS · REAL GOALS</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
 
 export async function createSixflTvLeagueTableCard(input: {
