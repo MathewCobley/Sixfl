@@ -8,6 +8,12 @@ import { notFound, redirect } from "next/navigation";
 import { FixtureStatus, TeamRole, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import PlayerAppFixtures, {
+  type PlayerAppCancelledFixtureItem,
+  type PlayerAppFixtureItem,
+  type PlayerAppRecentResult,
+} from "@/components/player/PlayerAppFixtures";
+import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getOpenFixturePlayerRequests } from "@/lib/fixturePlayerRequests";
 import { prisma } from "@/lib/prisma";
@@ -281,14 +287,21 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
     select: {
       id: true,
       kickoffAt: true,
+      round: true,
       pitch: true,
+      status: true,
       homeTeamId: true,
-      homeTeam: { select: { name: true } },
-      awayTeam: { select: { name: true } },
+      homeTeam: { select: { name: true, logoUrl: true } },
+      awayTeam: { select: { name: true, logoUrl: true } },
       venue: { select: { name: true } },
       availabilities: {
         where: { teamMemberId: membership.id },
         select: { response: true, note: true, respondedAt: true },
+        take: 1,
+      },
+      selections: {
+        where: { teamMemberId: membership.id },
+        select: { selectionStatus: true },
         take: 1,
       },
       playerMatchFees: {
@@ -297,6 +310,47 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
       },
     },
   });
+
+  const [cancelledFixtureRows, recentResultRows] = await Promise.all([
+    prisma.fixture.findMany({
+      where: {
+        publishedAt: { not: null },
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        kickoffAt: { gte: now },
+        status: FixtureStatus.CANCELLED,
+      },
+      orderBy: { kickoffAt: "asc" },
+      take: 3,
+      select: {
+        id: true,
+        kickoffAt: true,
+        round: true,
+        pitch: true,
+        homeTeam: { select: { name: true, logoUrl: true } },
+        awayTeam: { select: { name: true, logoUrl: true } },
+        venue: { select: { name: true } },
+      },
+    }),
+    prisma.fixture.findMany({
+      where: {
+        publishedAt: { not: null },
+        OR: [{ homeTeamId: teamid }, { awayTeamId: teamid }],
+        kickoffAt: { lt: now },
+        status: FixtureStatus.COMPLETED,
+        result: { isNot: null },
+      },
+      orderBy: { kickoffAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        kickoffAt: true,
+        sixflTvUrl: true,
+        homeTeam: { select: { name: true, logoUrl: true } },
+        awayTeam: { select: { name: true, logoUrl: true } },
+        result: { select: { homeScore: true, awayScore: true } },
+      },
+    }),
+  ]);
 
   const selectedFixture =
     fixtures.find((fixture) => fixture.id === sp.fixtureId) ??
@@ -329,9 +383,116 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
   const previewedPlayerName =
     previewMembership?.user?.name || previewMembership?.user?.email;
 
+  const appFixtures: PlayerAppFixtureItem[] = fixtures.map((fixture) => {
+    const legacySelected = fixture.playerMatchFees.some(
+      (fee) => fee.teamMemberId === membership.id,
+    );
+    const explicitlySelected =
+      fixture.selections[0]?.selectionStatus === "SELECTED";
+    const selectedCount = new Set(
+      fixture.playerMatchFees
+        .map((fee) => fee.teamMemberId)
+        .filter((id): id is string => Boolean(id)),
+    ).size;
+
+    return {
+      id: fixture.id,
+      kickoffAt: fixture.kickoffAt,
+      round: fixture.round,
+      pitch: fixture.pitch,
+      venueName: fixture.venue?.name ?? null,
+      status:
+        fixture.status === FixtureStatus.POSTPONED
+          ? "POSTPONED"
+          : "SCHEDULED",
+      homeTeam: {
+        name: fixture.homeTeam.name,
+        logoUrl: fixture.homeTeam.logoUrl,
+      },
+      awayTeam: {
+        name: fixture.awayTeam.name,
+        logoUrl: fixture.awayTeam.logoUrl,
+      },
+      availabilityResponse: fixture.availabilities[0]?.response ?? null,
+      availabilityNote: fixture.availabilities[0]?.note ?? null,
+      selected: explicitlySelected || legacySelected,
+      squadPicked: targetSize > 0 && selectedCount >= targetSize,
+    };
+  });
+
+  const appSelectedFixture =
+    appFixtures.find((fixture) => fixture.id === selectedFixture?.id) ??
+    appFixtures[0] ??
+    null;
+
+  const appCancelledFixtures: PlayerAppCancelledFixtureItem[] =
+    cancelledFixtureRows.map((fixture) => ({
+      id: fixture.id,
+      kickoffAt: fixture.kickoffAt,
+      round: fixture.round,
+      pitch: fixture.pitch,
+      venueName: fixture.venue?.name ?? null,
+      homeTeam: {
+        name: fixture.homeTeam.name,
+        logoUrl: fixture.homeTeam.logoUrl,
+      },
+      awayTeam: {
+        name: fixture.awayTeam.name,
+        logoUrl: fixture.awayTeam.logoUrl,
+      },
+    }));
+
+  const appRecentResults: PlayerAppRecentResult[] = recentResultRows.flatMap(
+    (fixture) => {
+      if (!fixture.result) return [];
+      const highlightsUrl =
+        fixture.sixflTvUrl
+          ?.split(/\n+/)
+          .map((value) => value.trim())
+          .find(Boolean) ?? null;
+
+      return [
+        {
+          id: fixture.id,
+          kickoffAt: fixture.kickoffAt,
+          homeTeam: {
+            name: fixture.homeTeam.name,
+            logoUrl: fixture.homeTeam.logoUrl,
+          },
+          awayTeam: {
+            name: fixture.awayTeam.name,
+            logoUrl: fixture.awayTeam.logoUrl,
+          },
+          homeScore: fixture.result.homeScore,
+          awayScore: fixture.result.awayScore,
+          highlightsUrl,
+        },
+      ];
+    },
+  );
+
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
-      <div className="mx-auto max-w-6xl space-y-8">
+      <PlayerPwaModeOnly mode="app">
+        <PlayerAppFixtures
+          teamId={teamid}
+          selectedFixture={appSelectedFixture}
+          fixtures={appFixtures}
+          cancelledFixtures={appCancelledFixtures}
+          recentResults={appRecentResults}
+          previewMembershipId={previewMembershipParam}
+          savedMessage={savedMessage}
+          withdrawalRequest={
+            withdrawalRequest ? { reason: withdrawalRequest.reason ?? null } : null
+          }
+          waitlistRequest={
+            waitlistRequest ? { reason: waitlistRequest.reason ?? null } : null
+          }
+        />
+      </PlayerPwaModeOnly>
+
+      <PlayerPwaModeOnly mode="web">
+        <div className="mx-auto max-w-6xl space-y-8">
         {previewMembership ? (
           <section className="rounded-3xl border border-violet-400/25 bg-violet-500/10 p-5 text-sm text-violet-50/80">
             Admin preview: viewing as {previewedPlayerName || "this player"}.
@@ -685,7 +846,8 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
             )}
           </div>
         </section>
-      </div>
+        </div>
+      </PlayerPwaModeOnly>
     </main>
   );
 }
