@@ -716,7 +716,7 @@ export default async function CaptainPaymentsPage({
                 Pay an amount of your choice
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-                Enter the amount you want to pay, for example £43. SIXFL applies it to your oldest eligible outstanding team balance first.
+                Enter the amount you want to pay, for example £15. SIXFL applies it to your oldest eligible outstanding team balance first.
                 {flexiblePaymentPolicy?.enabled
                   ? " If that payment is more than the remaining balance, the permitted surplus becomes team credit. Team credit is still capped at one normal match fee."
                   : " The payment cannot be more than the current outstanding balance."}
