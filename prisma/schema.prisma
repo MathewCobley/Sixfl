@@ -1350,6 +1350,7 @@ model PortalConversationRead {
   conversationId String
   userId         String
   lastReadAt     DateTime @default(now())
+  archivedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
