@@ -29,6 +29,8 @@ async function findLeagueVideoMeta(slug: string) {
     FROM "League"
     WHERE "slug" = ${slug}
       AND "isActive" = true
+      AND "publicAt" IS NOT NULL
+      AND "publicAt" <= NOW()
     LIMIT 1
   `);
 
@@ -47,6 +49,8 @@ async function findLeagueVideoMeta(slug: string) {
       "advertVideoUploadedAt"
     FROM "League"
     WHERE "isActive" = true
+      AND "publicAt" IS NOT NULL
+      AND "publicAt" <= NOW()
       AND (
         LOWER("slug") LIKE '%heartlands%'
         OR LOWER("name") LIKE '%heartlands%'
