@@ -134,11 +134,15 @@ export async function getDueMatchdayAutoPayCharges(db: AutoPayDb = prisma) {
       pc."dueDate"
     FROM "PaymentCharge" pc
     JOIN "Fixture" f ON f."id" = pc."fixtureId"
+    JOIN "League" l ON l."id" = f."leagueId"
     JOIN "Team" t ON t."id" = pc."teamId"
     LEFT JOIN "PaymentTransaction" tx ON tx."chargeId" = pc."id"
     WHERE pc."fixtureId" IS NOT NULL
       AND pc."status" <> 'VOID'
       AND f."status" IN ('SCHEDULED', 'COMPLETED')
+      AND f."publishedAt" IS NOT NULL
+      AND l."publicAt" IS NOT NULL
+      AND l."publicAt" <= NOW()
       AND t."autoPayEnabled" = true
       AND t."stripeCustomerId" IS NOT NULL
       AND t."stripeDefaultPaymentMethodId" IS NOT NULL
