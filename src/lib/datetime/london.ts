@@ -119,6 +119,14 @@ export function toLondonTimeInputValue(value: Date | string | null) {
   return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
+export function toLondonDateTimeLocalInputValue(value: Date | string | null) {
+  if (!value) return "";
+
+  const parts = getLondonParts(value);
+
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
 export function formatTimeInLondon(value: Date | string) {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: LONDON_TZ,
