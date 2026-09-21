@@ -203,6 +203,8 @@ export default async function LeaguesPage() {
           id: {
             in: currentLeagueIds,
           },
+          isActive: true,
+          publicAt: { lte: new Date() },
         },
         select: {
           id: true,
