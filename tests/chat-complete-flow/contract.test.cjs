@@ -40,7 +40,7 @@ test("captain copy is addressed to the captain rather than system wording", () =
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
 
   assert.match(chat, /Private between \$\{selectedItem\?\.title \?\? "this person"\} and you/);
-  assert.match(chat, /Use Team Chat for your whole squad/);
+  assert.match(chat, /Use Whole Squad Chat, Regulars, Selected Players or a private conversation/);
   assert.match(chat, /Private messages/);
   assert.match(route, /private with you/);
   assert.doesNotMatch(chat, /team captain\(s\)/i);

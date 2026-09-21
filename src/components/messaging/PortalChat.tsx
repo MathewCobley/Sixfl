@@ -21,7 +21,7 @@ type ConversationItem = {
   unreadCount: number;
   latestMessageAt: string | null;
   preview: string | null;
-  kind: "TEAM" | "PRIVATE" | "SUPPORT";
+  kind: "TEAM" | "GROUP" | "PRIVATE" | "SUPPORT";
   disabled?: boolean;
 };
 
@@ -51,10 +51,22 @@ type ChatResponse = {
   selected: {
     ref: string;
     id: string;
-    type: "TEAM" | "CAPTAIN_PLAYER" | "CAPTAIN_CAPTAIN" | "SIXFL";
+    type:
+      | "TEAM"
+      | "CAPTAIN_PLAYER"
+      | "CAPTAIN_CAPTAIN"
+      | "REGULARS"
+      | "SELECTED_GROUP"
+      | "SIXFL";
     title: string;
   };
   conversations: ConversationItem[];
+  audienceOptions: Array<{
+    userId: string;
+    name: string;
+    role: string;
+    isRegular: boolean;
+  }>;
   messages: ChatMessage[];
 };
 
@@ -110,7 +122,7 @@ function ConversationButton({
   onSelect: (ref: string) => void;
 }) {
   const Icon =
-    item.kind === "TEAM"
+    item.kind === "TEAM" || item.kind === "GROUP"
       ? UserGroupIcon
       : item.kind === "SUPPORT"
         ? ShieldCheckIcon
@@ -169,6 +181,10 @@ export default function PortalChat({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [showSelectedPlayers, setShowSelectedPlayers] = useState(false);
+  const [selectedGroupUserIds, setSelectedGroupUserIds] = useState<string[]>([]);
   const [clearing, setClearing] = useState(false);
   const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -294,11 +310,69 @@ export default function PortalChat({
     }
   }
 
+  async function startGroupConversation(
+    audience: "REGULARS" | "SELECTED",
+  ) {
+    if (!data?.canSend || data.viewRole !== "CAPTAIN" || creatingGroup) return;
+
+    setCreatingGroup(true);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(
+        apiUrl({
+          teamId,
+          conversation: selectedRef,
+          previewMembershipId,
+          adminTestMode,
+          simulateTestMode,
+        }),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create-group",
+            audience,
+            memberUserIds:
+              audience === "SELECTED" ? selectedGroupUserIds : undefined,
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; conversationRef?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.conversationRef) {
+        throw new Error(payload?.error || "Could not start group chat.");
+      }
+
+      setSelectedRef(payload.conversationRef);
+      setSelectedGroupUserIds([]);
+      setShowSelectedPlayers(false);
+      setShowNewMessage(false);
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "Could not start group chat.",
+      );
+    } finally {
+      setCreatingGroup(false);
+    }
+  }
+
+  function toggleSelectedPlayer(userId: string) {
+    setSelectedGroupUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((value) => value !== userId)
+        : [...current, userId],
+    );
+  }
+
   async function clearTestMessages() {
     if (!data?.isAdminTestMode || !data.team.name || clearing) return;
 
     const confirmation = window.prompt(
-      `This will permanently delete every Team Chat and private chat message for ${data.team.name}. Type the exact team name to continue:`,
+      `This will permanently delete every Whole Squad Chat, group chat and private chat message for ${data.team.name}. Type the exact team name to continue:`,
     );
 
     if (confirmation === null) return;
@@ -359,8 +433,12 @@ export default function PortalChat({
   const selectedItem =
     data?.conversations.find((item) => item.ref === selectedRef) ?? null;
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
+  const groupItems =
+    data?.conversations.filter((item) => item.kind === "GROUP") ?? [];
   const privateItems =
     data?.conversations.filter((item) => item.kind === "PRIVATE") ?? [];
+  const regularCount =
+    data?.audienceOptions.filter((item) => item.isRegular).length ?? 0;
   const supportItems =
     data?.conversations.filter((item) => item.kind === "SUPPORT") ?? [];
 
@@ -377,8 +455,8 @@ export default function PortalChat({
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
               {data?.viewRole === "CAPTAIN"
-                ? "Use Team Chat for your whole squad, or choose someone for a private conversation."
-                : "Use Team Chat for the squad, message your captain privately, or contact SIXFL."}
+                ? "Use Whole Squad Chat, Regulars, Selected Players or a private conversation."
+                : "Use Whole Squad Chat, message your captain privately, or contact SIXFL."}
             </p>
             {data?.canSend &&
             !data.isAdminTestMode &&
@@ -407,6 +485,107 @@ export default function PortalChat({
 
       <div className="grid min-h-[620px] lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-black/15 p-3 lg:border-b-0 lg:border-r">
+          {data?.viewRole === "CAPTAIN" && data.canSend ? (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowNewMessage((value) => !value)}
+                className="flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-300"
+              >
+                {showNewMessage ? "Close new message" : "New message"}
+              </button>
+
+              {showNewMessage ? (
+                <div className="mt-3 space-y-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      Start a new conversation
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-white/45">
+                      Choose exactly who should be included.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRef("team");
+                      setShowNewMessage(false);
+                      setShowSelectedPlayers(false);
+                    }}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
+                  >
+                    Whole Squad Chat
+                    <span className="mt-1 block text-xs font-normal text-white/40">
+                      Everyone in the squad
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={creatingGroup || regularCount === 0}
+                    onClick={() => startGroupConversation("REGULARS")}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Regulars · {regularCount}
+                    <span className="mt-1 block text-xs font-normal text-white/40">
+                      Your usual playing group
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSelectedPlayers((value) => !value)}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
+                  >
+                    Selected Players
+                    <span className="mt-1 block text-xs font-normal text-white/40">
+                      Choose two or more people
+                    </span>
+                  </button>
+
+                  {showSelectedPlayers ? (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-2">
+                      <div className="max-h-64 space-y-1 overflow-y-auto">
+                        {data.audienceOptions.map((person) => (
+                          <label
+                            key={person.userId}
+                            className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-white/75 hover:bg-white/[0.05]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedGroupUserIds.includes(person.userId)}
+                              onChange={() => toggleSelectedPlayer(person.userId)}
+                              className="h-4 w-4 accent-emerald-400"
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              {person.name}
+                            </span>
+                            {person.isRegular ? (
+                              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-300/70">
+                                Regular
+                              </span>
+                            ) : null}
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={
+                          creatingGroup || selectedGroupUserIds.length < 2
+                        }
+                        onClick={() => startGroupConversation("SELECTED")}
+                        className="mt-2 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Start group · {selectedGroupUserIds.length} selected
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             {teamItems.map((item) => (
               <ConversationButton
@@ -417,6 +596,24 @@ export default function PortalChat({
               />
             ))}
           </div>
+
+          {groupItems.length > 0 ? (
+            <div className="mt-5">
+              <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                Group chats
+              </div>
+              <div className="mt-2 space-y-2">
+                {groupItems.map((item) => (
+                  <ConversationButton
+                    key={item.ref}
+                    item={item}
+                    selected={selectedRef === item.ref}
+                    onSelect={setSelectedRef}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-5">
             <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
@@ -460,9 +657,11 @@ export default function PortalChat({
               <div className="mt-0.5 truncate text-xs text-white/40">
                 {selectedRef === "team"
                   ? data?.viewRole === "CAPTAIN"
-                    ? "Everyone in your registered squad can read and reply"
-                    : "Everyone in the registered squad can read and reply"
-                  : selectedRef === "sixfl"
+                    ? "Everyone in your squad can read and reply"
+                    : "Everyone in the active squad can read and reply"
+                  : selectedRef.startsWith("group:")
+                    ? selectedItem?.subtitle || "Private group conversation"
+                    : selectedRef === "sixfl"
                     ? "Private between you and SIXFL"
                     : data?.viewRole === "CAPTAIN"
                       ? `Private between ${selectedItem?.title ?? "this person"} and you`
@@ -494,7 +693,7 @@ export default function PortalChat({
 
           {data?.isAdminTestMode ? (
             <div className="border-b border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-100/80 sm:px-5">
-              Admin Test Mode · messages are sent as SIXFL Admin/Test. No phone push notifications are sent. Clear the test history before Team Chat launches.
+              Admin Test Mode · messages are sent as SIXFL Admin/Test. No phone push notifications are sent. Clear the test history before Whole Squad Chat launches.
             </div>
           ) : data?.isSimulatedTestMode ? (
             <div className="border-b border-violet-400/20 bg-violet-500/10 px-4 py-2.5 text-xs font-medium text-violet-100/85 sm:px-5">
@@ -561,13 +760,15 @@ export default function PortalChat({
                 <p className="mt-1 max-w-sm text-xs leading-5 text-white/45">
                   {selectedRef === "team"
                     ? data?.viewRole === "CAPTAIN"
-                      ? "Start your team conversation. Everyone currently registered in your squad will be able to see it."
-                      : "Start the team conversation. Everyone currently registered in the squad will be able to see it."
-                    : selectedRef === "sixfl"
-                      ? "Send a private message to SIXFL."
-                      : data?.viewRole === "CAPTAIN"
-                        ? `Start a private conversation with ${selectedItem?.title ?? "this person"}.`
-                        : "Start a private conversation with your captain."}
+                      ? "Start Whole Squad Chat. Everyone currently registered in your squad will be able to see it."
+                      : "Start Whole Squad Chat. Everyone currently registered in the squad will be able to see it."
+                    : selectedRef.startsWith("group:")
+                      ? `Start the ${selectedItem?.title ?? "group"} conversation. Only the people included in this group can see it.`
+                      : selectedRef === "sixfl"
+                        ? "Send a private message to SIXFL."
+                        : data?.viewRole === "CAPTAIN"
+                          ? `Start a private conversation with ${selectedItem?.title ?? "this person"}.`
+                          : "Start a private conversation with your captain."}
                 </p>
               </div>
             )}
@@ -592,7 +793,7 @@ export default function PortalChat({
                 <BellAlertIcon className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300/80" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-white">
-                    Notify team on their phone
+                    Notify whole squad on their phone
                   </span>
                   <span className="mt-0.5 block text-xs leading-5 text-white/45">
                     Off by default. Use this only for an important team message — normal chat stays quiet.
@@ -611,19 +812,25 @@ export default function PortalChat({
                   data?.canSend
                     ? data.isAdminTestMode
                       ? selectedRef === "team"
-                        ? "Send a test message to Team Chat…"
-                        : selectedRef === "sixfl"
-                          ? "Send a test message to SIXFL…"
-                          : "Send a test private message…"
+                        ? "Send a test message to Whole Squad Chat…"
+                        : selectedRef.startsWith("group:")
+                          ? "Send a test group message…"
+                          : selectedRef === "sixfl"
+                            ? "Send a test message to SIXFL…"
+                            : "Send a test private message…"
                       : data.isSimulatedTestMode
                         ? selectedRef === "sixfl"
                           ? "Reply to SIXFL as this user…"
-                          : "Send a simulated test reply…"
+                          : selectedRef.startsWith("group:")
+                            ? "Send a simulated group reply…"
+                            : "Send a simulated test reply…"
                         : selectedRef === "team"
-                          ? "Message the team…"
-                          : selectedRef === "sixfl"
-                            ? "Message SIXFL…"
-                            : "Private message…"
+                          ? "Message the whole squad…"
+                          : selectedRef.startsWith("group:")
+                            ? "Message this group…"
+                            : selectedRef === "sixfl"
+                              ? "Message SIXFL…"
+                              : "Private message…"
                     : "Preview mode is read-only"
                 }
                 className="max-h-32 min-h-12 flex-1 resize-y rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-50"
@@ -647,13 +854,15 @@ export default function PortalChat({
                       ? data?.viewRole === "PLAYER"
                         ? "Squad conversation · use @Captain only when you need their attention"
                         : notifyTeam
-                          ? "Important team notification"
+                          ? "Important whole-squad notification"
                           : "Your squad conversation · no phone alert"
-                      : selectedRef === "sixfl"
-                        ? "Private message to SIXFL"
-                        : data?.viewRole === "CAPTAIN"
-                          ? `Private with ${selectedItem?.title ?? "this person"}`
-                          : "Private with your captain"}
+                      : selectedRef.startsWith("group:")
+                        ? selectedItem?.subtitle || "Private group conversation"
+                        : selectedRef === "sixfl"
+                          ? "Private message to SIXFL"
+                          : data?.viewRole === "CAPTAIN"
+                            ? `Private with ${selectedItem?.title ?? "this person"}`
+                            : "Private with your captain"}
               </span>
               <span>{message.length}/2000</span>
             </div>

@@ -42,6 +42,7 @@ model User {
   portalMessages              PortalMessage[]          @relation("PortalMessageSender")
   portalConversationReads     PortalConversationRead[] @relation("PortalConversationReadUser")
   portalPrivateConversations  PortalConversation[]     @relation("PortalConversationParticipantUser")
+  portalConversationMemberships PortalConversationMember[]
   pushSubscriptions           PushSubscription[]
   pushNotifications           PushNotification[]
 }
@@ -301,6 +302,7 @@ model TeamMember {
   userId String
   teamId String
   role   TeamRole @default(MANAGER)
+  isRegular Boolean @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -1267,6 +1269,8 @@ enum PortalConversationType {
   TEAM
   CAPTAIN_PLAYER
   CAPTAIN_CAPTAIN
+  REGULARS
+  SELECTED_GROUP
   SIXFL
 }
 
@@ -1297,6 +1301,7 @@ model PortalConversation {
 
   messages PortalMessage[]
   reads    PortalConversationRead[]
+  members  PortalConversationMember[]
 
   @@index([teamId, type])
   @@index([participantUserId])
@@ -1322,6 +1327,21 @@ model PortalMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderUserId, createdAt])
+}
+
+model PortalConversationMember {
+  id String @id @default(cuid())
+
+  conversationId String
+  userId         String
+
+  createdAt DateTime @default(now())
+
+  conversation PortalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, conversationId])
 }
 
 model PortalConversationRead {

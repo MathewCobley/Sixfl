@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import {
   PortalConversationType,
   PortalMessageSenderRole,
@@ -40,6 +41,7 @@ type PortalConversationResult = {
   conversation: Awaited<ReturnType<typeof ensureTeamPortalConversation>>;
   title?: string;
   targetUserId?: string | null;
+  memberUserIds?: string[];
 };
 
 type AccessContext = {
@@ -106,10 +108,10 @@ async function getAccessContext(
     return { error: "Your SIXFL account could not be found.", status: 401 } as const;
   }
 
-  // Team chat stays dark-launched until the player/captain app is ready.
+  // Whole Squad Chat stays dark-launched until the player/captain app is ready.
   // Admins can still open the feature in read-only preview mode for testing.
   if (actualUser.role !== UserRole.ADMIN) {
-    return { error: "Team chat is not available yet.", status: 404 } as const;
+    return { error: "Whole Squad Chat is not available yet.", status: 404 } as const;
   }
 
   const url = new URL(request.url);
@@ -287,6 +289,28 @@ async function resolveCaptainSourceUserId(
   return source?.userId ?? null;
 }
 
+async function resolveGroupCreatorUserId(
+  teamId: string,
+  context: AccessContext,
+) {
+  if (
+    context.membershipRole === TeamRole.CAPTAIN &&
+    context.effectiveUserId
+  ) {
+    return context.effectiveUserId;
+  }
+
+  if (!context.isAdminTestMode) return null;
+
+  const captain = await prisma.teamMember.findFirst({
+    where: { teamId, role: TeamRole.CAPTAIN },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true },
+  });
+
+  return captain?.userId ?? null;
+}
+
 async function resolveSixflParticipantUserId(
   teamId: string,
   context: AccessContext,
@@ -313,6 +337,57 @@ async function resolveSixflParticipantUserId(
   return member?.userId ?? context.effectiveUserId;
 }
 
+async function getGroupConversationForRef(input: {
+  teamId: string;
+  conversationRef: string;
+  context: AccessContext;
+}): Promise<PortalConversationResult | ApiError> {
+  if (!input.conversationRef.startsWith("group:")) {
+    return { error: "That group conversation could not be found.", status: 404 } as const;
+  }
+
+  const conversationId = input.conversationRef.slice("group:".length).trim();
+  if (!conversationId) {
+    return { error: "That group conversation could not be found.", status: 404 } as const;
+  }
+
+  const conversation = await prisma.portalConversation.findFirst({
+    where: {
+      id: conversationId,
+      teamId: input.teamId,
+      type: {
+        in: [
+          PortalConversationType.REGULARS,
+          PortalConversationType.SELECTED_GROUP,
+        ],
+      },
+    },
+    include: {
+      members: {
+        select: { userId: true },
+      },
+    },
+  });
+
+  if (!conversation) {
+    return { error: "That group conversation could not be found.", status: 404 } as const;
+  }
+
+  const memberUserIds = conversation.members.map((member) => member.userId);
+  if (
+    !input.context.isAdminTestMode &&
+    !memberUserIds.includes(input.context.effectiveUserId)
+  ) {
+    return { error: "You are not part of this group conversation.", status: 403 } as const;
+  }
+
+  return {
+    conversation,
+    title: conversation.title || "Group chat",
+    memberUserIds,
+  };
+}
+
 async function getConversationForRef(input: {
   teamId: string;
   conversationRef: string;
@@ -321,8 +396,12 @@ async function getConversationForRef(input: {
   if (input.conversationRef === "team") {
     return {
       conversation: await ensureTeamPortalConversation(input.teamId),
-      title: "Team chat",
+      title: "Whole Squad Chat",
     };
+  }
+
+  if (input.conversationRef.startsWith("group:")) {
+    return getGroupConversationForRef(input);
   }
 
   if (input.conversationRef === SIXFL_CHAT_REF) {
@@ -414,13 +493,38 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     teamId,
     context,
   );
-  const [teamConversation, sixflConversation] = await Promise.all([
+  const [teamConversation, sixflConversation, groupConversations] = await Promise.all([
     ensureTeamPortalConversation(teamId),
     ensureSixflPortalConversation(
       teamId,
       sixflParticipantUserId,
       "Message SIXFL",
     ),
+    prisma.portalConversation.findMany({
+      where: {
+        teamId,
+        type: {
+          in: [
+            PortalConversationType.REGULARS,
+            PortalConversationType.SELECTED_GROUP,
+          ],
+        },
+        ...(context.isAdminTestMode
+          ? {}
+          : { members: { some: { userId: context.effectiveUserId } } }),
+      },
+      orderBy: [{ latestMessageAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        latestMessageAt: true,
+        lastMessagePreview: true,
+        members: {
+          select: { userId: true },
+        },
+      },
+    }),
   ]);
 
   const [teamUnread, sixflUnread] = await Promise.all([
@@ -443,22 +547,42 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     unreadCount: number;
     latestMessageAt: string | null;
     preview: string | null;
-    kind: "TEAM" | "PRIVATE" | "SUPPORT";
+    kind: "TEAM" | "GROUP" | "PRIVATE" | "SUPPORT";
     disabled?: boolean;
   }> = [
     {
       ref: "team",
-      title: "Team chat",
+      title: "Whole Squad Chat",
       subtitle:
         context.viewRole === "CAPTAIN"
-          ? "Everyone in your registered squad"
-          : "Everyone in the registered squad",
+          ? "Everyone in your squad"
+          : "Everyone in the squad",
       unreadCount: teamUnread,
       latestMessageAt: teamConversation.latestMessageAt?.toISOString() ?? null,
       preview: teamConversation.lastMessagePreview,
       kind: "TEAM",
     },
   ];
+
+  const groupItems = await Promise.all(
+    groupConversations.map(async (conversation) => ({
+      ref: `group:${conversation.id}`,
+      title:
+        conversation.title ||
+        (conversation.type === PortalConversationType.REGULARS
+          ? "Regulars"
+          : "Selected Players"),
+      subtitle: `Private group · ${conversation.members.length} people`,
+      unreadCount: await unreadCountFor({
+        conversationId: conversation.id,
+        userId: context.effectiveUserId,
+        isPreview: context.isPreview,
+      }),
+      latestMessageAt: conversation.latestMessageAt?.toISOString() ?? null,
+      preview: conversation.lastMessagePreview,
+      kind: "GROUP" as const,
+    })),
+  );
 
   if (context.viewRole === "PLAYER") {
     const captainCount = await prisma.teamMember.count({
@@ -495,6 +619,8 @@ async function buildConversationList(teamId: string, context: AccessContext) {
       kind: "PRIVATE",
       disabled: captainCount === 0,
     });
+
+    items.push(...groupItems);
 
     items.push({
       ref: SIXFL_CHAT_REF,
@@ -652,6 +778,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     return a.title.localeCompare(b.title);
   });
 
+  items.push(...groupItems);
   items.push(...privateItems);
   items.push({
     ref: SIXFL_CHAT_REF,
@@ -687,10 +814,34 @@ export async function GET(
 
   if ("error" in selected) return jsonError(selected.error, selected.status);
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamid },
-    select: { id: true, name: true, logoUrl: true },
-  });
+  const groupCreatorUserId =
+    context.viewRole === "CAPTAIN"
+      ? await resolveGroupCreatorUserId(teamid, context)
+      : null;
+
+  const [team, audienceOptions] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamid },
+      select: { id: true, name: true, logoUrl: true },
+    }),
+    context.viewRole === "CAPTAIN"
+      ? prisma.teamMember.findMany({
+          where: {
+            teamId: teamid,
+            ...(groupCreatorUserId
+              ? { userId: { not: groupCreatorUserId } }
+              : {}),
+          },
+          orderBy: [{ isRegular: "desc" }, { createdAt: "asc" }],
+          select: {
+            userId: true,
+            role: true,
+            isRegular: true,
+            user: { select: { name: true, email: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
   if (!team) return jsonError("Team not found.", 404);
 
   const messages = await prisma.portalMessage.findMany({
@@ -740,6 +891,12 @@ export async function GET(
     isAdminTestMode: context.isAdminTestMode,
     isSimulatedTestMode: context.isSimulatedTestMode,
     simulatedAsName: context.isSimulatedTestMode ? context.effectiveName : null,
+    audienceOptions: audienceOptions.map((member) => ({
+      userId: member.userId,
+      name: getDisplayName(member.user),
+      role: member.role,
+      isRegular: member.isRegular,
+    })),
     selected: {
       ref: conversationRef,
       id: selected.conversation.id,
@@ -786,8 +943,135 @@ export async function POST(
   }
 
   const payload = (await request.json().catch(() => null)) as
-    | { conversation?: unknown; message?: unknown; notifyTeam?: unknown }
+    | {
+        action?: unknown;
+        audience?: unknown;
+        memberUserIds?: unknown;
+        conversation?: unknown;
+        message?: unknown;
+        notifyTeam?: unknown;
+      }
     | null;
+
+  if (payload?.action === "create-group") {
+    if (context.viewRole !== "CAPTAIN") {
+      return jsonError("Only captains can start group conversations.", 403);
+    }
+
+    const audience = String(payload?.audience ?? "").trim().toUpperCase();
+    if (audience !== "REGULARS" && audience !== "SELECTED") {
+      return jsonError("Choose Regulars or Selected Players.", 400);
+    }
+
+    const creatorUserId = await resolveGroupCreatorUserId(teamid, context);
+    if (!creatorUserId) {
+      return jsonError("A captain must be linked before starting a group chat.", 409);
+    }
+
+    let recipientMembers: Array<{
+      userId: string;
+      user: { name: string | null; email: string | null };
+    }> = [];
+
+    if (audience === "REGULARS") {
+      recipientMembers = await prisma.teamMember.findMany({
+        where: {
+          teamId: teamid,
+          isRegular: true,
+          userId: { not: creatorUserId },
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          userId: true,
+          user: { select: { name: true, email: true } },
+        },
+      });
+
+      if (recipientMembers.length === 0) {
+        return jsonError("No players are marked as Regulars yet.", 409);
+      }
+    } else {
+      const requestedIds = Array.isArray(payload?.memberUserIds)
+        ? Array.from(
+            new Set(
+              payload.memberUserIds
+                .map((value) => String(value).trim())
+                .filter(Boolean),
+            ),
+          )
+        : [];
+
+      if (requestedIds.length < 2) {
+        return jsonError("Select at least two people for a group chat.", 400);
+      }
+
+      recipientMembers = await prisma.teamMember.findMany({
+        where: {
+          teamId: teamid,
+          userId: { in: requestedIds, not: creatorUserId },
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          userId: true,
+          user: { select: { name: true, email: true } },
+        },
+      });
+
+      if (recipientMembers.length < 2) {
+        return jsonError("Select at least two current squad members.", 400);
+      }
+    }
+
+    const recipientUserIds = recipientMembers.map((member) => member.userId);
+    const conversationUserIds = Array.from(
+      new Set([creatorUserId, ...recipientUserIds]),
+    ).sort();
+
+    const conversationType =
+      audience === "REGULARS"
+        ? PortalConversationType.REGULARS
+        : PortalConversationType.SELECTED_GROUP;
+    const conversationKey =
+      audience === "REGULARS"
+        ? `REGULARS:${teamid}:${conversationUserIds.join(":")}`
+        : `SELECTED_GROUP:${teamid}:${conversationUserIds.join(":")}`;
+
+    const title =
+      audience === "REGULARS"
+        ? `Regulars · ${recipientUserIds.length}`
+        : (() => {
+            const names = recipientMembers.map((member) =>
+              getDisplayName(member.user),
+            );
+            if (names.length <= 3) return names.join(", ");
+            return `${names.slice(0, 2).join(", ")} + ${names.length - 2}`;
+          })();
+
+    const conversation = await prisma.portalConversation.upsert({
+      where: { conversationKey },
+      update: { title },
+      create: {
+        conversationKey,
+        teamId: teamid,
+        type: conversationType,
+        title,
+        members: {
+          create: conversationUserIds.map((userId) => ({ userId })),
+        },
+      },
+      select: { id: true, title: true },
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        conversationRef: `group:${conversation.id}`,
+        title: conversation.title,
+      },
+      { status: 201 },
+    );
+  }
+
   const message = String(payload?.message ?? "").trim();
   const notifyTeam =
     !context.isAdminTestMode &&

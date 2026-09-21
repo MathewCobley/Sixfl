@@ -17,6 +17,7 @@ import {
   removeSquadMemberAction,
   updateSquadMemberRoleAction,
 } from "./actions";
+import { setSquadMemberRegularAction } from "@/app/captain/team/[teamid]/regulars/actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -110,6 +111,10 @@ function getSavedMessage(saved?: string) {
       return "Activation email queued.";
     case "activation-sms-sent":
       return "Activation SMS queued.";
+    case "regular-added":
+      return "Player added to Regulars.";
+    case "regular-removed":
+      return "Player removed from Regulars.";
     default:
       return saved ? "Saved." : null;
   }
@@ -310,6 +315,7 @@ export default async function CaptainSquadPage({
         select: {
           id: true,
           role: true,
+          isRegular: true,
           createdAt: true,
           user: {
             select: {
@@ -435,6 +441,7 @@ export default async function CaptainSquadPage({
   const captainCount = team.members.filter((member) => member.role === "CAPTAIN").length;
   const managerCount = team.members.filter((member) => member.role === "MANAGER").length;
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
+  const regularCount = team.members.filter((member) => member.isRegular).length;
   const totalSquadCount = team.members.length + pendingSquadProspects.length;
   const yesCount = playerInterestResponses.filter((response) => response.response === "YES").length;
   const noCount = playerInterestResponses.filter((response) => response.response === "NO").length;
@@ -445,6 +452,7 @@ export default async function CaptainSquadPage({
     { label: "Captains", value: captainCount, copy: "Linked captain roles in squad.", tone: "amber" },
     { label: "Managers", value: managerCount, copy: "Organisers and managers attached.", tone: "emerald" },
     { label: "Linked players", value: playerCount, copy: "Players with a SIXFL account.", tone: "white" },
+    { label: "Regulars", value: regularCount, copy: "Players in the usual playing group.", tone: "emerald" },
     ...(isManagedTeam
       ? [{ label: "Responses", value: playerInterestResponses.length, copy: `${yesCount} YES · ${noCount} NO`, tone: "sky" }]
       : []),
@@ -607,6 +615,11 @@ export default async function CaptainSquadPage({
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
+                        {member.isRegular ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                            Regular
+                          </span>
+                        ) : null}
                         {isManagedTeam ? <PlayerResponseBadge response={latestResponse} /> : null}
                       </div>
                       <div className="mt-2 text-sm text-white/65">
@@ -649,6 +662,23 @@ export default async function CaptainSquadPage({
                   </div>
 
                   <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:max-w-[36rem] xl:justify-end">
+                    <form action={setSquadMemberRegularAction} className="w-full sm:w-auto">
+                      <input type="hidden" name="teamid" value={teamid} />
+                      <input type="hidden" name="membershipId" value={member.id} />
+                      <input type="hidden" name="isRegular" value={member.isRegular ? "false" : "true"} />
+                      <input type="hidden" name="returnTo" value="squad" />
+                      <button
+                        type="submit"
+                        className={`inline-flex w-full items-center justify-center rounded-xl border px-4 py-2.5 text-center text-sm font-medium transition sm:w-auto ${
+                          member.isRegular
+                            ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
+                            : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                        }`}
+                      >
+                        {member.isRegular ? "Regular ✓" : "Mark Regular"}
+                      </button>
+                    </form>
+
                     <form action={updateSquadMemberRoleAction} className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
                       <input type="hidden" name="teamid" value={teamid} />
                       <input type="hidden" name="membershipId" value={member.id} />

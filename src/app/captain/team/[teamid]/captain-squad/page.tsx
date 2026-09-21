@@ -13,6 +13,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
+import { setSquadMemberRegularAction } from "@/app/captain/team/[teamid]/regulars/actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -187,6 +188,10 @@ function getSavedMessage(saved?: string) {
       return "Player details updated.";
     case "login-email-sent":
       return "Dashboard sign-in email sent to the player.";
+    case "regular-added":
+      return "Player added to Regulars.";
+    case "regular-removed":
+      return "Player removed from Regulars.";
     default:
       return saved ? "Saved." : null;
   }
@@ -472,6 +477,7 @@ export default async function CaptainSquadViewPage({
         select: {
           id: true,
           role: true,
+          isRegular: true,
           createdAt: true,
           user: {
             select: {
@@ -543,6 +549,7 @@ export default async function CaptainSquadViewPage({
   const playerCount = team.members.filter((member) => member.role === "PLAYER").length;
   const backupCount = team.members.filter((member) => member.role === "BACKUP_PLAYER").length;
   const totalSquadCount = team.members.length;
+  const regularCount = team.members.filter((member) => member.isRegular).length;
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
@@ -596,7 +603,8 @@ export default async function CaptainSquadViewPage({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
             <MetricCard label="Your squad" value={totalSquadCount} copy="Players currently attached to your team." tone="emerald" />
             <MetricCard label="Organisers" value={organiserCount} copy="Captain and support roles for your team." tone="amber" />
-            <MetricCard label="Players" value={playerCount} copy="Regular players in your squad." tone="white" />
+            <MetricCard label="Players" value={playerCount} copy="Players in your squad." tone="white" />
+            <MetricCard label="Regulars" value={regularCount} copy="Players in your usual playing group." tone="emerald" />
             <MetricCard label="Backups" value={backupCount} copy="Backup players available if needed." tone="sky" />
           </div>
         </div>
@@ -670,6 +678,11 @@ export default async function CaptainSquadViewPage({
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClasses(member.role)}`}>
                           {getRoleLabel(member.role)}
                         </span>
+                        {member.isRegular ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                            Regular
+                          </span>
+                        ) : null}
                         {whatsAppUrl ? <WhatsAppLink href={whatsAppUrl} playerName={playerName} /> : null}
                       </div>
                       <div className="mt-1 text-xs text-white/45">
@@ -704,6 +717,23 @@ export default async function CaptainSquadViewPage({
                     </div>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2 xl:w-72 xl:justify-end">
+                    <form action={setSquadMemberRegularAction}>
+                      <input type="hidden" name="teamid" value={teamid} />
+                      <input type="hidden" name="membershipId" value={member.id} />
+                      <input type="hidden" name="isRegular" value={member.isRegular ? "false" : "true"} />
+                      <input type="hidden" name="returnTo" value="captain-squad" />
+                      <button
+                        type="submit"
+                        className={`inline-flex w-full items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
+                          member.isRegular
+                            ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
+                            : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                        }`}
+                      >
+                        {member.isRegular ? "Regular ✓" : "Mark Regular"}
+                      </button>
+                    </form>
+
                     <Link
                       href={`/captain/team/${teamid}/captain-squad/${member.id}/edit`}
                       className="inline-flex items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"

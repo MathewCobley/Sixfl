@@ -113,6 +113,9 @@ jobs:
       - name: Check complete Team Chat test flow
         run: node --test tests/chat-complete-flow/contract.test.cjs
 
+      - name: Check chat audiences and Regulars
+        run: node --test tests/chat-audiences-regulars/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 

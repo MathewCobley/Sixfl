@@ -10,7 +10,7 @@ test("admin chat test mode is writable without opening team chat to users", () =
   const playerPage = read("src/app/player/team/[teamid]/chat/page.tsx");
 
   assert.match(route, /actualUser\.role !== UserRole\.ADMIN/);
-  assert.match(route, /Team chat is not available yet/);
+  assert.match(route, /Whole Squad Chat is not available yet/);
   assert.match(route, /adminTestRequested/);
   assert.match(route, /isAdminTestMode: adminTestRequested/);
   assert.match(route, /canSend: adminTestRequested/);

@@ -48,12 +48,12 @@ export function previewText(body: string) {
 export async function ensureTeamPortalConversation(teamId: string) {
   return prisma.portalConversation.upsert({
     where: { conversationKey: teamConversationKey(teamId) },
-    update: {},
+    update: { title: "Whole Squad Chat" },
     create: {
       conversationKey: teamConversationKey(teamId),
       teamId,
       type: PortalConversationType.TEAM,
-      title: "Team chat",
+      title: "Whole Squad Chat",
     },
   });
 }
@@ -145,6 +145,14 @@ export async function getPortalChatUnreadCount(input: {
                 participantUserId: input.userId,
               },
             ]),
+        {
+          type: PortalConversationType.REGULARS,
+          members: { some: { userId: input.userId } },
+        },
+        {
+          type: PortalConversationType.SELECTED_GROUP,
+          members: { some: { userId: input.userId } },
+        },
       ],
     },
     select: {
