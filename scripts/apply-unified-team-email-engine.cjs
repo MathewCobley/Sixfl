@@ -111,20 +111,30 @@ teamActions = teamActions.replace(
   "      const result = await sendTeamBroadcastMessage({",
   "      const result = await sendSIXFLTeamCommunication({",
 );
-const teamMessageSenderAnchor = teamActions.includes(
-  "        variables,\n        createdByUserId,\n        deferThreadHistory: true,\n      });",
-)
-  ? "        variables,\n        createdByUserId,\n        deferThreadHistory: true,\n      });"
-  : "        variables,\n        createdByUserId,\n      });";
-const teamMessageSenderReplacement = teamMessageSenderAnchor.includes("deferThreadHistory")
-  ? "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n        deferThreadHistory: true,\n      });"
-  : "        variables,\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",\n      });";
-teamActions = replaceOnce(
-  teamActions,
-  teamMessageSenderAnchor,
-  teamMessageSenderReplacement,
-  "Team Messages canonical sender options",
+const canonicalSenderStart = teamActions.indexOf(
+  "const result = await sendSIXFLTeamCommunication({",
 );
+if (canonicalSenderStart === -1) {
+  throw new Error("Unified email patch could not find Team Messages canonical sender call.");
+}
+const canonicalSenderEnd = teamActions.indexOf("\n      });", canonicalSenderStart);
+if (canonicalSenderEnd === -1) {
+  throw new Error("Unified email patch could not find the end of Team Messages canonical sender call.");
+}
+let canonicalSenderCall = teamActions.slice(canonicalSenderStart, canonicalSenderEnd);
+if (!canonicalSenderCall.includes("\n        isTransactional,")) {
+  if (!canonicalSenderCall.includes("\n        createdByUserId,")) {
+    throw new Error("Unified email patch could not find Team Messages createdByUserId option.");
+  }
+  canonicalSenderCall = canonicalSenderCall.replace(
+    "\n        createdByUserId,",
+    "\n        createdByUserId,\n        isTransactional,\n        sendMode: cupSendMode === \"test\" ? \"TEST\" : \"SEND\",",
+  );
+  teamActions =
+    teamActions.slice(0, canonicalSenderStart) +
+    canonicalSenderCall +
+    teamActions.slice(canonicalSenderEnd);
+}
 fs.writeFileSync(teamBulkActionsPath, teamActions, "utf8");
 
 for (const [file, markers] of [
