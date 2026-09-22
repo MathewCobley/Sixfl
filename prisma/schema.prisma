@@ -1562,3 +1562,15 @@ model FixtureMatchReport {
   fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
   @@id([fixtureId, teamId])
 }
+
+// Operational request only; does not grant named guest approval.
+model FixtureLoanAuthorityRequest {
+  fixtureId String
+  teamId    String
+  count     Int
+  revision  Int @default(1)
+  updatedBy String
+  updatedAt DateTime @default(now())
+
+  @@id([fixtureId, teamId])
+}

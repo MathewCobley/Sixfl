@@ -1,3 +1,5 @@
+import { getLoanAuthorityRequests } from "@/lib/fixtures/loan-authority";
+import { loanAuthorityLabel } from "@/lib/fixtures/loan-authority-policy";
 import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/api/admin/night-board/night-fixtures/route.ts
@@ -33,7 +35,7 @@ const MARGIN = 28;
 const HEADER_HEIGHT = 104;
 const FOOTER_HEIGHT = 22;
 const COLUMN_GAP = 22;
-const MAX_FIXTURES_PER_PITCH = 6;
+const MAX_FIXTURES_PER_PITCH = 5;
 const TEAL = "#078f7e";
 const DARK = "#17201d";
 const MUTED = "#64706b";
@@ -187,6 +189,8 @@ function drawArrow(
 
 type FixtureRow = Awaited<ReturnType<typeof getFixtures>>[number];
 type PrintableFixture = FixtureRow & {
+  homeLoanCount: number;
+  awayLoanCount: number;
   prediction: ReturnType<typeof calculateFixtureWinChance> | null;
 };
 
@@ -294,6 +298,15 @@ function drawFixtureRow(
     align: "center",
     baseline: "middle",
   });
+
+  const loanBadgeSize = Math.min(30, Math.max(22, Math.floor((height - 12) / 2)));
+  const loanTextX = x + timeWidth + 10 + loanBadgeSize + 8;
+  if (fixture.homeLoanCount > 0) {
+    write(ctx, loanAuthorityLabel(fixture.homeLoanCount), loanTextX, y + 4 + loanBadgeSize / 2 + 12, { font: font(6.5, true), fill: "#9a3412" });
+  }
+  if (fixture.awayLoanCount > 0) {
+    write(ctx, loanAuthorityLabel(fixture.awayLoanCount), loanTextX, y + height - loanBadgeSize / 2 + 8, { font: font(6.5, true), fill: "#9a3412" });
+  }
 
   const teamsX = x + timeWidth + 12;
   const teamsWidth = width - timeWidth - predictorWidth - 30;
@@ -525,6 +538,7 @@ export async function GET(request: Request) {
   const start = parseLondonDateTime(date, "00:00");
   const end = parseLondonDateTime(nextDate(date), "00:00");
   const fixtures = await getFixtures({ start, end, leagueId, venueId });
+  const loanRequests = await getLoanAuthorityRequests(fixtures.map(fixture => fixture.id));
   const leagueIds = Array.from(new Set(fixtures.map((fixture) => fixture.leagueId)));
 
   const history = leagueIds.length
@@ -551,6 +565,8 @@ export async function GET(request: Request) {
 
   const printable: PrintableFixture[] = fixtures.map((fixture) => ({
     ...fixture,
+    homeLoanCount: loanRequests.find(row => row.fixtureId === fixture.id && row.teamId === fixture.homeTeam.id)?.count ?? 0,
+    awayLoanCount: loanRequests.find(row => row.fixtureId === fixture.id && row.teamId === fixture.awayTeam.id)?.count ?? 0,
     prediction:
       fixture.status === FixtureStatus.SCHEDULED
         ? calculateFixtureWinChance({

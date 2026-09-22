@@ -1,0 +1,36 @@
+name: Loan authority requests
+on:
+  pull_request:
+    paths:
+      - 'src/lib/fixtures/loan-authority*'
+      - 'src/components/admin/night-board/**'
+      - 'src/app/(admin)/admin/night-board/**'
+      - 'src/app/api/admin/night-board/**'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'tests/loan-authority/**'
+      - '.github/workflows/loan-authority.yml'
+  workflow_dispatch:
+concurrency:
+  group: loan-authority-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node --test tests/loan-authority/contract.test.cjs
+      - run: node tests/loan-authority/print.cjs
+      - run: npm install --prefix /tmp/sixfl-loan-tools --no-package-lock --ignore-scripts @electric-sql/pglite@0.5.8
+      - run: node tests/loan-authority/database.cjs
+        env:
+          PGLITE_MODULE: /tmp/sixfl-loan-tools/node_modules/@electric-sql/pglite

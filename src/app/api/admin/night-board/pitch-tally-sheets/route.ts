@@ -1,3 +1,5 @@
+import { getLoanAuthorityRequests } from "@/lib/fixtures/loan-authority";
+import { loanAuthorityLabel } from "@/lib/fixtures/loan-authority-policy";
 import { PREDICTOR_RESULT_SELECT } from "@/lib/fixtures/result-score";
 // ========================================
 // File: src/app/api/admin/night-board/pitch-tally-sheets/route.ts
@@ -62,6 +64,8 @@ type TvRow = { id: string; sixflTvRecorded: boolean };
 type ShinPadWarningCountRow = { teamId: string; warningCount: number };
 type FixtureRow = Awaited<ReturnType<typeof getFixtures>>[number];
 type PrintableFixture = FixtureRow & {
+  homeLoanCount: number;
+  awayLoanCount: number;
   isTv: boolean;
   homeKitColour: string | null;
   awayKitColour: string | null;
@@ -242,6 +246,7 @@ function drawTeamTallyRow(
   ctx: CanvasRenderingContext2D,
   input: {
     teamName: string;
+    loanCount: number;
     kitColour: string | null;
     warningCount: number;
     x: number;
@@ -256,6 +261,10 @@ function drawTeamTallyRow(
   const tallyX = input.x + teamWidth;
   const scoreX = input.x + input.width - scoreWidth;
   const tallyWidth = scoreX - sectionGap - tallyX;
+
+  if (input.loanCount > 0) {
+    write(ctx, loanAuthorityLabel(input.loanCount), input.x + 23, input.y + 5, { font: font(5.7, true), fill: "#9a3412" });
+  }
 
   drawShirt(ctx, input.x + 2, input.y + 10, input.kitColour);
   ctx.font = font(8.6, true);
@@ -371,6 +380,7 @@ function drawFixture(
   const rowWidth = width - 20;
   drawTeamTallyRow(ctx, {
     teamName: fixture.homeTeam.name,
+    loanCount: fixture.homeLoanCount,
     kitColour: fixture.homeKitColour,
     warningCount: fixture.homeShinPadWarningCount,
     x: rowX,
@@ -379,6 +389,7 @@ function drawFixture(
   });
   drawTeamTallyRow(ctx, {
     teamName: fixture.awayTeam.name,
+    loanCount: fixture.awayLoanCount,
     kitColour: fixture.awayKitColour,
     warningCount: fixture.awayShinPadWarningCount,
     x: rowX,
@@ -593,6 +604,7 @@ export async function GET(request: Request) {
   const start = parseLondonDateTime(date, "00:00");
   const end = parseLondonDateTime(nextDate(date), "00:00");
   const fixtures = await getFixtures({ start, end, leagueId, venueId });
+  const loanRequests = await getLoanAuthorityRequests(fixtures.map(fixture => fixture.id));
   const fixtureIds = fixtures.map((fixture) => fixture.id);
   const leagueIds = Array.from(new Set(fixtures.map((fixture) => fixture.leagueId)));
   const teamIds = Array.from(
@@ -651,6 +663,8 @@ export async function GET(request: Request) {
   );
   const printable: PrintableFixture[] = fixtures.map((fixture) => ({
     ...fixture,
+    homeLoanCount: loanRequests.find(row => row.fixtureId === fixture.id && row.teamId === fixture.homeTeam.id)?.count ?? 0,
+    awayLoanCount: loanRequests.find(row => row.fixtureId === fixture.id && row.teamId === fixture.awayTeam.id)?.count ?? 0,
     isTv: tvByFixture.get(fixture.id) ?? false,
     homeKitColour: kitColours.get(fixture.homeTeam.id) ?? null,
     awayKitColour: kitColours.get(fixture.awayTeam.id) ?? null,

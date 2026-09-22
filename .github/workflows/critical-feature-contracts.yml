@@ -226,6 +226,9 @@ jobs:
           node scripts/check-fixture-abandonment-email-recovery.mjs
           node scripts/check-fixture-formal-conduct-notice.mjs
 
+      - name: Verify loan authority request contracts
+        run: node --test tests/loan-authority/contract.test.cjs
+
       - name: Generate Prisma client
         run: npx prisma generate
 
