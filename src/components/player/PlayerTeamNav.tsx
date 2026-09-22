@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   BanknotesIcon,
   CalendarDaysIcon,
-  ChartBarSquareIcon,
   ChatBubbleLeftRightIcon,
   EllipsisHorizontalCircleIcon,
   HomeIcon,
@@ -99,7 +99,6 @@ const appTabs = (
   teamId: string,
   previewMembershipId: string | null,
   unreadChatCount: number,
-  showTeamChat: boolean,
 ): PlayerAppTab[] => [
   {
     href: addPreviewMembershipId(`/player/team/${teamId}`, previewMembershipId),
@@ -116,20 +115,13 @@ const appTabs = (
     exact: false,
     icon: CalendarDaysIcon,
   },
-  ...(showTeamChat
-    ? [{
-        href: addPreviewMembershipId(`/player/team/${teamId}/chat`, previewMembershipId),
-        label: "Chat",
-        exact: false,
-        unreadCount: unreadChatCount,
-        icon: ChatBubbleLeftRightIcon,
-      }]
-    : [{
-        href: addPreviewMembershipId(`/player/team/${teamId}/stats`, previewMembershipId),
-        label: "Stats",
-        exact: false,
-        icon: ChartBarSquareIcon,
-      }]),
+  {
+    href: addPreviewMembershipId(`/player/team/${teamId}/chat`, previewMembershipId),
+    label: "Chat",
+    exact: false,
+    unreadCount: unreadChatCount,
+    icon: ChatBubbleLeftRightIcon,
+  },
   {
     href: addPreviewMembershipId(`/player/team/${teamId}/ledger`, previewMembershipId),
     label: "Payments",
@@ -157,6 +149,40 @@ export default function PlayerTeamNav({
   const searchParams = useSearchParams();
   const previewMembershipId = searchParams.get("previewMembershipId")?.trim() || null;
   const effectiveShowTeamChat = showTeamChat && !previewMembershipId;
+  const [liveUnreadChatCount, setLiveUnreadChatCount] = useState(unreadChatCount);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams();
+    if (previewMembershipId) {
+      params.set("previewMembershipId", previewMembershipId);
+    }
+    const query = params.toString();
+
+    async function refreshUnreadCount() {
+      try {
+        const response = await fetch(
+          `/api/player/team/${teamId}/chat-unread${query ? `?${query}` : ""}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as { unreadCount?: number };
+        if (!cancelled && Number.isFinite(payload.unreadCount)) {
+          setLiveUnreadChatCount(Math.max(0, Number(payload.unreadCount)));
+        }
+      } catch {
+        // Keep the last known count if the lightweight refresh fails.
+      }
+    }
+
+    setLiveUnreadChatCount(unreadChatCount);
+    void refreshUnreadCount();
+    const timer = window.setInterval(refreshUnreadCount, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [teamId, previewMembershipId, unreadChatCount]);
 
   return (
     <>
@@ -213,7 +239,7 @@ export default function PlayerTeamNav({
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 px-1 pt-1.5">
-          {appTabs(teamId, previewMembershipId, unreadChatCount, effectiveShowTeamChat).map((tab) => {
+          {appTabs(teamId, previewMembershipId, liveUnreadChatCount).map((tab) => {
             const active = isActivePath(pathname, tab);
             const Icon = tab.icon;
 
