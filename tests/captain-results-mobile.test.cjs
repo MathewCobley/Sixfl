@@ -119,6 +119,18 @@ if (require.main === module) {
     assert.equal(h.writes[0].update.scorers[0].goals, 2);
     assert.equal(h.writes[0].update.scorers.length, 1);
   });
+  test('a saved own goal satisfies scorer completeness against the official score', async () => {
+    const h = harness();
+    const meta = h.data.fixture.result.teamMetadata[0];
+    meta.goalsRecorded = 2;
+    meta.ownGoals = 1;
+    meta.scorers = [{ teamMemberId: 'player-0', name: 'Test Player 0', goals: 2, assists: 0 }];
+    const html = renderToStaticMarkup(await h.page());
+    assert.match(html, /Own goal: 1/);
+    assert.match(html, /Accounted for 3 of 3 on-pitch team goals/);
+    assert.match(html, />Complete</);
+    assert.doesNotMatch(html, /Recorded 2 of 3 on-pitch team goals/);
+  });
   test('captain permissions, score bounds and the nine-player limit still reject invalid saves', async () => {
     for (const scenario of ['unauthorised', 'goals', 'ownGoals', 'assists', 'rating', 'players']) {
       const h = harness(), form = findForm(await h.page()), body = new FormData();
