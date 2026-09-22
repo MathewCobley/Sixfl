@@ -175,6 +175,26 @@ for(const channel of ['EMAIL','SMS'])test(`ordinary ${channel} requests still re
   await seed({alert:false});await dispatch('request',{channel,sourceType:channel==='EMAIL'?'FIXTURE_CONFIRMATION_INITIAL_EMAIL':'FIXTURE_CONFIRMATION_CHASE_SMS'});
   const h=processor(['request']);assert.equal((await h.run()).sent,1);assert.equal(h.delivered.length,1);
 });
+test('captain and Night Board surfaces treat the allocated replacement as no-confirmation-required',()=>{
+  const captain=read('src/app/captain/team/[teamid]/fixtures/page.tsx');
+  const nightBoard=read('src/app/(admin)/admin/night-board/page.tsx');
+  const policySource=read('src/lib/fixtures/replacement-confirmation-policy.ts');
+
+  assert.match(policySource,/getAllocatedReplacementConfirmationBlocks/);
+  assert.match(policySource,/replacementConfirmationReferenceKey/);
+
+  assert.match(captain,/getAllocatedReplacementConfirmationBlocks/);
+  assert.match(captain,/Replacement agreed/);
+  assert.match(captain,/Replacement fixture agreed/);
+  assert.match(captain,/You do not need to confirm the fixture again/);
+  assert.match(captain,/!selectedReplacementReason/);
+
+  assert.match(nightBoard,/getAllocatedReplacementConfirmationBlocks/);
+  assert.match(nightBoard,/label: "Replacement agreed"/);
+  assert.match(nightBoard,/no further confirmation required/);
+  assert.match(nightBoard,/replacementConfirmationBlocks/);
+});
+
 test('both final gates and queue checks remain native after prebuild; resolver still sends replacement details',()=>{
   const processor=read('src/lib/notifications/processor.ts');assert.equal((processor.match(/await getFixtureConfirmationDeliveryBlock\(dispatch\)/g)||[]).length,2);
   for(const name of ['confirmation-emails.ts','confirmation-reminders.ts','confirmation-warning-emails.ts'])assert.match(read('src/lib/fixtures/'+name),/await getAllocatedReplacementConfirmationBlock/);
