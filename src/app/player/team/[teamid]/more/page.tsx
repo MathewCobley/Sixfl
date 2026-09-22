@@ -1,5 +1,12 @@
 import Link from "next/link";
+import { UserRole } from "@prisma/client";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/auth";
+import { getPlayerTeamMembershipsByUserId } from "@/lib/players/player-team-memberships";
+import { prisma } from "@/lib/prisma";
 import {
+  ArrowsRightLeftIcon,
   BookOpenIcon,
   ChartBarSquareIcon,
   ChevronRightIcon,
@@ -23,7 +30,42 @@ function withPreview(href: string, previewMembershipId: string | null) {
 export default async function PlayerMorePage({ params, searchParams }: PageProps) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
-  const previewMembershipId = sp.previewMembershipId?.trim() || null;
+  const session = await getServerSession(authOptions);
+  const requestedPreviewMembershipId = sp.previewMembershipId?.trim() || null;
+
+  const user = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email.trim().toLowerCase() },
+        select: {
+          id: true,
+          role: true,
+          teamMembers: {
+            where: { teamId: teamid },
+            select: { id: true, userId: true },
+            take: 1,
+          },
+        },
+      })
+    : null;
+
+  const previewMembership =
+    user?.role === UserRole.ADMIN && requestedPreviewMembershipId
+      ? await prisma.teamMember.findFirst({
+          where: { id: requestedPreviewMembershipId, teamId: teamid },
+          select: { id: true, userId: true },
+        })
+      : null;
+
+  const previewMembershipId =
+    user?.role === UserRole.ADMIN ? previewMembership?.id ?? null : null;
+  const effectiveUserId =
+    previewMembership?.userId ?? user?.teamMembers[0]?.userId ?? null;
+  const membershipMap = effectiveUserId
+    ? await getPlayerTeamMembershipsByUserId([effectiveUserId])
+    : new Map();
+  const linkedTeamAccounts = effectiveUserId
+    ? membershipMap.get(effectiveUserId) ?? []
+    : [];
 
   const rows = [
     {
@@ -62,6 +104,19 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       description: "Get help or send SIXFL a private message",
       icon: LifebuoyIcon,
     },
+    ...(linkedTeamAccounts.length > 1
+      ? [
+          {
+            href: withPreview(
+              `/player/team/${teamid}/switch-account`,
+              previewMembershipId,
+            ),
+            label: "Switch team account",
+            description: `Choose between your ${linkedTeamAccounts.length} linked team accounts`,
+            icon: ArrowsRightLeftIcon,
+          },
+        ]
+      : []),
   ];
 
   return (
