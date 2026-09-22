@@ -49,6 +49,13 @@ expect(
   "captains must have a forced resend path and collection saving must report actual queued email count",
 );
 expect(
+  action.includes("const forceEmailFeeIds = new Set<string>()") &&
+    action.includes("existing.amountPence !== playerAmountPence") &&
+    action.includes("...(forceFeeIds.has(feeId) ? { force: true } : {})") &&
+    action.includes("replaced by an updated payment request"),
+  "changing an existing player payment amount must replace any stale queued request and force a fresh email",
+);
+expect(
   page.includes("emailRequired:") &&
     page.includes("disabled={ledgerControlled || (player.emailRequired && !player.fee)}") &&
     page.includes("Send payment link again"),

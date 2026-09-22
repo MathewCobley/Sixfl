@@ -235,7 +235,10 @@ async function syncTeamChargeForZeroFeeWaivers(input: {
   });
 }
 
-async function emailPlayerPaymentLinks(feeIds: string[]) {
+async function emailPlayerPaymentLinks(
+  feeIds: string[],
+  forceFeeIds: Set<string> = new Set(),
+) {
   const uniqueFeeIds = Array.from(new Set(feeIds.filter(Boolean)));
   let queued = 0;
   let skipped = 0;
@@ -245,6 +248,7 @@ async function emailPlayerPaymentLinks(feeIds: string[]) {
       feeId,
       mode: "request",
       channels: ["EMAIL"],
+      ...(forceFeeIds.has(feeId) ? { force: true } : {}),
     });
 
     queued += result.queued;
@@ -396,6 +400,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
     .map((player) => player.id);
   const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(selectedMemberIds);
   const createdOrUpdatedFeeIds: string[] = [];
+  const forceEmailFeeIds = new Set<string>();
 
   for (const player of players) {
     const enteredAmountPence = getPlayerAmountPence({
@@ -447,7 +452,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, teamMemberId: player.id },
-        select: { id: true, status: true, note: true },
+        select: { id: true, status: true, amountPence: true, note: true },
       });
 
       if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerBalanceProtected(existing.id))) continue;
@@ -479,6 +484,13 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             select: { id: true, status: true },
           });
 
+      if (
+        fee.status === "OPEN" &&
+        existing &&
+        (existing.status !== "OPEN" || existing.amountPence !== playerAmountPence)
+      ) {
+        forceEmailFeeIds.add(fee.id);
+      }
       if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
 
@@ -492,7 +504,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
       const existing = await prisma.playerMatchFee.findFirst({
         where: { fixtureId, prospectId: player.id },
-        select: { id: true, status: true, note: true },
+        select: { id: true, status: true, amountPence: true, note: true },
       });
 
       if (existing && (isLockedPlayerFee(existing.status) || await isPlayerFeeLedgerBalanceProtected(existing.id))) continue;
@@ -524,6 +536,13 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
             select: { id: true, status: true },
           });
 
+      if (
+        fee.status === "OPEN" &&
+        existing &&
+        (existing.status !== "OPEN" || existing.amountPence !== playerAmountPence)
+      ) {
+        forceEmailFeeIds.add(fee.id);
+      }
       if (fee.status === "OPEN") createdOrUpdatedFeeIds.push(fee.id);
     }
   }
@@ -573,7 +592,14 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
   await syncTeamChargeForZeroFeeWaivers({ teamId, fixtureId });
   await ensurePlayerMatchFeePaymentDetailsForFees(createdOrUpdatedFeeIds);
-  const delivery = await emailPlayerPaymentLinks(createdOrUpdatedFeeIds);
+  await cancelQueuedPlayerMatchFeeNotificationDispatches(
+    Array.from(forceEmailFeeIds),
+    "Player match fee amount or collection method was updated before delivery; replaced by an updated payment request.",
+  );
+  const delivery = await emailPlayerPaymentLinks(
+    createdOrUpdatedFeeIds,
+    forceEmailFeeIds,
+  );
 
   revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));
   redirect(
