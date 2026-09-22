@@ -13,6 +13,7 @@ import {
   PreferredNight,
   Prisma,
 } from "@prisma/client";
+import { parseLondonDateTime } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { queueDirectNotification } from "@/lib/notifications/service";
@@ -31,6 +32,7 @@ type ParsedLeagueInput = {
   slug: string;
   season: string | null;
   isActive: boolean;
+  publicAt: Date | null;
   isMoving?: boolean;
   area: string | null;
   dayOfWeek: PreferredNight | null;
@@ -180,6 +182,20 @@ function parseOptionalTime(value: FormDataEntryValue | null) {
   return raw;
 }
 
+function parsePublicAt(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(raw);
+  if (!match) return undefined;
+
+  try {
+    return parseLondonDateTime(match[1], match[2]);
+  } catch {
+    return undefined;
+  }
+}
+
 async function setLeagueRequiredRefereesPerNight(input: {
   leagueId: string;
   requiredRefereesPerNight: number;
@@ -258,6 +274,7 @@ function parseLeagueInput(formData: FormData): {
   const ctaText = normaliseText(formData.get("ctaText"));
 
   const proposedStartDate = parseProposedStartDate(formData.get("proposedStartDate"));
+  const publicAt = parsePublicAt(formData.get("publicAt"));
   const minutesPerGame = parseOptionalWholeNumber({ value: formData.get("minutesPerGame"), min: 1, max: 180 });
   const costPerTeamPerMatchPence = parseCostPerTeamPerMatchPence(formData.get("costPerTeamPerMatch"));
   const targetTeamCount = parseOptionalWholeNumber({ value: formData.get("targetTeamCount"), min: 2, max: 64 });
@@ -284,6 +301,7 @@ function parseLeagueInput(formData: FormData): {
   if (rawDayOfWeek && !dayOfWeek) errors.dayOfWeek = ["Please choose a valid day."];
   if (rawLeagueType && !leagueType) errors.leagueType = ["Please choose a valid league type."];
   if (proposedStartDate === null) errors.proposedStartDate = ["Please enter a valid proposed start date."];
+  if (publicAt === undefined) errors.publicAt = ["Please enter a valid public go-live date and time."];
   if (minutesPerGame === null) errors.minutesPerGame = ["Minutes per game must be a whole number between 1 and 180."];
   if (costPerTeamPerMatchPence === null) errors.costPerTeamPerMatch = ["Cost must be a valid amount between £0 and £1,000."];
   if (targetTeamCount === null) errors.targetTeamCount = ["Target number of teams must be a whole number between 2 and 64."];
@@ -297,7 +315,7 @@ function parseLeagueInput(formData: FormData): {
   if (ctaText && ctaText.length > 80) errors.ctaText = ["CTA text must be 80 characters or fewer."];
 
   return {
-    data: { name, slug, season, isActive, isMoving, area, dayOfWeek, leagueType, venueName, kickoffInfo, format, surface, description, heroImageUrl, badgeUrl, ctaText },
+    data: { name, slug, season, isActive, publicAt: publicAt ?? null, isMoving, area, dayOfWeek, leagueType, venueName, kickoffInfo, format, surface, description, heroImageUrl, badgeUrl, ctaText },
     requiredRefereesPerNight: requiredRefereesPerNight ?? 1,
     confirmationDetails: { proposedStartDate: proposedStartDate ?? null, minutesPerGame: minutesPerGame ?? null, costPerTeamPerMatchPence: costPerTeamPerMatchPence ?? null, targetTeamCount: targetTeamCount ?? null },
     bookingDetails: { bookedPitchCount: bookedPitchCount ?? null, bookingStartTime: bookingStartTime ?? null, bookingEndTime: bookingEndTime ?? null, pitchCostPerHourOverridePence: pitchCostPerHourOverridePence ?? null },

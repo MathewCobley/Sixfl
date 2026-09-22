@@ -15,7 +15,7 @@ export async function GET(
 
   try {
     const league = await prisma.league.findFirst({
-      where: { slug, isActive: true },
+      where: { slug, isActive: true, publicAt: { lte: new Date() } },
       select: { id: true, name: true },
     });
 

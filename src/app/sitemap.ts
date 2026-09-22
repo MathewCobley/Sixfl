@@ -29,6 +29,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           id: {
             in: currentLeagueIds,
           },
+          isActive: true,
+          publicAt: { lte: new Date() },
         },
         select: {
           slug: true,

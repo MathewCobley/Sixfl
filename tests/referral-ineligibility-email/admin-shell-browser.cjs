@@ -20,6 +20,7 @@ const { renderReferralLayout } = require('./layout-fixture.cjs');
     '@/lib/messaging/service': 'export const getAdminInboxSummary=async()=>({unreadThreads:0});',
     '@/lib/night-board/next-night-issues': 'export const getNextNightBoardIssueSummary=async()=>({count:0});',
     '@/lib/prisma': 'export const prisma={resultDispute:{count:async()=>0}};',
+    '@/components/admin/sixfl-tv/FootageUploadProvider': 'import React from "react";export default function FootageUploadProvider(p){return React.createElement(React.Fragment,null,p.children)}',
   };
   const source = `
     import React,{useEffect} from 'react';

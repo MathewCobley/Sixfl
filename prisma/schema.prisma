@@ -130,6 +130,7 @@ model League {
   name     String
   season   String?
   isActive Boolean @default(true)
+  publicAt DateTime?
   slug     String  @unique
 
   area         String?
@@ -162,6 +163,7 @@ model League {
   @@index([competitionId])
   @@index([competitionId, season])
   @@index([isActive])
+  @@index([publicAt])
   @@index([area])
   @@index([dayOfWeek])
   @@index([leagueType])
