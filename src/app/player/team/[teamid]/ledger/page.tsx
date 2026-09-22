@@ -233,6 +233,9 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
             : formatActivityDate(displayDate),
         title: entryTitle(entry.kind),
         detail: entryDetail(entry.kind, entry.reason),
+        fixtureLabel: fee
+          ? `${fixtureLabel(fee)} · ${formatShortDate(fee.fixture.kickoffAt)}`
+          : null,
         amountPence: entry.amountPence,
         balancePence: runningBalanceByEntryId.get(entry.id) ?? 0,
         receivedByCaptain: entry.receivedBy === "CAPTAIN",

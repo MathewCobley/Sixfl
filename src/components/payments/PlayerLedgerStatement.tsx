@@ -16,6 +16,14 @@ function entryReason(kind: string, reason: string) {
   return reason.replaceAll("[SIXFL_PLAYER_LEDGER_RECEIPTS]", "").trim();
 }
 
+function fixtureLabel(fee: PlayerLedgerAccount["fees"][number] | undefined) {
+  if (!fee) return null;
+  return `${fee.fixture.homeTeam.name} vs ${fee.fixture.awayTeam.name} · ${formatDateTimeInLondon(
+    fee.fixture.kickoffAt,
+    { day: "2-digit", month: "short", year: "numeric" },
+  )}`;
+}
+
 export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAccount}){
   const feeById = new Map(account.fees.map(fee => [fee.id, fee]));
   const runningBalanceByEntryId = new Map<string, number>();
@@ -38,7 +46,8 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
         const displayDate = e.kind === "OPENING_BALANCE" && fee?.fixture?.kickoffAt
           ? fee.fixture.kickoffAt
           : e.createdAt;
-        return <tr key={e.id} className="border-t border-white/10 align-top"><td className="whitespace-nowrap p-2">{formatDateTimeInLondon(displayDate,{day:"2-digit",month:"short",year:"numeric",hour:e.kind==="OPENING_BALANCE"?undefined:"2-digit",minute:e.kind==="OPENING_BALANCE"?undefined:"2-digit"})}</td><td className="p-2"><span className="font-medium">{entryLabel(e.kind)}</span><p className="mt-1 max-w-xl text-xs text-white/55">{entryReason(e.kind,e.reason)}</p>{e.receivedBy?<p className="text-xs text-white/55">Received by {e.receivedBy==="CAPTAIN"?"captain — not a SIXFL bank receipt":"SIXFL"}</p>:null}</td><td className="whitespace-nowrap p-2 text-right">{e.amountPence>0?"+":""}{money(e.amountPence)}</td><td className="whitespace-nowrap p-2 text-right font-semibold">{money(runningBalanceByEntryId.get(e.id) ?? 0)}</td></tr>;
+        const matchLabel = fixtureLabel(fee);
+        return <tr key={e.id} className="border-t border-white/10 align-top"><td className="whitespace-nowrap p-2">{formatDateTimeInLondon(displayDate,{day:"2-digit",month:"short",year:"numeric",hour:e.kind==="OPENING_BALANCE"?undefined:"2-digit",minute:e.kind==="OPENING_BALANCE"?undefined:"2-digit"})}</td><td className="p-2"><span className="font-medium">{entryLabel(e.kind)}</span>{matchLabel?<p className="mt-1 text-xs font-medium text-emerald-100/80">Match: {matchLabel}</p>:null}<p className="mt-1 max-w-xl text-xs text-white/55">{entryReason(e.kind,e.reason)}</p>{e.receivedBy?<p className="text-xs text-white/55">Received by {e.receivedBy==="CAPTAIN"?"captain — not a SIXFL bank receipt":"SIXFL"}</p>:null}</td><td className="whitespace-nowrap p-2 text-right">{e.amountPence>0?"+":""}{money(e.amountPence)}</td><td className="whitespace-nowrap p-2 text-right font-semibold">{money(runningBalanceByEntryId.get(e.id) ?? 0)}</td></tr>;
       })}</tbody>
     </table></div>
   </section>;

@@ -26,6 +26,7 @@ export type PlayerAppPaymentActivity = {
   dateLabel: string;
   title: string;
   detail: string;
+  fixtureLabel: string | null;
   amountPence: number;
   balancePence: number;
   receivedByCaptain: boolean;
@@ -290,6 +291,11 @@ export default function PlayerAppPayments({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-white">{entry.title}</div>
+                        {entry.fixtureLabel ? (
+                          <div className="mt-0.5 truncate text-[11px] font-semibold text-emerald-100/70">
+                            {entry.fixtureLabel}
+                          </div>
+                        ) : null}
                         <div className="mt-0.5 text-[10px] text-white/35">{entry.dateLabel}</div>
                       </div>
                       <div className={`shrink-0 text-sm font-black ${amountTone(entry.amountPence)}`}>

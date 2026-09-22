@@ -197,6 +197,19 @@ test("money and small residual policy do not round debt away or silently increas
  assert.equal(parseLedgerMoney("8"),800);assert.equal(parseLedgerMoney("£8.01"),801);assert.throws(()=>parseLedgerMoney("8.001"));assert.throws(()=>parseLedgerMoney("-8"));
  assert.equal(repaymentAmount({instalmentPence:800,instalmentPaidPence:0},1200),800);assert.equal(repaymentAmount({instalmentPence:800,instalmentPaidPence:0},825),775);
 });
+test("player payment history names the fixture for each ledger entry",()=>{
+ const read=(p:string)=>readFileSync(p,"utf8");
+ const statement=read("src/components/payments/PlayerLedgerStatement.tsx");
+ const page=read("src/app/player/team/[teamid]/ledger/page.tsx");
+ const app=read("src/components/player/PlayerAppPayments.tsx");
+ assert.match(statement,/Match: \{matchLabel\}/);
+ assert.match(statement,/homeTeam\.name/);
+ assert.match(statement,/awayTeam\.name/);
+ assert.match(page,/fixtureLabel: fee/);
+ assert.match(page,/formatShortDate\(fee\.fixture\.kickoffAt\)/);
+ assert.match(app,/entry\.fixtureLabel/);
+});
+
 test("prepared sources retain normal guards, optional native controls and a single verified payment handoff",()=>{
  const read=(p:string)=>readFileSync(p,"utf8");const processor=read("src/lib/notifications/processor.ts");assert.ok(processor.indexOf("await playerLedgerNotificationBlock(dispatch)")<processor.indexOf("const sendResult = await sendEmailWithResend"));
  const webhook=read("src/app/api/stripe/webhook/route.ts");assert.match(webhook,/settlePlayerRepaymentSession/);assert.match(webhook,/handlePlayerRepaymentRefund/);
