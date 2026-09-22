@@ -24,7 +24,7 @@ const generalRegisterLink = "/register-interest";
 const generalTeamLink = "/register-interest?type=team";
 const generalPlayerLink = "/register-interest?type=player";
 const generalRefereeLink = "/register-interest?type=referee";
-const predictorHomeTeamName = "Six Offenders";
+const predictorHomeTeamName = "Dynamo Kebab";
 const predictorAwayTeamName = "Crescent United";
 
 const whySixflPoints = [

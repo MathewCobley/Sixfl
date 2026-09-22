@@ -2,7 +2,7 @@ import Image from "next/image";
 
 import predictorLogo from "../../../public/logos/sixfl-ai-predictor.png";
 
-const predictorHomeTeamName = "Six Offenders";
+const predictorHomeTeamName = "Dynamo Kebab";
 const predictorAwayTeamName = "Crescent United";
 
 const predictorSample = [
@@ -72,7 +72,7 @@ export default function HomepageAiPredictorSection({
 
             <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:gap-5 sm:p-5">
               <SampleTeamBadge
-                initials="SO"
+                initials="DK"
                 logoUrl={teamLogos.homeLogoUrl}
                 name={predictorHomeTeamName}
                 tone="emerald"
@@ -94,7 +94,7 @@ export default function HomepageAiPredictorSection({
               ))}
             </div>
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/62">
-              Six Offenders are slight favourites after stronger recent scoring form. Crescent United still carry enough attacking threat to keep this fixture competitive.
+              Dynamo Kebab are slight favourites after stronger recent scoring form. Crescent United still carry enough attacking threat to keep this fixture competitive.
             </div>
             <div className="mt-4 text-[11px] leading-5 text-white/35">
               Live predictions are calculated from completed SIXFL results, recent form, goals scored and goals conceded.
