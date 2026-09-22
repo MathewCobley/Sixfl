@@ -1,11 +1,9 @@
 import Link from "next/link";
 import {
   BanknotesIcon,
+  CalendarDaysIcon,
   ChartBarSquareIcon,
   ChevronRightIcon,
-  GlobeAltIcon,
-  QuestionMarkCircleIcon,
-  TrophyIcon,
 } from "@heroicons/react/24/outline";
 
 type PageProps = {
@@ -15,8 +13,9 @@ type PageProps = {
 
 function withPreview(href: string, previewMembershipId: string | null) {
   if (!previewMembershipId) return href;
-  const separator = href.includes("?") ? "&" : "?";
-  return `${href}${separator}previewMembershipId=${encodeURIComponent(previewMembershipId)}`;
+  const [path, hash = ""] = href.split("#");
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}previewMembershipId=${encodeURIComponent(previewMembershipId)}${hash ? `#${hash}` : ""}`;
 }
 
 export default async function PlayerMorePage({ params, searchParams }: PageProps) {
@@ -38,32 +37,13 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       icon: ChartBarSquareIcon,
     },
     {
-      href: withPreview(`/player/team/${teamid}/league-results`, previewMembershipId),
-      label: "League & results",
-      description: "Results, table and recent form",
-      icon: TrophyIcon,
-    },
-    {
-      href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamid)}${
-        previewMembershipId
-          ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
-          : ""
-      }`,
-      label: "Goal of the Month",
-      description: "Nominate, watch and vote",
-      icon: TrophyIcon,
-    },
-    {
-      href: "/player/referrals",
-      label: "Refer a team",
-      description: "Your SIXFL team referral reward",
-      icon: GlobeAltIcon,
-    },
-    {
-      href: "/faq",
-      label: "Help & FAQ",
-      description: "Rules, support and common questions",
-      icon: QuestionMarkCircleIcon,
+      href: withPreview(
+        `/player/team/${teamid}/availability#recent-results`,
+        previewMembershipId,
+      ),
+      label: "Recent results",
+      description: "Your latest SIXFL results inside the app",
+      icon: CalendarDaysIcon,
     },
   ];
 
@@ -76,7 +56,7 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
           </p>
           <h1 className="mt-1 text-2xl font-black tracking-tight">More</h1>
           <p className="mt-2 text-sm leading-6 text-white/45">
-            Less-used player tools live here so the main app stays simple.
+            Everything here stays inside the SIXFL player app.
           </p>
         </div>
 
@@ -107,13 +87,7 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
           })}
         </section>
 
-        <div className="mt-5 grid gap-3">
-          <Link
-            href="/"
-            className="flex min-h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70"
-          >
-            Open full SIXFL website
-          </Link>
+        <div className="mt-5">
           <Link
             href="/api/auth/signout"
             className="flex min-h-12 items-center justify-center rounded-2xl border border-white/10 px-4 text-sm font-semibold text-white/45"

@@ -344,7 +344,6 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
       select: {
         id: true,
         kickoffAt: true,
-        sixflTvUrl: true,
         homeTeam: { select: { name: true, logoUrl: true } },
         awayTeam: { select: { name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true } },
@@ -445,12 +444,6 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
   const appRecentResults: PlayerAppRecentResult[] = recentResultRows.flatMap(
     (fixture) => {
       if (!fixture.result) return [];
-      const highlightsUrl =
-        fixture.sixflTvUrl
-          ?.split(/\n+/)
-          .map((value) => value.trim())
-          .find(Boolean) ?? null;
-
       return [
         {
           id: fixture.id,
@@ -465,7 +458,6 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
           },
           homeScore: fixture.result.homeScore,
           awayScore: fixture.result.awayScore,
-          highlightsUrl,
         },
       ];
     },

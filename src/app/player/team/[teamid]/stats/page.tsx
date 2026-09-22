@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import PlayerAppStats from "@/components/player/PlayerAppStats";
+import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 
@@ -75,10 +77,13 @@ function topRows(
 
 export default async function PlayerStatsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamid: string }>;
+  searchParams?: Promise<{ previewMembershipId?: string }>;
 }) {
   const { teamid } = await params;
+  const sp = (await searchParams) ?? {};
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
@@ -102,7 +107,19 @@ export default async function PlayerStatsPage({
     redirect(`/login?callbackUrl=${encodeURIComponent(`/player/team/${teamid}/stats`)}`);
   }
 
-  const ownMembershipId = user.teamMembers[0]?.id ?? null;
+  const requestedPreviewMembershipId =
+    user.role === UserRole.ADMIN ? sp.previewMembershipId?.trim() || null : null;
+  const previewMembership = requestedPreviewMembershipId
+    ? await prisma.teamMember.findFirst({
+        where: { id: requestedPreviewMembershipId, teamId: teamid },
+        select: { id: true },
+      })
+    : null;
+
+  if (requestedPreviewMembershipId && !previewMembership) notFound();
+
+  const ownMembershipId =
+    previewMembership?.id ?? user.teamMembers[0]?.id ?? null;
   if (!ownMembershipId && user.role !== UserRole.ADMIN) notFound();
 
   const team = await prisma.team.findUnique({
@@ -263,9 +280,70 @@ export default async function PlayerStatsPage({
     },
   ];
 
+
+  const appLeaderboards = leaderboardCards.map((card) => ({
+    title: card.title,
+    label: card.label,
+    rows: card.rows.map((player) => ({
+      teamMemberId: player.teamMemberId,
+      name: player.name,
+      value: card.value(player),
+      isCurrentPlayer: player.teamMemberId === ownMembershipId,
+    })),
+  }));
+
+  const appSquad = sortedSquad.map((player) => ({
+    teamMemberId: player.teamMemberId,
+    name: player.name,
+    appearances: player.appearances,
+    goals: player.goals,
+    assists: player.assists,
+    playerOfMatchAwards: player.playerOfMatchAwards,
+    averageRating: player.averageRating,
+    isCurrentPlayer: player.teamMemberId === ownMembershipId,
+  }));
+
+  const appRecentMatches = recentMatches.map((match) => {
+    const teamWasHome = match.homeTeamId === teamid;
+    return {
+      id: match.matchResultId,
+      dateLabel: formatDate(match.kickoffAt),
+      opponent: teamWasHome ? match.awayTeamName : match.homeTeamName,
+      teamScore: teamWasHome ? match.homeScore : match.awayScore,
+      opponentScore: teamWasHome ? match.awayScore : match.homeScore,
+      goalsRecorded: match.goalsRecorded,
+      assistsRecorded: match.assistsRecorded,
+      averageRating: match.averageRating,
+      playerOfMatchName: match.playerOfMatchName,
+    };
+  });
+
   return (
-    <main className="px-4 py-6 text-white">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <main className="text-white">
+      <PlayerPwaModeOnly mode="app">
+        <PlayerAppStats
+          teamName={team.name}
+          seasonLabel={seasonLabel}
+          ownStats={
+            ownStats
+              ? {
+                  appearances: ownStats.appearances,
+                  goals: ownStats.goals,
+                  assists: ownStats.assists,
+                  playerOfMatchAwards: ownStats.playerOfMatchAwards,
+                  averageRating: ownStats.averageRating,
+                }
+              : null
+          }
+          leaderboards={appLeaderboards}
+          squad={appSquad}
+          recentMatches={appRecentMatches}
+        />
+      </PlayerPwaModeOnly>
+
+      <PlayerPwaModeOnly mode="web">
+        <div className="px-4 py-6">
+          <div className="mx-auto max-w-6xl space-y-6">
         <section className="overflow-hidden rounded-3xl border border-violet-400/20 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.18),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -444,7 +522,9 @@ export default async function PlayerStatsPage({
             ) : null}
           </div>
         </section>
-      </div>
+          </div>
+        </div>
+      </PlayerPwaModeOnly>
     </main>
   );
 }

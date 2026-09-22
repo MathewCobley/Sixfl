@@ -6,7 +6,6 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   MapPinIcon,
-  PlayCircleIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
@@ -56,7 +55,6 @@ export type PlayerAppRecentResult = {
   awayTeam: AppTeam;
   homeScore: number;
   awayScore: number;
-  highlightsUrl: string | null;
 };
 
 function fixtureHref(
@@ -556,17 +554,11 @@ export default function PlayerAppFixtures({
         ) : null}
 
         {recentResults.length > 0 ? (
-          <section>
-            <div className="mb-2 flex items-center justify-between px-1">
+          <section id="recent-results" className="scroll-mt-24">
+            <div className="mb-2 px-1">
               <h2 className="text-xs font-black uppercase tracking-[0.14em] text-white/55">
                 Recent results
               </h2>
-              <Link
-                href={`/player/team/${teamId}/league-results`}
-                className="text-[10px] font-bold text-sky-300"
-              >
-                View all →
-              </Link>
             </div>
             <div className="space-y-2">
               {recentResults.map((result) => (
@@ -589,17 +581,6 @@ export default function PlayerAppFixtures({
                       {result.homeScore}–{result.awayScore}
                     </div>
                   </div>
-                  {result.highlightsUrl ? (
-                    <a
-                      href={result.highlightsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-fuchsia-300/25 bg-fuchsia-500/10 px-3 py-2 text-xs font-bold text-fuchsia-100"
-                    >
-                      <PlayCircleIcon className="h-4 w-4" aria-hidden="true" />
-                      Match highlights
-                    </a>
-                  ) : null}
                 </article>
               ))}
             </div>
