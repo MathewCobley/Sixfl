@@ -6,6 +6,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FaFacebookF, FaInstagram } from "react-icons/fa";
 import { track } from "@vercel/analytics";
 
@@ -68,6 +69,8 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
 ];
 
 export default function SiteFooter() {
+  const pathname = usePathname();
+  if (pathname === "/referee" || pathname.startsWith("/referee/")) return null;
   return (
     <footer className="border-t border-white/10 bg-black text-white">
       <div className="h-[3px] w-full bg-emerald-500"></div>

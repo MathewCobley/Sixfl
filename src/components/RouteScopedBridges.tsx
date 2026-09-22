@@ -75,10 +75,6 @@ const NorthallertonWaitingListCopyBridge = dynamic(
   () => import("@/components/public/NorthallertonWaitingListCopyBridge"),
   { ssr: false },
 );
-const ReopenedNightAccessBridge = dynamic(
-  () => import("@/components/referee/ReopenedNightAccessBridge"),
-  { ssr: false },
-);
 const SixflTvFixtureBridge = dynamic(
   () => import("@/components/SixflTvFixtureBridge"),
   { ssr: false },
@@ -107,7 +103,6 @@ export default function RouteScopedBridges() {
   const isNightBoard = pathname.startsWith("/admin/night-board");
   const isAdminPayments = pathname.startsWith("/admin/payments");
   const isAdminFixtures = pathname.startsWith("/admin/fixtures");
-  const isReferee = pathname.startsWith("/referee");
 
   return (
     <>
@@ -142,7 +137,6 @@ export default function RouteScopedBridges() {
       {(isPlayer || isCaptainMatchFees) ? <TemporaryPlayerPassLauncher /> : null}
       {isCaptainMatchFees ? <TemporaryPlayerRequestsPanel /> : null}
       {isPublicLeague ? <NorthallertonWaitingListCopyBridge /> : null}
-      {isReferee ? <ReopenedNightAccessBridge /> : null}
       {(isAdminFixtures || isCaptain) ? <SixflTvFixtureBridge /> : null}
     </>
   );
