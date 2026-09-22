@@ -14,6 +14,9 @@ on:
       - 'tests/early-match-reports/**'
       - '.github/workflows/early-match-reports.yml'
   workflow_dispatch:
+concurrency:
+  group: early-match-reports-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
