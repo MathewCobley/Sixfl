@@ -187,7 +187,7 @@ function CurrentViewBanner({
   return (
     <details className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
       <summary className="cursor-pointer font-semibold">Admin preview · {refereeName}</summary>
-      <a href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`} className="mt-2 inline-flex min-h-11 items-center underline">Return to admin</a>
+      <a href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`} className="mt-2 inline-flex min-h-11 items-center underline">Switch back to Full Admin View</a>
     </details>
   );
 }
