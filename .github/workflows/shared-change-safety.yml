@@ -22,6 +22,8 @@ jobs:
     name: Validate shared schema, scripts and dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
