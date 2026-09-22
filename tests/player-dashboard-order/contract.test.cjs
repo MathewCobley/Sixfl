@@ -208,3 +208,27 @@ test('player app excludes preview and temporary-player website overlays', () => 
   assert.match(launcher, /explicitPlayerAppPreview/);
   assert.match(launcher, /standaloneApp \|\| explicitPlayerAppPreview/);
 });
+
+
+test('player PWA payments is a native app screen with preview-safe account selection', () => {
+  const paymentsPage = read('src/app/player/team/[teamid]/ledger/page.tsx');
+  const paymentsApp = read('src/components/player/PlayerAppPayments.tsx');
+  const nav = read('src/components/player/PlayerTeamNav.tsx');
+
+  assert.match(paymentsPage, /<PlayerPwaModeOnly mode="app">\s*<PlayerAppPayments/);
+  assert.match(paymentsPage, /<PlayerPwaModeOnly mode="web">/);
+  assert.match(paymentsPage, /user\.role === UserRole\.ADMIN \? requestedPreviewMembershipId : null/);
+  assert.match(paymentsPage, /getPlayerLedgerSummaryForUser\(teamid, accountUserId\)/);
+  assert.match(paymentsPage, /\/pay\/player-match-fee\/\$\{fee\.paymentToken\}/);
+  assert.match(paymentsPage, /\/pay\/player-repayment\/\$\{activePlanRow\.token\}/);
+
+  assert.match(paymentsApp, /Current balance/);
+  assert.match(paymentsApp, /What you owe/);
+  assert.match(paymentsApp, /Payment activity/);
+  assert.match(paymentsApp, /Agreed smaller payments/);
+  assert.match(paymentsApp, /Paid captain directly/);
+  assert.doesNotMatch(paymentsApp, /target="_blank"/);
+
+  assert.match(nav, /\/player\/team\/\$\{teamId\}\/ledger/);
+  assert.match(nav, /label: "Payments"/);
+});
