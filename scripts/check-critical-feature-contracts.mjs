@@ -239,7 +239,7 @@ expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Chat"', "playe
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
 expectRegex("player pwa", playerAppNavPath, playerAppNav, /const appTabs[\s\S]*label: "Chat"[\s\S]*label: "Payments"[\s\S]*label: "More"/, "player app bottom navigation must keep Home, Fixtures, Chat, Payments and More in the primary set");
-expectRegex("player pwa", playerAppNavPath, playerAppNav, /const appTabs[\s\S]*^(?![\s\S]*label: "Stats")/, "Stats must not replace permanent Chat in the player app bottom navigation");
+expectRegex("player pwa", playerAppNavPath, playerAppNav, /^(?![\s\S]*label: "Stats")[\s\S]*$/, "Stats must not replace permanent Chat in the player app bottom navigation");
 expectText("player pwa", playerChatUnreadApiPath, playerChatUnreadApi, "getPortalChatUnreadCount", "player app nav unread badge must use the shared chat unread source");
 expectRegex("player pwa", portalChatApiPath, portalChatApi, /^(?![\s\S]*Whole Squad Chat is not available yet)[\s\S]*$/, "linked players must not be blocked by the old chat dark-launch gate");
 expectText("player pwa", playerAppChatPath, playerAppChat, "user.teamMembers.length === 0", "player chat must allow linked players while rejecting unrelated users");
