@@ -9,6 +9,10 @@ import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
+import {
+  getAllocatedReplacementConfirmationBlocks,
+  replacementConfirmationReferenceKey,
+} from "@/lib/fixtures/replacement-confirmation-policy";
 import TeamShirt from "@/components/fixtures/TeamShirt";
 import SixflTvFixtureBadge from "@/components/sixfl-tv/SixflTvFixtureBadge";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -175,6 +179,7 @@ function getFixtureConfirmationSummary(input: {
     | null
     | undefined;
   kickoffAt: Date;
+  replacementReason?: string | null;
 }): ConfirmationSummary {
   const confirmation = input.confirmation ?? null;
   const confirmationDeadline = new Date(input.kickoffAt.getTime() - FIXTURE_RESPONSE_LOCK_MS);
@@ -205,6 +210,15 @@ function getFixtureConfirmationSummary(input: {
       label: "Issue raised",
       tone: "amber",
       helper: confirmation.issueRaisedAt ? `Raised ${formatShortDateTime(confirmation.issueRaisedAt)}` : "Awaiting review",
+    };
+  }
+
+  if (input.replacementReason) {
+    return {
+      label: "Replacement agreed",
+      tone: "emerald",
+      helper:
+        "SIXFL has allocated your team to this last-minute fixture. No further team confirmation is required.",
     };
   }
 
@@ -496,6 +510,14 @@ export default async function CaptainFixturesPage({
 
   if (!team) notFound();
 
+  const replacementConfirmationBlocks =
+    await getAllocatedReplacementConfirmationBlocks(
+      upcomingFixtures.map((fixture) => ({
+        fixtureId: fixture.id,
+        teamId: teamid,
+      })),
+    );
+
   const fixtureTeamIds = [
     team.id,
     ...upcomingFixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]),
@@ -517,6 +539,14 @@ export default async function CaptainFixturesPage({
     : null;
   const selectedFixture = requestedFixture ?? upcomingFixtures[0] ?? null;
   const selectedConfirmation = selectedFixture?.captainConfirmations[0] ?? null;
+  const selectedReplacementReason = selectedFixture
+    ? replacementConfirmationBlocks.get(
+        replacementConfirmationReferenceKey({
+          fixtureId: selectedFixture.id,
+          teamId: teamid,
+        }),
+      ) ?? null
+    : null;
   const selectedFixtureIsProvisional = Boolean(
     selectedFixture && fixtureIsProvisional(selectedFixture),
   );
@@ -534,6 +564,7 @@ export default async function CaptainFixturesPage({
       : getFixtureConfirmationSummary({
           confirmation: selectedConfirmation,
           kickoffAt: selectedFixture.kickoffAt,
+          replacementReason: selectedReplacementReason,
         })
     : null;
   const isSelectedFixtureConfirmed = selectedConfirmation?.status === "CONFIRMED";
@@ -581,7 +612,9 @@ export default async function CaptainFixturesPage({
                 : "Your next match will appear here once SIXFL publishes the fixture."}
             </p>
 
-            {selectedFixture && !selectedFixtureIsProvisional ? (
+            {selectedFixture &&
+            !selectedFixtureIsProvisional &&
+            !selectedReplacementReason ? (
               <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
                 <strong className="text-sky-50">Confirm your team at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.</strong>{" "}
                 This is the whole-team response; individual player availability is handled separately in the Availability tab. If your team cannot play, needs to change a response or has a fixture issue, notify SIXFL as soon as possible. Within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off, contact SIXFL directly about any cancellation, change or issue.
@@ -631,6 +664,24 @@ export default async function CaptainFixturesPage({
                     SIXFL is still confirming your opponent. Once the other team is known,
                     this page will ask whether your team can play the fixture.
                   </p>
+                </div>
+              ) : selectedReplacementReason ? (
+                <div className="rounded-3xl border border-emerald-400/25 bg-emerald-500/10 p-5 text-emerald-50">
+                  <p className="text-base font-semibold">
+                    Replacement fixture agreed
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-emerald-100/80">
+                    SIXFL has allocated your team to this last-minute fixture, so your agreement is already recorded. You do not need to confirm the fixture again.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-emerald-100/80">
+                    Please make sure your players know about the extra fixture. If anything has changed and you can no longer fulfil it, contact SIXFL immediately.
+                  </p>
+                  <a
+                    href={selectedFixtureEmailHref}
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-300/25 bg-black/20 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-black/30"
+                  >
+                    Need to change something? Email SIXFL
+                  </a>
                 </div>
               ) : selectedResponseLocked ? (
                 <div className="rounded-3xl border border-amber-400/25 bg-amber-500/10 p-5 text-amber-50">
@@ -788,6 +839,13 @@ export default async function CaptainFixturesPage({
                   : getFixtureConfirmationSummary({
                       confirmation,
                       kickoffAt: fixture.kickoffAt,
+                      replacementReason:
+                        replacementConfirmationBlocks.get(
+                          replacementConfirmationReferenceKey({
+                            fixtureId: fixture.id,
+                            teamId: teamid,
+                          }),
+                        ) ?? null,
                     });
                 const isNextUpcoming = upcomingFixtures[0]?.id === fixture.id;
 

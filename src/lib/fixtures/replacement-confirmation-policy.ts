@@ -87,6 +87,35 @@ export async function getAllocatedReplacementConfirmationBlock(input: Reference,
   return matchesAllocatedReplacement(context, input.teamId) ? REPLACEMENT_CONFIRMATION_REASON : null;
 }
 
+export function replacementConfirmationReferenceKey(input: Reference) {
+  return `${input.fixtureId}:${input.teamId}`;
+}
+
+/**
+ * Admin/captain read surfaces need the same exact replacement exemption as the
+ * notification engine. Keep this helper as the shared source rather than
+ * re-implementing the replacement matching rules in UI code.
+ */
+export async function getAllocatedReplacementConfirmationBlocks(
+  references: Reference[],
+  db: RawDb = prisma,
+  now = new Date(),
+) {
+  const unique = new Map(
+    references.map((reference) => [
+      replacementConfirmationReferenceKey(reference),
+      reference,
+    ]),
+  );
+  const entries = await Promise.all(
+    [...unique.entries()].map(async ([key, reference]) => [
+      key,
+      await getAllocatedReplacementConfirmationBlock(reference, db, now),
+    ] as const),
+  );
+  return new Map(entries);
+}
+
 type Dispatch = { sourceType: string | null; sourceId: string | null; metadata: unknown };
 function references(dispatch: Dispatch): Reference | null {
   const meta = record(dispatch.metadata);

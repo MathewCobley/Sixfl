@@ -18,6 +18,10 @@ import {
   type NightBoardFixtureOperation,
 } from "@/components/admin/night-board/NightBoardOperations";
 import { toLondonTimeInputValue } from "@/lib/datetime/london";
+import {
+  getAllocatedReplacementConfirmationBlocks,
+  replacementConfirmationReferenceKey,
+} from "@/lib/fixtures/replacement-confirmation-policy";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 
@@ -334,24 +338,17 @@ function getTeamChargeSummary(
 function getTeamConfirmationSummary(
   fixture: FixtureForBoard,
   teamId: string,
+  replacementReason: string | null = null,
 ): TeamConfirmationSummary {
   const confirmation = fixture.captainConfirmations.find(
     (item) => item.teamId === teamId,
   );
-  if (!confirmation) {
-    return {
-      label: "No confirmation sent",
-      detail: "No captain confirmation row yet",
-      note: null,
-      tone: "missing",
-    };
-  }
 
   const actor =
-    confirmation.confirmedByUser?.name ||
-    confirmation.confirmedByUser?.email ||
+    confirmation?.confirmedByUser?.name ||
+    confirmation?.confirmedByUser?.email ||
     "captain";
-  if (confirmation.status === "CONFIRMED") {
+  if (confirmation?.status === "CONFIRMED") {
     return {
       label: "Confirmed",
       detail: `${actor} · ${formatDateTime(
@@ -361,7 +358,7 @@ function getTeamConfirmationSummary(
       tone: "confirmed",
     };
   }
-  if (confirmation.status === "ISSUE_RAISED") {
+  if (confirmation?.status === "ISSUE_RAISED") {
     return {
       label: "Issue raised",
       detail: `Raised ${formatDateTime(
@@ -369,6 +366,22 @@ function getTeamConfirmationSummary(
       )}`,
       note: confirmation.note,
       tone: "issue",
+    };
+  }
+  if (replacementReason) {
+    return {
+      label: "Replacement agreed",
+      detail: "Allocated by SIXFL · no further confirmation required",
+      note: null,
+      tone: "confirmed",
+    };
+  }
+  if (!confirmation) {
+    return {
+      label: "No confirmation sent",
+      detail: "No captain confirmation row yet",
+      note: null,
+      tone: "missing",
     };
   }
   return {
@@ -1140,21 +1153,27 @@ function FixtureCard({
   returnTo,
   refereeOptions,
   venues,
+  homeReplacementReason,
+  awayReplacementReason,
 }: {
   fixture: FixtureForBoard;
   returnTo: string;
   refereeOptions: Array<{ value: string; label: string }>;
   venues: Array<{ id: string; name: string }>;
+  homeReplacementReason: string | null;
+  awayReplacementReason: string | null;
 }) {
   const homeCharge = getTeamChargeSummary(fixture, fixture.homeTeam.id);
   const awayCharge = getTeamChargeSummary(fixture, fixture.awayTeam.id);
   const homeConfirmation = getTeamConfirmationSummary(
     fixture,
     fixture.homeTeam.id,
+    homeReplacementReason,
   );
   const awayConfirmation = getTeamConfirmationSummary(
     fixture,
     fixture.awayTeam.id,
+    awayReplacementReason,
   );
 
   return (
@@ -1327,6 +1346,13 @@ export default async function NightBoardPage({
     leagueId: activeLeagueId,
     venueId: activeVenueId,
   });
+  const replacementConfirmationBlocks =
+    await getAllocatedReplacementConfirmationBlocks(
+      fixtures.flatMap((fixture) => [
+        { fixtureId: fixture.id, teamId: fixture.homeTeam.id },
+        { fixtureId: fixture.id, teamId: fixture.awayTeam.id },
+      ]),
+    );
   const savedOverride = await getSavedNightBoardPitchHireOverride({
     boardDate: selectedDate,
     leagueId: activeLeagueId,
@@ -1419,14 +1445,27 @@ export default async function NightBoardPage({
   const missingPitchCount = fixtures.filter(
     (fixture) => !fixture.pitch?.trim(),
   ).length;
-  const confirmedCaptains = fixtures.reduce(
-    (total, fixture) =>
+  const confirmedCaptains = fixtures.reduce((total, fixture) => {
+    const teamIds = [fixture.homeTeam.id, fixture.awayTeam.id];
+    return (
       total +
-      fixture.captainConfirmations.filter(
-        (confirmation) => confirmation.status === "CONFIRMED",
-      ).length,
-    0,
-  );
+      teamIds.filter((teamId) => {
+        const confirmation = fixture.captainConfirmations.find(
+          (item) => item.teamId === teamId,
+        );
+        if (confirmation?.status === "CONFIRMED") return true;
+        if (confirmation?.status === "ISSUE_RAISED") return false;
+        return Boolean(
+          replacementConfirmationBlocks.get(
+            replacementConfirmationReferenceKey({
+              fixtureId: fixture.id,
+              teamId,
+            }),
+          ),
+        );
+      }).length
+    );
+  }, 0);
   const expectedCaptainConfirmations = fixtures.length * 2;
   const isSorted =
     fixtures.length > 0 &&
@@ -1586,6 +1625,22 @@ export default async function NightBoardPage({
                                   returnTo={returnTo}
                                   refereeOptions={refereeOptions}
                                   venues={venues}
+                                  homeReplacementReason={
+                                    replacementConfirmationBlocks.get(
+                                      replacementConfirmationReferenceKey({
+                                        fixtureId: fixture.id,
+                                        teamId: fixture.homeTeam.id,
+                                      }),
+                                    ) ?? null
+                                  }
+                                  awayReplacementReason={
+                                    replacementConfirmationBlocks.get(
+                                      replacementConfirmationReferenceKey({
+                                        fixtureId: fixture.id,
+                                        teamId: fixture.awayTeam.id,
+                                      }),
+                                    ) ?? null
+                                  }
                                 />
                               ))}
                             </div>
