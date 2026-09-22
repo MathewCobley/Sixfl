@@ -106,7 +106,7 @@ async function main() {
       data: {
         id: resultId,
         fixtureId,
-        homeScore: 1,
+        homeScore: n === 1 ? 2 : 1,
         awayScore: 0,
         enteredAt: new Date(kickoffAt.getTime() + 2 * 60 * 60 * 1000),
       },
@@ -119,6 +119,7 @@ async function main() {
         teamId: id("team"),
         scorers: [{ teamMemberId: id("member"), name: "Priority Player", goals: 1, assists: 1 }],
         goalsRecorded: 1,
+        ownGoals: n === 1 ? 1 : 0,
         playerOfMatchName: "Priority Player",
         priorityCoreCompletedAt: completionAt,
         priorityAssistsCompletedAt: completionAt,
@@ -194,6 +195,11 @@ async function main() {
   assert.equal(score.matches.reduce((sum, match) => sum + match.assistsPoints, 0), 5);
   assert.equal(score.matches.reduce((sum, match) => sum + match.ratingsPoints, 0), 5);
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
+  assert.equal(
+    score.matches.find((match) => match.fixtureId === id("fixture_1"))?.coreComplete,
+    true,
+    "a player goal plus an own goal must count as a complete match card",
+  );
 
   const newTeam = await getSixflTvPriorityScore(id("new"), prisma);
   assert.equal(newTeam.reliabilityScore, 100);
