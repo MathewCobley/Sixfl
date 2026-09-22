@@ -1,0 +1,42 @@
+name: Referee app home
+on:
+  pull_request:
+    paths:
+      - 'src/app/(public)/referee/**'
+      - 'src/components/referee/**'
+      - 'src/components/layout/SiteFooter.tsx'
+      - 'src/components/RouteScopedBridges.tsx'
+      - 'scripts/**'
+      - 'tests/referee-app-home/**'
+      - '.github/workflows/referee-app-home.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: referee-app-home-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node --test tests/referee-app-home/contract.test.cjs
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix /tmp/sixfl-referee-tools --no-package-lock --ignore-scripts playwright@1.58.2
+          ln -s /tmp/sixfl-referee-tools/node_modules/playwright node_modules/playwright
+          /tmp/sixfl-referee-tools/node_modules/.bin/playwright install --with-deps chromium
+      - run: node tests/referee-app-home/browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: referee-home-browser
+          path: /tmp/sixfl-referee-home-browser/referee-home-390.png
+          retention-days: 7

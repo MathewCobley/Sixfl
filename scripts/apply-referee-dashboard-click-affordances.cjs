@@ -14,7 +14,7 @@ if (!fs.existsSync(pagePath)) {
   throw new Error("Referee dashboard page was not found.");
 }
 
-const source = fs.readFileSync(pagePath, "utf8");
+const source = fs.readFileSync(pagePath, "utf8") + fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
 
 // This used to be a build-time source rewriter that patched click affordances
 // into the rendered referee dashboard. The referee dashboard now owns those
@@ -25,12 +25,13 @@ const requiredNativeMarkers = [
   'title="Mark your dates"',
   'id="referee-night-picker"',
   "Choose the night you want to work on",
-  'href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-night-picker"}',
+  'href={`/referee/night/${nextNight.id}`}',
   "Open night sheet",
   "Open reopened night",
   'RefereeTabs active="overview"',
   "onsiteByNightId",
-  "Your referee nights, availability, match sheets, cashup and payments are all shown here.",
+  "Payments & cashup",
+  "Referee app navigation",
 ];
 
 for (const marker of requiredNativeMarkers) {
