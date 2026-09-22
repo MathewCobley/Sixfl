@@ -13,6 +13,7 @@ type LeagueFormValues = {
   slug: string;
   season: string;
   isActive: boolean;
+  publicAt: string;
   isMoving: boolean;
   area: string;
   dayOfWeek: PreferredNight | "";
@@ -217,6 +218,7 @@ export default function LeagueForm({
       slug: initialValues?.slug ?? "",
       season: initialValues?.season ?? "",
       isActive: initialValues?.isActive ?? true,
+      publicAt: initialValues?.publicAt ?? "",
       isMoving: initialValues?.isMoving ?? false,
       area: initialValues?.area ?? "",
       dayOfWeek: initialValues?.dayOfWeek ?? "",
@@ -421,7 +423,28 @@ export default function LeagueForm({
         <div className="space-y-2 md:col-span-2"><label htmlFor="ctaText" className="block text-sm font-medium text-white">CTA text</label><Input id="ctaText" name="ctaText" defaultValue={values.ctaText} placeholder="Register your team" hasError={Boolean(state.errors?.ctaText)} /><FieldError errors={state.errors} name="ctaText" /></div>
         <div className="space-y-2 md:col-span-2"><label htmlFor="description" className="block text-sm font-medium text-white">Description</label><TextArea id="description" name="description" defaultValue={values.description} placeholder="Premium weekly 6-a-side football..." rows={6} hasError={Boolean(state.errors?.description)} /><FieldError errors={state.errors} name="description" /></div>
 
-        <div className="space-y-2"><label htmlFor="isActive" className="block text-sm font-medium text-white">Status</label><Select id="isActive" name="isActive" defaultValue={values.isActive ? "true" : "false"} options={[{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }]} /></div>
+        <div className="space-y-2">
+          <label htmlFor="publicAt" className="block text-sm font-medium text-white">
+            Public go-live
+          </label>
+          <Input
+            id="publicAt"
+            name="publicAt"
+            type="datetime-local"
+            defaultValue={values.publicAt}
+            hasError={Boolean(state.errors?.publicAt)}
+          />
+          <p className="text-xs leading-5 text-white/45">
+            UK time. Leave blank to keep this league private. Admin can still organise teams, divisions and draft fixtures before this date.
+          </p>
+          <FieldError errors={state.errors} name="publicAt" />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="isActive" className="block text-sm font-medium text-white">Operational status</label>
+          <Select id="isActive" name="isActive" defaultValue={values.isActive ? "true" : "false"} options={[{ value: "true", label: "Active in admin" }, { value: "false", label: "Inactive" }]} />
+          <p className="text-xs leading-5 text-white/45">Active keeps the league available to SIXFL admin tools. Public visibility is controlled separately by the go-live date.</p>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
