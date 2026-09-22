@@ -144,3 +144,49 @@ test("player Home uses shared portal-chat unread logic for the previewed player'
   assert.match(home, /unread message/);
   assert.match(home, /unreadChatCount > 99 \? "99\+" : unreadChatCount/);
 });
+
+test("player PWA fixtures uses a dedicated mobile-first layout", () => {
+  const page = read("src/app/player/team/[teamid]/availability/page.tsx");
+  const app = read("src/components/player/PlayerAppFixtures.tsx");
+
+  assert.match(page, /PlayerPwaModeOnly mode="app"/);
+  assert.match(page, /<PlayerAppFixtures/);
+  assert.match(page, /PlayerPwaModeOnly mode="web"/);
+  assert.match(app, /Next match/);
+  assert.match(app, /Upcoming fixtures/);
+  assert.match(app, /Recent results/);
+  assert.match(app, /Fixture updates/);
+  assert.match(app, /Join waiting list/);
+  assert.match(app, /Send withdrawal request/);
+  assert.doesNotMatch(app, /Choose fixture/);
+});
+
+test("player PWA fixtures shows availability and real saved selection state", () => {
+  const page = read("src/app/player/team/[teamid]/availability/page.tsx");
+  const actions = read("src/app/player/team/[teamid]/availability/actions.ts");
+  const app = read("src/components/player/PlayerAppFixtures.tsx");
+
+  assert.match(page, /selections:\s*\{/);
+  assert.match(page, /selectionStatus: true/);
+  assert.match(page, /selectionStatus === "SELECTED"/);
+  assert.match(app, /Not selected yet/);
+  assert.match(app, /Not in squad/);
+  assert.match(app, /You're selected/);
+  assert.match(app, /Can you play\?/);
+  assert.match(actions, /selectionStatus: "SELECTED"/);
+  assert.match(actions, /input\.fixture\.selections\.map/);
+});
+
+test("player PWA fixtures surfaces cancellations and match highlights without changing web availability", () => {
+  const page = read("src/app/player/team/[teamid]/availability/page.tsx");
+  const app = read("src/components/player/PlayerAppFixtures.tsx");
+
+  assert.match(page, /status: FixtureStatus\.CANCELLED/);
+  assert.match(page, /status: FixtureStatus\.COMPLETED/);
+  assert.match(page, /sixflTvUrl: true/);
+  assert.match(app, /Cancelled/);
+  assert.match(app, /Match highlights/);
+  assert.match(page, /Confirm availability/);
+  assert.match(page, /Choose fixture/);
+});
+
