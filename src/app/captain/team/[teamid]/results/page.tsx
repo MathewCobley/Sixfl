@@ -186,7 +186,7 @@ function getFriendlyErrorMessage(error: unknown) {
   if (error.message.includes("rating")) {
     return "Ratings must be between 1 and 10, with no more than one decimal place (for example, 9.2).";
   }
-  if (error.message.includes("Own goals")) {
+  if (error.message.toLowerCase().includes("own goals")) {
     return "Own goals must be a whole number such as 0, 1, or 2.";
   }
   if (error.message.includes("whole numbers")) {
@@ -353,7 +353,7 @@ async function saveTeamMatchDetails(formData: FormData) {
     const assistsRecorded = contributions.reduce((sum, row) => sum + row.assists, 0);
 
     if (goalsRecorded + ownGoals > goalsExpected) {
-      throw new Error("Recorded scorer goals and Own goals cannot exceed the on-pitch result.");
+      throw new Error("Recorded scorer goals and own goals cannot exceed the on-pitch result.");
     }
     if (assistsRecorded > goalsExpected) {
       throw new Error("Recorded assists cannot exceed the on-pitch result.");
@@ -840,7 +840,7 @@ export default async function CaptainResultsPage({
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/40">
                           Goals & assists
                         </p>
-                        {row.contributions.length > 0 ? (
+                        {row.contributions.length > 0 || ownGoals > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {row.contributions.map((item) => (
                               <span
@@ -851,6 +851,11 @@ export default async function CaptainResultsPage({
                                 {item.assists > 0 ? ` · ${item.assists}A` : ""}
                               </span>
                             ))}
+                            {ownGoals > 0 ? (
+                              <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-sm text-amber-100">
+                                Own goal{ownGoals === 1 ? "" : "s"}: {ownGoals}
+                              </span>
+                            ) : null}
                           </div>
                         ) : (
                           <p className="mt-2 text-sm text-white/60">
