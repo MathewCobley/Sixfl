@@ -209,12 +209,12 @@ function CurrentViewBanner({
             Admin home
           </Link>
 
-          <Link
+          <a
             href={`/admin/referees/${refereeId}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${refereeId}`)}`}
             className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-bold text-emerald-50 transition hover:bg-emerald-500/20"
           >
             Switch back to Full Admin View
-          </Link>
+          </a>
         </div>
       </div>
     </section>
