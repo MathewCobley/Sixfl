@@ -43,6 +43,75 @@ export type EveningSnapshot = {
   segments: EveningSegment[];
 };
 
+function sameOptional(left: string | null, right: string | null) {
+  return left === right;
+}
+
+/**
+ * A referee who has already confirmed does not need to reconfirm when their
+ * existing evening is only extended later at the same venue(s). The original
+ * start and venue set must stay unchanged, and at least one venue's final
+ * kick-off must move later. Earlier starts, venue changes, removals and other
+ * work-window changes remain material and require a fresh confirmation.
+ */
+export function isNonDisruptiveConfirmedExtension(
+  previous: EveningSnapshot,
+  current: EveningSnapshot,
+) {
+  if (
+    !previous.first ||
+    !current.first ||
+    previous.first !== current.first ||
+    previous.segments.length !== current.segments.length
+  ) {
+    return false;
+  }
+
+  let extendedLater = false;
+
+  for (let index = 0; index < previous.segments.length; index += 1) {
+    const before = previous.segments[index];
+    const after = current.segments[index];
+
+    if (
+      !after ||
+      !sameOptional(before.venueId, after.venueId) ||
+      !sameOptional(before.venueName, after.venueName) ||
+      !sameOptional(before.venueAddress, after.venueAddress) ||
+      before.first !== after.first
+    ) {
+      return false;
+    }
+
+    const beforeLast = Date.parse(before.last);
+    const afterLast = Date.parse(after.last);
+    if (!Number.isFinite(beforeLast) || !Number.isFinite(afterLast) || afterLast < beforeLast) {
+      return false;
+    }
+
+    if (afterLast > beforeLast) {
+      extendedLater = true;
+    }
+
+    if (before.finish && after.finish) {
+      const beforeFinish = Date.parse(before.finish);
+      const afterFinish = Date.parse(after.finish);
+      if (
+        !Number.isFinite(beforeFinish) ||
+        !Number.isFinite(afterFinish) ||
+        afterFinish < beforeFinish
+      ) {
+        return false;
+      }
+    } else if (before.finish !== after.finish) {
+      // A change between known and unknown duration is not safe to infer.
+      return false;
+    }
+  }
+
+  return extendedLater;
+}
+
 /** Only working hours and venues are material. Team names, pitches, fees,
  * fixture IDs, league boundaries and internal match order cannot cause a resend. */
 export function eveningSnapshot(fixtures: EveningFixture[]): EveningSnapshot {

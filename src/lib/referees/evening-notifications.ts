@@ -7,7 +7,8 @@ import { renderNotificationText } from "@/lib/notifications/renderer";
 import { getPublicSiteUrl } from "@/lib/stripe/client";
 import {
   ARRIVAL_LEAD, EVENING_SOURCE, HOUR, URGENT_WINDOW,
-  eveningSnapshot, eveningIsOver, lastCommunicated, planEveningNotice,
+  eveningSnapshot, eveningIsOver, isNonDisruptiveConfirmedExtension,
+  lastCommunicated, planEveningNotice,
   type EveningFixture, type EveningHistory, type EveningMessageKind, type EveningSnapshot,
 } from "./evening-policy";
 
@@ -84,13 +85,27 @@ async function observeSnapshot(row: EveningRow, snapshot: EveningSnapshot, db: D
       : previous.length && previous.every((p) => p.status === "CONFIRMED") ? "CONFIRMED" : "PENDING";
     row.respondedAt = previous.map((p) => p.respondedAt).filter((d): d is Date => d !== null).sort((a,b) => b.getTime()-a.getTime())[0] ?? null;
   } else {
-    row.confirmationStatus = "PENDING";
-    row.respondedAt = null;
-    // Old delivered links must not confirm a newly changed work window.
-    await db.$executeRaw(Prisma.sql`
-      UPDATE "RefereeNight" SET "confirmationTokenHash" = NULL
-      WHERE "refereeId" = ${row.refereeId} AND "nightDate" = ${row.nightDate}::date
-    `);
+    const history = await historyFor(row, db);
+    const previousConfirmedSnapshot = row.confirmationStatus === "CONFIRMED"
+      ? [...history].reverse().find((item) =>
+          item.hash === row.summaryHash &&
+          (item.status === "SENT" || item.status === "PROCESSING"),
+        )?.snapshot ?? null
+      : null;
+    const keepConfirmation = Boolean(
+      previousConfirmedSnapshot &&
+      isNonDisruptiveConfirmedExtension(previousConfirmedSnapshot, snapshot),
+    );
+
+    if (!keepConfirmation) {
+      row.confirmationStatus = "PENDING";
+      row.respondedAt = null;
+      // Old delivered links must not confirm a newly changed work window.
+      await db.$executeRaw(Prisma.sql`
+        UPDATE "RefereeNight" SET "confirmationTokenHash" = NULL
+        WHERE "refereeId" = ${row.refereeId} AND "nightDate" = ${row.nightDate}::date
+      `);
+    }
   }
   row.summaryHash = snapshot.hash;
   await db.$executeRaw(Prisma.sql`
@@ -181,7 +196,10 @@ export async function processRefereeEvening(eveningId: string, now = new Date())
     const confirmationUrl = `${base}/referee-evening-confirm/${token}`;
     const previous = lastCommunicated(history)?.snapshot ?? snapshot;
     const window = snapshot.first ? snapshot : previous;
+    const informationOnlyUpdate =
+      plan.kind === "update" && row.confirmationStatus === "CONFIRMED";
     const key = plan.kind === "booking" && row.confirmationStatus === "CONFIRMED" ? "booking-confirmed"
+      : informationOnlyUpdate ? "update-confirmed"
       : plan.kind === "reminder" && row.confirmationStatus !== "CONFIRMED" ? "confirmation" : plan.kind;
     const dispatch = await queueNotificationFromTemplate({
       templateKey: `referee-evening-${key}-${plan.channel.toLowerCase()}`,
@@ -200,7 +218,11 @@ export async function processRefereeEvening(eveningId: string, now = new Date())
         snapshot: snapshot as unknown as Prisma.InputJsonValue,
         workWindow: window as unknown as Prisma.InputJsonValue },
     }, db);
-    if (dispatch.status === "QUEUED" && plan.kind !== "cancelled") {
+    if (
+      dispatch.status === "QUEUED" &&
+      plan.kind !== "cancelled" &&
+      row.confirmationStatus !== "CONFIRMED"
+    ) {
       await db.$executeRaw(Prisma.sql`
         INSERT INTO "RefereeEveningToken" (hash, "eveningId", "summaryHash", "expiresAt")
         VALUES (${hashToken(token)}, ${row.id}, ${snapshot.hash},

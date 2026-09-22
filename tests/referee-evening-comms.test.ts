@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
-  EVENING_SOURCE, HOUR, eveningSnapshot, isLegacyRefereeNotice, planEveningNotice,
+  EVENING_SOURCE, HOUR, eveningSnapshot, isLegacyRefereeNotice,
+  isNonDisruptiveConfirmedExtension, planEveningNotice,
   type EveningFixture, type EveningHistory,
 } from "../src/lib/referees/evening-policy";
 
@@ -75,6 +76,33 @@ test("only material changes produce an update; urgent update is one SMS", () => 
   assert.deepEqual(plan({ snapshot: changed, history: [sent] }), { kind: "update", channel: "EMAIL", urgent: false });
   assert.deepEqual(plan({ now: new Date(first.getTime() - HOUR), snapshot: changed, history: [sent] }), { kind: "update", channel: "SMS", urgent: true });
 });
+test("a confirmed referee keeps confirmation when the same evening only runs later", () => {
+  const later = eveningSnapshot([
+    fixture("1"),
+    fixture("2", 40),
+    fixture("3", 80),
+    fixture("4", 120),
+  ]);
+  assert.equal(isNonDisruptiveConfirmedExtension(snapshot, later), true);
+
+  const earlierStart = eveningSnapshot([
+    fixture("early", -40),
+    fixture("1"),
+    fixture("3", 80),
+  ]);
+  assert.equal(isNonDisruptiveConfirmedExtension(snapshot, earlierStart), false);
+
+  const venueChange = eveningSnapshot([
+    fixture("1", 0, "venue-a"),
+    fixture("2", 40, "venue-a"),
+    fixture("3", 80, "venue-b"),
+    fixture("4", 120, "venue-b"),
+  ]);
+  assert.equal(isNonDisruptiveConfirmedExtension(snapshot, venueChange), false);
+
+  const shorter = eveningSnapshot([fixture("1"), fixture("2", 40)]);
+  assert.equal(isNonDisruptiveConfirmedExtension(snapshot, shorter), false);
+});
 test("cancellation before first send is silent; afterwards gives one notice", () => {
   const empty = eveningSnapshot([]);
   assert.equal(plan({ snapshot: empty }), null);
@@ -91,6 +119,7 @@ test("legacy block is narrowly scoped, never personal/finance/availability messa
 test("production preparation preserves shared routing and migration safeguards", () => {
   const read = (p: string) => readFileSync(p, "utf8");
   const migration = read("prisma/migrations/20260905223000_referee_evening_communications/migration.sql");
+  const laterExtensionMigration = read("prisma/migrations/20260922113000_referee_later_extension_no_reconfirm/migration.sql");
   const core = read("src/lib/referees/evening-notifications.ts");
   const processor = read("src/lib/notifications/processor.ts");
   const service = read("src/lib/notifications/service.ts");
@@ -99,6 +128,12 @@ test("production preparation preserves shared routing and migration safeguards",
   assert.match(migration, /AT TIME ZONE 'UTC' AT TIME ZONE 'Europe\/London'/);
   assert.match(migration, /ON CONFLICT \(key\) DO NOTHING/);
   assert.match(migration, /status IN \('QUEUED', 'FAILED'\)/);
+  assert.match(laterExtensionMigration, /referee-evening-update-confirmed-email/);
+  assert.match(laterExtensionMigration, /you do not need to confirm again/i);
+  assert.match(laterExtensionMigration, /referee-evening-update-confirmed-sms/);
+  assert.match(core, /isNonDisruptiveConfirmedExtension/);
+  assert.match(core, /informationOnlyUpdate/);
+  assert.match(core, /row\.confirmationStatus !== "CONFIRMED"/);
   assert.match(core, /FOR UPDATE SKIP LOCKED/);
   assert.match(core, /queueNotificationFromTemplate/);
   assert.doesNotMatch(core, /queueDirectNotification/);
