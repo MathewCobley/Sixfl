@@ -543,7 +543,7 @@ export default async function CaptainFixturesPage({
     ? replacementConfirmationBlocks.get(
         replacementConfirmationReferenceKey({
           fixtureId: selectedFixture.id,
-          teamId,
+          teamId: teamid,
         }),
       ) ?? null
     : null;
@@ -843,7 +843,7 @@ export default async function CaptainFixturesPage({
                         replacementConfirmationBlocks.get(
                           replacementConfirmationReferenceKey({
                             fixtureId: fixture.id,
-                            teamId,
+                            teamId: teamid,
                           }),
                         ) ?? null,
                     });
