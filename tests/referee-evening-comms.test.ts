@@ -120,13 +120,17 @@ test("legacy block is narrowly scoped, never personal/finance/availability messa
 });
 test("referee admin preview exit cannot be prefetched and clear preview state early", () => {
   const refereePage = read("src/app/(public)/referee/page.tsx");
+  const exitHrefIndex = refereePage.indexOf("referee-preview/exit");
+  assert.notEqual(exitHrefIndex, -1);
+  const exitTagStart = refereePage.lastIndexOf("<", exitHrefIndex);
+  const exitTagEnd = refereePage.indexOf(">", exitHrefIndex);
+  const exitOpeningTag = refereePage.slice(exitTagStart, exitTagEnd + 1);
+
+  assert.match(exitOpeningTag, /^<a\b/);
+  assert.doesNotMatch(exitOpeningTag, /^<Link\b/);
   assert.match(
-    refereePage,
-    /<a[\s\S]{0,700}referee-preview\/exit[\s\S]{0,700}Switch back to Full Admin View/,
-  );
-  assert.doesNotMatch(
-    refereePage,
-    /<Link[\s\S]{0,700}referee-preview\/exit/,
+    refereePage.slice(exitHrefIndex, exitHrefIndex + 900),
+    /Switch back to Full Admin View/,
   );
 });
 
