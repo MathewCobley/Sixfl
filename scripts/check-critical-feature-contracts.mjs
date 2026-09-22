@@ -212,7 +212,8 @@ const playerAppHome = read(playerAppHomePath);
 const playerAppPage = read(playerAppPagePath);
 const playerAppNav = read(playerAppNavPath);
 
-expectText("player pwa", playerAppHomePath, playerAppHome, "Refer a new team and earn £75", "player app home must retain the referral banner");
+expectText("player pwa", playerAppHomePath, playerAppHome, 'resultsHref = `${fixturesHref}#recent-results`', "player app recent-form navigation must stay inside the Fixtures app screen");
+expectRegex("player pwa", playerAppHomePath, playerAppHome, /^(?![\s\S]*\/player\/referrals)[\s\S]*$/, "player app home must not link out to the website referral page");
 expectText("player pwa", playerAppHomePath, playerAppHome, "Recent form", "player app home must retain compact recent form");
 expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "SIXFL Chat"', "player PWA Home must retain the SIXFL Chat quick action");
 expectText("player pwa", playerAppHomePath, playerAppHome, "body: unreadMessageLabel", "player PWA Home must show Messages or the unread count on the chat tile");

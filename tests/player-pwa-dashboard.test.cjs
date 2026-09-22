@@ -19,7 +19,7 @@ test("player PWA home follows the approved compact dashboard hierarchy", () => {
   assert.match(home, /Availability/);
   assert.match(home, /Match Fees/);
   assert.match(home, /Recent form/);
-  assert.match(home, /Refer a new team and earn £75/);
+  assert.doesNotMatch(home, /\/player\/referrals/);
 });
 
 test("Player PWA Home always exposes SIXFL Chat while admin preview keeps the same Home content", () => {
@@ -177,16 +177,56 @@ test("player PWA fixtures shows availability and real saved selection state", ()
   assert.match(actions, /input\.fixture\.selections\.map/);
 });
 
-test("player PWA fixtures surfaces cancellations and match highlights without changing web availability", () => {
+test("player PWA fixtures surfaces cancellations and keeps results inside the app", () => {
   const page = read("src/app/player/team/[teamid]/availability/page.tsx");
   const app = read("src/components/player/PlayerAppFixtures.tsx");
 
   assert.match(page, /status: FixtureStatus\.CANCELLED/);
   assert.match(page, /status: FixtureStatus\.COMPLETED/);
-  assert.match(page, /sixflTvUrl: true/);
+  assert.match(app, /id="recent-results"/);
   assert.match(app, /Cancelled/);
-  assert.match(app, /Match highlights/);
+  assert.doesNotMatch(app, /league-results/);
+  assert.doesNotMatch(app, /Match highlights/);
+  assert.doesNotMatch(page, /sixflTvUrl: true/);
   assert.match(page, /Confirm availability/);
   assert.match(page, /Choose fixture/);
 });
 
+
+
+test("player PWA navigation is a closed app and does not expose public website links", () => {
+  const home = read("src/components/player/PlayerAppHome.tsx");
+  const fixtures = read("src/components/player/PlayerAppFixtures.tsx");
+  const more = read("src/app/player/team/[teamid]/more/page.tsx");
+  const nav = read("src/components/player/PlayerTeamNav.tsx");
+  const appTabs = nav.slice(nav.indexOf("const appTabs"), nav.indexOf("export default"));
+
+  for (const source of [home, fixtures, more, appTabs]) {
+    assert.doesNotMatch(source, /\/leagues\//);
+    assert.doesNotMatch(source, /\/goal-of-the-month/);
+    assert.doesNotMatch(source, /\/player\/referrals/);
+    assert.doesNotMatch(source, /href=["']\/faq/);
+  }
+
+  assert.doesNotMatch(more, /Open full SIXFL website/);
+  assert.doesNotMatch(more, /href=["']\/["']/);
+  assert.match(home, /resultsHref = `\$\{fixturesHref\}#recent-results`/);
+  assert.match(more, /availability#recent-results/);
+});
+
+test("player Stats has a dedicated mobile PWA presentation while web stats remain available", () => {
+  const page = read("src/app/player/team/[teamid]/stats/page.tsx");
+  const app = read("src/components/player/PlayerAppStats.tsx");
+
+  assert.match(page, /PlayerPwaModeOnly mode="app"/);
+  assert.match(page, /<PlayerAppStats/);
+  assert.match(page, /PlayerPwaModeOnly mode="web"/);
+  assert.match(page, /previewMembershipId/);
+  assert.match(app, /Your season/);
+  assert.match(app, /Team leaders/);
+  assert.match(app, /Squad leaderboard/);
+  assert.match(app, /Recent matches/);
+  assert.match(app, /G\+A/);
+  assert.doesNotMatch(app, /<table/);
+  assert.doesNotMatch(app, /href=/);
+});

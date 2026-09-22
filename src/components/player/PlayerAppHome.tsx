@@ -5,8 +5,6 @@ import {
   ChartBarSquareIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
-  ChevronRightIcon,
-  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 
 type FixtureTeam = {
@@ -162,10 +160,7 @@ export default function PlayerAppHome({
     `/player/team/${teamId}/ledger`,
     previewMembershipId,
   );
-  const resultsHref = addPreviewMembershipId(
-    `/player/team/${teamId}/league-results`,
-    previewMembershipId,
-  );
+  const resultsHref = `${fixturesHref}#recent-results`;
   const chatHref = addPreviewMembershipId(
     `/player/team/${teamId}/chat`,
     previewMembershipId,
@@ -436,20 +431,7 @@ export default function PlayerAppHome({
           )}
         </section>
 
-        <Link
-          href="/player/referrals"
-          className="flex items-center gap-3 rounded-[1.5rem] border border-emerald-400/35 bg-[linear-gradient(120deg,rgba(16,185,129,0.2),rgba(6,78,59,0.32))] p-4 active:scale-[0.995]"
-        >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-300/15 text-emerald-200">
-            <UserCircleIcon className="h-8 w-8" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/65">Team referrals</div>
-            <div className="mt-1 text-sm font-black text-white">Refer a new team and earn £75</div>
-            <div className="mt-1 text-xs leading-5 text-white/45">Share your private referral link.</div>
-          </div>
-          <ChevronRightIcon className="h-5 w-5 shrink-0 text-emerald-200/60" />
-        </Link>
+
       </div>
     </section>
   );
