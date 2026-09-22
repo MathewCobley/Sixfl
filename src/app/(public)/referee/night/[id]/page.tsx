@@ -26,7 +26,13 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ saved?: string; submitted?: string }>;
+  searchParams?: Promise<{
+    saved?: string;
+    submitted?: string;
+    cashError?: string;
+    cashMaxPence?: string;
+    cashExistingPence?: string;
+  }>;
 };
 
 type DisciplinaryNoteRow = {
@@ -142,6 +148,31 @@ function getSavedMessage(saved?: string, submitted?: string) {
   }
 }
 
+function getCashErrorMessage(
+  code?: string,
+  maxCashPenceValue?: string,
+  existingNightCashPenceValue?: string,
+) {
+  if (code === "invalid_amount") {
+    return "Enter a cash amount greater than £0.";
+  }
+
+  if (code === "too_high") {
+    const maxCashPence = Number(maxCashPenceValue);
+    const existingNightCashPence = Number(existingNightCashPenceValue);
+    const existingCopy =
+      Number.isFinite(existingNightCashPence) && existingNightCashPence > 0
+        ? ` ${formatMoney(existingNightCashPence)} is already recorded from this team for this referee night, so check that you are not entering the same cash twice.`
+        : "";
+    if (Number.isFinite(maxCashPence) && maxCashPence >= 0) {
+      return `That amount is higher than the team's remaining outstanding balance of ${formatMoney(maxCashPence)}.${existingCopy}`;
+    }
+    return `That cash amount is higher than the team's remaining outstanding balance.${existingCopy}`;
+  }
+
+  return null;
+}
+
 function groupDisciplinaryNotesByFixture(notes: DisciplinaryNoteRow[]) {
   const grouped = new Map<string, DisciplinaryNoteRow[]>();
 
@@ -157,11 +188,13 @@ function CashForm({
   fixtureId,
   teamId,
   teamName,
+  alreadyRecordedPence,
 }: {
   refereeNightId: string;
   fixtureId: string;
   teamId: string;
   teamName: string;
+  alreadyRecordedPence: number;
 }) {
   return (
     <form action={recordRefereeNightCashAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -170,6 +203,16 @@ function CashForm({
       <input type="hidden" name="teamId" value={teamId} />
       <input type="hidden" name="method" value="CASH" />
       <div className="text-sm font-semibold text-white">{teamName}</div>
+      <div className={[
+        "mt-2 rounded-xl border px-3 py-2 text-xs",
+        alreadyRecordedPence > 0
+          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+          : "border-white/10 bg-white/[0.03] text-white/45",
+      ].join(" ")}>
+        {alreadyRecordedPence > 0
+          ? `Already recorded tonight: ${formatMoney(alreadyRecordedPence)}`
+          : "No cash recorded from this team yet."}
+      </div>
       <div className="mt-3">
         <label className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
           Cash collected
@@ -235,6 +278,11 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
   const disciplinaryNotesByFixture = groupDisciplinaryNotesByFixture(disciplinaryNotes);
   const allFixturesHaveResults = fixtures.length > 0 && fixtures.every((fixture) => fixture.result);
   const savedMessage = getSavedMessage(sp.saved, sp.submitted);
+  const cashErrorMessage = getCashErrorMessage(
+    sp.cashError,
+    sp.cashMaxPence,
+    sp.cashExistingPence,
+  );
   const locked = isNightLocked(night.status);
   const lockedMessage = getLockedMessage(night.status);
 
@@ -272,6 +320,13 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
         {savedMessage ? (
           <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
             {savedMessage}
+          </section>
+        ) : null}
+
+        {cashErrorMessage ? (
+          <section className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100">
+            <div className="font-semibold text-white">Cash was not recorded</div>
+            <div className="mt-1">{cashErrorMessage}</div>
           </section>
         ) : null}
 
@@ -388,8 +443,20 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
                           </div>
                         ) : (
                           <div className="grid gap-3 md:grid-cols-2">
-                            <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.homeTeam.id} teamName={fixture.homeTeam.name} />
-                            <CashForm refereeNightId={night.id} fixtureId={fixture.id} teamId={fixture.awayTeam.id} teamName={fixture.awayTeam.name} />
+                            <CashForm
+                              refereeNightId={night.id}
+                              fixtureId={fixture.id}
+                              teamId={fixture.homeTeam.id}
+                              teamName={fixture.homeTeam.name}
+                              alreadyRecordedPence={homeCollected}
+                            />
+                            <CashForm
+                              refereeNightId={night.id}
+                              fixtureId={fixture.id}
+                              teamId={fixture.awayTeam.id}
+                              teamName={fixture.awayTeam.name}
+                              alreadyRecordedPence={awayCollected}
+                            />
                           </div>
                         )}
                       </div>

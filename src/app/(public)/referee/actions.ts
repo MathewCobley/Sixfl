@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireReferee } from "@/lib/admin";
+import { resolveTeamFixtureFeePence } from "@/lib/payments/fixture-fee-policy";
 import {
   getRefereeNightFixtureIds,
   parseMoneyToPence,
@@ -95,6 +96,36 @@ function getChargePaidTotal(transactions: Array<{ amountPence: number }>) {
 
 function getChargeOutstandingPence(charge: OutstandingChargeForAllocation) {
   return Math.max(0, charge.amountPence - getChargePaidTotal(charge.transactions));
+}
+
+function redirectCashEntryError(
+  refereeNightId: string,
+  code: "invalid_amount" | "too_high",
+  options?: {
+    maxCashPence?: number;
+    existingNightCashPence?: number;
+  },
+): never {
+  const params = new URLSearchParams({ cashError: code });
+  if (
+    typeof options?.maxCashPence === "number" &&
+    Number.isFinite(options.maxCashPence)
+  ) {
+    params.set(
+      "cashMaxPence",
+      String(Math.max(0, Math.round(options.maxCashPence))),
+    );
+  }
+  if (
+    typeof options?.existingNightCashPence === "number" &&
+    Number.isFinite(options.existingNightCashPence)
+  ) {
+    params.set(
+      "cashExistingPence",
+      String(Math.max(0, Math.round(options.existingNightCashPence))),
+    );
+  }
+  redirect(`/referee/night/${refereeNightId}?${params.toString()}`);
 }
 
 function buildCashAllocationNote(input: {
@@ -274,7 +305,7 @@ export async function recordRefereeNightCashAction(formData: FormData) {
   const notes = parseOptionalString(formData.get("notes"));
 
   if (!amountPence || amountPence <= 0) {
-    throw new Error("Please enter a valid amount collected.");
+    redirectCashEntryError(refereeNightId, "invalid_amount");
   }
 
   await assertNightAccess({ refereeNightId, fixtureId, user });
@@ -285,10 +316,13 @@ export async function recordRefereeNightCashAction(formData: FormData) {
       id: true,
       leagueId: true,
       kickoffAt: true,
+      matchFeePence: true,
+      homeMatchFeePence: true,
+      awayMatchFeePence: true,
       homeTeamId: true,
       awayTeamId: true,
-      homeTeam: { select: { name: true } },
-      awayTeam: { select: { name: true } },
+      homeTeam: { select: { name: true, standardMatchFeePence: true } },
+      awayTeam: { select: { name: true, standardMatchFeePence: true } },
     },
   });
 
@@ -297,7 +331,15 @@ export async function recordRefereeNightCashAction(formData: FormData) {
     throw new Error("Selected team is not part of this fixture.");
   }
 
-  const teamName = fixture.homeTeamId === teamId ? fixture.homeTeam.name : fixture.awayTeam.name;
+  const teamIsHome = fixture.homeTeamId === teamId;
+  const teamName = teamIsHome ? fixture.homeTeam.name : fixture.awayTeam.name;
+  const fixtureFeePence = resolveTeamFixtureFeePence(
+    teamIsHome ? fixture.homeMatchFeePence : fixture.awayMatchFeePence,
+    teamIsHome
+      ? fixture.homeTeam.standardMatchFeePence
+      : fixture.awayTeam.standardMatchFeePence,
+    fixture.matchFeePence,
+  );
 
   const currentCharge = await prisma.paymentCharge.upsert({
     where: {
@@ -313,12 +355,13 @@ export async function recordRefereeNightCashAction(formData: FormData) {
       fixtureId,
       title: `Match fee: ${teamName}`,
       description: "Created from referee night cash collection.",
-      amountPence,
+      amountPence: fixtureFeePence,
       dueDate: fixture.kickoffAt,
       status: PaymentChargeStatus.OPEN,
     },
     select: {
       id: true,
+      status: true,
     },
   });
 
@@ -344,6 +387,10 @@ export async function recordRefereeNightCashAction(formData: FormData) {
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
   });
 
+  const totalOpenOutstandingPence = openCharges.reduce(
+    (sum, charge) => sum + getChargeOutstandingPence(charge),
+    0,
+  );
   let remainingPence = amountPence;
   const allocations: CashAllocation[] = [];
 
@@ -365,7 +412,15 @@ export async function recordRefereeNightCashAction(formData: FormData) {
   }
 
   if (remainingPence > 0 || allocations.length === 0) {
-    throw new Error("The cash entered is higher than this team's open outstanding balance.");
+    const existingNightCash = await prisma.paymentTransaction.aggregate({
+      where: { refereeNightId, teamId },
+      _sum: { amountPence: true },
+    });
+
+    redirectCashEntryError(refereeNightId, "too_high", {
+      maxCashPence: totalOpenOutstandingPence,
+      existingNightCashPence: existingNightCash._sum.amountPence ?? 0,
+    });
   }
 
   await prisma.$transaction(async (tx) => {
