@@ -273,10 +273,19 @@ test("More contains only secondary app-native destinations", () => {
   const tv = read("src/app/player/team/[teamid]/tv/page.tsx");
   const referrals = read("src/app/player/team/[teamid]/referrals/page.tsx");
   const stats = read("src/app/player/team/[teamid]/stats/page.tsx");
+  const leagueRules = read("src/app/player/team/[teamid]/league-rules/page.tsx");
+  const matchRules = read("src/app/player/team/[teamid]/match-rules/page.tsx");
+  const help = read("src/app/player/team/[teamid]/help/page.tsx");
+  const switchAccount = read("src/app/player/team/[teamid]/switch-account/page.tsx");
 
   assert.match(more, /My stats/);
   assert.match(more, /SIXFL TV/);
   assert.match(more, /Refer a team · £75/);
+  assert.match(more, /League Rules/);
+  assert.match(more, /Match Rules/);
+  assert.match(more, /Help \/ Contact SIXFL/);
+  assert.match(more, /Switch team account/);
+  assert.match(more, /linkedTeamAccounts\.length > 1/);
   assert.doesNotMatch(more, /label: "Payments"/);
   assert.doesNotMatch(more, /label: "Recent results"/);
 
@@ -285,4 +294,11 @@ test("More contains only secondary app-native destinations", () => {
   assert.match(tv, /PlayerPwaModeOnly mode="web"/);
   assert.match(referrals, /Player app/);
   assert.match(referrals, /\/player\/team\/\$\{teamid\}\/referrals/);
+  assert.match(leagueRules, /PlayerAppRulesPage/);
+  assert.match(matchRules, /PlayerAppRulesPage/);
+  assert.match(help, /conversation=sixfl/);
+  assert.match(switchAccount, /Switch team account/);
+  assert.match(switchAccount, /getPlayerTeamMembershipsByUserId/);
+  assert.match(switchAccount, /VIEWING/);
+  assert.match(switchAccount, /SWITCH/);
 });
