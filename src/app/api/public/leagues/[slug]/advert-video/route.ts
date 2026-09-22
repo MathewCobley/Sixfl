@@ -21,6 +21,8 @@ async function findLeagueVideo(slug: string) {
     FROM "League"
     WHERE "slug" = ${slug}
       AND "isActive" = true
+      AND "publicAt" IS NOT NULL
+      AND "publicAt" <= NOW()
     LIMIT 1
   `);
 
@@ -35,6 +37,8 @@ async function findLeagueVideo(slug: string) {
       COALESCE("advertVideoEnabled", false) AS "advertVideoEnabled"
     FROM "League"
     WHERE "isActive" = true
+      AND "publicAt" IS NOT NULL
+      AND "publicAt" <= NOW()
       AND (
         LOWER("slug") LIKE '%heartlands%'
         OR LOWER("name") LIKE '%heartlands%'
