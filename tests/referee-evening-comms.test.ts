@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+
+const read = (p: string) => readFileSync(p, "utf8");
 import {
   EVENING_SOURCE, HOUR, eveningSnapshot, isLegacyRefereeNotice,
   isNonDisruptiveConfirmedExtension, planEveningNotice,
@@ -129,7 +131,6 @@ test("referee admin preview exit cannot be prefetched and clear preview state ea
 });
 
 test("production preparation preserves shared routing and migration safeguards", () => {
-  const read = (p: string) => readFileSync(p, "utf8");
   const migration = read("prisma/migrations/20260905223000_referee_evening_communications/migration.sql");
   const laterExtensionMigration = read("prisma/migrations/20260922113000_referee_later_extension_no_reconfirm/migration.sql");
   const core = read("src/lib/referees/evening-notifications.ts");
