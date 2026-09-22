@@ -399,6 +399,7 @@ model Fixture {
   awayTeam             Team                         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
   venue                Venue?                       @relation(fields: [venueId], references: [id], onDelete: SetNull)
   referee              User?                        @relation("FixtureReferee", fields: [refereeId], references: [id], onDelete: SetNull)
+  earlyReports         FixtureMatchReport[]
   result               MatchResult?
   paymentCharges       PaymentCharge[]
   captainConfirmations FixtureCaptainConfirmation[]
@@ -1544,4 +1545,20 @@ model PlayerRepaymentRequest {
   updatedAt DateTime @updatedAt
   @@index([planId, status])
   @@index([feeId, status])
+}
+
+// Captain evidence before an official result exists. Never a provisional score.
+model FixtureMatchReport {
+  fixtureId String
+  teamId String
+  contributions Json
+  performances Json
+  playerOfMatchName String?
+  coreCompletedAt DateTime?
+  assistsCompletedAt DateTime?
+  ratingsCompletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  @@id([fixtureId, teamId])
 }

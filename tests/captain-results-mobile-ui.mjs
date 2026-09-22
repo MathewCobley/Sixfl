@@ -37,6 +37,8 @@ await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: process.cwd()
   loader: { '.css': 'local-css' },
   plugins: [{ name: 'isolated-results-data', setup(builder) {
     const mocks = {
+      // This fixture contains an official result; pending reports are exercised separately.
+      '@/components/captain/EarlyMatchReports': 'export default function PendingReports(){return null;}',
       '@/lib/prisma': `const d=${data}; d.fixture.kickoffAt=new Date(d.fixture.kickoffAt);d.fixture.result.enteredAt=new Date(d.fixture.result.enteredAt); export const prisma={team:{findUnique:async()=>d.team},fixture:{findMany:async()=>[d.fixture]}};`,
       '@/lib/requireCaptain': 'export const requireCaptain=async()=>({user:{id:"test-captain"}});',
       '@/lib/playerMatchPerformances': `export const getMatchPerformances=async()=>(${data}).performances; export const replaceMatchPerformances=()=>{throw Error('Never write in UI tests')};`,

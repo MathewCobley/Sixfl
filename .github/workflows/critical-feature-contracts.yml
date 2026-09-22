@@ -116,6 +116,9 @@ jobs:
       - name: Check chat audiences and Regulars
         run: node --test tests/chat-audiences-regulars/contract.test.cjs
 
+      - name: Check early match reports and result reconciliation
+        run: node --test tests/early-match-reports/contract.test.cjs
+
       - name: Check critical feature contracts
         run: node scripts/check-critical-feature-contracts.mjs
 

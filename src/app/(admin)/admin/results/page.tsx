@@ -1,3 +1,4 @@
+import MatchReportWarnings from "@/components/admin/MatchReportWarnings";
 import Link from "next/link";
 // ========================================
 // File: src/app/(admin)/admin/results/page.tsx
@@ -129,6 +130,8 @@ export default async function AdminResultsPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
+      <MatchReportWarnings/>
+
       <div className="space-y-2">
         <h1 className="text-3xl font-semibold text-white">Result disputes</h1>
         <p className="text-sm text-white/60">
