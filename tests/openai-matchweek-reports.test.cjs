@@ -69,7 +69,7 @@ test("generated validation checks fixture coverage, duplicates and invented scor
 
 test("facts use one London date, not round number; omit unsafe outcomes and minimise scorer data", async () => {
   let query;
-  const f = (id, extra = {}) => ({ id, status: "COMPLETED", kickoffAt: new Date("2026-09-09T18:00:00Z"), homeTeam: { id: "a", name: "Team Alpha" }, awayTeam: { id: "b", name: "Team Beta" }, result: { homeScore: 1, awayScore: 3, isDisputed: false, disputes: [], teamMetadata: [{ teamId: "b", scorers: [{ name: "Alex Example", goals: 2, email: "secret@example.test" }], playerOfMatchName: "Alex Example" }] }, ...extra });
+  const f = (id, extra = {}) => ({ id, status: "COMPLETED", kickoffAt: new Date("2026-09-09T18:00:00Z"), homeTeam: { id: "a", name: "Team Alpha" }, awayTeam: { id: "b", name: "Team Beta" }, result: { homeScore: 1, awayScore: 3, isDisputed: false, disputes: [], teamMetadata: [{ teamId: "b", scorers: [{ name: "Alex Example", goals: 2, email: "secret@example.test" }], ownGoals: 1, playerOfMatchName: "Alex Example" }] }, ...extra });
   const list = [f("fixture-a"), f("replaced"), f("disputed", { result: { homeScore: 1, awayScore: 3, isDisputed: true, disputes: [] } }), f("pending", { status: "SCHEDULED", result: null }), f("cancelled", { status: "CANCELLED" })];
   const db = { league: { findFirst: async () => ({ id: "test-league", name: "Example", area: "Example" }) }, fixture: { findMany: async q => { query = q; return list; } }, $queryRaw: async () => [{ fixtureId: "replaced" }] };
   const load = loader({ "@/lib/prisma": { prisma: db }, "@/lib/teams/fixture-placeholders": { getFixturePlaceholderTeamIds: async () => new Set() } });
@@ -80,8 +80,13 @@ test("facts use one London date, not round number; omit unsafe outcomes and mini
   assert.equal(query.where.round, undefined); assert.equal(query.take, undefined);
   assert.equal(result.matches.length, 1); assert.equal(result.pendingFixtures, 1); assert.equal(result.omittedFixtures, 3);
   assert.doesNotMatch(JSON.stringify(result), /secret@example/);
+  assert.deepEqual(result.matches[0].scorers, [
+    { team: "Team Beta", name: "Alex Example", goals: 2 },
+    { team: "Team Beta", name: "Own goal", goals: 1 },
+  ]);
   assert.equal(facts.recordedScorers([{ name: "A", goals: 3 }, { name: "B", goals: 2 }], "Team", 3).length, 0);
   assert.equal(facts.recordedScorers([{ name: "email@example.test", goals: 1 }], "Team", 3).length, 0);
+  assert.equal(facts.recordedTeamScorers([{ name: "A", goals: 3 }], 1, "Team", 3).length, 0);
   await facts.getReportSource("example", "2026-10-25");
   assert.equal((query.where.kickoffAt.lt - query.where.kickoffAt.gte) / 3600000, 25, "DST fall-back is one London calendar day");
 });
