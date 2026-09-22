@@ -83,8 +83,16 @@ export default function AdminAppMessagingPanel({
           </p>
         </div>
 
-        <div className="text-xs leading-5 text-white/40">
-          SMS and email remain unchanged during the pilot.
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="text-xs leading-5 text-white/40">
+            SMS and email remain unchanged during the pilot.
+          </div>
+          <Link
+            href="/admin/messaging/chat"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
+          >
+            Internal Chat Console
+          </Link>
         </div>
       </div>
 

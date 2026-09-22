@@ -40,6 +40,89 @@ export type AdminAppMessagingDashboard = {
   pushAudit: AdminPushAuditItem[];
 };
 
+export type AdminInternalChatConversation = {
+  id: string;
+  teamName: string;
+  conversationLabel: string;
+  participantName: string | null;
+  lastMessagePreview: string | null;
+  latestMessageAt: Date | null;
+  messageCount: number;
+  href: string;
+};
+
+function internalConversationLabel(input: {
+  type: PortalConversationType;
+  title: string | null;
+  participantUser: { name: string | null; email: string | null } | null;
+}) {
+  if (input.type === PortalConversationType.CAPTAIN_PLAYER) {
+    return `Private · ${displayName(input.participantUser)} ↔ captain`;
+  }
+  if (input.type === PortalConversationType.CAPTAIN_CAPTAIN) {
+    return "Private · captain ↔ captain";
+  }
+  if (input.type === PortalConversationType.REGULARS) {
+    return input.title?.trim() || "Regulars";
+  }
+  if (input.type === PortalConversationType.SELECTED_GROUP) {
+    return input.title?.trim() || "Selected Players";
+  }
+  if (input.type === PortalConversationType.SIXFL) {
+    return "Message SIXFL";
+  }
+  return "Whole Squad Chat";
+}
+
+export async function getAdminInternalChatConversations(
+  limit = 200,
+): Promise<AdminInternalChatConversation[]> {
+  const conversations = await prisma.portalConversation.findMany({
+    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    take: Math.max(20, Math.min(500, limit)),
+    select: {
+      id: true,
+      teamId: true,
+      type: true,
+      conversationKey: true,
+      participantUserId: true,
+      title: true,
+      lastMessagePreview: true,
+      latestMessageAt: true,
+      participantUser: {
+        select: { name: true, email: true },
+      },
+      team: {
+        select: { name: true },
+      },
+      _count: {
+        select: { messages: true },
+      },
+    },
+  });
+
+  return conversations.map((conversation) => ({
+    id: conversation.id,
+    teamName: conversation.team.name,
+    conversationLabel: internalConversationLabel(conversation),
+    participantName:
+      conversation.type === PortalConversationType.CAPTAIN_PLAYER ||
+      conversation.type === PortalConversationType.SIXFL
+        ? displayName(conversation.participantUser)
+        : null,
+    lastMessagePreview: conversation.lastMessagePreview,
+    latestMessageAt: conversation.latestMessageAt,
+    messageCount: conversation._count.messages,
+    href: adminPortalChatHref({
+      teamId: conversation.teamId,
+      conversationId: conversation.id,
+      type: conversation.type,
+      participantUserId: conversation.participantUserId,
+      conversationKey: conversation.conversationKey,
+    }),
+  }));
+}
+
 function displayName(user: { name: string | null; email: string | null } | null) {
   return user?.name?.trim() || user?.email?.trim() || "SIXFL user";
 }
@@ -49,7 +132,7 @@ function preview(value: string, max = 120) {
   return compact.length <= max ? compact : `${compact.slice(0, max - 3)}...`;
 }
 
-function chatHref(input: {
+export function adminPortalChatHref(input: {
   teamId: string;
   conversationId: string;
   type: PortalConversationType;
@@ -337,7 +420,7 @@ export async function getAdminAppMessagingDashboard(
         : conversationLabel,
       createdAt: message.createdAt,
       unreadRecipientCount,
-      href: chatHref({
+      href: adminPortalChatHref({
         teamId: conversation.teamId,
         conversationId: conversation.id,
         type: conversation.type,
