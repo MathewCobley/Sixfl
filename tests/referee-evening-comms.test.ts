@@ -116,6 +116,18 @@ test("legacy block is narrowly scoped, never personal/finance/availability messa
   assert.ok(isLegacyRefereeNotice("REFEREE_NIGHT_CONFIRMATION_AUTO72H"));
   for (const source of [EVENING_SOURCE, "REFEREE_AVAILABILITY_REQUEST", "REFEREE_WELCOME", "REFEREE_PAYMENT", "DIRECT_REFEREE_MESSAGE", null]) assert.equal(isLegacyRefereeNotice(source), false);
 });
+test("referee admin preview exit cannot be prefetched and clear preview state early", () => {
+  const refereePage = read("src/app/(public)/referee/page.tsx");
+  assert.match(
+    refereePage,
+    /<a[\s\S]{0,700}referee-preview\/exit[\s\S]{0,700}Switch back to Full Admin View/,
+  );
+  assert.doesNotMatch(
+    refereePage,
+    /<Link[\s\S]{0,700}referee-preview\/exit/,
+  );
+});
+
 test("production preparation preserves shared routing and migration safeguards", () => {
   const read = (p: string) => readFileSync(p, "utf8");
   const migration = read("prisma/migrations/20260905223000_referee_evening_communications/migration.sql");
