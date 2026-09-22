@@ -1,9 +1,9 @@
 import Link from "next/link";
 import {
-  BanknotesIcon,
-  CalendarDaysIcon,
   ChartBarSquareIcon,
   ChevronRightIcon,
+  GiftIcon,
+  PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 
 type PageProps = {
@@ -25,25 +25,22 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
 
   const rows = [
     {
-      href: withPreview(`/player/team/${teamid}/ledger`, previewMembershipId),
-      label: "Payments",
-      description: "Match fees, balance and payment history",
-      icon: BanknotesIcon,
-    },
-    {
       href: withPreview(`/player/team/${teamid}/stats`, previewMembershipId),
       label: "My stats",
-      description: "Appearances, goals and player performance",
+      description: "Appearances, goals, assists and player performance",
       icon: ChartBarSquareIcon,
     },
     {
-      href: withPreview(
-        `/player/team/${teamid}/availability#recent-results`,
-        previewMembershipId,
-      ),
-      label: "Recent results",
-      description: "Your latest SIXFL results inside the app",
-      icon: CalendarDaysIcon,
+      href: withPreview(`/player/team/${teamid}/tv`, previewMembershipId),
+      label: "SIXFL TV",
+      description: "Your team's highlights and recorded matches",
+      icon: PlayCircleIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/referrals`, previewMembershipId),
+      label: "Refer a team · £75",
+      description: "Share your referral link and track rewards",
+      icon: GiftIcon,
     },
   ];
 
