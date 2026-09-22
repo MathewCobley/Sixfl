@@ -16,6 +16,24 @@ test("admin communications includes the dark-launch app messaging centre", () =>
   assert.match(panel, /Recent app messages/);
   assert.match(panel, /Push notification audit/);
   assert.match(panel, /Unread by/);
+  assert.match(panel, /Internal Chat Console/);
+  assert.match(panel, /\/admin\/messaging\/chat/);
+});
+
+test("admin has a dedicated internal app chat console", () => {
+  const page = read("src/app/(admin)/admin/messaging/chat/page.tsx");
+  const admin = read("src/lib/admin/app-messaging.ts");
+
+  assert.match(page, /Internal Chat Console/);
+  assert.match(page, /Internal app chat only/);
+  assert.match(page, /No SMS · No email/);
+  assert.match(page, /getAdminInternalChatConversations/);
+  assert.match(page, /Admin Test Mode/);
+  assert.match(admin, /getAdminInternalChatConversations/);
+  assert.match(admin, /PortalConversationType\.REGULARS/);
+  assert.match(admin, /PortalConversationType\.SELECTED_GROUP/);
+  assert.match(admin, /PortalConversationType\.CAPTAIN_PLAYER/);
+  assert.match(admin, /PortalConversationType\.CAPTAIN_CAPTAIN/);
 });
 
 test("push audit records real device outcomes", () => {
