@@ -14,6 +14,9 @@ export async function GET(
     SELECT COALESCE("freeKitOfferEnabled", TRUE) AS "enabled"
     FROM "League"
     WHERE "slug" = ${slug}
+      AND "isActive" = true
+      AND "publicAt" IS NOT NULL
+      AND "publicAt" <= NOW()
     LIMIT 1
   `);
   const row = rows[0] ?? null;
