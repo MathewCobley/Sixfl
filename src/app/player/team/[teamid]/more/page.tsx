@@ -1,8 +1,10 @@
 import Link from "next/link";
 import {
+  BookOpenIcon,
   ChartBarSquareIcon,
   ChevronRightIcon,
   GiftIcon,
+  LifebuoyIcon,
   PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 
@@ -41,6 +43,24 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       label: "Refer a team · £75",
       description: "Share your referral link and track rewards",
       icon: GiftIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/league-rules`, previewMembershipId),
+      label: "League Rules",
+      description: "Competition, payments, conduct and fixture rules",
+      icon: BookOpenIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/match-rules`, previewMembershipId),
+      label: "Match Rules",
+      description: "The rules and procedures used on the pitch",
+      icon: BookOpenIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/help`, previewMembershipId),
+      label: "Help / Contact SIXFL",
+      description: "Get help or send SIXFL a private message",
+      icon: LifebuoyIcon,
     },
   ];
 
