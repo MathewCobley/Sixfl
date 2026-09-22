@@ -165,7 +165,6 @@ if (standingsViolations.length) {
   pass("standings");
 }
 
-// ---------------------------------------------------------------------------
 // LEAGUE PUBLICATION — admins can prepare future leagues without exposing them
 // publicly before the scheduled UK go-live time. Draft fixture status remains
 // the existing safety boundary for payment, reminder and chase automation.
@@ -203,8 +202,8 @@ expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ public
 expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Date() }", "scheduled leagues must stay out of the public sitemap");
 
 // ---------------------------------------------------------------------------
-// PLAYER PWA — keep the approved app-style first screen compact, data-backed
-// and chat-dark-launched for real players.
+// PLAYER PWA — keep the approved app-style first screen compact, data-backed,
+// and exact in admin player preview.
 // ---------------------------------------------------------------------------
 const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
 const playerAppPagePath = "src/app/player/team/[teamid]/page.tsx";
@@ -215,12 +214,31 @@ const playerAppNav = read(playerAppNavPath);
 
 expectText("player pwa", playerAppHomePath, playerAppHome, "Refer a new team and earn £75", "player app home must retain the referral banner");
 expectText("player pwa", playerAppHomePath, playerAppHome, "Recent form", "player app home must retain compact recent form");
-expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "SIXFL Chat"', "admin preview must retain the SIXFL Chat tile");
-expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "My Stats"', "live players must receive a safe non-chat fourth tile");
+expectText("player pwa", playerAppHomePath, playerAppHome, 'title: "SIXFL Chat"', "player PWA Home must retain the SIXFL Chat quick action");
+expectText("player pwa", playerAppHomePath, playerAppHome, "body: unreadMessageLabel", "player PWA Home must show Messages or the unread count on the chat tile");
 expectText("player pwa", playerAppPagePath, playerAppPage, "getTeamMemberProfilesByTeamMemberIds", "player app home must use the existing player profile source");
-expectText("player pwa", playerAppPagePath, playerAppPage, 'showTeamChat={user.role === UserRole.ADMIN}', "real players must not have Team Chat enabled before launch");
+expectText("player pwa", playerAppPagePath, playerAppPage, "getPortalChatUnreadCount", "player app home must use shared portal-chat unread logic");
+expectText("player pwa", playerAppPagePath, playerAppPage, "prisma.fixtureSelection.findFirst", "player app home must use saved fixture selection data");
+expectText("player pwa", playerAppHomePath, playerAppHome, "NOT SELECTED YET", "player app home must keep non-final selection wording safe");
+expectText("player pwa", playerAppHomePath, playerAppHome, "NOT IN SQUAD", "player app home must expose explicit final non-selection when known");
+expectText("player pwa", playerAppHomePath, playerAppHome, "unreadMessageLabel", "player app home must surface unread SIXFL Chat status");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
+
+// ---------------------------------------------------------------------------
+// ADMIN PWA VIEWER — keep the selected test subject and phone-preview route
+// when an administrator leaves and returns to the diagnostics page.
+// ---------------------------------------------------------------------------
+const adminPwaViewerPath = "src/components/admin/pwa/PwaViewerPicker.tsx";
+const adminPwaDiagnosticsPath = "src/components/admin/PwaDiagnosticsPanel.tsx";
+const adminPwaViewer = read(adminPwaViewerPath);
+const adminPwaDiagnostics = read(adminPwaDiagnosticsPath);
+
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "sixfl-admin-pwa-viewer-selection-v1", "viewer picker must persist the selected captain/player/referee");
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "window.localStorage.getItem", "viewer picker must restore persisted test subjects");
+expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "storedMembership?.membershipId", "restored player selection must be validated against the restored team");
+expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "sixfl-admin-pwa-preview-path-v1", "phone preview must remember the last selected viewer route");
+expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "previewPathHydrated", "stored preview route must be restored before persistence writes defaults");
 
 // ---------------------------------------------------------------------------
 // PLAYERPOOL — keep the native captain discovery/introduction workflow visible.
