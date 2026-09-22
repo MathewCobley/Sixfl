@@ -230,7 +230,7 @@ export default async function CaptainVeoPriorityCard({
                   {match.matchCardStatus === 'INCOMPLETE' ? (
                     <div className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">
                       <strong>What was missing?</strong> The core match card was incomplete. Save the players who played,
-                      goalscorers and Player of the Match by <strong>6pm the following day</strong>.
+                      account for all team goals (including any own goals) and choose Player of the Match by <strong>6pm the following day</strong>.
                     </div>
                   ) : match.matchCardStatus === 'LATE' ? (
                     <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-100">
