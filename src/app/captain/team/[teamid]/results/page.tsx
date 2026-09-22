@@ -186,6 +186,9 @@ function getFriendlyErrorMessage(error: unknown) {
   if (error.message.includes("rating")) {
     return "Ratings must be between 1 and 10, with no more than one decimal place (for example, 9.2).";
   }
+  if (error.message.includes("Own goals")) {
+    return "Own goals must be a whole number such as 0, 1, or 2.";
+  }
   if (error.message.includes("whole numbers")) {
     return "Goals and assists must be whole numbers such as 0, 1, 2, or 3.";
   }
@@ -336,6 +339,12 @@ async function saveTeamMatchDetails(formData: FormData) {
       throw new Error("A maximum of 9 players can play in one fixture.");
     }
 
+    const ownGoalsText = String(formData.get("ownGoals") ?? "0").trim();
+    const ownGoals = Number(ownGoalsText || "0");
+    if (!Number.isSafeInteger(ownGoals) || ownGoals < 0) {
+      throw new Error("Own goals must be a whole number.");
+    }
+
     const isHome = result.fixture.homeTeamId === teamid;
     const playedResult = getPredictorResult(result);
     if (!playedResult) throw new Error("The original played score needs administrator review before saving scorer details.");
@@ -343,8 +352,8 @@ async function saveTeamMatchDetails(formData: FormData) {
     const goalsRecorded = contributions.reduce((sum, row) => sum + row.goals, 0);
     const assistsRecorded = contributions.reduce((sum, row) => sum + row.assists, 0);
 
-    if (goalsRecorded > goalsExpected) {
-      throw new Error("Recorded scorer goals cannot exceed the on-pitch result.");
+    if (goalsRecorded + ownGoals > goalsExpected) {
+      throw new Error("Recorded scorer goals and Own goals cannot exceed the on-pitch result.");
     }
     if (assistsRecorded > goalsExpected) {
       throw new Error("Recorded assists cannot exceed the on-pitch result.");
@@ -366,12 +375,13 @@ async function saveTeamMatchDetails(formData: FormData) {
         where: {
           matchResultId_teamId: { matchResultId: resultId, teamId: teamid },
         },
-        update: { scorers: contributionsJson, goalsRecorded, playerOfMatchName },
+        update: { scorers: contributionsJson, goalsRecorded, ownGoals, playerOfMatchName },
         create: {
           matchResultId: resultId,
           teamId: teamid,
           scorers: contributionsJson,
           goalsRecorded,
+          ownGoals,
           playerOfMatchName,
         },
       }),
@@ -384,7 +394,7 @@ async function saveTeamMatchDetails(formData: FormData) {
 
     const priorityCoreComplete =
       performanceRows.length > 0 &&
-      goalsRecorded === goalsExpected &&
+      goalsRecorded + ownGoals === goalsExpected &&
       Boolean(playerOfMatchName);
     const priorityAssistsComplete = goalsExpected === 0 || assistsRecorded > 0;
     const priorityRatingsComplete =
@@ -602,7 +612,9 @@ export default async function CaptainResultsPage({
       }));
       const contributions = parseStoredContributions(matchDetails?.scorers);
       const matchPerformances = performancesByResult.get(fixture.result!.id) ?? [];
-      const needsScorers = (matchDetails?.goalsRecorded ?? 0) !== playedGoalsFor;
+      const needsScorers =
+        (matchDetails?.goalsRecorded ?? 0) + (matchDetails?.ownGoals ?? 0) !==
+        playedGoalsFor;
       const needsPom = !matchDetails?.playerOfMatchName;
       const needsAppearances = matchPerformances.length === 0;
 
@@ -746,6 +758,8 @@ export default async function CaptainResultsPage({
             (sum, item) => sum + item.assists,
             0,
           );
+          const ownGoals = row.matchDetails?.ownGoals ?? 0;
+          const accountedGoalTotal = recordedGoalTotal + ownGoals;
           const performanceByMemberId = new Map(
             row.matchPerformances.map((item) => [item.teamMemberId, item]),
           );
@@ -873,8 +887,8 @@ export default async function CaptainResultsPage({
                       </div>
 
                       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/65">
-                        Recorded {recordedGoalTotal} of {row.playedGoalsFor} on-pitch team goals. Optional assists recorded: {recordedAssistTotal}.
-                        {recordedGoalTotal > row.playedGoalsFor || recordedAssistTotal > row.playedGoalsFor ? <p className="mt-2 font-semibold text-amber-200">Your report exceeds the recorded score. Please correct the details, or raise a score dispute if the official result is wrong. SIXFL can see this warning too.</p> : null}
+                        Accounted for {accountedGoalTotal} of {row.playedGoalsFor} on-pitch team goals: {recordedGoalTotal} player goal{recordedGoalTotal === 1 ? "" : "s"}{ownGoals > 0 ? ` + ${ownGoals} own goal${ownGoals === 1 ? "" : "s"}` : ""}. Optional assists recorded: {recordedAssistTotal}.
+                        {accountedGoalTotal > row.playedGoalsFor || recordedAssistTotal > row.playedGoalsFor ? <p className="mt-2 font-semibold text-amber-200">Your report exceeds the recorded score. Please correct the details, or raise a score dispute if the official result is wrong. SIXFL can see this warning too.</p> : null}
                       </div>
                     </div>
                   </div>
@@ -993,6 +1007,23 @@ export default async function CaptainResultsPage({
                           };
                         })}
                       />
+
+                      <label className="mt-5 block rounded-2xl border border-amber-300/20 bg-amber-400/[0.06] p-4">
+                        <span className="text-sm font-semibold text-white">Own goals</span>
+                        <span className="mt-1 block text-xs leading-5 text-white/50">
+                          Use this when an opponent put the ball into their own net. It counts towards your team score without giving a SIXFL player the goal.
+                        </span>
+                        <input
+                          type="number"
+                          name="ownGoals"
+                          defaultValue={ownGoals}
+                          min={0}
+                          max={row.playedGoalsFor}
+                          inputMode="numeric"
+                          aria-label="Own goals"
+                          className="mt-3 h-11 w-24 rounded-xl border border-white/10 bg-[#0d1428] px-3 text-center text-base font-bold text-white outline-none focus:border-amber-300/50"
+                        />
+                      </label>
 
                       <div className="mt-5">
                         <FormListboxField
