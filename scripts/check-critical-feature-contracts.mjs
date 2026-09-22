@@ -208,9 +208,21 @@ expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Dat
 const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
 const playerAppPagePath = "src/app/player/team/[teamid]/page.tsx";
 const playerAppNavPath = "src/components/player/PlayerTeamNav.tsx";
+const playerAppMorePath = "src/app/player/team/[teamid]/more/page.tsx";
+const playerAppChatPath = "src/app/player/team/[teamid]/chat/page.tsx";
+const portalChatApiPath = "src/app/api/portal-chat/team/[teamid]/route.ts";
+const playerChatUnreadApiPath = "src/app/api/player/team/[teamid]/chat-unread/route.ts";
+const playerAppTvPath = "src/app/player/team/[teamid]/tv/page.tsx";
+const playerAppReferralsPath = "src/app/player/team/[teamid]/referrals/page.tsx";
 const playerAppHome = read(playerAppHomePath);
 const playerAppPage = read(playerAppPagePath);
 const playerAppNav = read(playerAppNavPath);
+const playerAppMore = read(playerAppMorePath);
+const playerAppChat = read(playerAppChatPath);
+const portalChatApi = read(portalChatApiPath);
+const playerChatUnreadApi = read(playerChatUnreadApiPath);
+const playerAppTv = read(playerAppTvPath);
+const playerAppReferrals = read(playerAppReferralsPath);
 
 expectText("player pwa", playerAppHomePath, playerAppHome, 'resultsHref = `${fixturesHref}#recent-results`', "player app recent-form navigation must stay inside the Fixtures app screen");
 expectRegex("player pwa", playerAppHomePath, playerAppHome, /^(?![\s\S]*\/player\/referrals)[\s\S]*$/, "player app home must not link out to the website referral page");
@@ -223,8 +235,20 @@ expectText("player pwa", playerAppPagePath, playerAppPage, "prisma.fixtureSelect
 expectText("player pwa", playerAppHomePath, playerAppHome, "NOT SELECTED YET", "player app home must keep non-final selection wording safe");
 expectText("player pwa", playerAppHomePath, playerAppHome, "NOT IN SQUAD", "player app home must expose explicit final non-selection when known");
 expectText("player pwa", playerAppHomePath, playerAppHome, "unreadMessageLabel", "player app home must surface unread SIXFL Chat status");
+expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Chat"', "player app bottom navigation must keep Chat permanent");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
+expectRegex("player pwa", playerAppNavPath, playerAppNav, /const appTabs[\s\S]*label: "Chat"[\s\S]*label: "Payments"[\s\S]*label: "More"/, "player app bottom navigation must keep Home, Fixtures, Chat, Payments and More in the primary set");
+expectRegex("player pwa", playerAppNavPath, playerAppNav, /const appTabs[\s\S]*^(?![\s\S]*label: "Stats")/, "Stats must not replace permanent Chat in the player app bottom navigation");
+expectText("player pwa", playerChatUnreadApiPath, playerChatUnreadApi, "getPortalChatUnreadCount", "player app nav unread badge must use the shared chat unread source");
+expectRegex("player pwa", portalChatApiPath, portalChatApi, /^(?![\s\S]*Whole Squad Chat is not available yet)[\s\S]*$/, "linked players must not be blocked by the old chat dark-launch gate");
+expectText("player pwa", playerAppChatPath, playerAppChat, "user.teamMembers.length === 0", "player chat must allow linked players while rejecting unrelated users");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "My stats"', "More must keep player stats as a secondary destination");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "SIXFL TV"', "More must keep SIXFL TV as an app destination");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Refer a team · £75"', "More must keep referrals as an app destination");
+expectRegex("player pwa", playerAppMorePath, playerAppMore, /^(?![\s\S]*label: "Payments")(?![\s\S]*label: "Recent results")[\s\S]*$/, "More must not duplicate permanent bottom tabs or Fixtures content");
+expectText("player pwa", playerAppTvPath, playerAppTv, '<PlayerPwaModeOnly mode="app">', "SIXFL TV must have a dedicated app presentation");
+expectText("player pwa", playerAppReferralsPath, playerAppReferrals, "Player app", "referrals opened from More must stay inside the player app");
 
 // ---------------------------------------------------------------------------
 // ADMIN PWA VIEWER — keep the selected test subject and phone-preview route
