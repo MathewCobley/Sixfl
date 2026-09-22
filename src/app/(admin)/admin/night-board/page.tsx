@@ -1,3 +1,4 @@
+import NightBoardLoanAuthorityControl from "@/components/admin/night-board/NightBoardLoanAuthorityControl";
 import MatchReportWarnings from "@/components/admin/MatchReportWarnings";
 // ========================================
 // File: src/app/(admin)/admin/night-board/page.tsx
@@ -1191,6 +1192,8 @@ function FixtureCard({
           {fixture.status}
         </div>
       </div>
+
+      <NightBoardLoanAuthorityControl fixtureId={fixture.id} teams={[fixture.homeTeam, fixture.awayTeam]} />
 
       <div className="mt-3 grid gap-2">
         <TeamChargeBadge
