@@ -34,14 +34,17 @@ test("Player PWA Home always exposes SIXFL Chat while admin preview keeps the sa
   assert.match(nav, /effectiveShowTeamChat = showTeamChat && !previewMembershipId/);
 });
 
-test("player app bottom navigation stays to five primary destinations", () => {
+test("player app bottom navigation keeps Chat permanent and moves Stats into More", () => {
   const nav = read("src/components/player/PlayerTeamNav.tsx");
+  const appTabs = nav.slice(nav.indexOf("const appTabs"), nav.indexOf("export default"));
 
-  assert.match(nav, /label: "Home"/);
-  assert.match(nav, /label: "Fixtures"/);
-  assert.match(nav, /label: "Payments"/);
-  assert.match(nav, /label: "More"/);
-  assert.doesNotMatch(nav, /label: "TV",/);
+  assert.match(appTabs, /label: "Home"/);
+  assert.match(appTabs, /label: "Fixtures"/);
+  assert.match(appTabs, /label: "Chat"/);
+  assert.match(appTabs, /label: "Payments"/);
+  assert.match(appTabs, /label: "More"/);
+  assert.doesNotMatch(appTabs, /label: "Stats"/);
+  assert.doesNotMatch(appTabs, /label: "TV"/);
 });
 
 test("player PWA home uses real profile and performance data", () => {
@@ -225,7 +228,11 @@ test("player PWA navigation is a closed app and does not expose public website l
   assert.doesNotMatch(more, /Open full SIXFL website/);
   assert.doesNotMatch(more, /href=["']\/["']/);
   assert.match(home, /resultsHref = `\$\{fixturesHref\}#recent-results`/);
-  assert.match(more, /availability#recent-results/);
+  assert.match(more, /\/stats/);
+  assert.match(more, /\/tv/);
+  assert.match(more, /\/referrals/);
+  assert.doesNotMatch(more, /\/ledger/);
+  assert.doesNotMatch(more, /recent-results/);
 });
 
 test("player Stats has a dedicated mobile PWA presentation while web stats remain available", () => {
@@ -243,4 +250,39 @@ test("player Stats has a dedicated mobile PWA presentation while web stats remai
   assert.match(app, /G\+A/);
   assert.doesNotMatch(app, /<table/);
   assert.doesNotMatch(app, /href=/);
+});
+
+
+test("permanent Player Chat is available to linked players and unread nav checks are read-only", () => {
+  const page = read("src/app/player/team/[teamid]/chat/page.tsx");
+  const api = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+  const unreadApi = read("src/app/api/player/team/[teamid]/chat-unread/route.ts");
+  const nav = read("src/components/player/PlayerTeamNav.tsx");
+
+  assert.match(page, /user\.role !== UserRole\.ADMIN && user\.teamMembers\.length === 0/);
+  assert.doesNotMatch(api, /Whole Squad Chat is not available yet/);
+  assert.match(unreadApi, /getPortalChatUnreadCount/);
+  assert.match(unreadApi, /previewMembershipId/);
+  assert.doesNotMatch(unreadApi, /portalConversationRead\.upsert/);
+  assert.match(nav, /chat-unread/);
+  assert.match(nav, /setInterval\(refreshUnreadCount, 30000\)/);
+});
+
+test("More contains only secondary app-native destinations", () => {
+  const more = read("src/app/player/team/[teamid]/more/page.tsx");
+  const tv = read("src/app/player/team/[teamid]/tv/page.tsx");
+  const referrals = read("src/app/player/team/[teamid]/referrals/page.tsx");
+  const stats = read("src/app/player/team/[teamid]/stats/page.tsx");
+
+  assert.match(more, /My stats/);
+  assert.match(more, /SIXFL TV/);
+  assert.match(more, /Refer a team · £75/);
+  assert.doesNotMatch(more, /label: "Payments"/);
+  assert.doesNotMatch(more, /label: "Recent results"/);
+
+  assert.match(stats, /PlayerPwaModeOnly mode="app"/);
+  assert.match(tv, /PlayerPwaModeOnly mode="app"/);
+  assert.match(tv, /PlayerPwaModeOnly mode="web"/);
+  assert.match(referrals, /Player app/);
+  assert.match(referrals, /\/player\/team\/\$\{teamid\}\/referrals/);
 });
