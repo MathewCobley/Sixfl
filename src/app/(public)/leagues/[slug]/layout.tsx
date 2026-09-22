@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
-import { permanentRedirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import FormingLeagueLanding from "@/components/leagues/FormingLeagueLanding";
 import LeagueQuickLinks from "@/components/leagues/LeagueQuickLinks";
 import { getHomepageLeagues } from "@/lib/leagues/homepage-leagues";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function PublicLeagueLayout({
   children,
@@ -16,6 +20,19 @@ export default async function PublicLeagueLayout({
 
   if (slug.toLowerCase().includes("heartlands")) {
     permanentRedirect("/leagues");
+  }
+
+  const publicLeague = await prisma.league.findFirst({
+    where: {
+      slug,
+      isActive: true,
+      publicAt: { lte: new Date() },
+    },
+    select: { id: true },
+  });
+
+  if (!publicLeague) {
+    notFound();
   }
 
   const homepageLeagues = await getHomepageLeagues({ includeHidden: true });
