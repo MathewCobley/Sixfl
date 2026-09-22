@@ -1,0 +1,38 @@
+name: Early match reports
+on:
+  pull_request:
+    paths:
+      - 'src/lib/match-reports/**'
+      - 'src/components/captain/EarlyMatchReports.tsx'
+      - 'src/components/captain/MatchDetailsPlayerFields.tsx'
+      - 'src/components/admin/MatchReportWarnings.tsx'
+      - 'src/app/captain/team/**/results/**'
+      - 'src/app/(admin)/admin/**'
+      - 'src/app/(public)/referee/actions.ts'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'tests/early-match-reports/**'
+      - '.github/workflows/early-match-reports.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  early-reports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node --test tests/early-match-reports/contract.test.cjs tests/captain-results-mobile.test.cjs
+      - name: Install isolated PostgreSQL test engine
+        run: npm install --prefix /tmp/sixfl-early-report-tools --no-package-lock --ignore-scripts @electric-sql/pglite@0.5.8
+      - name: Verify real database migration, promotion and mismatch warnings
+        env:
+          PGLITE_MODULE: /tmp/sixfl-early-report-tools/node_modules/@electric-sql/pglite
+          TZ: UTC
+        run: node tests/early-match-reports/database.cjs

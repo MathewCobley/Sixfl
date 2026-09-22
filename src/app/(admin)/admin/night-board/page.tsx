@@ -1,3 +1,4 @@
+import MatchReportWarnings from "@/components/admin/MatchReportWarnings";
 // ========================================
 // File: src/app/(admin)/admin/night-board/page.tsx
 // ========================================
@@ -1493,6 +1494,7 @@ export default async function NightBoardPage({
   return (
     <NightBoardOperationsProvider fixtures={operationFixtures}>
       <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <MatchReportWarnings fixtureIds={fixtures.map(fixture => fixture.id)}/>
         <AdminCard className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>

@@ -1,3 +1,4 @@
+import MatchReportWarnings from "@/components/admin/MatchReportWarnings";
 // ========================================
 // File: src/app/(admin)/admin/fixtures/page.tsx
 // ========================================
@@ -515,6 +516,8 @@ export default async function AdminFixturesPage({
 
   return (
     <div className="w-full space-y-8 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+      <MatchReportWarnings/>
+
       <FixtureMatchupGrid
         initialLeagueId={activeLeagueId}
         initialDivisionId={activeDivisionId ?? undefined}

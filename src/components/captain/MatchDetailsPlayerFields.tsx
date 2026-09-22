@@ -15,7 +15,7 @@ export type MatchDetailsPlayer = {
  * field names, discards edits or changes the existing server-action payload. */
 export default function MatchDetailsPlayerFields({ players, goalsFor }: {
   players: MatchDetailsPlayer[];
-  goalsFor: number;
+  goalsFor: number | null;
 }) {
   return (
     <div className={styles.container} data-match-player-fields>
@@ -42,12 +42,12 @@ export default function MatchDetailsPlayerFields({ players, goalsFor }: {
           <label className={styles.field}>
             <span className={styles.mobileLabel}>Goals</span>
             <input type="number" name={`scorerGoals_${player.id}`} defaultValue={player.goals}
-              min={0} max={goalsFor} inputMode="numeric" aria-label={`Goals for ${player.name}`} />
+              min={0} max={goalsFor ?? undefined} inputMode="numeric" aria-label={`Goals for ${player.name}`} />
           </label>
           <label className={styles.field}>
             <span className={styles.mobileLabel}>Assists</span>
             <input type="number" name={`assists_${player.id}`} defaultValue={player.assists}
-              min={0} max={goalsFor} inputMode="numeric" aria-label={`Assists for ${player.name}`} />
+              min={0} max={goalsFor ?? undefined} inputMode="numeric" aria-label={`Assists for ${player.name}`} />
           </label>
           <label className={styles.field}>
             <span className={styles.mobileLabel}>Rating</span>

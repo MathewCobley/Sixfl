@@ -1,3 +1,4 @@
+import MatchReportWarnings from "@/components/admin/MatchReportWarnings";
 import OverturnEmailPanel from "@/components/admin/OverturnEmailPanel";
 import { emailOverturnedResultAction } from "./overturn-email-actions";
 import { randomUUID } from "node:crypto";
@@ -64,6 +65,8 @@ export default async function FixtureResultPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <MatchReportWarnings fixtureId={id}/>
+
       <Link href={returnTo} className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
         ← Back to fixtures
       </Link>

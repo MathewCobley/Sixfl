@@ -166,3 +166,7 @@ collapsed sections in browsers at desktop/phone widths. Tests also cover
 fail-closed helper defaults and an admin boolean without the server role.
 The example remains £37 settled / £3 due; only the administrator sees the
 £18 cash / £19 internal adjustment breakdown.
+
+## Match reports before official results
+
+Published fixtures in released leagues accept captain reports from kick-off while awaiting the official result. Fixture ownership, cancellation/postponement, squad membership, a maximum of nine players and numeric validation remain server enforced. Pending reports never invent a score, result, league-table entry or player-stat record. The fixture row lock serializes report saves with every result insertion. A database trigger transfers both teams' evidence atomically when a result is first entered, preserving original completion timestamps and avoiding re-import on later score corrections. Removed memberships and replaced teams cannot block the official result or attach another team's evidence. A shared read-only warning query compares scorer/assist totals with the played score (including overturned results) on Admin Results, Fixtures, result details and Night Board. Reports are preserved for correction. The early-report workflow exercises the migration and canonical player-performance triggers in disposable PostgreSQL; the main critical-feature workflow also checks the prepared pages and server guards.

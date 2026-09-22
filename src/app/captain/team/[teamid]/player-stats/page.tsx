@@ -466,7 +466,7 @@ export default async function CaptainPlayerStatsPage({
           </div>
         ) : (
           <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm leading-6 text-white/45">
-            No completed match reports are available for this season yet. Enter the details in Match Reports after a result is recorded.
+            No completed match reports are available for this season yet. Add details in Match Reports from kick-off, even before the official result is recorded.
           </div>
         )}
       </section>

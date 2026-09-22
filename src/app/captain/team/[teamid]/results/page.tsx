@@ -1,3 +1,4 @@
+import EarlyMatchReports from "@/components/captain/EarlyMatchReports";
 import MatchDetailsPlayerFields from "@/components/captain/MatchDetailsPlayerFields";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
@@ -601,7 +602,7 @@ export default async function CaptainResultsPage({
       }));
       const contributions = parseStoredContributions(matchDetails?.scorers);
       const matchPerformances = performancesByResult.get(fixture.result!.id) ?? [];
-      const needsScorers = (matchDetails?.goalsRecorded ?? 0) < playedGoalsFor;
+      const needsScorers = (matchDetails?.goalsRecorded ?? 0) !== playedGoalsFor;
       const needsPom = !matchDetails?.playerOfMatchName;
       const needsAppearances = matchPerformances.length === 0;
 
@@ -663,6 +664,7 @@ export default async function CaptainResultsPage({
         </div>
       </section>
 
+      {filters.saved === "early" ? <p role="status" className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-100">Match details saved. They will carry across when the official score is entered.</p> : null}
       {filters.saved === "1" ? (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
           Match details, appearances and ratings saved successfully.
@@ -715,10 +717,12 @@ export default async function CaptainResultsPage({
         </form>
       </section>
 
+      <EarlyMatchReports teamId={teamid} query={filters.q} outcome={filters.outcome}/>
+
       <div className="space-y-4">
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-white/60">
-            No results matched the current filters.
+            No results matched the current filters. Reports awaiting a score are shown above.
           </div>
         ) : null}
 
@@ -870,6 +874,7 @@ export default async function CaptainResultsPage({
 
                       <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white/65">
                         Recorded {recordedGoalTotal} of {row.playedGoalsFor} on-pitch team goals. Optional assists recorded: {recordedAssistTotal}.
+                        {recordedGoalTotal > row.playedGoalsFor || recordedAssistTotal > row.playedGoalsFor ? <p className="mt-2 font-semibold text-amber-200">Your report exceeds the recorded score. Please correct the details, or raise a score dispute if the official result is wrong. SIXFL can see this warning too.</p> : null}
                       </div>
                     </div>
                   </div>

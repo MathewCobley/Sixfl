@@ -26,6 +26,7 @@ function harness() {
   const data = fixtureData(), writes = [];
   let authorised = true;
   const mocks = {
+    "@/components/captain/EarlyMatchReports": () => null,
     '@/lib/prisma': { prisma: {
       team: { findUnique: async () => data.team },
       fixture: { findMany: async () => [data.fixture] },
