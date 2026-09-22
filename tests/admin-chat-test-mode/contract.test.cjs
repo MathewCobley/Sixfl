@@ -4,13 +4,16 @@ const fs = require("node:fs");
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("admin chat test mode is writable without opening team chat to users", () => {
+test("admin chat test mode stays isolated while linked player chat is live", () => {
   const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
   const captainPage = read("src/app/captain/team/[teamid]/chat/page.tsx");
   const playerPage = read("src/app/player/team/[teamid]/chat/page.tsx");
 
-  assert.match(route, /actualUser\.role !== UserRole\.ADMIN/);
-  assert.match(route, /Whole Squad Chat is not available yet/);
+  assert.doesNotMatch(route, /Whole Squad Chat is not available yet/);
+  assert.match(route, /const membership = await prisma\.teamMember\.findFirst/);
+  assert.match(route, /where: \{ teamId, userId: actualUser\.id \}/);
+  assert.match(route, /if \(!membership\)/);
+  assert.match(route, /canSend: true/);
   assert.match(route, /adminTestRequested/);
   assert.match(route, /isAdminTestMode: adminTestRequested/);
   assert.match(route, /canSend: adminTestRequested/);
@@ -18,6 +21,7 @@ test("admin chat test mode is writable without opening team chat to users", () =
   assert.match(captainPage, /adminTestMode/);
   assert.doesNotMatch(playerPage, /adminTestMode/);
   assert.match(playerPage, /previewMembershipId/);
+  assert.match(playerPage, /user\.role !== UserRole\.ADMIN && user\.teamMembers\.length === 0/);
 });
 
 test("admin test messages never trigger phone push notifications", () => {
