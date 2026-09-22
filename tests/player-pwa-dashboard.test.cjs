@@ -93,6 +93,20 @@ test("player appearances are backfilled from reliable completed-match evidence",
 });
 
 
+
+test("player PWA stats follow the same player across recreated team records", () => {
+  const page = read("src/app/player/team/[teamid]/page.tsx");
+
+  assert.match(page, /normaliseHistoricalTeamName/);
+  assert.match(page, /historicalTeamIds/);
+  assert.match(page, /historical_member\."userId" = \$\{membership\.user\.id\}/);
+  assert.match(page, /performance\."teamId" IN/);
+  assert.doesNotMatch(
+    page,
+    /WHERE performance\."teamMemberId" = \$\{membership\.id\}\s+AND performance\."teamId" = \$\{teamid\}/,
+  );
+});
+
 test("player PWA header stays clean and team badges render without white discs", () => {
   const header = read("src/components/player/PlayerPwaPortalHeader.tsx");
   const home = read("src/components/player/PlayerAppHome.tsx");

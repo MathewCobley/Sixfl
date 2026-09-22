@@ -66,6 +66,15 @@ function formatFixtureDate(value: Date) {
   });
 }
 
+function normaliseHistoricalTeamName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function formatPaymentDate(value: Date | null) {
   if (!value) return "Not paid yet";
 
@@ -401,6 +410,14 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   let playerProfile: TeamMemberProfile | null = null;
   let playerAppStats = { appearances: 0, goals: 0, assists: 0 };
   if (membership) {
+    const teamNameKey = normaliseHistoricalTeamName(team.name);
+    const historicalTeamRows = await prisma.team.findMany({
+      select: { id: true, name: true },
+    });
+    const historicalTeamIds = historicalTeamRows
+      .filter((candidate) => normaliseHistoricalTeamName(candidate.name) === teamNameKey)
+      .map((candidate) => candidate.id);
+
     const [profiles, statRows] = await Promise.all([
       getTeamMemberProfilesByTeamMemberIds([membership.id]),
       prisma.$queryRaw<Array<{ appearances: number; goals: number; assists: number }>>(Prisma.sql`
@@ -409,8 +426,10 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           COALESCE(SUM(performance."goals"), 0)::int AS "goals",
           COALESCE(SUM(performance."assists"), 0)::int AS "assists"
         FROM "PlayerMatchPerformance" performance
-        WHERE performance."teamMemberId" = ${membership.id}
-          AND performance."teamId" = ${teamid}
+        INNER JOIN "TeamMember" historical_member
+          ON historical_member."id" = performance."teamMemberId"
+        WHERE historical_member."userId" = ${membership.user.id}
+          AND performance."teamId" IN (${Prisma.join(historicalTeamIds)})
       `),
     ]);
     playerProfile = profiles.get(membership.id) ?? null;
