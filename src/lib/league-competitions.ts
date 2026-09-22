@@ -146,6 +146,9 @@ export async function getPublicCompetitionSeasonsByLeagueSlug(slug: string) {
       FROM "League" l
       LEFT JOIN "LeagueCompetition" c ON c."id" = l."competitionId"
       WHERE l."slug" = ${slug}
+        AND l."isActive" = true
+        AND l."publicAt" IS NOT NULL
+        AND l."publicAt" <= NOW()
       LIMIT 1
     `);
 
@@ -170,6 +173,8 @@ export async function getPublicCompetitionSeasonsByLeagueSlug(slug: string) {
       LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
       WHERE l."competitionId" = ${row.competitionId}
         AND l."isActive" = true
+        AND l."publicAt" IS NOT NULL
+        AND l."publicAt" <= NOW()
       GROUP BY l."id", l."name", l."slug", l."season", l."isActive"
       ORDER BY (l."id" = ${row.currentLeagueId}) DESC, COALESCE(l."season", '') DESC, l."createdAt" DESC
     `);
