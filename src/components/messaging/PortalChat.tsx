@@ -171,9 +171,14 @@ function ConversationButton({
               </span>
             ) : null}
           </span>
-          <span className="mt-0.5 block truncate text-xs text-white/45">
-            {item.preview || item.subtitle}
+          <span className="mt-0.5 block truncate text-xs text-white/50">
+            {item.subtitle}
           </span>
+          {item.preview ? (
+            <span className="mt-1 block truncate text-[11px] text-white/35">
+              Latest: {item.preview}
+            </span>
+          ) : null}
         </span>
       </div>
     </button>
@@ -565,9 +570,7 @@ export default function PortalChat({
               {data?.team.name ?? "Team messaging"}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-              {data?.viewRole === "CAPTAIN"
-                ? "Use Whole Squad Chat, Regulars, Selected Players or a private conversation."
-                : "Use Whole Squad Chat, message your captain privately, or contact SIXFL."}
+              Who do you want to message? Use Whole Squad Chat, Regulars, Selected Players or a private conversation.
             </p>
             {data?.canSend &&
             !data.isAdminTestMode &&
@@ -628,7 +631,7 @@ export default function PortalChat({
                   >
                     Whole Squad Chat
                     <span className="mt-1 block text-xs font-normal text-white/40">
-                      Everyone in the squad
+                      Everyone in the squad can read and reply
                     </span>
                   </button>
 
@@ -638,9 +641,9 @@ export default function PortalChat({
                     onClick={() => startGroupConversation("REGULARS")}
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    Regulars · {regularCount}
+                    Regulars Chat
                     <span className="mt-1 block text-xs font-normal text-white/40">
-                      Your usual playing group
+                      {regularCount} player{regularCount === 1 ? "" : "s"} marked as Regulars
                     </span>
                   </button>
 
@@ -651,7 +654,7 @@ export default function PortalChat({
                   >
                     Selected Players
                     <span className="mt-1 block text-xs font-normal text-white/40">
-                      Choose two or more people
+                      Choose exactly which players can see this chat
                     </span>
                   </button>
 
@@ -711,7 +714,7 @@ export default function PortalChat({
           {groupItems.length > 0 ? (
             <div className="mt-5">
               <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                Group chats
+                Your group chats
               </div>
               <div className="mt-2 space-y-2">
                 {groupItems.map((item) => (
@@ -773,19 +776,17 @@ export default function PortalChat({
               </div>
               <div className="mt-0.5 truncate text-xs text-white/40">
                 {selectedRef === "team"
-                  ? data?.viewRole === "CAPTAIN"
-                    ? "Everyone in your squad can read and reply"
-                    : "Everyone in the active squad can read and reply"
+                  ? "Everyone in the squad can read and reply"
                   : selectedRef.startsWith("group:")
                     ? data?.viewRole === "CAPTAIN" &&
                       highlightedGroupRecipientIds.size > 0
-                      ? `${selectedItem?.subtitle || "Private group conversation"} · recipients highlighted on the left`
-                      : selectedItem?.subtitle || "Private group conversation"
+                      ? `${selectedItem?.subtitle || "Private group chat"} · recipients highlighted on the left`
+                      : selectedItem?.subtitle || "Private group chat"
                     : selectedRef === "sixfl"
-                    ? "Private between you and SIXFL"
-                    : data?.viewRole === "CAPTAIN"
-                      ? `Private between ${selectedItem?.title ?? "this person"} and you`
-                      : "Private between you and your captain"}
+                      ? "Private between you and SIXFL"
+                      : data?.viewRole === "CAPTAIN"
+                        ? `Private between ${selectedItem?.title ?? "this person"} and you`
+                        : "Private between you and your captain"}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">

@@ -337,6 +337,48 @@ async function resolveSixflParticipantUserId(
   return member?.userId ?? context.effectiveUserId;
 }
 
+type CurrentRegularAudience = {
+  regularUserIds: Set<string>;
+  captainUserIds: Set<string>;
+};
+
+async function getCurrentRegularAudience(teamId: string): Promise<CurrentRegularAudience> {
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { userId: true, isRegular: true, role: true },
+  });
+
+  return {
+    regularUserIds: new Set(
+      members.filter((member) => member.isRegular).map((member) => member.userId),
+    ),
+    captainUserIds: new Set(
+      members.filter((member) => member.role === TeamRole.CAPTAIN).map((member) => member.userId),
+    ),
+  };
+}
+
+function isCurrentRegularSnapshot(
+  memberUserIds: string[],
+  audience: CurrentRegularAudience,
+) {
+  if (audience.regularUserIds.size === 0) return false;
+
+  const memberSet = new Set(memberUserIds);
+  for (const userId of audience.regularUserIds) {
+    if (!memberSet.has(userId)) return false;
+  }
+
+  const extraMembers = memberUserIds.filter(
+    (userId) => !audience.regularUserIds.has(userId),
+  );
+
+  return (
+    extraMembers.length <= 1 &&
+    extraMembers.every((userId) => audience.captainUserIds.has(userId))
+  );
+}
+
 async function getGroupConversationForRef(input: {
   teamId: string;
   conversationRef: string;
@@ -381,9 +423,22 @@ async function getGroupConversationForRef(input: {
     return { error: "You are not part of this group conversation.", status: 403 } as const;
   }
 
+  if (
+    conversation.type === PortalConversationType.REGULARS &&
+    !input.context.isAdminTestMode
+  ) {
+    const currentAudience = await getCurrentRegularAudience(input.teamId);
+    if (!isCurrentRegularSnapshot(memberUserIds, currentAudience)) {
+      return { error: "This Regulars chat is no longer current.", status: 404 } as const;
+    }
+  }
+
   return {
     conversation,
-    title: conversation.title || "Group chat",
+    title:
+      conversation.type === PortalConversationType.REGULARS
+        ? "Regulars Chat"
+        : conversation.title || "Group chat",
     memberUserIds,
   };
 }
@@ -493,7 +548,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     teamId,
     context,
   );
-  const [teamConversation, sixflConversation, groupConversations] = await Promise.all([
+  const [teamConversation, sixflConversation, groupConversations, currentRegularAudience] = await Promise.all([
     ensureTeamPortalConversation(teamId),
     ensureSixflPortalConversation(
       teamId,
@@ -530,6 +585,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
         },
       },
     }),
+    getCurrentRegularAudience(teamId),
   ]);
 
   const [teamUnread, sixflUnread] = await Promise.all([
@@ -558,10 +614,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     {
       ref: "team",
       title: "Whole Squad Chat",
-      subtitle:
-        context.viewRole === "CAPTAIN"
-          ? "Everyone in your squad"
-          : "Everyone in the squad",
+      subtitle: "Everyone in the squad can read and reply",
       unreadCount: teamUnread,
       latestMessageAt: teamConversation.latestMessageAt?.toISOString() ?? null,
       preview: teamConversation.lastMessagePreview,
@@ -570,6 +623,17 @@ async function buildConversationList(teamId: string, context: AccessContext) {
   ];
 
   const visibleGroupConversations = groupConversations.filter((conversation) => {
+    if (
+      conversation.type === PortalConversationType.REGULARS &&
+      !context.isAdminTestMode &&
+      !isCurrentRegularSnapshot(
+        conversation.members.map((member) => member.userId),
+        currentRegularAudience,
+      )
+    ) {
+      return false;
+    }
+
     const archivedAt = conversation.reads[0]?.archivedAt ?? null;
     if (!archivedAt) return true;
     return Boolean(
@@ -582,11 +646,13 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     visibleGroupConversations.map(async (conversation) => ({
       ref: `group:${conversation.id}`,
       title:
-        conversation.title ||
-        (conversation.type === PortalConversationType.REGULARS
-          ? "Regulars"
-          : "Selected Players"),
-      subtitle: `Private group · ${conversation.members.length} people`,
+        conversation.type === PortalConversationType.REGULARS
+          ? "Regulars Chat"
+          : conversation.title || "Selected Players",
+      subtitle:
+        conversation.type === PortalConversationType.REGULARS
+          ? `${currentRegularAudience.regularUserIds.size} player${currentRegularAudience.regularUserIds.size === 1 ? "" : "s"} marked as Regulars`
+          : `Private group chat · ${conversation.members.length} people`,
       unreadCount: await unreadCountFor({
         conversationId: conversation.id,
         userId: context.effectiveUserId,
@@ -622,10 +688,10 @@ async function buildConversationList(teamId: string, context: AccessContext) {
 
     items.push({
       ref: privateChatRef(context.effectiveUserId),
-      title: "Message captain",
+      title: "Message your captain",
       subtitle:
         captainCount > 0
-          ? "Private between you and your captain"
+          ? `Private — only you and your captain${captainCount === 1 ? "" : "s"}`
           : "No captain is currently linked",
       unreadCount: unread,
       latestMessageAt: existing?.latestMessageAt?.toISOString() ?? null,
@@ -639,7 +705,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
     items.push({
       ref: SIXFL_CHAT_REF,
       title: "Message SIXFL",
-      subtitle: "Private message to SIXFL",
+      subtitle: "Private — only you and SIXFL",
       unreadCount: sixflUnread,
       latestMessageAt: sixflConversation.latestMessageAt?.toISOString() ?? null,
       preview: sixflConversation.lastMessagePreview,
@@ -802,7 +868,7 @@ async function buildConversationList(teamId: string, context: AccessContext) {
   items.push({
     ref: SIXFL_CHAT_REF,
     title: "Message SIXFL",
-    subtitle: "Private message to SIXFL",
+    subtitle: "Private — only you and SIXFL",
     unreadCount: sixflUnread,
     latestMessageAt: sixflConversation.latestMessageAt?.toISOString() ?? null,
     preview: sixflConversation.lastMessagePreview,
@@ -1094,7 +1160,7 @@ export async function POST(
 
     const title =
       audience === "REGULARS"
-        ? `Regulars · ${recipientUserIds.length}`
+        ? "Regulars Chat"
         : (() => {
             const names = recipientMembers.map((member) =>
               getDisplayName(member.user),

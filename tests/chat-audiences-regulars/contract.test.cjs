@@ -71,7 +71,8 @@ test("group chat UI supports Regulars and multi-select selected players", () => 
   const chat = read("src/components/messaging/PortalChat.tsx");
 
   assert.match(chat, /New message/);
-  assert.match(chat, /Regulars · \{regularCount\}/);
+  assert.match(chat, /Regulars Chat/);
+  assert.match(chat, /player\{regularCount === 1 \? "" : "s"\} marked as Regulars/);
   assert.match(chat, /Selected Players/);
   assert.match(chat, /selectedGroupUserIds/);
   assert.match(chat, /Start group · \{selectedGroupUserIds\.length\} selected/);
@@ -100,6 +101,26 @@ test("selected group chat highlights the exact recipient players", () => {
   assert.match(chat, /recipientHighlighted=\{Boolean\(/);
   assert.match(chat, />\s*Included\s*</);
   assert.match(chat, /recipients highlighted on the left/);
+});
+
+
+test("normal player and captain views only show the current Regulars audience", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /getCurrentRegularAudience/);
+  assert.match(route, /isCurrentRegularSnapshot/);
+  assert.match(route, /This Regulars chat is no longer current/);
+  assert.match(route, /conversation\.type === PortalConversationType\.REGULARS[\s\S]{0,260}!context\.isAdminTestMode/);
+  assert.match(route, /"Regulars Chat"/);
+  assert.match(route, /marked as Regulars/);
+  assert.doesNotMatch(route, /Regulars · \$\{recipientUserIds\.length\}/);
+
+  assert.match(chat, /Who do you want to message\?/);
+  assert.match(chat, /Latest: \{item\.preview\}/);
+  assert.match(chat, /Everyone in the squad can read and reply/);
+  assert.match(route, /Private — only you and SIXFL/);
+  assert.match(chat, /Private between you and SIXFL/);
 });
 
 test("old group chats can be removed from one user's list without deleting history", () => {
