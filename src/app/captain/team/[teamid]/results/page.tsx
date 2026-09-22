@@ -962,7 +962,7 @@ export default async function CaptainResultsPage({
                         Update match details
                       </h4>
                       <p className="mt-2 max-w-2xl text-sm text-white/60">
-                        Tick the players who actually played, then add goals, optional assists and an optional rating. The full registered squad is shown so late replacements can be recorded correctly. Maximum 9 players per fixture.
+                        Tick the players who actually played, then add player goals, any own goals, optional assists and an optional rating. The full registered squad is shown so late replacements can be recorded correctly. Maximum 9 players per fixture.
                       </p>
                     </div>
                     <span
@@ -1046,7 +1046,7 @@ export default async function CaptainResultsPage({
 
                       <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm text-emerald-50/80 sm:flex-row sm:items-center sm:justify-between">
                         <span>
-                          Ratings are optional. Adding a goal, assist, rating or Player of the Match automatically marks that player as having played. No more than 9 players can be recorded for the fixture.
+                          Ratings are optional. Adding a player goal, assist, rating or Player of the Match automatically marks that player as having played. Own goals count towards the team score but are not credited to a player. No more than 9 players can be recorded for the fixture.
                         </span>
                         <button
                           type="submit"
