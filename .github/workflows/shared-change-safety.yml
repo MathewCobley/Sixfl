@@ -1,0 +1,44 @@
+name: Shared change safety
+
+on:
+  pull_request:
+    paths:
+      - "prisma/schema.prisma"
+      - "prisma/migrations/**"
+      - "scripts/**"
+      - "package*.json"
+      - ".github/workflows/shared-change-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-change-safety-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-safety:
+    name: Validate shared schema, scripts and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Enforce narrow workflow triggers
+        run: node scripts/check-ci-workflow-scope.mjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply production source preparation
+        run: npm run prebuild
+      - name: Validate Prisma schema and generated client
+        run: |
+          npx prisma generate
+          npx prisma validate
+      - name: Check cross-feature source contracts
+        run: node scripts/check-critical-feature-contracts.mjs
+      - name: Type-check prepared application
+        run: npx tsc --noEmit

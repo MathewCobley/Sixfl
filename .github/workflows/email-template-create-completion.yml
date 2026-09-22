@@ -9,7 +9,6 @@ on:
       - "scripts/check-email-template-create-completion.mjs"
       - "scripts/check-template-save-runtime.mjs"
       - "scripts/check-template-save-browser.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/email-template-create-completion.yml"
   workflow_dispatch:
 

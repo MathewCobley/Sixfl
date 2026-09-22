@@ -6,7 +6,6 @@ on:
       - "src/**/*Referee*"
       - "src/app/(admin)/admin/night-board/**"
       - "tests/referee-evening-*.test.ts"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260626120500_add_referee_nights/**"
       - "prisma/migrations/20260626133000_add_referee_profiles/**"
       - "prisma/migrations/20260706193000_referee_night_confirmations/**"

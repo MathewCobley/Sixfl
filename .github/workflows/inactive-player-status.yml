@@ -7,7 +7,6 @@ on:
       - "src/app/captain/team/[teamid]/squad/status-actions.ts"
       - "src/app/api/jobs/managed-squad-availability-reminders/route.ts"
       - "prisma/migrations/20260829190000_allow_inactive_team_member_status/**"
-      - "package.json"
       - "scripts/check-inactive-player-status-storage.mjs"
       - ".github/workflows/inactive-player-status.yml"
   workflow_dispatch:

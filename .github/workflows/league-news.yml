@@ -17,8 +17,6 @@ on:
       - "tests/admin-matchweek-reports.test.cjs"
       - "tests/matchweek-report-proxy.test.cjs"
       - "tests/report-omissions.test.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260910224500_openai_matchweek_drafts/**"
       - "prisma/migrations/20260911053000_league_news_publication/**"
       - ".github/workflows/league-news.yml"

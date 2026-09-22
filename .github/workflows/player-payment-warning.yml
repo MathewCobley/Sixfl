@@ -8,9 +8,7 @@ on:
       - "src/components/admin/payments/**"
       - "tests/player-payment-warning*.test.cjs"
       - "tests/player-payment-warning.browser.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "scripts/check-squad-invite-placeholders.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-payment-warning.yml"
   workflow_dispatch:
 permissions:

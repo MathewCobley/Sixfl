@@ -8,7 +8,6 @@ on:
       - 'src/app/api/team-badges/**'
       - 'src/app/(admin)/admin/teams/**'
       - 'src/components/admin/teams/**'
-      - 'prisma/migrations/**'
       - 'scripts/check-team-badge-upload.ts'
       - '.github/workflows/team-badge-upload.yml'
   workflow_dispatch:

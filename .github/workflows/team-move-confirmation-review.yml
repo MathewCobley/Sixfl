@@ -10,8 +10,6 @@ on:
       - "src/app/(admin)/admin/leagues/actions.ts"
       - "src/app/(admin)/admin/leagues/**/page.tsx"
       - "tests/team-move-confirmation-review*.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260906124500_team_move_confirmation/**"
       - ".github/workflows/team-move-confirmation-review.yml"
   workflow_dispatch:

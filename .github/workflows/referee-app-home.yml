@@ -6,7 +6,6 @@ on:
       - 'src/components/referee/**'
       - 'src/components/layout/SiteFooter.tsx'
       - 'src/components/RouteScopedBridges.tsx'
-      - 'scripts/**'
       - 'tests/referee-app-home/**'
       - '.github/workflows/referee-app-home.yml'
   workflow_dispatch:

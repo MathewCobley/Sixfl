@@ -6,8 +6,6 @@ on:
       - "src/**/*Lead*"
       - "src/lib/notifications/**"
       - "tests/team-lead-decline.test.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/team-lead-decline.yml"
   workflow_dispatch:
 permissions:

@@ -1,11 +1,12 @@
 name: SIXFL critical feature contracts
 
 on:
-  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: critical-feature-contracts-${{ github.event.pull_request.number || github.ref }}
+  group: critical-feature-contracts-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

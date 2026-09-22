@@ -6,7 +6,6 @@ on:
       - "src/components/payments/**"
       - "tests/payment-ledger-consistency.test.cjs"
       - "tests/player-charge-correction-controls.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - ".github/workflows/payment-adjustment-privacy.yml"
   workflow_dispatch:
 permissions:

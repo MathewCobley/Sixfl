@@ -7,8 +7,6 @@ on:
       - "src/lib/messaging/**"
       - "tests/player-pool-sms-chases.test.ts"
       - "scripts/check-player-pool-profile-reminders.mjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-pool-sms-chases.yml"
   workflow_dispatch:
 permissions:

@@ -5,7 +5,6 @@ on:
       - "src/**/*referral*"
       - "src/**/*Referral*"
       - "tests/referral-eligibility/**"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260805002000_team_referral_rewards/**"
       - "prisma/migrations/20260825162500_team_referral_payout_details/**"
       - "prisma/migrations/20260819232000_fixture_abandonment_workflow/**"

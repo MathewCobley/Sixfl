@@ -9,8 +9,6 @@ on:
       - 'src/lib/playerMatchPerformances.ts'
       - 'tests/captain-results-mobile*'
       - '.github/workflows/captain-results-mobile.yml'
-      - 'scripts/**'
-      - 'package*.json'
   workflow_dispatch:
 permissions:
   contents: read

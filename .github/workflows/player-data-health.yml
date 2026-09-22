@@ -7,9 +7,7 @@ on:
       - "src/app/(admin)/admin/players/data-health/**"
       - "src/components/admin/players/**"
       - "tests/player-data-health/**"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "scripts/check-player-pool-profile-reminders.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-data-health.yml"
   workflow_dispatch:
 permissions:

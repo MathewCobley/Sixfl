@@ -6,8 +6,6 @@ on:
       - "src/lib/payments/**"
       - "src/lib/prisma.ts"
       - "tests/completed-fixture-fee-reduction.test.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/completed-fixture-fee-reduction.yml"
   workflow_dispatch:
 permissions:

@@ -9,7 +9,6 @@ on:
       - "src/lib/auth/sign-in-link-activity.ts"
       - "src/app/(admin)/admin/sign-in-activity/**"
       - "src/components/admin/AdminSidebar.tsx"
-      - "prisma/migrations/**"
       - "scripts/apply-login-session-retention-guard.cjs"
       - "scripts/apply-admin-team-kickoff-summary.cjs"
       - "scripts/check-sign-in-link-activity-contract.mjs"

@@ -12,7 +12,6 @@ on:
       - "src/lib/email/**"
       - "tests/email-preview-isolation*.cjs"
       - "tests/helpers/email-preview-render.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - ".github/workflows/email-preview-isolation.yml"
   workflow_dispatch:
 permissions:

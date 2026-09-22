@@ -8,9 +8,6 @@ on:
       - 'src/app/(public)/venues/**'
       - 'src/app/sitemap.ts'
       - 'src/middleware.ts'
-      - 'scripts/**'
-      - 'package.json'
-      - 'package-lock.json'
       - 'tests/critical-pages/public-seo.test.cjs'
       - '.github/workflows/public-seo.yml'
   workflow_dispatch:

@@ -8,9 +8,7 @@ on:
       - "src/app/(admin)/admin/messaging/**"
       - "src/components/admin/messages/**"
       - "scripts/apply-message-sender-attribution.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "tests/admin-sms-reply*.cjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/admin-sms-reply.yml"
   workflow_dispatch:
 permissions:

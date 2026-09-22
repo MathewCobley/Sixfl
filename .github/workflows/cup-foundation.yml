@@ -12,7 +12,6 @@ on:
       - "scripts/check-native-cup-fixture-source.mjs"
       - "tests/native-cup-fixtures.test.cjs"
       - "tests/fixture-fee-inheritance.test.cjs"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260911233000_inter_league_cup_foundation/**"
       - ".github/workflows/cup-foundation.yml"
   workflow_dispatch:
