@@ -53,11 +53,25 @@ export default async function EarlyMatchReports({ teamId, query = "", outcome = 
         <p className="text-sm text-white/60">{formatDateTimeInLondon(fixture.kickoffAt, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
         <h2 className="mt-1 text-xl font-semibold text-white">{fixture.homeTeam.name} vs {fixture.awayTeam.name}</h2>
         <p className="mt-2 font-semibold text-amber-200">Awaiting official result</p>
-        <p className="mt-2 text-sm text-white/70">Add who played, scorers, assists, ratings and Player of the Match now while it is fresh. Your report will carry across when SIXFL enters the score.</p>
-        {report ? <p className="mt-3 text-sm text-emerald-200">Report saved — you can update it below. {contributions.reduce((sum, row) => sum + row.goals, 0)} scorer goals recorded.</p> : null}
+        <p className="mt-2 text-sm text-white/70">Add who played, scorers, own goals, assists, ratings and Player of the Match now while it is fresh. Your report will carry across when SIXFL enters the score.</p>
+        {report ? <p className="mt-3 text-sm text-emerald-200">Report saved — you can update it below. {contributions.reduce((sum, row) => sum + row.goals, 0)} player goals{report.ownGoals > 0 ? ` + ${report.ownGoals} own goal${report.ownGoals === 1 ? "" : "s"}` : ""} recorded.</p> : null}
         {members.length <= 1 ? <a className="mt-4 inline-block text-emerald-200 underline" href={`/captain/team/${teamId}/captain-squad#add-player`}>Add your squad to use match reporting</a> : <form action={save} className="mt-4 space-y-4">
           <input type="hidden" name="teamid" value={teamId}/><input type="hidden" name="fixtureId" value={fixture.id}/>
           <MatchDetailsPlayerFields players={players} goalsFor={null}/>
+          <label className="block rounded-2xl border border-amber-300/20 bg-amber-400/[0.06] p-4">
+            <span className="text-sm font-semibold text-white">Own goals</span>
+            <span className="mt-1 block text-xs leading-5 text-white/50">Use this only when an opponent scored into their own net. Do not assign that goal to one of your players.</span>
+            <input
+              type="number"
+              name="ownGoals"
+              defaultValue={report?.ownGoals ?? 0}
+              min={0}
+              max={999}
+              inputMode="numeric"
+              aria-label="Own goals"
+              className="mt-3 h-11 w-24 rounded-xl border border-white/10 bg-[#0d1428] px-3 text-center text-base font-bold text-white outline-none focus:border-amber-300/50"
+            />
+          </label>
           <FormListboxField name="playerOfMatchTeamMemberId" label="Player of the Match" value={players.find(player => player.name === report?.playerOfMatchName)?.id ?? ""} options={[{ value: "", label: "No Player of the Match yet" }, ...players.map(player => ({ value: player.id, label: player.name }))]}/>
           <p className="text-sm text-white/60">Maximum 9 players. Ratings and assists are optional. Saving this report does not set the official score.</p>
           <button type="submit" className="min-h-11 rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-black">Save match details</button>
