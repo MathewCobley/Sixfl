@@ -186,7 +186,11 @@ function getFriendlyErrorMessage(error: unknown) {
   if (error.message.includes("rating")) {
     return "Ratings must be between 1 and 10, with no more than one decimal place (for example, 9.2).";
   }
-  if (error.message.toLowerCase().includes("own goals")) {
+  const lowerMessage = error.message.toLowerCase();
+  if (lowerMessage.includes("scorer goals and own goals cannot exceed")) {
+    return "Player goals plus own goals cannot be higher than your team’s official score.";
+  }
+  if (lowerMessage.includes("own goals must be")) {
     return "Own goals must be a whole number such as 0, 1, or 2.";
   }
   if (error.message.includes("whole numbers")) {
