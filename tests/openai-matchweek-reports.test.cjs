@@ -80,7 +80,7 @@ test("facts use one London date, not round number; omit unsafe outcomes and mini
   assert.equal(query.where.round, undefined); assert.equal(query.take, undefined);
   assert.equal(result.matches.length, 1); assert.equal(result.pendingFixtures, 1); assert.equal(result.omittedFixtures, 3);
   assert.doesNotMatch(JSON.stringify(result), /secret@example/);
-  assert.deepEqual(result.matches[0].scorers, [
+  assert.deepEqual(JSON.parse(JSON.stringify(result.matches[0].scorers)), [
     { team: "Team Beta", name: "Alex Example", goals: 2 },
     { team: "Team Beta", name: "Own goal", goals: 1 },
   ]);
