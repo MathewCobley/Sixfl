@@ -41,6 +41,7 @@ type MetaRow = {
   matchResultId: string;
   teamId: string;
   goalsRecorded: number;
+  ownGoals: number;
   playerOfMatchName: string | null;
   priorityCoreCompletedAt: Date | null;
   priorityAssistsCompletedAt: Date | null;
@@ -269,7 +270,7 @@ async function getSixflTvReliabilityScores(
         AND "teamId" IN (${Prisma.join(uniqueTeamIds)})
     `),
     db.$queryRaw<MetaRow[]>(Prisma.sql`
-      SELECT "matchResultId", "teamId", "goalsRecorded", "playerOfMatchName",
+      SELECT "matchResultId", "teamId", "goalsRecorded", "ownGoals", "playerOfMatchName",
         "priorityCoreCompletedAt", "priorityAssistsCompletedAt", "priorityRatingsCompletedAt",
         "createdAt", "updatedAt"
       FROM "MatchResultTeamMeta"
@@ -367,7 +368,7 @@ async function getSixflTvReliabilityScores(
     const coreComplete =
       Boolean(meta) &&
       appearanceCount > 0 &&
-      meta!.goalsRecorded === fixture.teamGoals &&
+      meta!.goalsRecorded + meta!.ownGoals === fixture.teamGoals &&
       Boolean(meta!.playerOfMatchName?.trim());
 
     let matchCardPoints = 0;
