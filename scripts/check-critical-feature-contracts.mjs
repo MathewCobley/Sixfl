@@ -208,9 +208,29 @@ expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Dat
 const playerAppHomePath = "src/components/player/PlayerAppHome.tsx";
 const playerAppPagePath = "src/app/player/team/[teamid]/page.tsx";
 const playerAppNavPath = "src/components/player/PlayerTeamNav.tsx";
+const playerAppMorePath = "src/app/player/team/[teamid]/more/page.tsx";
+const playerAppChatPath = "src/app/player/team/[teamid]/chat/page.tsx";
+const portalChatApiPath = "src/app/api/portal-chat/team/[teamid]/route.ts";
+const playerChatUnreadApiPath = "src/app/api/player/team/[teamid]/chat-unread/route.ts";
+const playerAppTvPath = "src/app/player/team/[teamid]/tv/page.tsx";
+const playerAppReferralsPath = "src/app/player/team/[teamid]/referrals/page.tsx";
+const playerAppLeagueRulesPath = "src/app/player/team/[teamid]/league-rules/page.tsx";
+const playerAppMatchRulesPath = "src/app/player/team/[teamid]/match-rules/page.tsx";
+const playerAppHelpPath = "src/app/player/team/[teamid]/help/page.tsx";
+const playerAppSwitchAccountPath = "src/app/player/team/[teamid]/switch-account/page.tsx";
 const playerAppHome = read(playerAppHomePath);
 const playerAppPage = read(playerAppPagePath);
 const playerAppNav = read(playerAppNavPath);
+const playerAppMore = read(playerAppMorePath);
+const playerAppChat = read(playerAppChatPath);
+const portalChatApi = read(portalChatApiPath);
+const playerChatUnreadApi = read(playerChatUnreadApiPath);
+const playerAppTv = read(playerAppTvPath);
+const playerAppReferrals = read(playerAppReferralsPath);
+const playerAppLeagueRules = read(playerAppLeagueRulesPath);
+const playerAppMatchRules = read(playerAppMatchRulesPath);
+const playerAppHelp = read(playerAppHelpPath);
+const playerAppSwitchAccount = read(playerAppSwitchAccountPath);
 
 expectText("player pwa", playerAppHomePath, playerAppHome, 'resultsHref = `${fixturesHref}#recent-results`', "player app recent-form navigation must stay inside the Fixtures app screen");
 expectRegex("player pwa", playerAppHomePath, playerAppHome, /^(?![\s\S]*\/player\/referrals)[\s\S]*$/, "player app home must not link out to the website referral page");
@@ -223,8 +243,30 @@ expectText("player pwa", playerAppPagePath, playerAppPage, "prisma.fixtureSelect
 expectText("player pwa", playerAppHomePath, playerAppHome, "NOT SELECTED YET", "player app home must keep non-final selection wording safe");
 expectText("player pwa", playerAppHomePath, playerAppHome, "NOT IN SQUAD", "player app home must expose explicit final non-selection when known");
 expectText("player pwa", playerAppHomePath, playerAppHome, "unreadMessageLabel", "player app home must surface unread SIXFL Chat status");
+expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Chat"', "player app bottom navigation must keep Chat permanent");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "Payments"', "player app bottom navigation must expose Payments");
 expectText("player pwa", playerAppNavPath, playerAppNav, 'label: "More"', "player app bottom navigation must keep More");
+expectRegex("player pwa", playerAppNavPath, playerAppNav, /const appTabs[\s\S]*label: "Chat"[\s\S]*label: "Payments"[\s\S]*label: "More"/, "player app bottom navigation must keep Home, Fixtures, Chat, Payments and More in the primary set");
+expectRegex("player pwa", playerAppNavPath, playerAppNav, /^(?![\s\S]*label: "Stats")[\s\S]*$/, "Stats must not replace permanent Chat in the player app bottom navigation");
+expectText("player pwa", playerChatUnreadApiPath, playerChatUnreadApi, "getPortalChatUnreadCount", "player app nav unread badge must use the shared chat unread source");
+expectRegex("player pwa", portalChatApiPath, portalChatApi, /^(?![\s\S]*Whole Squad Chat is not available yet)[\s\S]*$/, "linked players must not be blocked by the old chat dark-launch gate");
+expectText("player pwa", playerAppChatPath, playerAppChat, "user.teamMembers.length === 0", "player chat must allow linked players while rejecting unrelated users");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "My stats"', "More must keep player stats as a secondary destination");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "SIXFL TV"', "More must keep SIXFL TV as an app destination");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Refer a team · £75"', "More must keep referrals as an app destination");
+expectRegex("player pwa", playerAppMorePath, playerAppMore, /^(?![\s\S]*label: "Payments")(?![\s\S]*label: "Recent results")[\s\S]*$/, "More must not duplicate permanent bottom tabs or Fixtures content");
+expectText("player pwa", playerAppTvPath, playerAppTv, '<PlayerPwaModeOnly mode="app">', "SIXFL TV must have a dedicated app presentation");
+expectText("player pwa", playerAppReferralsPath, playerAppReferrals, "Player app", "referrals opened from More must stay inside the player app");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "League Rules"', "More must expose app-native League Rules");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Match Rules"', "More must expose app-native Match Rules");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Help / Contact SIXFL"', "More must expose app-native Help / Contact SIXFL");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Switch team account"', "More must use the exact Switch team account wording");
+expectText("player pwa", playerAppMorePath, playerAppMore, "linkedTeamAccounts.length > 1", "Switch team account must only appear for multi-team players");
+expectText("player pwa", playerAppLeagueRulesPath, playerAppLeagueRules, "PlayerAppRulesPage", "League Rules must use the compact player app rules view");
+expectText("player pwa", playerAppMatchRulesPath, playerAppMatchRules, "PlayerAppRulesPage", "Match Rules must use the compact player app rules view");
+expectText("player pwa", playerAppHelpPath, playerAppHelp, "conversation=sixfl", "Help / Contact SIXFL must open the private SIXFL conversation inside Chat");
+expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "getPlayerTeamMembershipsByUserId", "Switch team account must use shared multi-team membership data");
+expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "Switch team account", "team switch screen must use the requested account wording");
 
 // ---------------------------------------------------------------------------
 // ADMIN PWA VIEWER — keep the selected test subject and phone-preview route

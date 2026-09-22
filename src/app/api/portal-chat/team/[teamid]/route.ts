@@ -108,12 +108,6 @@ async function getAccessContext(
     return { error: "Your SIXFL account could not be found.", status: 401 } as const;
   }
 
-  // Whole Squad Chat stays dark-launched until the player/captain app is ready.
-  // Admins can still open the feature in read-only preview mode for testing.
-  if (actualUser.role !== UserRole.ADMIN) {
-    return { error: "Whole Squad Chat is not available yet.", status: 404 } as const;
-  }
-
   const url = new URL(request.url);
   const previewMembershipId = url.searchParams.get("previewMembershipId")?.trim() || null;
   const adminTestRequested = url.searchParams.get("adminTest") === "1";

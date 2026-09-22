@@ -43,13 +43,16 @@ export default async function PlayerTeamChatPage({
     },
   });
 
-  if (!user || user.role !== UserRole.ADMIN) notFound();
+  if (!user) notFound();
 
   const previewMembershipId =
     user.role === UserRole.ADMIN
       ? sp.previewMembershipId?.trim() || null
       : null;
 
+  if (user.role !== UserRole.ADMIN && user.teamMembers.length === 0) {
+    notFound();
+  }
 
   return (
     <PortalChat

@@ -1,9 +1,18 @@
 import Link from "next/link";
+import { UserRole } from "@prisma/client";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/auth";
+import { getPlayerTeamMembershipsByUserId } from "@/lib/players/player-team-memberships";
+import { prisma } from "@/lib/prisma";
 import {
-  BanknotesIcon,
-  CalendarDaysIcon,
+  ArrowsRightLeftIcon,
+  BookOpenIcon,
   ChartBarSquareIcon,
   ChevronRightIcon,
+  GiftIcon,
+  LifebuoyIcon,
+  PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 
 type PageProps = {
@@ -21,30 +30,93 @@ function withPreview(href: string, previewMembershipId: string | null) {
 export default async function PlayerMorePage({ params, searchParams }: PageProps) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
-  const previewMembershipId = sp.previewMembershipId?.trim() || null;
+  const session = await getServerSession(authOptions);
+  const requestedPreviewMembershipId = sp.previewMembershipId?.trim() || null;
+
+  const user = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email.trim().toLowerCase() },
+        select: {
+          id: true,
+          role: true,
+          teamMembers: {
+            where: { teamId: teamid },
+            select: { id: true, userId: true },
+            take: 1,
+          },
+        },
+      })
+    : null;
+
+  const previewMembership =
+    user?.role === UserRole.ADMIN && requestedPreviewMembershipId
+      ? await prisma.teamMember.findFirst({
+          where: { id: requestedPreviewMembershipId, teamId: teamid },
+          select: { id: true, userId: true },
+        })
+      : null;
+
+  const previewMembershipId =
+    user?.role === UserRole.ADMIN ? previewMembership?.id ?? null : null;
+  const effectiveUserId =
+    previewMembership?.userId ?? user?.teamMembers[0]?.userId ?? null;
+  const membershipMap = effectiveUserId
+    ? await getPlayerTeamMembershipsByUserId([effectiveUserId])
+    : new Map();
+  const linkedTeamAccounts = effectiveUserId
+    ? membershipMap.get(effectiveUserId) ?? []
+    : [];
 
   const rows = [
     {
-      href: withPreview(`/player/team/${teamid}/ledger`, previewMembershipId),
-      label: "Payments",
-      description: "Match fees, balance and payment history",
-      icon: BanknotesIcon,
-    },
-    {
       href: withPreview(`/player/team/${teamid}/stats`, previewMembershipId),
       label: "My stats",
-      description: "Appearances, goals and player performance",
+      description: "Appearances, goals, assists and player performance",
       icon: ChartBarSquareIcon,
     },
     {
-      href: withPreview(
-        `/player/team/${teamid}/availability#recent-results`,
-        previewMembershipId,
-      ),
-      label: "Recent results",
-      description: "Your latest SIXFL results inside the app",
-      icon: CalendarDaysIcon,
+      href: withPreview(`/player/team/${teamid}/tv`, previewMembershipId),
+      label: "SIXFL TV",
+      description: "Your team's highlights and recorded matches",
+      icon: PlayCircleIcon,
     },
+    {
+      href: withPreview(`/player/team/${teamid}/referrals`, previewMembershipId),
+      label: "Refer a team · £75",
+      description: "Share your referral link and track rewards",
+      icon: GiftIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/league-rules`, previewMembershipId),
+      label: "League Rules",
+      description: "Competition, payments, conduct and fixture rules",
+      icon: BookOpenIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/match-rules`, previewMembershipId),
+      label: "Match Rules",
+      description: "The rules and procedures used on the pitch",
+      icon: BookOpenIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/help`, previewMembershipId),
+      label: "Help / Contact SIXFL",
+      description: "Get help or send SIXFL a private message",
+      icon: LifebuoyIcon,
+    },
+    ...(linkedTeamAccounts.length > 1
+      ? [
+          {
+            href: withPreview(
+              `/player/team/${teamid}/switch-account`,
+              previewMembershipId,
+            ),
+            label: "Switch team account",
+            description: `Choose between your ${linkedTeamAccounts.length} linked team accounts`,
+            icon: ArrowsRightLeftIcon,
+          },
+        ]
+      : []),
   ];
 
   return (
