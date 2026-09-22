@@ -90,6 +90,12 @@ async function assertHomepage(page, label) {
   await page.getByRole("heading", {
     name: /Match predictions, powered by SIXFL AI Predictor/i,
   }).waitFor({ state: "visible" });
+  await page.getByText("Dynamo Kebab", { exact: true }).first().waitFor({
+    state: "visible",
+  });
+  if (await page.getByText("Six Offenders", { exact: false }).count()) {
+    fail(`${label} still exposes the retired Six Offenders team name.`);
+  }
 
   // The league directory is database-backed. This critical-page workflow
   // deliberately runs with an unavailable database, so verify the stable
