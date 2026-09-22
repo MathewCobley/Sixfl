@@ -6,9 +6,7 @@ on:
       - "src/app/pay/**"
       - "src/app/captain/**"
       - "scripts/apply-captain-team-credit-explanation.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "tests/team-payment-order*.test.cjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/team-payment-order.yml"
   workflow_dispatch:
 permissions:

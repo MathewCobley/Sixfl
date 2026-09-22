@@ -10,10 +10,6 @@ on:
       - 'src/app/**/abandonment*'
       - 'src/app/**/abandonment*/**'
       - 'tests/abandonment*'
-      - 'prisma/migrations/**'
-      - 'prisma/schema.prisma'
-      - 'scripts/**'
-      - 'package*.json'
       - '.github/workflows/abandonment-fee-override.yml'
   workflow_dispatch:
 concurrency:

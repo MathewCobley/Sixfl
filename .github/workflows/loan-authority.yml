@@ -7,7 +7,6 @@ on:
       - 'src/app/(admin)/admin/night-board/**'
       - 'src/app/api/admin/night-board/**'
       - 'prisma/**'
-      - 'scripts/**'
       - 'tests/loan-authority/**'
       - '.github/workflows/loan-authority.yml'
   workflow_dispatch:

@@ -6,8 +6,6 @@ on:
       - "src/**/*FirstMatch*"
       - "src/lib/notifications/**"
       - "tests/first-match-ready.test.ts"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/first-match-ready.yml"
   workflow_dispatch:
 permissions:

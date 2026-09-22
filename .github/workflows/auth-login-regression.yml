@@ -7,8 +7,6 @@ on:
       - "src/lib/auth/**"
       - "src/app/api/auth/**"
       - "src/app/(public)/login/**"
-      - "prisma/schema.prisma"
-      - "prisma/migrations/**"
       - "scripts/apply-player-email-verification-v2.cjs"
       - "scripts/apply-login-session-retention-guard.cjs"
       - "tests/auth-sign-in-lifecycle.test.cjs"

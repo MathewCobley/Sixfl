@@ -8,7 +8,6 @@ on:
       - "src/components/admin/leads/**"
       - "tests/lead-communication-evidence.test.cjs"
       - "tests/lead-sms-status-links.test.cjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/lead-communication-evidence.yml"
   workflow_dispatch:
 permissions:

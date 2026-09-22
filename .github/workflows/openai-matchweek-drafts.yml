@@ -10,8 +10,6 @@ on:
       - "tests/admin-matchweek-reports.test.cjs"
       - "tests/matchweek-report-proxy.test.cjs"
       - "tests/report-omissions*.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260910224500_openai_matchweek_drafts/**"
       - ".github/workflows/openai-matchweek-drafts.yml"
   workflow_dispatch:

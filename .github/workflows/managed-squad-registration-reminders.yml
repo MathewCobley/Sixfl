@@ -7,9 +7,7 @@ on:
       - "src/**/*managed*squad*"
       - "src/**/*Managed*Squad*"
       - "tests/managed-squad-registration-reminders.test.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "scripts/check-squad-invite-placeholders.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/managed-squad-registration-reminders.yml"
   workflow_dispatch:
 permissions:

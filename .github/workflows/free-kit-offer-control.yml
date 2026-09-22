@@ -11,8 +11,6 @@ on:
       - 'src/app/api/captain/team/**/extra-kit-payments/**'
       - 'src/lib/kits/**'
       - 'tests/kits/free-kit-offer*'
-      - 'scripts/**'
-      - 'package*.json'
       - '.github/workflows/free-kit-offer-control.yml'
   workflow_dispatch:
 

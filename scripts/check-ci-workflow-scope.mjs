@@ -26,6 +26,16 @@ function pullRequestBlock(source) {
   return eventBlock(source, "pull_request");
 }
 
+function blockPaths(block) {
+  if (!block) return [];
+  const multiline = block.match(/^\s{4}paths:\s*\n((?:\s{6}-[^\n]*\n?)*)/m);
+  if (!multiline) return [];
+  return multiline[1]
+    .split(/\r?\n/)
+    .map((value) => value.replace(/^\s{6}-\s*/, "").trim().replace(/^['"]|['"]$/g, ""))
+    .filter(Boolean);
+}
+
 function blockIncludesBranch(block, branch) {
   if (!block) return false;
 
@@ -49,8 +59,32 @@ function blockIncludesBranch(block, branch) {
 
 const coreBroadPullRequestWorkflows = new Set([
   ".github/workflows/dom-bridge-policy.yml",
-  ".github/workflows/critical-feature-contracts.yml",
   ".github/workflows/pr-hygiene.yml",
+]);
+
+const sharedTriggerPatterns = new Set([
+  "prisma/schema.prisma",
+  "prisma/migrations/**",
+  "scripts/**",
+  "scripts/check-critical-feature-contracts.mjs",
+  "package*.json",
+  "package.json",
+  "package-lock.json",
+]);
+
+const allowedSharedTriggerPatterns = new Map([
+  [
+    ".github/workflows/shared-change-safety.yml",
+    new Set(sharedTriggerPatterns),
+  ],
+  [
+    ".github/workflows/prebuild-compatibility.yml",
+    new Set(["scripts/**", "package*.json", "package.json", "package-lock.json"]),
+  ],
+  [
+    ".github/workflows/vercel-function-bundles.yml",
+    new Set(["package*.json", "package.json", "package-lock.json"]),
+  ],
 ]);
 
 // This workflow keeps a lightweight post-deploy public-page verifier on main.
@@ -89,6 +123,15 @@ for (const file of files) {
       if (exactSrcCatchAll && !allowedBroadSourceWorkflows.has(file)) {
         failures.push(`${file}: specialist workflows must not use an exact src/** catch-all; list the feature-owned source paths instead.`);
       }
+
+      const allowedShared = allowedSharedTriggerPatterns.get(file) ?? new Set();
+      for (const changedPath of blockPaths(block)) {
+        if (sharedTriggerPatterns.has(changedPath) && !allowedShared.has(changedPath)) {
+          failures.push(
+            `${file}: shared trigger ${changedPath} belongs in shared-change-safety.yml, not a specialist workflow.`,
+          );
+        }
+      }
     }
   }
 
@@ -115,4 +158,9 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`CI workflow scope policy passed for all ${files.length} workflow file(s).`);
+if (!files.includes(".github/workflows/shared-change-safety.yml")) {
+  console.error("CI WORKFLOW SCOPE POLICY FAILED: shared-change-safety.yml is missing.");
+  process.exit(1);
+}
+
+console.log(`CI workflow scope policy passed for all ${files.length} workflow file(s); shared changes are centralized.`);

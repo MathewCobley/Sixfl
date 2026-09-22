@@ -7,8 +7,6 @@ on:
       - "src/components/admin/player-pool/**"
       - "tests/player-pool-response-check.test.ts"
       - "scripts/check-player-pool-profile-reminders.mjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-pool-response-check.yml"
   workflow_dispatch:
 permissions:

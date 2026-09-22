@@ -10,8 +10,6 @@ on:
       - "src/components/player/PlayerPerformancePanel.tsx"
       - "src/app/(public)/leagues/[slug]/stats/page.tsx"
       - "scripts/audit-player-performance-integrity.mjs"
-      - "package.json"
-      - "package-lock.json"
       - ".github/workflows/validate-player-performance.yml"
   pull_request:
     paths:
@@ -20,8 +18,6 @@ on:
       - "src/components/player/PlayerPerformancePanel.tsx"
       - "src/app/(public)/leagues/[slug]/stats/page.tsx"
       - "scripts/audit-player-performance-integrity.mjs"
-      - "package.json"
-      - "package-lock.json"
       - ".github/workflows/validate-player-performance.yml"
 
 permissions:

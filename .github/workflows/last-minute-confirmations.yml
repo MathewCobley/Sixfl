@@ -9,9 +9,7 @@ on:
       - "scripts/check-last-minute-replacement-resolution.mjs"
       - "scripts/check-night-board-fixture-notifications.mjs"
       - "scripts/check-fixture-team-change-notifications.mjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "docs/last-minute-confirmation-policy.md"
-      - "prisma/schema.prisma"
       - ".github/workflows/last-minute-confirmations.yml"
   workflow_dispatch:
 permissions:

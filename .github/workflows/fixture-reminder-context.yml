@@ -8,8 +8,6 @@ on:
       - "src/app/api/admin/night-board/update-match/**"
       - "tests/fixture-reminder-context.test.cjs"
       - "tests/fixture-fee-inheritance.test.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/fixture-reminder-context.yml"
   workflow_dispatch:
 permissions:

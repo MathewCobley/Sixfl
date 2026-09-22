@@ -7,8 +7,6 @@ on:
       - "src/lib/payments/**"
       - "src/components/payments/**"
       - "tests/payment-ledger-consistency*.cjs"
-      - "prisma/schema.prisma"
-      - "scripts/check-critical-feature-contracts.mjs"
       - ".github/workflows/payment-ledger-consistency.yml"
   workflow_dispatch:
 permissions:

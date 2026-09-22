@@ -10,9 +10,7 @@ on:
       - "scripts/apply-publish-tbc-fee-safety.cjs"
       - "scripts/apply-resilient-published-fee-repair.cjs"
       - "scripts/fix-publish-tbc-fee-safety-compat.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "tests/fixture-fee-inheritance.test.cjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/fixture-fee-inheritance.yml"
   workflow_dispatch:
 permissions:

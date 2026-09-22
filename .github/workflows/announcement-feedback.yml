@@ -6,8 +6,6 @@ on:
       - "src/**/*announcement*"
       - "src/**/*Announcement*"
       - "tests/announcement-*.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/announcement-feedback.yml"
   workflow_dispatch:
 permissions:

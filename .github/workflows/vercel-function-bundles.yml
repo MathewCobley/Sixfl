@@ -10,7 +10,6 @@ on:
       - "tests/team-logo-bundle.test.cjs"
       - "tests/vercel-function-bundles.test.mjs"
       - "scripts/check-vercel-function-bundles.mjs"
-      - "scripts/check-critical-feature-contracts.mjs"
       - "next.config.*"
       - "package.json"
       - "package-lock.json"

@@ -10,7 +10,6 @@ on:
       - "src/components/admin/leagues/LeagueForm.tsx"
       - "src/app/(admin)/admin/leagues/actions.ts"
       - "src/app/(admin)/admin/leagues/[id]/page.tsx"
-      - "prisma/schema.prisma"
       - "prisma/migrations/20260906124500_team_move_confirmation/**"
       - "prisma/migrations/20260906142000_league_move_tracking/**"
       - "tests/team-move-confirmation*.cjs"

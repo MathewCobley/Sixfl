@@ -8,8 +8,6 @@ on:
       - "src/**/*Badge*"
       - "tests/team-logo-export.test.cjs"
       - "scripts/check-team-logo-export-browser.mjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/team-logo-export.yml"
   workflow_dispatch:
 permissions:

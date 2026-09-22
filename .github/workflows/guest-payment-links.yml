@@ -6,7 +6,6 @@ on:
       - "src/**/*guest*payment*"
       - "src/**/*Guest*Payment*"
       - "tests/guest-payment-links.test.ts"
-      - "prisma/schema.prisma"
       - ".github/workflows/guest-payment-links.yml"
   workflow_dispatch:
 permissions:

@@ -6,8 +6,6 @@ on:
       - "src/components/admin/payments/**"
       - "src/app/(admin)/admin/payments/**"
       - "tests/player-payment-warning-history*.cjs"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-payment-warning-history.yml"
   workflow_dispatch:
 permissions:

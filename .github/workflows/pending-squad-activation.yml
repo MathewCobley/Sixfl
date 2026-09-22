@@ -6,8 +6,6 @@ on:
       - "src/**/*Pending*Squad*"
       - "src/lib/notifications/**"
       - "tests/pending-squad-activation.test.ts"
-      - "scripts/check-critical-feature-contracts.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/pending-squad-activation.yml"
   workflow_dispatch:
 permissions:

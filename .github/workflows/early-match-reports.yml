@@ -10,7 +10,6 @@ on:
       - 'src/app/(admin)/admin/**'
       - 'src/app/(public)/referee/actions.ts'
       - 'prisma/**'
-      - 'scripts/**'
       - 'tests/early-match-reports/**'
       - '.github/workflows/early-match-reports.yml'
   workflow_dispatch:

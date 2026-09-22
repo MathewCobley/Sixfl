@@ -6,7 +6,6 @@ on:
       - "src/components/admin/player-prospects/**"
       - "src/lib/player-prospects/**"
       - "tests/player-prospect-search.test.mjs"
-      - "prisma/schema.prisma"
       - ".github/workflows/player-prospect-search.yml"
   workflow_dispatch:
 permissions:
