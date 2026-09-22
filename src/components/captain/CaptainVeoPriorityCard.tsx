@@ -10,6 +10,18 @@ type ThisWeekVeoStatus = {
   veoBooked: boolean;
 };
 
+const scoreBreakdownDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+function formatScoreBreakdownMatchDate(kickoffAt: Date) {
+  return scoreBreakdownDateFormatter.format(kickoffAt);
+}
+
 async function readThisWeekVeoStatus(leagueId: string, teamId: string): Promise<ThisWeekVeoStatus> {
   const rows = await prisma.$queryRaw<{ fixtureId: string; veoBooked: boolean }[]>`
     SELECT
@@ -190,7 +202,12 @@ export default async function CaptainVeoPriorityCard({
               return (
                 <div key={match.fixtureId} className="rounded-xl border border-white/10 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <strong className="text-sm">vs {match.opponentName}</strong>
+                    <div>
+                      <strong className="text-sm">vs {match.opponentName}</strong>
+                      <div className="mt-0.5 text-[11px] font-medium text-white/50">
+                        {formatScoreBreakdownMatchDate(match.kickoffAt)}
+                      </div>
+                    </div>
                     <div className="text-right">
                       <div className="text-sm font-bold">{match.points}/20</div>
                       <div className="text-[11px] text-white/45">
