@@ -153,7 +153,7 @@ export default async function PlayerTeamReferralsPage({
                         {statusLabel}
                       </span>
                     </div>
-                    {status === "PENDING" ? (
+                    {status === "TRACKING" ? (
                       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
                         <div
                           className="h-full rounded-full bg-emerald-400"
