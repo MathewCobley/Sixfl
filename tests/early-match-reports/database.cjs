@@ -5,6 +5,7 @@ const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const ts = require('typescript');
 const { Prisma } = require('@prisma/client');
 const migration = 'prisma/migrations/20260922233000_early_match_reports/migration.sql';
+const ownGoalMigration = 'prisma/migrations/20260922234500_own_goal_match_reports/migration.sql';
 function load(file, mocks) {
   const mod = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -19,6 +20,7 @@ function load(file, mocks) {
     await db.exec('DROP TABLE "FixtureMatchReport"');
     await db.exec(fs.readFileSync('prisma/migrations/20260803010000_canonical_player_match_performance/migration.sql', 'utf8'));
     await db.exec(fs.readFileSync(migration, 'utf8'));
+    await db.exec(fs.readFileSync(ownGoalMigration, 'utf8'));
     const query = async (strings, ...values) => {
       const sql = strings.text ? strings : Prisma.sql(strings, ...values);
       return (await db.query(sql.text, sql.values)).rows;
@@ -29,18 +31,20 @@ function load(file, mocks) {
       INSERT INTO "User" ("id","name") VALUES ('u1','Player A'),('u2','Player B');
       INSERT INTO "TeamMember" ("id","userId","teamId") VALUES ('m1','u1','a'),('m2','u2','b');`);
     async function fixture(id) { await db.query(`INSERT INTO "Fixture" ("id","leagueId","homeTeamId","awayTeamId","kickoffAt","publishedAt","updatedAt") VALUES ($1,'l','a','b',NOW()-INTERVAL '1 day',NOW()-INTERVAL '2 days',NOW())`, [id]); }
-    async function draft(id, team, goals, member, name) {
-      await db.query(`INSERT INTO "FixtureMatchReport" ("fixtureId","teamId","contributions","performances","playerOfMatchName","coreCompletedAt","assistsCompletedAt","ratingsCompletedAt","updatedAt") VALUES ($1,$2,$3,$4,$5,'2026-09-22 20:00','2026-09-22 20:00','2026-09-22 20:00',NOW())`, [id, team, JSON.stringify([{ teamMemberId: member, name, goals, assists: 1 }]), JSON.stringify([{ teamMemberId: member, rating: 9.2 }]), name]);
+    async function draft(id, team, goals, member, name, ownGoals = 0) {
+      await db.query(`INSERT INTO "FixtureMatchReport" ("fixtureId","teamId","contributions","performances","ownGoals","playerOfMatchName","coreCompletedAt","assistsCompletedAt","ratingsCompletedAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,'2026-09-22 20:00','2026-09-22 20:00','2026-09-22 20:00',NOW())`, [id, team, JSON.stringify([{ teamMemberId: member, name, goals, assists: goals > 0 ? 1 : 0 }]), JSON.stringify([{ teamMemberId: member, rating: 9.2 }]), ownGoals, name]);
     }
     await fixture('f1');
     await draft('f1','a',5,'m1','Player A');
-    await draft('f1','b',1,'m2','Player B');
+    await draft('f1','b',0,'m2','Player B',1);
     assert.equal((await query`SELECT * FROM "MatchResult"`).length, 0, 'saving reports must not fabricate scores');
     assert.equal((await query`SELECT * FROM "PlayerMatchPerformance"`).length, 0, 'pending reports do not change published player stats');
     await db.exec(`INSERT INTO "MatchResult" ("id","fixtureId","homeScore","awayScore","updatedAt") VALUES ('r1','f1',3,1,NOW())`);
     const metas = await query`SELECT * FROM "MatchResultTeamMeta" ORDER BY "teamId"`;
-    assert.equal(metas.length, 2); assert.equal(metas[0].goalsRecorded,5); assert.equal(metas[0].priorityCoreCompletedAt,null);
-    assert.equal((await query`SELECT "priorityCoreCompletedAt"::text AS stamp FROM "MatchResultTeamMeta" WHERE "teamId"='b'`)[0].stamp, '2026-09-22 20:00:00', 'timely matching report keeps submission time');
+    assert.equal(metas.length, 2); assert.equal(metas[0].goalsRecorded,5); assert.equal(metas[0].ownGoals,0); assert.equal(metas[0].priorityCoreCompletedAt,null);
+    const awayMeta=(await query`SELECT "goalsRecorded","ownGoals","priorityCoreCompletedAt"::text AS stamp FROM "MatchResultTeamMeta" WHERE "teamId"='b'`)[0];
+    assert.equal(awayMeta.goalsRecorded,0); assert.equal(awayMeta.ownGoals,1);
+    assert.equal(awayMeta.stamp, '2026-09-22 20:00:00', 'an own goal can complete the official team score without inventing a player scorer');
     const performances = await query`SELECT * FROM "PlayerMatchPerformance" ORDER BY "teamId"`;
     assert.equal(performances.length,2); assert.equal(performances[0].rating,9.2); assert.equal(performances[0].goals,5); assert.equal(performances[0].appearanceRecorded,true); assert.equal(performances[0].isPlayerOfMatch,true);
     let warnings = await getMatchReportWarnings(); assert.equal(warnings.length,1); assert.equal(warnings[0].teamId,'a'); assert.equal(warnings[0].goalsExpected,3);
@@ -63,6 +67,6 @@ function load(file, mocks) {
     await db.exec(`UPDATE "Fixture" SET "homeTeamId"='b',"awayTeamId"='b' WHERE "id"='f3'`);
     await db.exec(`INSERT INTO "MatchResult" ("id","fixtureId","homeScore","awayScore","updatedAt") VALUES ('r3','f3',1,0,NOW())`);
     assert.equal((await query`SELECT * FROM "MatchResultTeamMeta" WHERE "matchResultId"='r3'`).length,0,'replaced team report cannot attach to another team');
-    console.log('PASS: real PostgreSQL migration, both teams, promotion, player evidence, excess goals, corrections, timestamps, removed members and replaced teams.');
+    console.log('PASS: real PostgreSQL migration, own goals, both teams, promotion, player evidence, excess goals, corrections, timestamps, removed members and replaced teams.');
   } finally { await db.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -25,6 +25,20 @@ export function recordedScorers(value: unknown, team: string, score: number) {
   // Inconsistent scorer records must not become confident reporting claims.
   return rows.reduce((sum, r) => sum + r.goals, 0) <= score ? rows : [];
 }
+
+export function recordedTeamScorers(
+  value: unknown,
+  ownGoalsValue: unknown,
+  team: string,
+  score: number,
+) {
+  const rows = recordedScorers(value, team, score);
+  const ownGoals = Number(ownGoalsValue ?? 0);
+  if (Number.isInteger(ownGoals) && ownGoals > 0 && ownGoals <= score) {
+    rows.push({ team, name: "Own goal", goals: ownGoals });
+  }
+  return rows.reduce((sum, row) => sum + row.goals, 0) <= score ? rows : [];
+}
 export async function getReportSource(slug: string, requestedDate?: string): Promise<ReportSource | null> {
   const league = await prisma.league.findFirst({ where: { slug, isActive: true }, select: { id: true, name: true, area: true } });
   if (!league) return null;
@@ -40,7 +54,7 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
     select: { id: true, status: true, kickoffAt: true,
       homeTeam: { select: { id: true, name: true } }, awayTeam: { select: { id: true, name: true } },
       result: { select: { homeScore: true, awayScore: true, isDisputed: true,
-        teamMetadata: { select: { teamId: true, scorers: true, playerOfMatchName: true } },
+        teamMetadata: { select: { teamId: true, scorers: true, ownGoals: true, playerOfMatchName: true } },
         disputes: { where: { status: { in: ["OPEN", "REVIEW"] } }, select: { id: true }, take: 1 },
       } },
     },
@@ -94,7 +108,10 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
     // Completed replacement games reach this same path as any other valid result.
     const result = r!;
     const a = result.teamMetadata.find(m => m.teamId === f.homeTeam.id), b = result.teamMetadata.find(m => m.teamId === f.awayTeam.id);
-    const scorers = [...recordedScorers(a?.scorers, teamA, result.homeScore), ...recordedScorers(b?.scorers, teamB, result.awayScore)];
+    const scorers = [
+      ...recordedTeamScorers(a?.scorers, a?.ownGoals, teamA, result.homeScore),
+      ...recordedTeamScorers(b?.scorers, b?.ownGoals, teamB, result.awayScore),
+    ];
     const playersOfMatch = [[a, teamA], [b, teamB]].flatMap(([meta, team]) => {
       const player = name((meta as typeof a)?.playerOfMatchName);
       return player ? [{ team: team as string, name: player }] : [];

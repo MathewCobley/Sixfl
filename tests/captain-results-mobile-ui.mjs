@@ -102,6 +102,9 @@ try {
           await contained(page,form.locator('[data-match-player="player-1"] input[type="number"]'));
           await form.getByRole('spinbutton',{name:'Goals for Test Player 0',exact:true}).fill('2');
           await form.getByRole('spinbutton',{name:'Assists for Test Player 0',exact:true}).fill('1');
+          const ownGoals = form.getByRole('spinbutton',{name:'Own goals',exact:true});
+          await contained(page,ownGoals);
+          await ownGoals.fill('1');
           const rating = form.getByRole('spinbutton',{name:'Rating for Test Player 0',exact:true});
           assert.equal(await rating.getAttribute('step'),'0.1');
           for (const [value, valid] of [['0',false],['10.1',false],['9.25',false],['',true],['1',true],['10',true],['9',true],['9.5',true],['9.2',true]]) {
@@ -117,6 +120,7 @@ try {
           assert.equal(await form.locator('input[name="playerOfMatchTeamMemberId"]').inputValue(),'player-2');
           await page.setViewportSize({width:width===390?1360:390,height:844});
           assert.equal(await form.locator('input[name="scorerGoals_player-0"]').inputValue(),'2');
+          assert.equal(await ownGoals.inputValue(),'1');
           assert.equal(await rating.inputValue(),'9.2');
           await page.setViewportSize({width,height:844});
           const save=form.getByRole('button',{name:'Save match details',exact:true});
@@ -128,8 +132,9 @@ try {
           assert.equal(submission.actionName,'saveTeamMatchDetails');
           const fields=Object.fromEntries(submission.fields);
           assert.equal(fields['scorerGoals_player-0'],'2');assert.equal(fields['assists_player-0'],'1');assert.equal(fields['rating_player-0'],'9.2');
-          assert.equal(fields.playerOfMatchTeamMemberId,'player-2');assert.equal(fields.teamid,'team-a');assert.equal(fields.resultId,'result-a');
+          assert.equal(fields.ownGoals,'1');assert.equal(fields.playerOfMatchTeamMemberId,'player-2');assert.equal(fields.teamid,'team-a');assert.equal(fields.resultId,'result-a');
           assert.equal(submission.fields.filter(([key])=>key==='scorerGoals_player-0').length,1);
+          assert.equal(submission.fields.filter(([key])=>key==='ownGoals').length,1);
           assert.equal(submission.fields.filter(([key])=>key==='rating_player-0').length,1);
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'Horizontal page overflow');
           assert.deepEqual(errors,[]);

@@ -14,7 +14,7 @@ function fixtureData() {
   } }));
   const team = { id: 'team-a', name: 'Test Team A', members };
   const result = { id: 'result-a', homeScore: 3, awayScore: 1, enteredAt: new Date(), overturn: null,
-    teamMetadata: [{ teamId: team.id, goalsRecorded: 1, playerOfMatchName: members[0].user.name,
+    teamMetadata: [{ teamId: team.id, goalsRecorded: 1, ownGoals: 0, playerOfMatchName: members[0].user.name,
       scorers: [{ teamMemberId: members[0].id, name: members[0].user.name, goals: 1, assists: 0 }] }], disputes: [] };
   const fixture = { id: 'fixture-a', homeTeamId: team.id, awayTeamId: 'team-b', kickoffAt: new Date(),
     homeTeam: { name: team.name }, awayTeam: { name: 'Test Team B' }, result,
@@ -80,6 +80,8 @@ if (require.main === module) {
     assert.match(html, /id="edit-match-result-a"/);
     assert.match(html, /Save match details/);
     assert.match(html, /Player of the Match/);
+    assert.equal(html.split('name="ownGoals"').length - 1, 1);
+    assert.match(html, /Own goals/);
     assert.match(html, /value="7.5"/);
     assert.doesNotMatch(html, /min-w-\[640px\]/);
     assert.equal(h.writes.length, 0);
@@ -97,19 +99,45 @@ if (require.main === module) {
     const h = harness(), form = findForm(await h.page());
     const body = new FormData();
     for (const [key, value] of Object.entries({ teamid: 'team-a', resultId: 'result-a', scorerGoals_player0: 'unused',
-      'scorerGoals_player-0': '2', 'assists_player-0': '1', 'rating_player-0': '7.5', playerOfMatchTeamMemberId: 'player-0' })) body.set(key, value);
+      'scorerGoals_player-0': '2', 'assists_player-0': '1', 'rating_player-0': '7.5', ownGoals: '1', playerOfMatchTeamMemberId: 'player-0' })) body.set(key, value);
     await assert.rejects(form.props.action(body), e => e.url?.includes('saved=1'));
     assert.equal(h.writes[0].update.goalsRecorded, 2);
+    assert.equal(h.writes[0].update.ownGoals, 1);
     assert.equal(h.writes[0].update.playerOfMatchName, 'Test Player 0');
     assert.deepEqual(h.writes[1].rows, [{ teamMemberId: 'player-0', rating: 7.5 }]);
     assert.equal(h.data.fixture.result.homeScore, 3);
   });
+  test('own goals complete the team goal total without inventing a player scorer', async () => {
+    const h = harness(), form = findForm(await h.page());
+    const body = new FormData();
+    body.set('teamid', 'team-a'); body.set('resultId', 'result-a');
+    body.set('scorerGoals_player-0', '2'); body.set('ownGoals', '1');
+    body.set('played_player-0', 'on'); body.set('playerOfMatchTeamMemberId', 'player-0');
+    await assert.rejects(form.props.action(body), e => e.url?.includes('saved=1'));
+    assert.equal(h.writes[0].update.goalsRecorded, 2);
+    assert.equal(h.writes[0].update.ownGoals, 1);
+    assert.equal(h.writes[0].update.scorers[0].goals, 2);
+    assert.equal(h.writes[0].update.scorers.length, 1);
+  });
+  test('a saved own goal satisfies scorer completeness against the official score', async () => {
+    const h = harness();
+    const meta = h.data.fixture.result.teamMetadata[0];
+    meta.goalsRecorded = 2;
+    meta.ownGoals = 1;
+    meta.scorers = [{ teamMemberId: 'player-0', name: 'Test Player 0', goals: 2, assists: 0 }];
+    const html = renderToStaticMarkup(await h.page());
+    assert.match(html, /Own goal: 1/);
+    assert.match(html, /Accounted for 3 of 3 on-pitch team goals/);
+    assert.match(html, />Complete</);
+    assert.doesNotMatch(html, /Recorded 2 of 3 on-pitch team goals/);
+  });
   test('captain permissions, score bounds and the nine-player limit still reject invalid saves', async () => {
-    for (const scenario of ['unauthorised', 'goals', 'assists', 'rating', 'players']) {
+    for (const scenario of ['unauthorised', 'goals', 'ownGoals', 'assists', 'rating', 'players']) {
       const h = harness(), form = findForm(await h.page()), body = new FormData();
       body.set('teamid', 'team-a'); body.set('resultId', 'result-a');
       if (scenario === 'unauthorised') h.setAuthorised(false);
       if (scenario === 'goals') body.set('scorerGoals_player-0', '4');
+      if (scenario === 'ownGoals') body.set('ownGoals', '4');
       if (scenario === 'assists') body.set('assists_player-0', '4');
       if (scenario === 'rating') body.set('rating_player-0', '7.25');
       if (scenario === 'players') for (let i = 0; i < 10; i++) body.set(`played_player-${i}`, 'on');

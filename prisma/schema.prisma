@@ -578,6 +578,7 @@ model MatchResultTeamMeta {
   teamId            String
   scorers           Json?
   goalsRecorded     Int      @default(0)
+  ownGoals          Int      @default(0)
   playerOfMatchName String?
   priorityCoreCompletedAt    DateTime?
   priorityAssistsCompletedAt DateTime?
@@ -1553,6 +1554,7 @@ model FixtureMatchReport {
   teamId String
   contributions Json
   performances Json
+  ownGoals Int @default(0)
   playerOfMatchName String?
   coreCompletedAt DateTime?
   assistsCompletedAt DateTime?

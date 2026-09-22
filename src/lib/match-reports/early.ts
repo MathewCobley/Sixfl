@@ -6,7 +6,12 @@ export type EarlyPerformance = { teamMemberId: string; rating: number | null };
 
 export function readEarlyReport(form: FormData, members: Array<{ id: string; user: { name: string | null; email: string | null } }>) {
   const pomId = String(form.get("playerOfMatchTeamMemberId") ?? "");
+  const ownGoalsText = String(form.get("ownGoals") ?? "0").trim();
+  const ownGoals = Number(ownGoalsText || "0");
   if (pomId && !members.some(member => member.id === pomId)) throw new Error("Choose Player of the Match from your registered squad.");
+  if (!Number.isSafeInteger(ownGoals) || ownGoals < 0 || ownGoals > 999) {
+    throw new Error("Own goals must be a whole number between 0 and 999.");
+  }
   const contributions: EarlyContribution[] = [];
   const performances: EarlyPerformance[] = [];
   let playerOfMatchName: string | null = null;
@@ -29,7 +34,7 @@ export function readEarlyReport(form: FormData, members: Array<{ id: string; use
     if (pomId === member.id) playerOfMatchName = name;
   }
   if (performances.length > 9) throw new Error("A maximum of 9 players can be recorded for one fixture.");
-  return { contributions, performances, playerOfMatchName };
+  return { contributions, performances, ownGoals, playerOfMatchName };
 }
 
 /** Caller must authenticate captain access to teamId. No result or score is fabricated. */
@@ -49,6 +54,7 @@ export async function saveEarlyMatchReport(teamId: string, fixtureId: string, fo
     const data = {
       contributions: report.contributions as unknown as Prisma.InputJsonValue,
       performances: report.performances as unknown as Prisma.InputJsonValue,
+      ownGoals: report.ownGoals,
       playerOfMatchName: report.playerOfMatchName,
       coreCompletedAt: report.performances.length && report.playerOfMatchName ? existing?.coreCompletedAt ?? now : null,
       assistsCompletedAt: report.contributions.some(row => row.assists > 0) ? existing?.assistsCompletedAt ?? now : null,
