@@ -18,12 +18,15 @@ function UploadProgress() {
   const [expanded, setExpanded] = useState(false);
   const tasks = snapshot.tasks, active = tasks.find(task => task.status === "UPLOADING");
   const pending = tasks.filter(uploadPending).length;
+  const transferring = tasks.filter(
+    task => task.status === "UPLOADING" || task.status === "QUEUED",
+  ).length;
   useEffect(() => {
-    if (!pending) return;
+    if (!transferring) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [pending]);
+  }, [transferring]);
   if (!tasks.length) return null;
   const percent = active ? Math.min(100, Math.round(active.uploadedBytes / active.sizeBytes * 100)) : null;
   return <aside aria-label="Background footage uploads" className="fixed bottom-3 right-3 z-40 w-[calc(100%-1.5rem)] max-w-sm rounded-2xl border border-emerald-400/35 bg-slate-950 p-3 text-white shadow-2xl">

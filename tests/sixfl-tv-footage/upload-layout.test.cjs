@@ -12,11 +12,16 @@ test('upload queue is owned by persistent authenticated admin layout, not a fixt
   assert.match(page, /fixtureLabel=/);
   assert.match(provider, /useState\(\(\) => new FootageUploadQueue\(\)\)/);
   assert.match(provider, /href="\/admin\/sixfl-tv\/fixtures"/);
+  assert.match(provider, /task\.status === "UPLOADING" \|\| task\.status === "QUEUED"/);
+  assert.match(provider, /\[transferring\]/);
   assert.match(provider, />Another match<\/Link>/);
   assert.match(provider, /queue\.stop\(\)/);
   assert.match(uploader, /queue\.enqueue\(/);
   assert.match(uploader, />Upload another match<\/Link>/);
   assert.match(uploader, /className="sr-only"/);
+  assert.match(uploader, /disabled=\{localBusy \|\| !state\.configured\}/);
+  assert.doesNotMatch(uploader, /disabled=\{busy \|\| !state\.configured\}/);
+  assert.match(uploader, /You can still choose more footage and add it to the queue/);
   assert.match(uploader, /Nothing selected yet/);
   assert.match(uploader, /Change selected clips/);
   assert.match(uploader, /Choose file to resume/);
