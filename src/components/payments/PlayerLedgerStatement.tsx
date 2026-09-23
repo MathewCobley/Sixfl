@@ -1,4 +1,4 @@
-import { getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
+import { getLegacyPaymentLinkClosureContext, getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
 import { money, type PlayerLedgerAccount } from "@/lib/payments/player-ledger";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
@@ -141,6 +141,9 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                             {actorLabel(latestEndEvent)}
                             {latestEndEvent.via ? ` · ${latestEndEvent.via}` : ""}
                             {latestEndEvent.reason ? ` · ${latestEndEvent.reason}` : ""}
+                            {latestEndEvent.actorKind === "LEGACY" && getLegacyPaymentLinkClosureContext(fee)
+                              ? ` · ${getLegacyPaymentLinkClosureContext(fee)}`
+                              : ""}
                           </div>
                         ) : null}
                       </div>
