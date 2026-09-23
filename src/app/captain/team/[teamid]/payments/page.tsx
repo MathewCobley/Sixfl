@@ -715,7 +715,25 @@ export default async function CaptainPaymentsPage({
           ) : null}
           <p className="mt-3">Direct team payments and unallocated team credit must clear the oldest eligible charge before a newer one. Paying this week's fixture through squad contributions does not clear an older team debt. Held charges remain owed unless separately waived.</p>
           <p className="mt-2">Individual squad payments and player money passed on by the captain remain attached to their original fixture. A newer saved-card matchday payment is paused while an earlier team balance blocks it; arrears are not added to an automatic debit.</p>
-          {paymentOrder.next?.paymentToken ? <Link href={`/pay/charge/${paymentOrder.next.paymentToken}`} className="mt-3 inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black">Pay oldest charge {formatMoney(paymentOrder.next.outstandingPence)}</Link> : null}
+          {paymentOrder.next && creditBalancePence > 0 ? (
+            <form action={useTeamCreditAction} className="mt-3">
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="chargeId" value={paymentOrder.next.chargeId} />
+              <button
+                type="submit"
+                className="inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black hover:bg-emerald-300"
+              >
+                Use {formatMoney(Math.min(creditBalancePence, paymentOrder.next.outstandingPence))} credit first
+              </button>
+              <p className="mt-2 text-xs text-emerald-100/75">
+                {formatMoney(paymentOrder.next.outstandingPence)} charge − {formatMoney(Math.min(creditBalancePence, paymentOrder.next.outstandingPence))} credit = {formatMoney(Math.max(paymentOrder.next.outstandingPence - creditBalancePence, 0))} left to pay.
+              </p>
+            </form>
+          ) : paymentOrder.next?.paymentToken ? (
+            <Link href={`/pay/charge/${paymentOrder.next.paymentToken}`} className="mt-3 inline-flex rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-black">
+              Pay oldest charge {formatMoney(paymentOrder.next.outstandingPence)}
+            </Link>
+          ) : null}
         </section>
       ) : null}
       {subscriptionMessage ? (

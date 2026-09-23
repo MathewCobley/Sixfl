@@ -307,6 +307,8 @@ test("prepared source retains gates on UI, POST, saved card and unallocated cred
   assert.ok(captain.includes("Oldest charge to clear first"));
   assert.ok(captain.includes("Available team credit"));
   assert.ok(captain.includes("After that"));
+  assert.ok(captain.includes("Use {formatMoney(Math.min(creditBalancePence, paymentOrder.next.outstandingPence))} credit first"));
+  assert.ok(captain.includes("charge − {formatMoney(Math.min(creditBalancePence, paymentOrder.next.outstandingPence))} credit"));
   assert.ok(captain.includes("Pay oldest charge"));
   assert.equal(captain.includes("Pay next outstanding"), false);
   const publicPage = read("src/app/pay/charge/[token]/page.tsx");
