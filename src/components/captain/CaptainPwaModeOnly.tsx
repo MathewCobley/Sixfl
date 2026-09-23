@@ -41,11 +41,7 @@ export default function CaptainPwaModeOnly({
     setResolvedMode(detectAppMode(explicitPreview) ? "app" : "web");
   }, []);
 
-  if (resolvedMode === null) {
-    return mode === "app" ? (
-      <div className="min-h-[10rem] bg-[#07130f]" aria-hidden="true" />
-    ) : null;
-  }
+  if (resolvedMode === null) return null;
 
   return resolvedMode === mode ? <>{children}</> : null;
 }
