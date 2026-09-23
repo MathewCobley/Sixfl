@@ -199,7 +199,9 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
     },
   }).default;
   const tree = await Page();
-  tree.type(tree.props);
+  const appMode = React.Children.toArray(tree.props.children)[0];
+  const appHome = appMode.props.children;
+  appHome.type(appHome.props);
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
   assert.equal(props.dueToYou, "£30.00", "future referee fees must not show as owed before the night happens");
