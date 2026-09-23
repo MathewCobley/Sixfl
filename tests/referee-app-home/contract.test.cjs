@@ -342,3 +342,11 @@ test("decorative website-style eyebrows are removed from referee app screens", (
   assert.doesNotMatch(refereePage, />\s*Night sheets\s*</);
   assert.doesNotMatch(refereePage, /No open night sheets\./);
 });
+
+
+test("dual-role referees can switch back to the app viewer from the referee app", () => {
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+  assert.match(shell, /prisma\.teamMember\.findFirst/);
+  assert.match(shell, /href="\/dashboard\?app=1"/);
+  assert.match(shell, /aria-label="Switch app viewer"/);
+});
