@@ -296,7 +296,7 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
   const dueToRefereeNowPence = balanceIsDue ? night.dueToRefereePence : 0;
 
   return (
-    <RefereeAppShell active="nights" title="Night sheet">
+    <RefereeAppShell active="nights" title="Match night">
       <RefereeCashupSubmitFeedback />
       <div className="space-y-3">
         {savedMessage ? (

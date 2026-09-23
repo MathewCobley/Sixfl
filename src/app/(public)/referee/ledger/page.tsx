@@ -145,10 +145,7 @@ export default async function RefereeLedgerPage() {
       <section>
         <div className="flex items-center justify-between gap-3 px-1">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
-              Payment history
-            </p>
-            <h2 className="mt-0.5 text-base font-black text-white">
+            <h2 className="text-base font-black text-white">
               Money received
             </h2>
           </div>

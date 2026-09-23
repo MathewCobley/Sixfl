@@ -66,7 +66,7 @@ export default function RefereeAppHome({
 
           <div className="min-w-0 flex-1 text-center">
             <div className="text-sm font-black tracking-tight text-white">
-              Referee Portal
+              Home
             </div>
           </div>
 
@@ -88,10 +88,7 @@ export default function RefereeAppHome({
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-widest text-white/45">
-                Ready for match night
-              </p>
-              <h1 className="mt-0.5 break-words text-xl font-black tracking-tight">
+              <h1 className="break-words text-xl font-black tracking-tight">
                 Hi, {firstName}
               </h1>
             </div>

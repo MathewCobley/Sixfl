@@ -253,10 +253,7 @@ export default async function RefereeNightsPage() {
   return (
     <RefereeAppShell active="nights" title="Nights">
       <section className="rounded-[1.35rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">
-          Match nights
-        </p>
-        <h1 className="mt-1 text-lg font-black text-white">Your referee nights</h1>
+        <h1 className="text-lg font-black text-white">Your referee nights</h1>
         <p className="mt-1 text-xs leading-5 text-white/45">
           Upcoming work, anything that still needs completing, and your previous nights.
         </p>

@@ -420,7 +420,7 @@ function NightSheets({
       <div className="flex items-center justify-between gap-3 px-1">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
-            Night sheets
+            Match nights
           </p>
           <h2 className="mt-0.5 text-base font-black text-white">Your nights</h2>
         </div>
@@ -442,7 +442,7 @@ function NightSheets({
           ))
         ) : (
           <div className="rounded-[1.2rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">
-            No open night sheets.
+            No open match nights.
           </div>
         )}
       </div>
