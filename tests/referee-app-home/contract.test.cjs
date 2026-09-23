@@ -60,6 +60,7 @@ test("home exposes real night details and operational routes without website esc
     "£10.00",
     "Refereeing with: Mathew.",
     "Open night sheet",
+    "Referee Portal",
   ])
     assert.ok(html.includes(text), text);
   for (const href of [...html.matchAll(/<a[^>]*href="([^"]*)"/g)].map(
@@ -193,15 +194,21 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
         night("next", "2026-09-28", "DRAFT", 4000),
         night("settled", "2026-09-20", "SETTLED", 5000),
         night("submitted", "2026-09-21", "SUBMITTED", 1000),
+        night("future-submitted", "2026-09-29", "SUBMITTED", 9000),
       ],
     },
   }).default;
   const tree = await Page();
-  tree.type(tree.props);
+  const appMode = React.Children.toArray(tree.props.children)[0];
+  const appHome = appMode.props.children;
+  appHome.type(appHome.props);
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
-  assert.equal(props.dueToYou, "£30.00");
+  assert.equal(props.dueToYou, "£30.00", "future referee fees must not show as owed before the night happens");
   const page = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
+  assert.match(page, /RefereePortalViewMode mode="app"/);
+  assert.match(page, /RefereePortalViewMode mode="web"/);
+  assert.match(page, /return night\.nightDate < todayLondonDate/);
   assert.match(page, /Open reopened night/);
   assert.match(page, /onsiteByNightId/);
   assert.doesNotMatch(

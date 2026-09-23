@@ -1,5 +1,6 @@
 import RefereeAppHome from "@/components/referee/RefereeAppHome";
 import RefereeNightConfirmation from "@/components/referee/RefereeNightConfirmation";
+import RefereePortalViewMode from "@/components/referee/RefereePortalViewMode";
 // ========================================
 // File: src/app/(public)/referee/page.tsx
 // ========================================
@@ -70,10 +71,10 @@ function sortNightNewestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
 
 function isNightPayable(night: RefereeNightSummary, todayLondonDate: string) {
   if (night.status === "CANCELLED") return false;
-  if (["SUBMITTED", "APPROVED", "SETTLED", "REOPENED"].includes(night.status)) {
-    return true;
-  }
 
+  // A referee fee is not owed before the night has actually happened.
+  // Keep future and same-day assignments out of "Due to you" and the payable ledger,
+  // even if an admin/referee workflow has already moved the night to another status.
   return night.nightDate < todayLondonDate;
 }
 
@@ -501,29 +502,202 @@ export default async function RefereePage() {
   const nextFixtures = nextNight ? await getRefereeNightFixtures(nextNight.id) : [];
   const previewRefereeId = authenticatedUser.role === UserRole.ADMIN ? user.id : null;
 
-  return (
-    <RefereeAppHome
-      name={refereeName}
-      nextNight={nextNight ? {
-        id: nextNight.id, leagueName: nextNight.leagueName, venueName: nextNight.venueName,
-        dateLabel: formatNightDate(nextNight.nightDate), fixtureCount: nextNight.fixtureCount,
-        feeLabel: formatMoney(nextNight.feePence), isPast: nextNight.nightDate < todayLondonDate,
+  const nextNightView = nextNight
+    ? {
+        id: nextNight.id,
+        leagueName: nextNight.leagueName,
+        venueName: nextNight.venueName,
+        dateLabel: formatNightDate(nextNight.nightDate),
+        fixtureCount: nextNight.fixtureCount,
+        feeLabel: formatMoney(nextNight.feePence),
+        isPast: nextNight.nightDate < todayLondonDate,
         isToday: nextNight.nightDate === todayLondonDate,
-        firstKickoff: nextFixtures[0] ? formatDateTimeInLondon(nextFixtures[0].kickoffAt, { hour: "2-digit", minute: "2-digit" }) : null,
-        colleagues: onsiteByNightId.has(nextNight.id) ? makeTextList(onsiteByNightId.get(nextNight.id)!.coReferees) : null,
-      } : null}
-      openCount={currentOpenNights.length} submittedCount={submittedNights.length}
-      dueToYou={formatMoney(outstandingDueToReferee)} dueToSixfl={formatMoney(outstandingDueToSixfl)}
-      confirmation={<RefereeNightConfirmation refereeId={user.id} />}
-      desktopTabs={<RefereeTabs active="overview" previewRefereeId={previewRefereeId} />}
-      preview={<CurrentViewBanner isAdminPreview={isAdminPreview} refereeName={refereeName} refereeId={user.id} />}
-    >
-      <NightSheets openNights={currentOpenNights} closedNights={closedNights} legacyNights={legacyNights}
-        nextNight={nextNight} todayLondonDate={todayLondonDate} onsiteByNightId={onsiteByNightId} />
-      <section id="referee-ledger" className="scroll-mt-4">
-        <RefereeLedger nights={nights} todayLondonDate={todayLondonDate} />
-        <p className="mt-3 text-center text-[10px] text-white/40">{totalFixtures} fixtures covered · {settledNights.length} settled nights · {nights.length} total nights</p>
-      </section>
-    </RefereeAppHome>
+        firstKickoff: nextFixtures[0]
+          ? formatDateTimeInLondon(nextFixtures[0].kickoffAt, {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : null,
+        colleagues: onsiteByNightId.has(nextNight.id)
+          ? makeTextList(onsiteByNightId.get(nextNight.id)!.coReferees)
+          : null,
+      }
+    : null;
+
+  const nightSheets = (
+    <NightSheets
+      openNights={currentOpenNights}
+      closedNights={closedNights}
+      legacyNights={legacyNights}
+      nextNight={nextNight}
+      todayLondonDate={todayLondonDate}
+      onsiteByNightId={onsiteByNightId}
+    />
+  );
+
+  const ledger = (
+    <section id="referee-ledger" className="scroll-mt-4">
+      <RefereeLedger nights={nights} todayLondonDate={todayLondonDate} />
+      <p className="mt-3 text-center text-[10px] text-white/40">
+        {totalFixtures} fixtures covered · {settledNights.length} settled nights · {nights.length} total nights
+      </p>
+    </section>
+  );
+
+  return (
+    <>
+      <RefereePortalViewMode mode="app">
+        <RefereeAppHome
+          name={refereeName}
+          nextNight={nextNightView}
+          openCount={currentOpenNights.length}
+          submittedCount={submittedNights.length}
+          dueToYou={formatMoney(outstandingDueToReferee)}
+          dueToSixfl={formatMoney(outstandingDueToSixfl)}
+          confirmation={<RefereeNightConfirmation refereeId={user.id} />}
+          desktopTabs={<RefereeTabs active="overview" previewRefereeId={previewRefereeId} />}
+          preview={null}
+        >
+          {nightSheets}
+          {ledger}
+        </RefereeAppHome>
+      </RefereePortalViewMode>
+
+      <RefereePortalViewMode mode="web">
+        <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl space-y-6">
+            <CurrentViewBanner
+              isAdminPreview={isAdminPreview}
+              refereeName={refereeName}
+              refereeId={user.id}
+            />
+
+            <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 sm:p-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">
+                Referee Portal
+              </p>
+              <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight text-white">
+                    {refereeName}
+                  </h1>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-50/70">
+                    Your referee nights, availability, match sheets, cashup and payments are all shown here.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
+                  <div className="font-semibold text-white">
+                    {isAdminPreview ? "Previewing" : "Logged in as"}
+                  </div>
+                  <div className="mt-1">{user.email || refereeName}</div>
+                </div>
+              </div>
+            </section>
+
+            <RefereeTabs active="overview" previewRefereeId={previewRefereeId} />
+
+            <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+              <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">
+                    Referee dashboard
+                  </p>
+                  <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                    {nextNight ? "Next referee night" : "No open night yet"}
+                  </h2>
+                  <p className="mt-3 text-base text-white/70">
+                    {nextNight
+                      ? `${nextNight.leagueName}${nextNight.leagueSeason ? ` · ${nextNight.leagueSeason}` : ""}`
+                      : "When SIXFL assigns you to a night, it will appear here."}
+                  </p>
+                  {nextNight ? (
+                    <div className="mt-5 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/75">
+                        {formatNightDate(nextNight.nightDate)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/75">
+                        {nextNight.venueName || "Venue TBC"}
+                      </span>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-emerald-100">
+                        {nextNight.fixtureCount} fixture{nextNight.fixtureCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="mt-5 max-w-xl">
+                    <RefereeNightConfirmation refereeId={user.id} />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Open nights", currentOpenNights.length, "Need action or cashup."],
+                    ["Due to you", formatMoney(outstandingDueToReferee), "Only completed nights count."],
+                    ["Submitted", submittedNights.length, "Waiting for SIXFL review."],
+                    ["Due SIXFL", formatMoney(outstandingDueToSixfl), "Only completed nights count."],
+                  ].map(([label, value, help]) => (
+                    <div key={String(label)} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                        {label}
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-white">{value}</div>
+                      <div className="mt-1 text-xs leading-5 text-white/45">{help}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-3">
+              <Link
+                href="/referee/availability"
+                className="rounded-3xl border border-emerald-400/25 bg-emerald-500/12 p-5 transition hover:bg-emerald-500/18"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Availability</p>
+                <p className="mt-3 text-xl font-semibold text-white">Mark your dates</p>
+                <p className="mt-2 text-sm leading-5 text-white/60">Tell SIXFL which league nights you can referee.</p>
+              </Link>
+              <Link
+                href="/referee/match-rules"
+                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:bg-white/[0.07]"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Match rules</p>
+                <p className="mt-3 text-xl font-semibold text-white">Check the rules</p>
+                <p className="mt-2 text-sm leading-5 text-white/60">Quick reference for how SIXFL matches should be managed.</p>
+              </Link>
+              <Link
+                href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-night-picker"}
+                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:bg-white/[0.07]"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Next action</p>
+                <p className="mt-3 text-xl font-semibold text-white">
+                  {nextNight ? "Open night sheet" : "View night sheets"}
+                </p>
+                <p className="mt-2 text-sm leading-5 text-white/60">
+                  {nextNight ? "Enter results, cash and notes for your next night." : "No open night is currently assigned."}
+                </p>
+              </Link>
+            </section>
+
+            {nightSheets}
+
+            <section className="grid gap-4 md:grid-cols-3">
+              {[
+                ["Fixtures covered", totalFixtures],
+                ["Settled nights", settledNights.length],
+                ["Total nights", nights.length],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">{label}</p>
+                  <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+                </div>
+              ))}
+            </section>
+
+            {ledger}
+          </div>
+        </main>
+      </RefereePortalViewMode>
+    </>
   );
 }
+

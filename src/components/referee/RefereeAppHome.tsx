@@ -32,7 +32,7 @@ export default function RefereeAppHome({
   confirmation,
   children,
   desktopTabs,
-  preview,
+  preview: _preview,
 }: {
   name: string;
   nextNight: Night | null;
@@ -55,18 +55,30 @@ export default function RefereeAppHome({
     .toUpperCase();
   return (
     <main className="min-h-screen bg-[#07130f] text-white">
-      <header className="border-b border-white/10 bg-[#050807] px-4 pb-3 pt-[max(env(safe-area-inset-top),0.8rem)]">
-        <div className="mx-auto flex max-w-xl items-center justify-between">
-          <Link href="/referee" aria-label="SIXFL referee home">
-            <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto" />
+      <header
+        className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
+      >
+        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+          <Link href="/referee" aria-label="SIXFL referee home" className="shrink-0">
+            <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto object-contain" />
           </Link>
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
-            Referee
-          </span>
+
+          <div className="min-w-0 flex-1 text-center">
+            <div className="text-sm font-black tracking-tight text-white">
+              Referee Portal
+            </div>
+          </div>
+
+          <div
+            aria-label={`Referee ${name}`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/25 text-[10px] font-black text-white/60"
+          >
+            {initials}
+          </div>
         </div>
       </header>
       <div className="mx-auto max-w-xl space-y-3 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3">
-        {preview}
         <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_38%),linear-gradient(145deg,#0b1a22,#09140f)] p-3">
           <div className="flex items-center gap-3">
             <div
