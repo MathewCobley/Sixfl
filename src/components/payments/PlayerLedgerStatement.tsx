@@ -24,6 +24,26 @@ function fixtureLabel(fee: PlayerLedgerAccount["fees"][number] | undefined) {
   )}`;
 }
 
+function linkEventActionLabel(eventType: string) {
+  if (eventType === "CREATED") return "Created";
+  if (eventType === "REMOVED") return "Removed";
+  if (eventType === "CLOSED") return "Closed";
+  if (eventType === "REOPENED") return "Reopened";
+  return eventType.toLowerCase().replaceAll("_", " ");
+}
+
+function linkActorLabel(event: {
+  actorKind: string;
+  actorName: string | null;
+  actorRole: string | null;
+}) {
+  if (event.actorKind === "LEGACY") return "Legacy — actor not recorded";
+  if (event.actorKind === "SYSTEM") return event.actorName || "SIXFL System";
+  const role = event.actorRole ? ` (${event.actorRole.replaceAll("_", " ").toLowerCase()})` : "";
+  return `${event.actorName || "Signed-in SIXFL user"}${role}`;
+}
+
+
 export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAccount}){
   const feeById = new Map(account.fees.map(fee => [fee.id, fee]));
   const runningBalanceByEntryId = new Map<string, number>();
@@ -145,6 +165,28 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
 
                   <div className="mt-2 break-all rounded-lg bg-black/20 px-2.5 py-2 font-mono text-[10px] leading-5 text-white/35">
                     {link.paymentUrl}
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {account.paymentLinkEvents
+                      .filter((event) => event.paymentToken === link.paymentToken)
+                      .sort((left, right) => {
+                        if (left.sequence === right.sequence) return 0;
+                        return left.sequence < right.sequence ? -1 : 1;
+                      })
+                      .map((event) => (
+                        <div
+                          key={event.id}
+                          className="rounded-lg border border-white/[0.06] bg-black/15 px-2.5 py-2 text-xs leading-5 text-white/55"
+                        >
+                          <div className="font-medium text-white/75">
+                            {linkEventActionLabel(event.eventType)} by: {linkActorLabel(event)}
+                          </div>
+                          <div className="text-white/40">
+                            {formatDateTimeInLondon(event.createdAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} · {event.via}
+                          </div>
+                          {event.reason ? <div className="text-white/40">{event.reason}</div> : null}
+                        </div>
+                      ))}
                   </div>
                   <div className="mt-2 text-xs text-white/50">
                     {link.openCount > 0
