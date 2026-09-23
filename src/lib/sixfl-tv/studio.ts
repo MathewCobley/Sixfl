@@ -346,7 +346,9 @@ export async function cancelRenders(fixtureId: string, actor: string, kind?: Six
     : await prisma.$queryRaw<RenderJobRow[]>`
         UPDATE "SixflTvRenderJob"
         SET "state"='FAILED',"error"=${reason},"busyUntil"=NULL,"leaseToken"=NULL,"completedAt"=NOW(),"updatedAt"=NOW()
-        WHERE "fixtureId"=${fixtureId} AND "state" IN ('QUEUED','PROCESSING')
+        WHERE "fixtureId"=${fixtureId}
+          AND "kind" IN ('HIGHLIGHTS','FULL_MATCH')
+          AND "state" IN ('QUEUED','PROCESSING')
         RETURNING *`;
   return { stopped: rows.map(renderDto), actor: safeText(actor, 120) || "admin" };
 }
@@ -375,7 +377,11 @@ export async function requestRenders(fixtureId: string, actor: string, kind?: Si
     specs.push({ kind: "HIGHLIGHTS_ALT", content: [readyHighlights] });
   }
   if (fullMatch) specs.push({ kind: "FULL_MATCH", content: [fullMatch] });
-  const requestedSpecs = kind ? specs.filter(spec => spec.kind === kind) : specs;
+  // The alternative highlights render is an isolated private test. Normal
+  // Generate/Regenerate actions must never queue, restart or replace it.
+  const requestedSpecs = kind
+    ? specs.filter(spec => spec.kind === kind)
+    : specs.filter(spec => spec.kind !== "HIGHLIGHTS_ALT");
   if (!requestedSpecs.length) {
     if (kind === "HIGHLIGHTS" || kind === "HIGHLIGHTS_ALT") throw new StudioError("Upload at least one completed highlight clip or ready-made highlights video first.", 409);
     if (kind === "FULL_MATCH") throw new StudioError("Upload a completed full match first.", 409);
