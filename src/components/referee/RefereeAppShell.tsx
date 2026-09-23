@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  BanknotesIcon,
   BookOpenIcon,
   CalendarDaysIcon,
   ClipboardDocumentListIcon,
   HomeIcon,
 } from "@heroicons/react/24/outline";
 
-type RefereeAppSection = "home" | "nights" | "availability" | "rules";
+type RefereeAppSection = "home" | "nights" | "availability" | "ledger" | "rules";
 
 export default function RefereeAppShell({
   active,
@@ -31,6 +32,12 @@ export default function RefereeAppShell({
       href: "/referee/availability",
       label: "Availability",
       Icon: CalendarDaysIcon,
+    },
+    {
+      key: "ledger" as const,
+      href: "/referee/ledger",
+      label: "Ledger",
+      Icon: BanknotesIcon,
     },
     {
       key: "rules" as const,
@@ -65,7 +72,7 @@ export default function RefereeAppShell({
         aria-label="Referee app navigation"
         className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl"
       >
-        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {items.map(({ key, href, label, Icon }) => {
             const isActive = key === active;
             return (
