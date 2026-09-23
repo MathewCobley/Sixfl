@@ -15,7 +15,7 @@ import Confirmation from './src/components/referee/RefereeNightConfirmation';
 window.submissions=[];
 (async()=>{const confirmation=await Confirmation({refereeId:'ref'});createRoot(document.getElementById('root')).render(<Home name="Charlie Cobley" openCount={2} submittedCount={1} dueToYou="£30.00" dueToSixfl="£10.00" confirmation={confirmation} preview={null} desktopTabs={null}
 nextNight={{id:'n1',leagueName:'Northallerton Monday',venueName:'Northallerton Sports Village',dateLabel:'Mon 28 September',fixtureCount:4,feeLabel:'£40.00',isPast:false,isToday:false,firstKickoff:'19:30',colleagues:'Refereeing with: Mathew.'}}>
-<section id="referee-night-picker" className="rounded-2xl border border-white/10 p-4"><h2>Choose the night you want to work on</h2></section><section id="referee-ledger">Money owed and paid</section></Home>);})();`;
+<section id="referee-night-picker" className="rounded-2xl border border-white/10 p-4"><h2>Your nights</h2></section><section id="referee-ledger">Money owed and paid</section></Home>);})();`;
 const mocks = {
   "next/link": `import React from 'react';export default function Link(props){return <a {...props}/>;}`,
   "@prisma/client": "export const Prisma={sql:()=>({})};",
@@ -99,6 +99,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.getByRole("heading", { name: "Hi, Charlie" }).waitFor();
     assert.equal(await page.getByText("Referee Portal", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("Earns £40.00 after night", { exact: true }).count(), 1);
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

@@ -7,7 +7,9 @@ import { notFound } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 import DisciplinaryNoteForm from "@/components/referee/DisciplinaryNoteForm";
 import RefereeCashupSubmitFeedback from "@/components/referee/RefereeCashupSubmitFeedback";
+import RefereeAppShell from "@/components/referee/RefereeAppShell";
 import { requireReferee } from "@/lib/admin";
+import { toLondonDateInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import {
   formatKickoffTime,
@@ -285,11 +287,19 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
   );
   const locked = isNightLocked(night.status);
   const lockedMessage = getLockedMessage(night.status);
+  const todayLondonDate = toLondonDateInputValue(new Date());
+  const balanceIsDue =
+    night.status !== "CANCELLED" &&
+    (night.nightDate < todayLondonDate ||
+      (night.nightDate === todayLondonDate &&
+        Boolean(night.submittedAt || night.approvedAt || night.settledAt)));
+  const dueToSixflNowPence = balanceIsDue ? night.dueToSixflPence : 0;
+  const dueToRefereeNowPence = balanceIsDue ? night.dueToRefereePence : 0;
 
   return (
-    <div className="min-h-screen bg-black px-4 pb-28 pt-4 text-white sm:px-6 sm:py-6 lg:px-8">
+    <RefereeAppShell active="nights" title="Night sheet">
       <RefereeCashupSubmitFeedback />
-      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-8">
+      <div className="space-y-3">
         {isAdminPreview ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm text-amber-100">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -336,26 +346,45 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </section>
         ) : null}
 
-        <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_32%),rgba(255,255,255,0.03)] p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:p-6 md:p-8">
-          <Link href="/referee" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">← Referee dashboard</Link>
-          <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(night.status)}`}>{formatStatus(night.status)}</span>
-            <span className="text-sm text-white/55">{formatNightDate(night.nightDate)}</span>
+        <section className="rounded-[1.35rem] border border-white/10 bg-white/[0.035] p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-bold ${statusClasses(night.status)}`}>
+              {formatStatus(night.status)}
+            </span>
+            <span className="text-xs font-medium text-white/50">{formatNightDate(night.nightDate)}</span>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl md:text-4xl">
+
+          <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300/70">
+            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}
+          </p>
+          <h1 className="mt-1 text-lg font-black leading-tight text-white">
             {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-            {night.venueName || "Venue TBC"} · {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"}. {locked ? "This cashup has been submitted and is locked." : "Save scores first, then record cash or notes only where needed."}
-          </p>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Night fee</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.feePence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Collected</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.cashCollectedPence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">You keep</div><div className="mt-1 text-base font-semibold text-white sm:text-lg">{formatMoney(night.retainedByRefereePence)}</div></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">Owe SIXFL</div><div className="mt-1 text-base font-semibold text-emerald-200 sm:text-lg">{formatMoney(night.dueToSixflPence)}</div></div>
-            <div className="col-span-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 sm:col-span-1 sm:px-4"><div className="text-[10px] uppercase tracking-[0.16em] text-white/40 sm:text-[11px]">SIXFL owes you</div><div className="mt-1 text-base font-semibold text-amber-200 sm:text-lg">{formatMoney(night.dueToRefereePence)}</div></div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5">
+              <div className="text-[10px] text-white/40">Night fee</div>
+              <div className="mt-0.5 text-sm font-black text-white">{formatMoney(night.feePence)}</div>
+            </div>
+            <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2.5">
+              <div className="text-[10px] text-white/40">Cash recorded</div>
+              <div className="mt-0.5 text-sm font-black text-white">{formatMoney(night.cashCollectedPence)}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2.5">
+              <div className="text-[10px] text-emerald-100/55">Due SIXFL now</div>
+              <div className="mt-0.5 text-sm font-black text-emerald-100">{formatMoney(dueToSixflNowPence)}</div>
+            </div>
+            <div className="rounded-xl border border-amber-400/15 bg-amber-500/[0.06] px-3 py-2.5">
+              <div className="text-[10px] text-amber-100/55">Due to you now</div>
+              <div className="mt-0.5 text-sm font-black text-amber-100">{formatMoney(dueToRefereeNowPence)}</div>
+            </div>
           </div>
+
+          {!balanceIsDue ? (
+            <p className="mt-2 text-[11px] leading-5 text-white/40">
+              No referee balance is due until after this night has taken place.
+            </p>
+          ) : null}
         </section>
 
         {fixtures.length === 0 ? (
@@ -557,12 +586,12 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
       </div>
 
       {!locked ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/85 p-3 backdrop-blur sm:hidden">
+        <div className="fixed inset-x-3 bottom-[4.75rem] z-40 mx-auto max-w-xl rounded-2xl border border-white/10 bg-black/90 p-2 backdrop-blur sm:hidden">
           <a href="#submit-cashup" className="flex h-12 items-center justify-center rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-black shadow-[0_10px_30px_rgba(16,185,129,0.25)]">
             Finish night / submit cashup
           </a>
         </div>
       ) : null}
-    </div>
+    </RefereeAppShell>
   );
 }

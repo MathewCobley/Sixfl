@@ -24,7 +24,7 @@ const requiredNativeMarkers = [
   'href="/referee/availability"',
   'title="Mark your dates"',
   'id="referee-night-picker"',
-  "Choose the night you want to work on",
+  "Your nights",
   'href={`/referee/night/${nextNight.id}`}',
   "Open night sheet",
   "Open reopened night",
