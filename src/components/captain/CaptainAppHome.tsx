@@ -5,6 +5,7 @@ import {
   CheckCircleIcon,
   ClipboardDocumentCheckIcon,
   PlayCircleIcon,
+  EllipsisHorizontalCircleIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
@@ -222,16 +223,28 @@ export default function CaptainAppHome({
         </div>
       </section>
 
-      <Link
-        href={`/captain/team/${teamId}/payments`}
-        className="flex min-h-14 items-center justify-between rounded-[1.15rem] border border-white/10 bg-black/20 px-3.5 text-sm font-bold text-white/70"
-      >
-        <span className="flex items-center gap-2">
-          <BanknotesIcon className="h-5 w-5 text-emerald-300" />
-          Team payments
-        </span>
-        <span aria-hidden="true">→</span>
-      </Link>
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href={`/captain/team/${teamId}/payments`}
+          className="flex min-h-14 items-center justify-between rounded-[1.15rem] border border-white/10 bg-black/20 px-3.5 text-sm font-bold text-white/70"
+        >
+          <span className="flex items-center gap-2">
+            <BanknotesIcon className="h-5 w-5 text-emerald-300" />
+            Team payments
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+        <Link
+          href={`/captain/team/${teamId}/more`}
+          className="flex min-h-14 items-center justify-between rounded-[1.15rem] border border-white/10 bg-black/20 px-3.5 text-sm font-bold text-white/70"
+        >
+          <span className="flex items-center gap-2">
+            <EllipsisHorizontalCircleIcon className="h-5 w-5 text-emerald-300" />
+            More
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </div>
   );
 }
