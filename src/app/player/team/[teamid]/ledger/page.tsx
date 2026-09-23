@@ -288,12 +288,38 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
         fee?.paymentToken === link.paymentToken &&
         fee.status === "OPEN";
 
+      const events = account.paymentLinkEvents.filter(
+        (event) =>
+          event.feeId === link.feeId &&
+          event.paymentToken === link.paymentToken,
+      );
+      const createdEvent = events.find((event) => event.eventType === "CREATED") ?? null;
+      const latestEndEvent =
+        [...events]
+          .reverse()
+          .find((event) =>
+            ["REMOVED", "CLOSED", "REOPENED"].includes(event.eventType),
+          ) ?? null;
+      const eventActor = (event: (typeof events)[number] | null) => {
+        if (!event) return null;
+        if (event.actorKind === "LEGACY") return "Legacy · actor not recorded";
+        if (event.actorKind === "SYSTEM") return "SIXFL System";
+        const role = event.actorRole ? ` · ${event.actorRole.toLowerCase().replaceAll("_", " ")}` : "";
+        return `${event.actorName || "Signed-in SIXFL user"}${role}`;
+      };
+
       return {
         id: link.id,
         fixtureLabel: link.fixtureLabel ?? (fee ? fixtureLabel(fee) : null),
         amountPence: link.amountPence,
         createdLabel: formatLinkDate(link.createdAt),
         historicalBackfill: link.source.endsWith("BACKFILL"),
+        createdByLabel: eventActor(createdEvent),
+        createdVia: createdEvent?.via ?? null,
+        endedByLabel: eventActor(latestEndEvent),
+        endedVia: latestEndEvent?.via ?? null,
+        endedReason: latestEndEvent?.reason ?? null,
+        endedEventType: latestEndEvent?.eventType ?? null,
         firstOpenedLabel: link.firstOpenedAt
           ? formatLinkDate(link.firstOpenedAt)
           : null,
