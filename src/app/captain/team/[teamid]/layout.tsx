@@ -12,6 +12,7 @@ import { TeamRole } from "@prisma/client";
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRouteNotice";
 import CaptainAppHeader from "@/components/captain/CaptainAppHeader";
+import CaptainAppPageFocus from "@/components/captain/CaptainAppPageFocus";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
@@ -550,11 +551,14 @@ export default async function CaptainTeamLayout({
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
       <CaptainPwaModeOnly mode="app">
-        <CaptainAppHeader
-          teamId={team.id}
-          teamName={team.name}
-          teamLogoUrl={team.logoUrl}
-        />
+        <>
+          <CaptainAppHeader
+            teamId={team.id}
+            teamName={team.name}
+            teamLogoUrl={team.logoUrl}
+          />
+          <CaptainAppPageFocus teamId={team.id} />
+        </>
       </CaptainPwaModeOnly>
 
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 pb-24 pt-4 sm:gap-8 sm:px-10 sm:py-6">
