@@ -31,6 +31,36 @@ function getStatus(value: string): RefereeAvailabilityStatus {
     : "NO_RESPONSE";
 }
 
+
+export async function updateRefereeAvailabilitySlotAction(input: {
+  month: string;
+  leagueId: string;
+  date: string;
+  status: RefereeAvailabilityStatus;
+  note?: string | null;
+}) {
+  const { user } = await requireReferee();
+  const monthKey = normaliseMonthKey(input.month);
+  const leagueId = String(input.leagueId ?? "").trim();
+  const date = String(input.date ?? "").trim();
+  const status = getStatus(String(input.status ?? ""));
+  const note = String(input.note ?? "").trim() || null;
+
+  if (!leagueId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("Invalid availability date.");
+  }
+
+  await updateRefereeAvailability({
+    refereeId: user.id,
+    updates: [{ leagueId, date, status, note }],
+  });
+
+  revalidatePath("/referee");
+  revalidatePath("/referee/availability");
+
+  return { ok: true, monthKey, status };
+}
+
 export async function saveRefereeAvailabilityAction(formData: FormData) {
   const { user } = await requireReferee();
   const monthKey = normaliseMonthKey(readString(formData, "month"));
