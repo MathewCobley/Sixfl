@@ -278,10 +278,13 @@ test("More contains only secondary app-native destinations", () => {
   const help = read("src/app/player/team/[teamid]/help/page.tsx");
   const switchAccount = read("src/app/player/team/[teamid]/switch-account/page.tsx");
 
+  assert.doesNotMatch(more, /Everything here stays inside|row\.description/);
+  assert.match(more, /Rules and help/);
+  assert.match(more, /min-h-14/);
   assert.match(more, /My stats/);
   assert.match(more, /SIXFL TV/);
   assert.match(more, /label: "Goal of the Month"/);
-  assert.match(more, /withPreview\(`\/player\/team\/\$\{teamid\}\/goal-of-the-month`, previewMembershipId\)/);
+  assert.match(more, /withPreview\(\s*`\/player\/team\/\$\{teamid\}\/goal-of-the-month`,\s*previewMembershipId,?\s*\)/);
   assert.match(more, /Refer a team · £75/);
   assert.match(more, /League Rules/);
   assert.match(more, /Match Rules/);

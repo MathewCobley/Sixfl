@@ -386,7 +386,7 @@ test('clip nominees hide internal clip numbers and force the current poster vers
 });
 
 test('existing nominees are backed rather than re-nominated before the finalist vote', () => {
-  const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
+  const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx').replace(/\s+/g, ' ');
   const promo = read('src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx');
   assert.match(panel, /Back this goal/);
   assert.match(panel, /You backed this goal/);
@@ -398,7 +398,7 @@ test('existing nominees are backed rather than re-nominated before the finalist 
 });
 
 test('native competition and dashboard reuse one clip component and one monthly API', () => {
-  const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
+  const panel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx').replace(/\s+/g, ' ');
   const dashboard = read('src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx');
   for (const source of [panel, dashboard]) { assert.ok(source.includes('GoalNomineeCard')); assert.ok(source.includes('useMonthlyGoals')); }
   assert.ok(read('src/components/goal-of-month/useMonthlyGoals.ts').includes('/api/goal-of-month/community'));
@@ -408,7 +408,7 @@ test('native competition and dashboard reuse one clip component and one monthly 
 
 test('Goal of the Month admin links scorers to squad members instead of free text', () => {
   const admin = read('src/app/(admin)/admin/sixfl-tv/goal-of-month/page.tsx');
-  const publicPanel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx');
+  const publicPanel = read('src/components/goal-of-month/MonthlyGoalsPanel.tsx').replace(/\s+/g, ' ');
   assert.match(admin, /name="scorerTeamMemberId"/);
   assert.match(admin, /FormListboxField/);
   assert.match(admin, /Scorer missing\? Open team squad/);

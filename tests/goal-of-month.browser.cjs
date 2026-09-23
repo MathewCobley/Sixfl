@@ -5,20 +5,22 @@ const fs = require('node:fs');
 const {build} = require('esbuild');
 const {chromium} = require(process.env.GOAL_MONTH_PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname,'..');
-let browser,bundle;
+let browser,bundle,appCss;
 const goal={id:'goal-one',fixtureId:'fixture-one',teamId:'team-one',monthKey:'2026-09',goalNumber:1,scorerTeamMemberId:'member-one',scorerName:'Test Scorer',teamName:'Example FC',opponentName:'Opponent FC',teamLogoUrl:null,leagueName:'Example League',kickoffAt:'2026-09-03T19:00:00Z',nominationCount:1,voteCount:0,videoUrls:['https://youtu.be/dQw4w9WgXcQ']};
 function payload({nominees=true,eligible=true,voting=false}={}) {
   return {viewer:{signedIn:eligible,eligible},nominations:[{key:'2026-09',label:'September 2026',closesAt:'2026-10-05T23:00:00Z',usedNominations:0,maxNominations:3,nominatedCandidateIds:[],candidates:nominees?[goal]:[],fixtures:[{id:'fixture-one',kickoffAt:goal.kickoffAt,homeTeamId:'team-one',awayTeamId:'team-two',homeTeamName:'Example FC',awayTeamName:'Opponent FC',homeScore:6,awayScore:4,sixflTvUrl:goal.videoUrls[0],videoUrls:goal.videoUrls,leagueName:'Example League',squadPlayers:[{teamMemberId:'member-one',teamId:'team-one',name:'Test Scorer',squadNumber:10},{teamMemberId:'member-two',teamId:'team-two',name:'Opponent Scorer',squadNumber:9}],clips:[]}]}],voting:{key:'2026-09',label:'September 2026',open:voting,closesAt:'2026-10-12T23:00:00Z',candidates:voting?[goal]:[],selectedCandidateId:null},winners:[],legacy:{nominationsOpen:false,votingMayBeOpen:false,nominationsCloseAt:'2026-09-13T23:00:00Z',votingClosesAt:'2026-09-15T17:00:00Z'}};
 }
 test.before(async()=>{
-  const result=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Panel from './src/components/goal-of-month/MonthlyGoalsPanel';import Promo from './src/components/goal-of-week/GoalOfWeekDashboardPromo';const root=createRoot(document.getElementById('root'));let version=0;window.mount=kind=>root.render(kind==='promo'?<Promo key={++version} teamId="team-one" href="/goal-of-the-week?from=captain&teamId=team-one"/>:<Panel key={++version}/>);`,loader:'tsx',resolveDir:root},bundle:true,write:false,platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-next-link',setup(api){api.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'mock'}));api.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:"import React from 'react';export default function Link(props){return React.createElement('a',props)}",resolveDir:root}));api.onResolve({filter:/^@\//},args=>{const base=path.join(root,'src',args.path.slice(2));return{path:[base+'.ts',base+'.tsx',base].find(file=>fs.existsSync(file)&&fs.statSync(file).isFile())};});}}]});
-  bundle=result.outputFiles[0].text;browser=await chromium.launch({headless:true});
+  const result=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Panel from './src/components/goal-of-month/MonthlyGoalsPanel';import Promo from './src/components/goal-of-week/GoalOfWeekDashboardPromo';const root=createRoot(document.getElementById('root'));let version=0;window.mount=kind=>root.render(kind==='promo'?<Promo key={++version} teamId="team-one" href="/goal-of-the-week?from=captain&teamId=team-one"/>:<Panel key={++version} playerApp={kind==='app'}/>);`,loader:'tsx',resolveDir:root},bundle:true,write:false,platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-next-link',setup(api){api.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'mock'}));api.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:"import React from 'react';export default function Link(props){return React.createElement('a',props)}",resolveDir:root}));api.onResolve({filter:/^@\//},args=>{const base=path.join(root,'src',args.path.slice(2));return{path:[base+'.ts',base+'.tsx',base].find(file=>fs.existsSync(file)&&fs.statSync(file).isFile())};});}}]});
+  bundle=result.outputFiles[0].text;browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE || undefined,args:process.env.CHROMIUM_EXECUTABLE?["--no-sandbox","--disable-dev-shm-usage","--use-gl=angle","--use-angle=swiftshader","--disable-gpu"]:[]});
+  appCss=(await require("postcss")([require("@tailwindcss/postcss")()]).process('@import "tailwindcss";',{from:path.join(root,"app-browser.css")})).css;
 });
 test.after(async()=>{await browser?.close();});
 async function screen(width,data,kind='panel') {
   const context=await browser.newContext({viewport:{width,height:1000}});const page=await context.newPage();
   await context.route('**/*',route=>route.fulfill({status:200,contentType:'text/html',body:''}));
   await page.setContent('<!doctype html><style>*{box-sizing:border-box}body{margin:0;background:#06120e;color:#fff;font:16px Arial;padding:16px}#root{max-width:1200px;margin:auto}section,article,div{min-width:0}section,article{padding:12px;border:1px solid #234;margin:12px 0}button,select,input{font:inherit;max-width:100%;padding:10px}select,input{display:block;width:100%}button:disabled{opacity:.5}img,iframe{width:100%;max-width:100%;border:0}a{color:#9ef}label{display:block;margin:10px 0}.grid{display:grid;gap:16px}[class*="aspect-video"]{aspect-ratio:16/9;overflow:hidden}button img{height:auto}[class*="aspect-video"]>button,[class*="aspect-video"]>iframe{height:100%;width:100%}@media(min-width:640px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:1280px){article~article{margin-top:12px}}</style><div id="root"></div>');
+  if(kind==='app') await page.setContent(`<!doctype html><style>${appCss}body{margin:0;background:#07130f;color:white;font-family:Arial,sans-serif}#root{padding:12px 16px 96px;max-width:576px;margin:auto}</style><header style="padding:20px 16px;font-weight:bold">SIXFL <span style="float:right">Player Portal</span></header><main id="root"></main>`);
   await page.evaluate(({data,goal})=>{
     window.goalData=data;window.testGoal=goal;window.posts=[];window.mode='success';
     const respond=(ok,result)=>({ok,json:async()=>result});
@@ -36,7 +38,8 @@ async function screen(width,data,kind='panel') {
     };
   },{data,goal});
   await page.addScriptTag({content:bundle});await page.evaluate(kind=>window.mount(kind),kind);
-  await page.getByRole('heading',{name:kind==='promo'?/September Goal of the Month/:/current nominees/}).waitFor();
+  if(kind==='app') await page.getByRole('navigation',{name:'Goal of the Month sections'}).waitFor();
+  else await page.getByRole('heading',{name:kind==='promo'?/September Goal of the Month/:/current nominees/}).waitFor();
   return{context,page};
 }
 for(const width of [390,1440]) {
@@ -127,4 +130,47 @@ test('existing nominee can be backed without opening the winner vote',async()=>{
 test('verified player vote shows saved choice and no duplicate submission',async()=>{
   const {context,page}=await screen(1440,payload({voting:true}));
   try{await page.getByRole('button',{name:'Vote for this goal',exact:true}).click();await page.getByRole('button',{name:'Your vote is saved',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Your vote is saved',exact:true}).isDisabled(),true);assert.equal(await page.evaluate(()=>window.posts.length),1);}finally{await context.close();}
+});
+
+for(const width of [320,390,768]) {
+  test(`player app has compact views and working nomination controls at ${width}px`,async()=>{
+    const {context,page}=await screen(width,payload(),'app');
+    try {
+      assert.equal(await page.getByRole('button',{name:'Nominees',exact:true}).getAttribute('aria-pressed'),'true');
+      assert.equal(await page.getByRole('button',{name:'Recorded fixture',exact:true}).count(),0);
+      const card=await page.locator('[data-monthly-goal="goal-one"]').boundingBox();
+      assert.ok(card.y<350,`first clip starts at ${card.y}`);
+      assert.equal(await page.locator('select').count(),0);
+      await page.getByRole('button',{name:'Back this goal',exact:true}).click();
+      await page.getByRole('button',{name:'You backed this goal',exact:true}).waitFor();
+      await page.getByRole('button',{name:'Vote',exact:true}).click();
+      await page.getByText('Voting opens from the 6th',{exact:false}).waitFor();
+      assert.equal(await page.locator('[data-monthly-goal]').count(),0);
+      await page.getByRole('button',{name:'Winners',exact:true}).click();
+      await page.getByRole('heading',{name:'Monthly winners',exact:true}).waitFor();
+      await page.getByRole('button',{name:'Nominees',exact:true}).click();
+      await page.getByRole('button',{name:'+ Nominate a goal',exact:true}).click();
+      await page.getByRole('button',{name:'Recorded fixture',exact:true}).click();
+      await page.getByRole('option',{name:/Example FC v Opponent FC/}).click();
+      await page.getByLabel('Goal number in the match').fill('2');
+      await page.getByRole('button',{name:'Scoring team',exact:true}).click();
+      await page.getByRole('option',{name:'Example FC',exact:true}).click();
+      await page.getByRole('button',{name:'Scorer',exact:true}).click();
+      await page.getByRole('option',{name:'#10 · Test Scorer',exact:true}).click();
+      await page.getByRole('button',{name:'Submit nomination',exact:true}).click();
+      await page.getByRole('button',{name:'+ Nominate a goal',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>window.posts.at(-1).scorerTeamMemberId),'member-one');
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+      await page.screenshot({path:`/tmp/player-goals-${width}.png`,fullPage:true});
+    } finally {await context.close();}
+  });
+}
+test('player app opens the active ballot and saves the actual vote',async()=>{
+  const {context,page}=await screen(390,payload({voting:true}),'app');
+  try {
+    assert.equal(await page.getByRole('button',{name:'Vote',exact:true}).getAttribute('aria-pressed'),'true');
+    await page.getByRole('button',{name:'Vote for this goal',exact:true}).click();
+    await page.getByRole('button',{name:'Your vote is saved',exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.posts[0]),{action:'vote',candidateId:'goal-one'});
+  } finally {await context.close();}
 });
