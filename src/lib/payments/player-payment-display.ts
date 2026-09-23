@@ -54,6 +54,23 @@ export async function getPlayerReceiptStates(feeIds: string[]) {
  * same receipt/adjustment evidence as the fixture ledger. Explicit deletions
  * and replacements retain their own audit status. No financial records change.
  */
+export function getLegacyPaymentLinkClosureContext(fee: Fee | null | undefined) {
+  const note = fee?.note ?? "";
+  if (/Cancelled by captain because the team fixture charge was already fully covered/i.test(note)) {
+    return "Legacy bulk close by captain — the team fixture charge was already fully covered.";
+  }
+  if (/Voided:\s*Removed from captain squad payment collection/i.test(note)) {
+    return "Player was removed from Squad Payments.";
+  }
+  if (/captain\/organiser marked/i.test(note)) {
+    return "Captain/organiser marked this player as paid directly.";
+  }
+  if (/Zero-fee player share waived by SIXFL/i.test(note)) {
+    return "No player payment was required.";
+  }
+  return null;
+}
+
 export function getPlayerPaymentLinkSettlementLabel(
   link: { isRemoved: boolean; removedAt: Date | null; removedReason: string | null; source: string },
   fee: Fee | null | undefined,

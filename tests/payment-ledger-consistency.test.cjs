@@ -334,3 +334,28 @@ test('inactive payment links distinguish settlement evidence from genuine remova
   assert.equal(get({...legacy,source:'LIVE',removedAt:new Date(),removedReason:'Payment link removed when no individual payment was required.'},adjusted),'Settled');
   assert.equal(get(legacy,adjusted,{controlled:true,balancePence:100,receivedPence:0,captainReceivedPence:0}),null);
 });
+
+
+test('legacy payment-link closure context only exposes known safe historical mechanisms',()=>{
+  const get=loader()(displayPath).getLegacyPaymentLinkClosureContext;
+  assert.equal(
+    get({amountPence:800,status:'CANCELLED',note:'Cancelled by captain because the team fixture charge was already fully covered.'}),
+    'Legacy bulk close by captain — the team fixture charge was already fully covered.',
+  );
+  assert.equal(
+    get({amountPence:800,status:'CANCELLED',note:'Voided: Removed from captain squad payment collection'}),
+    'Player was removed from Squad Payments.',
+  );
+  assert.equal(
+    get({amountPence:800,status:'WAIVED',note:'No player link needed: captain/organiser marked £8.00 as paid directly.'}),
+    'Captain/organiser marked this player as paid directly.',
+  );
+  assert.equal(
+    get({amountPence:0,status:'WAIVED',note:'Zero-fee player share waived by SIXFL'}),
+    'No player payment was required.',
+  );
+  assert.equal(
+    get({amountPence:800,status:'CANCELLED',note:'Internal admin note that must not leak'}),
+    null,
+  );
+});
