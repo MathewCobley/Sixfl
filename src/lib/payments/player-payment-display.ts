@@ -48,3 +48,24 @@ export async function getPlayerReceiptStates(feeIds: string[]) {
     FROM "PlayerFeeLedgerState" WHERE "feeId" IN (${Prisma.join(ids)})`);
   return new Map(rows.map(row => [row.feeId, row]));
 }
+
+/** An inactive token is not evidence that an unpaid fee was removed.
+ * Resolve inferred legacy closure and settlement-triggered closure using the
+ * same receipt/adjustment evidence as the fixture ledger. Explicit deletions
+ * and replacements retain their own audit status. No financial records change.
+ */
+export function getPlayerPaymentLinkSettlementLabel(
+  link: { isRemoved: boolean; removedAt: Date | null; removedReason: string | null; source: string },
+  fee: Fee | null | undefined,
+  state?: ReceiptState | null,
+) {
+  if (!fee) return null;
+  const inferredLegacyClosure = link.source.endsWith("BACKFILL") && !link.removedAt;
+  const settlementClosure = /after payment was recorded|no individual payment was required/i.test(link.removedReason ?? "");
+  if (link.isRemoved && !inferredLegacyClosure && !settlementClosure) return null;
+  const display = getPlayerPaymentDisplay(fee, state, "player");
+  if (display.outstandingPence > 0 || display.review) return null;
+  if (display.adjustmentPence > 0) return "Settled";
+  if (display.receivedPence > 0 || display.captainReceivedPence > 0) return display.statusLabel;
+  return null;
+}

@@ -1,3 +1,4 @@
+import { getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
 import { money, type PlayerLedgerAccount } from "@/lib/payments/player-ledger";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 
@@ -25,6 +26,7 @@ function fixtureLabel(fee: PlayerLedgerAccount["fees"][number] | undefined) {
 }
 
 export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAccount}){
+  const stateByFeeId = new Map(account.states.map(state => [state.feeId, state]));
   const feeById = new Map(account.fees.map(fee => [fee.id, fee]));
   const runningBalanceByEntryId = new Map<string, number>();
   let runningBalance = 0;
@@ -64,8 +66,10 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
             .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
             .map((link) => {
               const fee = feeById.get(link.feeId);
+              const settlementLabel = getPlayerPaymentLinkSettlementLabel(link, fee, stateByFeeId.get(link.feeId));
               const label = link.fixtureLabel ?? fixtureLabel(fee) ?? "Player payment link";
               const active =
+                !settlementLabel &&
                 !link.isRemoved &&
                 fee?.paymentToken === link.paymentToken &&
                 fee?.status === "OPEN";
@@ -81,13 +85,13 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                       </div>
                     </div>
                     <span className={
-                      link.isRemoved
+                      settlementLabel ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-100" : link.isRemoved
                         ? "rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-semibold text-red-100"
                         : active
                           ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-100"
                           : "rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-white/55"
                     }>
-                      {link.isRemoved ? "Removed" : active ? "Active" : "Closed"}
+                      {settlementLabel ?? (link.isRemoved ? "Removed" : active ? "Active" : "Closed")}
                     </span>
                   </div>
                   {(() => {
@@ -151,7 +155,7 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                       ? `Opened ${link.openCount} time${link.openCount === 1 ? "" : "s"} · first ${formatDateTimeInLondon(link.firstOpenedAt!,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}${link.openCount > 1 && link.lastOpenedAt ? ` · last ${formatDateTimeInLondon(link.lastOpenedAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}` : ""}`
                       : "Never opened"}
                   </div>
-                  {link.isRemoved ? (
+                  {settlementLabel ? <p className="mt-2 text-xs text-emerald-100/70">This match fee is settled. No payment is due.</p> : link.isRemoved ? (
                     <p className="mt-2 text-xs leading-5 text-red-100/65">
                       {link.removedAt
                         ? `Removed ${formatDateTimeInLondon(link.removedAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}. `
