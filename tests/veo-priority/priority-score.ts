@@ -90,7 +90,7 @@ async function main() {
     const dueDate = kickoffAt;
     const paidAt = new Date(
       kickoffAt.getTime() +
-        (n === 5 ? 26 * 60 : n === 4 ? 2 * 60 : -60) * 60 * 1000,
+        (n === 5 ? 73 * 60 : n === 4 ? 2 * 60 : n === 3 ? 71 * 60 : -60) * 60 * 1000,
     );
 
     await prisma.fixture.create({
@@ -176,10 +176,12 @@ async function main() {
         paidAt,
         reference:
           n === 5
-            ? "next-day late payment test"
+            ? "payment after 72-hour cutoff"
             : n === 4
               ? "cash paid on the match night after kick-off"
-              : "on-time payment test",
+              : n === 3
+                ? "payment just inside 72-hour cutoff"
+                : "on-time payment test",
       },
     });
   }
@@ -205,14 +207,19 @@ async function main() {
   assert.equal(score.matches.reduce((sum, match) => sum + match.ratingsPoints, 0), 5);
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
   assert.equal(
+    score.matches.find((match) => match.fixtureId === id("fixture_3"))?.paymentStatus,
+    "ON_TIME",
+    "a payment 71 hours after kick-off must still receive full payment points",
+  );
+  assert.equal(
     score.matches.find((match) => match.fixtureId === id("fixture_4"))?.paymentStatus,
     "ON_TIME",
-    "cash recorded after kick-off on the same London match day must still count as on time",
+    "cash recorded after kick-off on the match night must still count as on time",
   );
   assert.equal(
     score.matches.find((match) => match.fixtureId === id("fixture_5"))?.paymentStatus,
     "LATE",
-    "a payment first completing the charge on the following day must remain late",
+    "a payment first completing the charge after the 72-hour cutoff must be late",
   );
   assert.equal(
     score.matches.find((match) => match.fixtureId === id("fixture_1"))?.coreComplete,
