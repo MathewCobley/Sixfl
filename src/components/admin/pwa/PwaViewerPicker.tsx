@@ -319,7 +319,9 @@ export default function PwaViewerPicker({
     }
 
     if (portal === "referee" && refereeId) {
-      onPreview(`/admin/referees/${refereeId}/referee-preview`);
+      onPreview(
+        `/admin/referees/${refereeId}/referee-preview?to=${encodeURIComponent("/referee?pwaPreview=1")}`,
+      );
     }
   }
 
