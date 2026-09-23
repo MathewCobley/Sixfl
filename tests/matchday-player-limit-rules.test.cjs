@@ -13,6 +13,7 @@ const mocks = {
   'next/link': ({ children, ...props }) => React.createElement('a', props, children),
   'next/navigation': { notFound: () => { throw Error('Unexpected missing test team'); } },
   '@/components/referee/RefereeTabs': () => null,
+  '@/components/referee/RefereeAppShell': ({ children }) => React.createElement(React.Fragment, null, children),
   '@/lib/admin': { requireReferee: async () => ({ user: { id: 'referee', name: 'Test Referee' }, isAdminPreview: false }) },
   '@/lib/requireAdmin': { requireAdmin: async () => ({ user: { id: 'admin' } }) },
   '@/lib/requireCaptain': { requireCaptain: async () => ({ user: { id: 'captain' } }) },
