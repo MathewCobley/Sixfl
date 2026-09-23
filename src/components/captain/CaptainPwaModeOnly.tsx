@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 type CaptainViewMode = "app" | "web";
 
@@ -34,15 +33,13 @@ export default function CaptainPwaModeOnly({
   mode: CaptainViewMode;
   children: ReactNode;
 }) {
-  const searchParams = useSearchParams();
-  const explicitPreview = searchParams.get("pwaPreview") === "1";
-  const [resolvedMode, setResolvedMode] = useState<CaptainViewMode | null>(
-    explicitPreview ? "app" : null,
-  );
+  const [resolvedMode, setResolvedMode] = useState<CaptainViewMode | null>(null);
 
   useEffect(() => {
+    const explicitPreview =
+      new URLSearchParams(window.location.search).get("pwaPreview") === "1";
     setResolvedMode(detectAppMode(explicitPreview) ? "app" : "web");
-  }, [explicitPreview]);
+  }, []);
 
   if (resolvedMode === null) {
     return mode === "app" ? (
