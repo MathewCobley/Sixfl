@@ -308,6 +308,21 @@ test('PostgreSQL transactions enforce current lease and exact output manifests',
 });
 
 
+test('normal highlights keep the original broadcast scorebug and add a green GOAL No. tab', async () => {
+  const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');
+  const scoreBugStart = graphics.indexOf('export async function createSixflTvScoreBug');
+  const scoreBugEnd = graphics.indexOf('export async function createSixflTvAltHighlightsOverlay', scoreBugStart);
+  assert.ok(scoreBugStart >= 0 && scoreBugEnd > scoreBugStart);
+  const scoreBug = graphics.slice(scoreBugStart, scoreBugEnd);
+
+  assert.match(scoreBug, /showGoalNumber/);
+  assert.match(scoreBug, />GOAL<\/text>/);
+  assert.match(scoreBug, />No\. \$\{input\.clipNumber\}<\/text>/);
+  assert.match(scoreBug, /fill="#10b981"/);
+  assert.match(scoreBug, /stroke="#2dd4bf"/);
+  assert.doesNotMatch(scoreBug, /Clip \$\{input\.clipNumber\}/);
+});
+
 test('Goal of the Month nominee render uses shared branding and player identity instead of the clip number', async () => {
   const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
   const graphics = await fs.readFile(path.resolve('src/lib/sixfl-tv/graphics.ts'), 'utf8');

@@ -732,9 +732,7 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
   const firstCode = broadcastCodeForTeam(input.fixture.firstTeam);
   const secondCode = broadcastCodeForTeam(input.fixture.secondTeam);
   const footageLabel = input.kind === "HIGHLIGHTS" ? "Match highlights" : "Full match";
-  const clipLabel = input.kind === "HIGHLIGHTS" && Number.isInteger(input.clipNumber)
-    ? `Clip ${input.clipNumber}`
-    : null;
+  const showGoalNumber = input.kind === "HIGHLIGHTS" && Number.isInteger(input.clipNumber);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
     <defs>
@@ -762,9 +760,16 @@ export async function createSixflTvScoreBug(input: { fixture: SixflTvGraphicFixt
     <g transform="translate(54 146)">
       <rect width="190" height="38" rx="19" fill="#020805" fill-opacity="0.76" stroke="#2dd4bf" stroke-opacity="0.5"/>
       <text x="95" y="26" text-anchor="middle" font-size="18" font-weight="800" fill="#d1fae5">${xml(footageLabel)}</text>
-      ${clipLabel ? `<g transform="translate(198 5)"><rect width="82" height="28" rx="14" fill="#020805" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.24"/><text x="41" y="20" text-anchor="middle" font-size="14" font-weight="800" fill="#ffffff">${xml(clipLabel)}</text></g>` : ""}
     </g>
     ${logoImage(sixflTvLogoBytes, 1585, 34, 275, 88, 0.94)}
+
+    ${showGoalNumber ? `<g transform="translate(1680 982)" filter="url(#scorebugShadow)">
+      <rect width="180" height="44" rx="9" fill="#020805" fill-opacity="0.92" stroke="#2dd4bf" stroke-opacity="0.55"/>
+      <rect width="76" height="44" rx="9" fill="#10b981"/>
+      <rect x="68" width="10" height="44" fill="#10b981"/>
+      <text x="38" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="#02140d" letter-spacing="1.4">GOAL</text>
+      <text x="128" y="29" text-anchor="middle" font-size="16" font-weight="850" fill="#ffffff" letter-spacing="0.8">No. ${input.clipNumber}</text>
+    </g>` : ""}
   </svg>`;
   return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
