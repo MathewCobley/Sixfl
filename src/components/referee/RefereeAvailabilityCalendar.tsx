@@ -288,10 +288,7 @@ export default function RefereeAvailabilityCalendar({
             ‹
           </Link>
           <div className="min-w-0 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">
-              Your availability
-            </p>
-            <h1 className="mt-0.5 truncate text-lg font-black text-white">{monthLabel}</h1>
+            <h1 className="truncate text-lg font-black text-white">{monthLabel}</h1>
           </div>
           <Link
             href={`/referee/availability?month=${nextMonth}`}
