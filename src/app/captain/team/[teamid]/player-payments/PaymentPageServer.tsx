@@ -333,7 +333,18 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
     )
     .map((fee) => fee.id);
   if (missingLinkIds.length > 0) {
-    await ensurePlayerMatchFeePaymentDetailsForFees(missingLinkIds);
+    await ensurePlayerMatchFeePaymentDetailsForFees(missingLinkIds, {
+      actorKind: "USER",
+      actorUserId: correctionAccess.user?.id ?? null,
+      actorName:
+        correctionAccess.user?.name ||
+        correctionAccess.user?.email ||
+        "Signed-in SIXFL user",
+      actorRole: correctionAccess.isAdmin
+        ? "ADMIN"
+        : correctionAccess.membership?.role ?? "CAPTAIN",
+      via: "Captain Squad Payments · page link creation",
+    });
   }
 
   const currentTeamFees = selectedFees.filter((fee) => fee.teamId === teamid);
