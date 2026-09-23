@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
@@ -283,13 +284,16 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .map((link) => {
       const fee = feeById.get(link.feeId);
+      const settlementLabel = getPlayerPaymentLinkSettlementLabel(link, fee, stateByFeeId.get(link.feeId));
       const isCurrentActiveLink =
+        !settlementLabel &&
         !link.isRemoved &&
         fee?.paymentToken === link.paymentToken &&
         fee.status === "OPEN";
 
       return {
         id: link.id,
+        settlementLabel,
         fixtureLabel: link.fixtureLabel ?? (fee ? fixtureLabel(fee) : null),
         amountPence: link.amountPence,
         createdLabel: formatLinkDate(link.createdAt),

@@ -318,3 +318,19 @@ test('adjustment privacy: shared table fails closed even when handed unsanitised
   const html=renderToStaticMarkup(React.createElement(Table,{rows,isAdmin:true}));
   assert.doesNotMatch(html,/adjustment|£3.00|£5.00/);assert.match(html,/£8.00/);
 });
+
+test('inactive payment links distinguish settlement evidence from genuine removals',()=>{
+  const get=loader()(displayPath).getPlayerPaymentLinkSettlementLabel;
+  const legacy={isRemoved:true,removedAt:null,removedReason:'Historical link is no longer active',source:'NOTIFICATION_BACKFILL'};
+  const adjusted={amountPence:800,status:'WAIVED',note:'Zero-fee player share waived by SIXFL',captainAssignedAmountPence:800};
+  assert.equal(get(legacy,adjusted),'Settled');
+  assert.equal(get(legacy,{amountPence:500,status:'PAID',note:'Player fee cap applied: captain share £8.00; player charged £5.00.'}),'Settled');
+  assert.equal(get(legacy,{amountPence:800,status:'PAID'}),'Paid online');
+  assert.equal(get(legacy,{amountPence:800,status:'OPEN'}),null);
+  assert.equal(get(legacy,{amountPence:0,status:'CANCELLED'}),null);
+  assert.equal(get(legacy,undefined),null);
+  assert.equal(get({...legacy,removedAt:new Date(),removedReason:'Payment link replaced by a new link.'},adjusted),null);
+  assert.equal(get({...legacy,removedAt:new Date(),removedReason:'Player fee record removed.'},adjusted),null);
+  assert.equal(get({...legacy,source:'LIVE',removedAt:new Date(),removedReason:'Payment link removed when no individual payment was required.'},adjusted),'Settled');
+  assert.equal(get(legacy,adjusted,{controlled:true,balancePence:100,receivedPence:0,captainReceivedPence:0}),null);
+});
