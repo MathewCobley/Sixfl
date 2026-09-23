@@ -202,6 +202,23 @@ expectText("league publication", fixtureGeneratePath, fixtureGenerate, "{ public
 expectText("league publication", sitemapPath, sitemap, "publicAt: { lte: new Date() }", "scheduled leagues must stay out of the public sitemap");
 
 // ---------------------------------------------------------------------------
+// REFEREE CASH — duplicate/over-limit cash stays blocked, but validation must
+// return the referee to the night with a clear explanation instead of crashing.
+// ---------------------------------------------------------------------------
+const refereeCashActionsPath = "src/app/(public)/referee/actions.ts";
+const refereeCashPagePath = "src/app/(public)/referee/night/[id]/page.tsx";
+const refereeCashActions = read(refereeCashActionsPath);
+const refereeCashPage = read(refereeCashPagePath);
+
+expectText("referee cash", refereeCashActionsPath, refereeCashActions, "redirectCashEntryError", "referee cash validation must return the user to the night instead of throwing a blank server-error page");
+expectText("referee cash", refereeCashActionsPath, refereeCashActions, "existingNightCashPence", "rejected duplicate cash must carry already-recorded cash context back to the referee");
+expectText("referee cash", refereeCashActionsPath, refereeCashActions, "remainingPence > 0 || allocations.length === 0", "cash above the remaining team balance must stay blocked");
+expectRegex("referee cash", refereeCashActionsPath, refereeCashActions, /create:\s*\{[\s\S]{0,700}amountPence: fixtureFeePence/, "fallback referee cash charge must use the fixture fee, never the amount handed to the referee");
+expectText("referee cash", refereeCashPagePath, refereeCashPage, "Cash was not recorded", "cash validation errors must be visible inline on the referee night");
+expectText("referee cash", refereeCashPagePath, refereeCashPage, "Already recorded tonight:", "the cash form must make previously recorded cash obvious before another entry is submitted");
+expectText("referee cash", refereeCashPagePath, refereeCashPage, "check that you are not entering the same cash twice", "duplicate-cash errors must explain the likely cause");
+
+// ---------------------------------------------------------------------------
 // PLAYER PWA — keep the approved app-style first screen compact, data-backed,
 // and exact in admin player preview.
 // ---------------------------------------------------------------------------
