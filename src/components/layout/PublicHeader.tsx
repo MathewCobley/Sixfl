@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import AppHeader from "@/components/layout/AppHeader";
 
@@ -19,11 +19,9 @@ function isRefereeAppFrame() {
 
 export default function PublicHeader() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const isRefereeRoute =
     pathname === "/referee" || pathname.startsWith("/referee/");
-  const explicitPreview = searchParams.get("pwaPreview") === "1";
-  const [refereeAppMode, setRefereeAppMode] = useState(explicitPreview);
+  const [refereeAppMode, setRefereeAppMode] = useState(false);
 
   useEffect(() => {
     if (!isRefereeRoute) {
@@ -36,10 +34,11 @@ export default function PublicHeader() {
       "standalone" in navigator &&
       Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
+    const explicitPreview = new URLSearchParams(window.location.search).get("pwaPreview") === "1";
     setRefereeAppMode(
       explicitPreview || standalone || iosStandalone || isRefereeAppFrame(),
     );
-  }, [explicitPreview, isRefereeRoute]);
+  }, [isRefereeRoute]);
 
   if (isRefereeRoute && refereeAppMode) return null;
 
