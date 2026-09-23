@@ -71,11 +71,12 @@ function sortNightNewestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
 
 function isNightPayable(night: RefereeNightSummary, todayLondonDate: string) {
   if (night.status === "CANCELLED") return false;
+  if (night.nightDate < todayLondonDate) return true;
+  if (night.nightDate > todayLondonDate) return false;
 
-  // A referee fee is not owed before the night has actually happened.
-  // Keep future and same-day assignments out of "Due to you" and the payable ledger,
-  // even if an admin/referee workflow has already moved the night to another status.
-  return night.nightDate < todayLondonDate;
+  // On the same day, the fee only becomes due once the referee has finished
+  // and submitted the night (or admin has subsequently approved/settled it).
+  return Boolean(night.submittedAt || night.approvedAt || night.settledAt);
 }
 
 function getPayableDueToRefereePence(
@@ -206,67 +207,65 @@ function NightCard({
 }) {
   const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
   const isPayable = isNightPayable(night, todayLondonDate);
+  const dueNowPence = getPayableDueToRefereePence(night, todayLondonDate);
 
   return (
-    <article className="rounded-2xl border border-white/10 bg-black/20 p-3">
-      <div className="flex flex-col gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(night.status)}`}>
-              {formatStatus(night.status)}
+    <article className="rounded-[1.2rem] border border-white/10 bg-black/20 p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`inline-flex shrink-0 rounded-lg border px-2.5 py-1 text-[10px] font-bold ${statusClasses(night.status)}`}>
+            {formatStatus(night.status)}
+          </span>
+          {isNext ? (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+              Next
             </span>
-            {isNext ? (
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
-                Next up
-              </span>
-            ) : null}
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65">
-              {formatNightDate(night.nightDate)}
-            </span>
-          </div>
-
-          <h3 className="mt-3 text-lg font-semibold leading-tight text-white">
-            {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
-          </h3>
-          <p className="mt-1 text-sm text-white/55">
-            Referee: {night.refereeName || night.refereeEmail || "Unknown referee"}
-          </p>
-          <p className="mt-1 text-sm text-white/55">
-            {night.venueName || "Venue TBC"} · {night.fixtureCount} fixture{night.fixtureCount === 1 ? "" : "s"}
-          </p>
+          ) : null}
         </div>
+        <span className="shrink-0 text-xs font-medium text-white/55">
+          {formatNightDate(night.nightDate)}
+        </span>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm">
-            <span className="text-white/35">Fee </span>
-            <span className="font-semibold text-white">{formatMoney(night.feePence)}</span>
+      <h3 className="mt-3 text-base font-black leading-tight text-white">
+        {night.leagueName}{night.leagueSeason ? ` · ${night.leagueSeason}` : ""}
+      </h3>
+      <p className="mt-1 text-xs leading-5 text-white/50">
+        {night.venueName || "Venue TBC"} · {night.fixtureCount} fixture{night.fixtureCount === 1 ? "" : "s"}
+      </p>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2.5">
+          <div className="text-[10px] text-white/40">
+            {isPayable ? "Night fee" : "Earns after night"}
           </div>
-          <div className="rounded-2xl border border-amber-400/15 bg-amber-500/10 px-4 py-3 text-sm">
-            <span className="text-amber-100/45">{isPayable ? "Due " : "After night "}</span>
-            <span className="font-semibold text-amber-100">
-              {formatMoney(getPayableDueToRefereePence(night, todayLondonDate))}
-            </span>
+          <div className="mt-0.5 text-sm font-black text-white">
+            {formatMoney(night.feePence)}
           </div>
-          <Link
-            href={`/referee/night/${night.id}`}
-            className="inline-flex items-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
-          >
-            {canOpen ? "Open night sheet" : "View night"}
-          </Link>
+        </div>
+        <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2.5">
+          <div className="text-[10px] text-emerald-100/55">Due now</div>
+          <div className="mt-0.5 text-sm font-black text-emerald-100">
+            {formatMoney(dueNowPence)}
+          </div>
         </div>
       </div>
 
       {onsite ? (
-        <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-50/80">
-          <div className="font-semibold text-white">
-            {onsite.totalReferees} referee{onsite.totalReferees === 1 ? "" : "s"} on site this night
+        <div className="mt-3 rounded-xl border border-sky-400/15 bg-sky-500/[0.07] px-3 py-2.5">
+          <div className="text-xs font-bold text-white">
+            {onsite.totalReferees} referee{onsite.totalReferees === 1 ? "" : "s"} on site
           </div>
-          <div className="mt-1 text-sky-50/70">{makeTextList(onsite.coReferees)}</div>
-          <div className="mt-2 text-xs text-sky-50/45">
-            Listed referees: {onsite.refereeNames.join(", ") || "Not set"}
-          </div>
+          <div className="mt-0.5 text-xs leading-5 text-white/50">{makeTextList(onsite.coReferees)}</div>
         </div>
       ) : null}
+
+      <Link
+        href={`/referee/night/${night.id}`}
+        className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-[#04130c] active:bg-emerald-300"
+      >
+        {canOpen ? "Open night sheet" : "View night"}
+      </Link>
     </article>
   );
 }
@@ -395,23 +394,20 @@ function NightSheets({
   onsiteByNightId: Map<string, OnsiteRefereeSummary>;
 }) {
   return (
-    <section id="referee-night-picker" className="scroll-mt-4 rounded-[1.45rem] border border-white/10 bg-white/[0.025] p-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <section id="referee-night-picker" className="scroll-mt-20">
+      <div className="flex items-center justify-between gap-3 px-1">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
             Night sheets
           </p>
-          <h2 className="mt-1 text-base font-bold text-white">Choose the night you want to work on</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-            Only current referee nights that need action are shown here. Historic imported fixture records stay in the league records and do not need a referee night sheet.
-          </p>
+          <h2 className="mt-0.5 text-base font-black text-white">Your nights</h2>
         </div>
-        <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/55">
+        <span className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-white/55">
           {openNights.length} open
-        </div>
+        </span>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-2 grid gap-2.5">
         {openNights.length > 0 ? (
           openNights.map((night) => (
             <NightCard
@@ -423,24 +419,29 @@ function NightSheets({
             />
           ))
         ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">
-            No current open referee night sheets.
+          <div className="rounded-[1.2rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/55">
+            No open night sheets.
           </div>
         )}
       </div>
 
       {legacyNights.length > 0 ? (
-        <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50/75">
-          {legacyNights.length} historic imported fixture record{legacyNights.length === 1 ? "" : "s"} hidden from referee work. Results and payments remain on the league/admin records; no referee night action is needed.
-        </div>
+        <details className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-xs text-white/55">
+          <summary className="cursor-pointer font-semibold text-white/70">
+            {legacyNights.length} historic record{legacyNights.length === 1 ? "" : "s"} hidden
+          </summary>
+          <p className="mt-2 leading-5">
+            These stay in league records and do not need referee action.
+          </p>
+        </details>
       ) : null}
 
       {closedNights.length > 0 ? (
-        <details className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white/75 [&::-webkit-details-marker]:hidden">
-            Submitted / closed nights ({closedNights.length})
+        <details className="mt-2 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/20">
+          <summary className="cursor-pointer list-none px-3.5 py-3 text-sm font-bold text-white/70 [&::-webkit-details-marker]:hidden">
+            Previous nights · {closedNights.length}
           </summary>
-          <div className="grid gap-3 border-t border-white/10 p-3">
+          <div className="grid gap-2.5 border-t border-white/10 p-2.5">
             {closedNights.slice(0, 5).map((night) => (
               <NightCard
                 key={night.id}

@@ -146,7 +146,7 @@ test("confirmation retains the existing action, referee scope, and correct contr
 });
 test("prepared page prioritises upcoming work, retains overdue sheets, and excludes settled balances", async () => {
   let props;
-  const night = (id, nightDate, status, dueToRefereePence) => ({
+  const night = (id, nightDate, status, dueToRefereePence, extra = {}) => ({
     id,
     nightDate,
     status,
@@ -156,6 +156,10 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
     feePence: 4000,
     leagueName: "Test league",
     refereeId: "ref",
+    submittedAt: null,
+    approvedAt: null,
+    settledAt: null,
+    ...extra,
   });
   const Page = load("src/app/(public)/referee/page.tsx", {
     "next/link": Link,
@@ -195,7 +199,8 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
         night("next", "2026-09-28", "DRAFT", 4000),
         night("settled", "2026-09-20", "SETTLED", 5000),
         night("submitted", "2026-09-21", "SUBMITTED", 1000),
-        night("future-submitted", "2026-09-29", "SUBMITTED", 9000),
+        night("future-submitted", "2026-09-29", "SUBMITTED", 9000, { submittedAt: new Date("2026-09-22T20:00:00Z") }),
+        night("same-day-submitted", "2026-09-23", "SUBMITTED", 7000, { submittedAt: new Date("2026-09-23T22:00:00Z") }),
       ],
     },
   }).default;
@@ -205,11 +210,12 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
   appHome.type(appHome.props);
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
-  assert.equal(props.dueToYou, "£30.00", "future referee fees must not show as owed before the night happens");
+  assert.equal(props.dueToYou, "£100.00", "future referee fees must not show as owed; a same-day submitted night may become due");
   const page = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
   assert.match(page, /RefereePortalViewMode mode="app"/);
   assert.match(page, /RefereePortalViewMode mode="web"/);
-  assert.match(page, /return night\.nightDate < todayLondonDate/);
+  assert.match(page, /night\.nightDate > todayLondonDate/);
+  assert.match(page, /night\.submittedAt \|\| night\.approvedAt \|\| night\.settledAt/);
   assert.match(page, /Open reopened night/);
   assert.match(page, /onsiteByNightId/);
   assert.doesNotMatch(
@@ -217,4 +223,28 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
     /ReopenedNightAccessBridge/,
   );
 });
+test("all referee work pages use the app shell and future balances are clearly not due", () => {
+  const files = {
+    availability: fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8"),
+    rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
+    night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
+    fixture: fs.readFileSync("src/app/(public)/referee/fixture/[id]/page.tsx", "utf8"),
+    home: fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8"),
+  };
+  for (const [name, source] of Object.entries(files)) {
+    if (name === "home") continue;
+    assert.match(source, /RefereeAppShell/, name);
+  }
+  assert.match(files.availability, /active="availability"/);
+  assert.match(files.rules, /active="rules"/);
+  assert.match(files.night, /active="nights"/);
+  assert.match(files.fixture, /active="nights"/);
+  assert.doesNotMatch(files.night, /← Referee dashboard/);
+  assert.doesNotMatch(files.fixture, /Back to referee dashboard|>Cancel</);
+  assert.match(files.home, /Due now/);
+  assert.match(files.home, /Earns after night/);
+  assert.match(files.night, /Due to you now/);
+  assert.match(files.night, /No referee balance is due until after this night has taken place/);
+});
+
 module.exports = { base };

@@ -1,0 +1,91 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
+import {
+  BookOpenIcon,
+  CalendarDaysIcon,
+  ClipboardDocumentListIcon,
+  HomeIcon,
+} from "@heroicons/react/24/outline";
+
+type RefereeAppSection = "home" | "nights" | "availability" | "rules";
+
+export default function RefereeAppShell({
+  active,
+  title,
+  children,
+}: {
+  active: RefereeAppSection;
+  title: string;
+  children: ReactNode;
+}) {
+  const items = [
+    { key: "home" as const, href: "/referee", label: "Home", Icon: HomeIcon },
+    {
+      key: "nights" as const,
+      href: "/referee#referee-night-picker",
+      label: "Nights",
+      Icon: ClipboardDocumentListIcon,
+    },
+    {
+      key: "availability" as const,
+      href: "/referee/availability",
+      label: "Availability",
+      Icon: CalendarDaysIcon,
+    },
+    {
+      key: "rules" as const,
+      href: "/referee/match-rules",
+      label: "Rules",
+      Icon: BookOpenIcon,
+    },
+  ];
+
+  return (
+    <main className="min-h-screen bg-[#07130f] text-white">
+      <header
+        className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
+      >
+        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+          <Link href="/referee" aria-label="SIXFL referee home" className="shrink-0">
+            <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto object-contain" />
+          </Link>
+          <div className="min-w-0 flex-1 text-center text-sm font-black tracking-tight text-white">
+            {title}
+          </div>
+          <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-xl space-y-3 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3">
+        {children}
+      </div>
+
+      <nav
+        aria-label="Referee app navigation"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl"
+      >
+        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1">
+          {items.map(({ key, href, label, Icon }) => {
+            const isActive = key === active;
+            return (
+              <Link
+                key={key}
+                href={href}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-semibold ${
+                  isActive
+                    ? "bg-emerald-400/10 text-emerald-200"
+                    : "text-white/55"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </main>
+  );
+}

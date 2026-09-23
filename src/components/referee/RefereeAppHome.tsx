@@ -155,7 +155,7 @@ export default function RefereeAppHome({
                   {nextNight.fixtureCount} matches
                 </span>
                 <span className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-100">
-                  {nextNight.feeLabel} night fee
+                  {nextNight.isPast ? `${nextNight.feeLabel} night fee` : `Earns ${nextNight.feeLabel} after night`}
                 </span>
               </div>
               {nextNight.colleagues && (

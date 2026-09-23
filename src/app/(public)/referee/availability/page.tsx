@@ -1,11 +1,7 @@
-// ========================================
-// File: src/app/(public)/referee/availability/page.tsx
-// ========================================
-
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import RefereeTabs from "@/components/referee/RefereeTabs";
+import RefereeAppShell from "@/components/referee/RefereeAppShell";
 import { requireReferee } from "@/lib/admin";
 import {
   formatAvailabilityDate,
@@ -34,13 +30,13 @@ const STATUS_OPTIONS: Array<{ value: RefereeAvailabilityStatus; label: string }>
 function peerCheckedClasses(status: RefereeAvailabilityStatus) {
   switch (status) {
     case "AVAILABLE":
-      return "peer-checked:border-emerald-400/35 peer-checked:bg-emerald-500/15 peer-checked:text-emerald-100";
+      return "peer-checked:border-emerald-400/45 peer-checked:bg-emerald-500/20 peer-checked:text-emerald-100";
     case "MAYBE":
-      return "peer-checked:border-amber-400/35 peer-checked:bg-amber-500/15 peer-checked:text-amber-100";
+      return "peer-checked:border-amber-400/45 peer-checked:bg-amber-500/20 peer-checked:text-amber-100";
     case "UNAVAILABLE":
-      return "peer-checked:border-red-400/35 peer-checked:bg-red-500/15 peer-checked:text-red-100";
+      return "peer-checked:border-red-400/45 peer-checked:bg-red-500/20 peer-checked:text-red-100";
     default:
-      return "peer-checked:border-white/20 peer-checked:bg-white/[0.08] peer-checked:text-white";
+      return "peer-checked:border-white/25 peer-checked:bg-white/[0.1] peer-checked:text-white";
   }
 }
 
@@ -50,12 +46,10 @@ function getLeagueLabel(slot: RefereeAvailabilitySlot) {
 
 function groupSlotsByLeague(slots: RefereeAvailabilitySlot[]) {
   const groups = new Map<string, RefereeAvailabilitySlot[]>();
-
   for (const slot of slots) {
     const key = getLeagueLabel(slot);
     groups.set(key, [...(groups.get(key) ?? []), slot]);
   }
-
   return Array.from(groups.entries());
 }
 
@@ -72,170 +66,138 @@ export default async function RefereeAvailabilityPage({ searchParams }: PageProp
   const nextMonth = getAdjacentMonthKey(monthKey, 1);
   const data = await getRefereeAvailabilityMonth({ refereeId: user.id, monthKey });
   const groupedSlots = groupSlotsByLeague(data.slots);
-  const availableCount = data.slots.filter((slot) => slot.status === "AVAILABLE").length;
-  const maybeCount = data.slots.filter((slot) => slot.status === "MAYBE").length;
-  const unavailableCount = data.slots.filter((slot) => slot.status === "UNAVAILABLE").length;
-  const noResponseCount = data.slots.filter((slot) => slot.status === "NO_RESPONSE").length;
+  const counts = {
+    available: data.slots.filter((slot) => slot.status === "AVAILABLE").length,
+    maybe: data.slots.filter((slot) => slot.status === "MAYBE").length,
+    unavailable: data.slots.filter((slot) => slot.status === "UNAVAILABLE").length,
+    noResponse: data.slots.filter((slot) => slot.status === "NO_RESPONSE").length,
+  };
 
   return (
-    <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        {isAdminPreview ? (
-          <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="font-semibold text-white">Referee preview mode</div>
-                <p className="mt-1 text-amber-50/80">
-                  You are seeing what {user.name || user.email || "this referee"} sees.
+    <RefereeAppShell active="availability" title="Availability">
+      {isAdminPreview ? (
+        <details className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+          <summary className="cursor-pointer font-bold">Admin preview · {user.name || user.email || "referee"}</summary>
+          <Link
+            href={`/admin/referees/${user.id}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${user.id}`)}`}
+            className="mt-2 inline-flex min-h-11 items-center underline"
+          >
+            Switch back to admin
+          </Link>
+        </details>
+      ) : null}
+
+      <section className="rounded-[1.35rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={`/referee/availability?month=${previousMonth}`}
+            aria-label="Previous month"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-lg text-white/70"
+          >
+            ‹
+          </Link>
+          <div className="min-w-0 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">Your availability</p>
+            <h1 className="mt-0.5 truncate text-lg font-black text-white">{data.monthLabel}</h1>
+          </div>
+          <Link
+            href={`/referee/availability?month=${nextMonth}`}
+            aria-label="Next month"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 text-lg text-emerald-100"
+          >
+            ›
+          </Link>
+        </div>
+
+        <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
+          {[
+            ["Available", counts.available, "text-emerald-200"],
+            ["Maybe", counts.maybe, "text-amber-200"],
+            ["No", counts.unavailable, "text-red-200"],
+            ["Unset", counts.noResponse, "text-white/65"],
+          ].map(([label, value, tone]) => (
+            <div key={String(label)} className="rounded-xl border border-white/[0.07] bg-black/20 px-1 py-2">
+              <div className={`text-base font-black tabular-nums ${tone}`}>{value}</div>
+              <div className="mt-0.5 text-[9px] text-white/40">{label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {sp.saved ? (
+        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-100">
+          Availability saved.
+        </div>
+      ) : null}
+
+      <form action={saveRefereeAvailabilityAction} className="space-y-3">
+        <input type="hidden" name="month" value={monthKey} />
+
+        {data.slots.length === 0 ? (
+          <div className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-white/55">
+            No league dates are available this month.
+          </div>
+        ) : (
+          groupedSlots.map(([leagueLabel, slots]) => (
+            <section key={leagueLabel} className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03]">
+              <div className="border-b border-white/[0.07] px-3.5 py-3">
+                <h2 className="text-sm font-black text-white">{leagueLabel}</h2>
+                <p className="mt-0.5 text-xs text-white/45">
+                  {slots[0]?.venueName || "Venue TBC"}
                 </p>
               </div>
-              <Link
-                href={`/admin/referees/${user.id}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${user.id}`)}`}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold text-white transition hover:bg-black/30"
-              >
-                Switch back to Full Admin View
-              </Link>
-            </div>
-          </section>
-        ) : null}
 
-        <RefereeTabs active="availability" />
+              <div className="divide-y divide-white/[0.07]">
+                {slots.map((slot, index) => {
+                  const rowIndex = `${slot.leagueId}_${slot.date}_${index}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+                  return (
+                    <div key={`${slot.leagueId}-${slot.date}`} className="p-3.5">
+                      <input type="hidden" name="rowIndex" value={rowIndex} />
+                      <input type="hidden" name={`leagueId_${rowIndex}`} value={slot.leagueId} />
+                      <input type="hidden" name={`date_${rowIndex}`} value={slot.date} />
 
-        <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
-          <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-                Referee availability
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {data.monthLabel}
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-                Mark the dates you can referee. These are based on the active league nights this referee is set to cover, so a Wednesday league will show the Wednesdays for this month even before fixtures are generated.
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href={`/referee/availability?month=${previousMonth}`}
-                  className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                >
-                  Previous month
-                </Link>
-                <Link
-                  href={`/referee/availability?month=${nextMonth}`}
-                  className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
-                >
-                  Next month
-                </Link>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Available</p>
-                <p className="mt-3 text-3xl font-semibold text-white">{availableCount}</p>
-              </div>
-              <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">Maybe</p>
-                <p className="mt-3 text-3xl font-semibold text-white">{maybeCount}</p>
-              </div>
-              <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">Unavailable</p>
-                <p className="mt-3 text-3xl font-semibold text-white">{unavailableCount}</p>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">No response</p>
-                <p className="mt-3 text-3xl font-semibold text-white">{noResponseCount}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {sp.saved ? (
-          <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            Availability saved.
-          </section>
-        ) : null}
-
-        <form action={saveRefereeAvailabilityAction} className="space-y-6">
-          <input type="hidden" name="month" value={monthKey} />
-
-          {data.slots.length === 0 ? (
-            <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/60">
-              There are no league dates for this referee this month. Check the referee's league coverage in admin.
-            </section>
-          ) : (
-            groupedSlots.map(([leagueLabel, slots]) => (
-              <section key={leagueLabel} className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]">
-                <div className="border-b border-white/10 px-6 py-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                    League night
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-white">{leagueLabel}</h2>
-                  <p className="mt-1 text-sm text-white/55">
-                    {slots[0]?.venueName || "Venue TBC"} · {slots.length} date{slots.length === 1 ? "" : "s"}
-                  </p>
-                </div>
-
-                <div className="divide-y divide-white/10">
-                  {slots.map((slot, index) => {
-                    const rowIndex = `${slot.leagueId}_${slot.date}_${index}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-
-                    return (
-                      <div key={`${slot.leagueId}-${slot.date}`} className="grid gap-4 px-6 py-5 lg:grid-cols-[220px_260px_minmax(0,1fr)] lg:items-center">
-                        <input type="hidden" name="rowIndex" value={rowIndex} />
-                        <input type="hidden" name={`leagueId_${rowIndex}`} value={slot.leagueId} />
-                        <input type="hidden" name={`date_${rowIndex}`} value={slot.date} />
-
-                        <div>
-                          <div className="font-semibold text-white">{formatAvailabilityDate(slot.date)}</div>
-                          <div className="mt-1 text-xs text-white/45">{slot.date}</div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
-                          {STATUS_OPTIONS.map((option) => (
-                            <label key={option.value} className="cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`status_${rowIndex}`}
-                                value={option.value}
-                                defaultChecked={slot.status === option.value}
-                                className="peer sr-only"
-                              />
-                              <span
-                                className={`flex items-center justify-center rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.05] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-emerald-300 ${peerCheckedClasses(option.value)}`}
-                              >
-                                {option.label}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-
-                        <input
-                          name={`note_${rowIndex}`}
-                          type="text"
-                          defaultValue={slot.note ?? ""}
-                          placeholder="Optional note, for example times you can do"
-                          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/60"
-                        />
+                      <div className="font-bold text-white">{formatAvailabilityDate(slot.date)}</div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {STATUS_OPTIONS.map((option) => (
+                          <label key={option.value} className="cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`status_${rowIndex}`}
+                              value={option.value}
+                              defaultChecked={slot.status === option.value}
+                              className="peer sr-only"
+                            />
+                            <span className={`flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-2 text-xs font-bold text-white/55 ${peerCheckedClasses(option.value)}`}>
+                              {option.label}
+                            </span>
+                          </label>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))
-          )}
 
-          {data.slots.length > 0 ? (
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-2xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
-            >
-              Save availability
-            </button>
-          ) : null}
-        </form>
-      </div>
-    </main>
+                      <input
+                        name={`note_${rowIndex}`}
+                        type="text"
+                        defaultValue={slot.note ?? ""}
+                        placeholder="Optional note, e.g. after 7pm"
+                        className="mt-2.5 h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/50"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))
+        )}
+
+        {data.slots.length > 0 ? (
+          <button
+            type="submit"
+            className="min-h-12 w-full rounded-xl bg-emerald-400 px-5 text-sm font-black text-[#04130c] active:bg-emerald-300"
+          >
+            Save availability
+          </button>
+        ) : null}
+      </form>
+    </RefereeAppShell>
   );
 }
