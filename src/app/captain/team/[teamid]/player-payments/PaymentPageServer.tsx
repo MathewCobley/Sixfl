@@ -695,6 +695,9 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
             payment will be handled. Saving this form creates or updates the player payment
             rows; it does not mark the team fee as paid.
           </p>
+          <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-50/80">
+            Existing payment requests are protected. Unticking a player here will not cancel or delete an existing link. To stop collection or write off a balance, use the explicit controls on the <Link href={`/captain/team/${team.id}/payments`} className="font-semibold text-amber-100 underline">Payments page</Link>, where the consequences are shown before anything is changed.
+          </p>
           {selectedFixture && selectedFixtureEditable ? (
             <SquadPaymentCollectionForm
               key={selectedFixture.id}
