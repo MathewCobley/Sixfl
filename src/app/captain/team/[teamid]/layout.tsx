@@ -11,6 +11,7 @@ import { TeamRole } from "@prisma/client";
 
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRouteNotice";
+import CaptainAppHeader from "@/components/captain/CaptainAppHeader";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
@@ -49,6 +50,108 @@ export const viewport: Viewport = {
 };
 
 const captainMobileStyles = String.raw`
+
+body:has(.captain-app-header) .captain-team-container {
+  max-width: 40rem !important;
+  gap: 0.75rem !important;
+  padding: 0.65rem 0.65rem calc(5.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+body:has(.captain-app-header) .captain-team-main {
+  min-width: 0;
+}
+
+body:has(.captain-app-header) .captain-team-main > * {
+  min-width: 0;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="space-y-8"] > :not([hidden]) ~ :not([hidden]),
+body:has(.captain-app-header) .captain-team-main [class*="space-y-6"] > :not([hidden]) ~ :not([hidden]),
+body:has(.captain-app-header) .captain-team-main [class*="space-y-5"] > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section,
+body:has(.captain-app-header) .captain-team-main article,
+body:has(.captain-app-header) .captain-team-main details {
+  border-radius: 1.15rem !important;
+  box-shadow: none !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section[class*="p-8"],
+body:has(.captain-app-header) .captain-team-main section[class*="p-6"],
+body:has(.captain-app-header) .captain-team-main section[class*="p-5"],
+body:has(.captain-app-header) .captain-team-main article[class*="p-8"],
+body:has(.captain-app-header) .captain-team-main article[class*="p-6"],
+body:has(.captain-app-header) .captain-team-main article[class*="p-5"],
+body:has(.captain-app-header) .captain-team-main div[class*="p-8"],
+body:has(.captain-app-header) .captain-team-main div[class*="p-6"],
+body:has(.captain-app-header) .captain-team-main div[class*="p-5"] {
+  padding: 0.9rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="px-8"],
+body:has(.captain-app-header) .captain-team-main [class*="px-6"],
+body:has(.captain-app-header) .captain-team-main [class*="px-5"] {
+  padding-left: 0.9rem !important;
+  padding-right: 0.9rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="py-8"],
+body:has(.captain-app-header) .captain-team-main [class*="py-6"],
+body:has(.captain-app-header) .captain-team-main [class*="py-5"] {
+  padding-top: 0.9rem !important;
+  padding-bottom: 0.9rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main h1[class*="text-4xl"],
+body:has(.captain-app-header) .captain-team-main h1[class*="text-3xl"],
+body:has(.captain-app-header) .captain-team-main h2[class*="text-4xl"],
+body:has(.captain-app-header) .captain-team-main h2[class*="text-3xl"] {
+  font-size: 1.35rem !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.015em !important;
+}
+
+body:has(.captain-app-header) .captain-team-main h2[class*="text-2xl"],
+body:has(.captain-app-header) .captain-team-main h3[class*="text-2xl"] {
+  font-size: 1.1rem !important;
+  line-height: 1.25 !important;
+}
+
+body:has(.captain-app-header) .captain-team-main p[class*="uppercase"]:has(+ h1),
+body:has(.captain-app-header) .captain-team-main p[class*="uppercase"]:has(+ h2),
+body:has(.captain-app-header) .captain-team-main div[class*="uppercase"]:has(+ h1),
+body:has(.captain-app-header) .captain-team-main div[class*="uppercase"]:has(+ h2) {
+  display: none !important;
+}
+
+body:has(.captain-app-header) .captain-team-main a[class*="rounded-full"],
+body:has(.captain-app-header) .captain-team-main button[class*="rounded-full"] {
+  border-radius: 0.85rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main a,
+body:has(.captain-app-header) .captain-team-main button,
+body:has(.captain-app-header) .captain-team-main input,
+body:has(.captain-app-header) .captain-team-main textarea {
+  font-size: 0.875rem;
+}
+
+body:has(.captain-app-header) .captain-team-main img[src*="player%20pool"],
+body:has(.captain-app-header) .captain-team-main img[src*="player pool"] {
+  max-height: 3.5rem !important;
+  width: auto !important;
+}
+
+body:has(.captain-app-header) .captain-team-main table {
+  font-size: 0.75rem;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="lg:grid-cols-"],
+body:has(.captain-app-header) .captain-team-main [class*="xl:grid-cols-"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
   min-width: 0;
   max-width: 100%;
@@ -447,26 +550,11 @@ export default async function CaptainTeamLayout({
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
       <CaptainPwaModeOnly mode="app">
-        <header
-          className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
-          style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
-        >
-          <div className="mx-auto flex w-full max-w-xl items-center gap-3">
-            <Link href={`/captain/team/${team.id}`} aria-label="SIXFL captain home" className="shrink-0">
-              <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto object-contain" />
-            </Link>
-            <div className="min-w-0 flex-1 truncate text-center text-sm font-black tracking-tight text-white">
-              {team.name}
-            </div>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
-              {team.logoUrl ? (
-                <img src={team.logoUrl} alt={`${team.name} badge`} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-[10px] font-black text-emerald-100">{getTeamInitials(team.name)}</span>
-              )}
-            </div>
-          </div>
-        </header>
+        <CaptainAppHeader
+          teamId={team.id}
+          teamName={team.name}
+          teamLogoUrl={team.logoUrl}
+        />
       </CaptainPwaModeOnly>
 
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 pb-24 pt-4 sm:gap-8 sm:px-10 sm:py-6">
