@@ -84,10 +84,10 @@ function ScoreLine({
 }
 
 function paymentLabel(status: string) {
-  if (status === 'ON_TIME') return 'Paid on time';
-  if (status === 'LATE') return 'Paid late';
-  if (status === 'UNPAID') return 'Payment overdue';
-  return 'No payment penalty';
+  if (status === 'ON_TIME') return 'Paid within 72 hours';
+  if (status === 'LATE') return 'Paid after 72 hours';
+  if (status === 'UNPAID') return 'Payment overdue by 72+ hours';
+  return 'Payment not late yet';
 }
 
 function confirmationLabel(status: string) {
@@ -173,7 +173,7 @@ export default async function CaptainVeoPriorityCard({
       <div className="grid gap-3 sm:grid-cols-5">
         {[
           ['8', 'Match card', 'By 6pm next day'],
-          ['6', 'Payment', 'Late = 2'],
+          ['6', 'Payment', 'Late after 72h · then 2 pts'],
           ['4', 'Confirmation', '72h deadline'],
           ['1', 'Assists', 'Bonus · by 6pm next day'],
           ['1', 'Ratings', 'Bonus · by 6pm next day'],
