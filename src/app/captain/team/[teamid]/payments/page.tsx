@@ -1265,11 +1265,47 @@ export default async function CaptainPaymentsPage({
                               <input type="hidden" name="chargeId" value={entry.chargeId} />
                               <button
                                 type="submit"
-                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-red-300/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/25"
+                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20"
                               >
                                 Pause unpaid player links — keep debt
                               </button>
                             </form>
+
+                            <details className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 p-3">
+                              <summary className="cursor-pointer text-sm font-semibold text-red-100">
+                                Permanently remove links and write off player balances
+                              </summary>
+                              <div className="mt-3 space-y-3 text-xs leading-5 text-red-50/80">
+                                <p>
+                                  <strong>This is a write-off, not a pause.</strong> It will remove the unpaid player links and forgive {formatMoney(playerLinksOpenPence)} from the affected players&apos; SIXFL accounts. SIXFL will stop collecting this money from those players.
+                                </p>
+                                <p>
+                                  <strong>The team&apos;s fixture balance is not reduced.</strong> The team remains responsible for the fixture fee even though these player balances are being written off.
+                                </p>
+                                <form action={writeOffUnpaidPlayerLinksAction} className="space-y-3">
+                                  <input type="hidden" name="teamId" value={team.id} />
+                                  <input type="hidden" name="chargeId" value={entry.chargeId} />
+                                  <label className="flex items-start gap-2 rounded-lg border border-red-300/20 bg-black/15 p-2.5">
+                                    <input
+                                      type="checkbox"
+                                      name="confirmWriteOff"
+                                      value="yes"
+                                      required
+                                      className="mt-0.5"
+                                    />
+                                    <span>
+                                      I understand that these players will no longer owe this money, SIXFL will not collect it from them, and the team still owes the fixture balance.
+                                    </span>
+                                  </label>
+                                  <button
+                                    type="submit"
+                                    className="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-400"
+                                  >
+                                    Write off player balances · {formatMoney(playerLinksOpenPence)}
+                                  </button>
+                                </form>
+                              </div>
+                            </details>
                           </div>
                         ) : null}
 
