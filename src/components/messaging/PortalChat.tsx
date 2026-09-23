@@ -72,6 +72,7 @@ type ChatResponse = {
 };
 
 type PortalChatProps = {
+  playerApp?: boolean;
   teamId: string;
   previewMembershipId?: string | null;
   adminTestMode?: boolean;
@@ -186,6 +187,7 @@ function ConversationButton({
 }
 
 export default function PortalChat({
+  playerApp = false,
   teamId,
   previewMembershipId = null,
   adminTestMode = false,
@@ -559,7 +561,22 @@ export default function PortalChat({
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+    <section className={playerApp ? "mx-auto w-full max-w-xl text-white" : "overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"}>
+      {playerApp ? (
+        <header className="relative flex min-h-11 items-center justify-between gap-3 px-4">
+          <h1 className="text-lg font-bold tracking-tight">Chat</h1>
+          {data?.canSend && !data.isAdminTestMode && !data.isSimulatedTestMode ? (
+            <details className="relative">
+              <summary aria-label="Chat notifications" className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl text-white/60 [&::-webkit-details-marker]:hidden">
+                <BellAlertIcon aria-hidden="true" className="h-5 w-5" />
+              </summary>
+              <div className="absolute right-0 top-full z-20 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#101d17] p-3 shadow-xl">
+                <PushNotificationControl />
+              </div>
+            </details>
+          ) : null}
+        </header>
+      ) : (
       <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_42%)] px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -596,6 +613,8 @@ export default function PortalChat({
           ) : null}
         </div>
       </div>
+
+      )}
 
       <div className="grid min-h-[620px] lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-black/15 p-3 lg:border-b-0 lg:border-r">

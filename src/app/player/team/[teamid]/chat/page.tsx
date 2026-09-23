@@ -55,10 +55,13 @@ export default async function PlayerTeamChatPage({
   }
 
   return (
+    <main className="min-h-screen bg-[#07130f] pb-28 pt-2">
     <PortalChat
+      playerApp
       teamId={teamid}
       previewMembershipId={previewMembershipId}
       simulateTestMode={Boolean(previewMembershipId)}
     />
+    </main>
   );
 }
