@@ -2,7 +2,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
-import { saveEarlyMatchReport, type EarlyContribution, type EarlyPerformance } from "@/lib/match-reports/early";
+import {
+  getEarlyMatchReportCutoff,
+  saveEarlyMatchReport,
+  type EarlyContribution,
+  type EarlyPerformance,
+} from "@/lib/match-reports/early";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import MatchDetailsPlayerFields from "./MatchDetailsPlayerFields";
 import FormListboxField from "@/components/ui/FormListboxField";
@@ -28,9 +33,25 @@ export default async function EarlyMatchReports({ teamId, query = "", outcome = 
   // Authorize here too: this component must remain safe if reused on another page.
   await requireCaptain(teamId);
   if (outcome) return null;
+  const now = new Date();
+  const recentCutoff = getEarlyMatchReportCutoff(now);
   const [fixtures, members] = await Promise.all([
     prisma.fixture.findMany({
-      where: { OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }], publishedAt: { not: null }, kickoffAt: { lte: new Date() }, status: { in: ["SCHEDULED", "COMPLETED"] }, league: { publicAt: { lte: new Date() } }, result: { is: null } },
+      where: {
+        OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        publishedAt: { not: null },
+        status: { in: ["SCHEDULED", "COMPLETED"] },
+        league: { publicAt: { lte: now } },
+        result: { is: null },
+        AND: [
+          {
+            OR: [
+              { kickoffAt: { gte: recentCutoff, lte: now } },
+              { earlyReports: { some: { teamId } } },
+            ],
+          },
+        ],
+      },
       orderBy: { kickoffAt: "desc" },
       include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } }, earlyReports: { where: { teamId } }, selections: { where: { teamMember: { teamId }, selectionStatus: "SELECTED" }, select: { teamMemberId: true } } },
     }),
