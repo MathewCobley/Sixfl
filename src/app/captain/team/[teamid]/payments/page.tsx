@@ -9,7 +9,7 @@ import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/
 // File: src/app/captain/team/[teamid]/payments/page.tsx
 // ========================================
 
-import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql } from "@/lib/payments/player-ledger";
+import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql, writeOffPlayerFeeBalances } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";
 import { revalidatePath } from "next/cache";
@@ -312,12 +312,43 @@ async function closeSettledChargePlayerLinksAction(formData: FormData) {
   redirect(`/captain/team/${teamId}/payments?links=paused`);
 }
 
+async function writeOffUnpaidPlayerLinksAction(formData: FormData) {
+  "use server";
+  const teamId=String(formData.get("teamId")??"").trim();
+  const chargeId=String(formData.get("chargeId")??"").trim();
+  const confirmed=String(formData.get("confirmWriteOff")??"")==="yes";
+  if(!teamId||!chargeId)redirect(teamId?`/captain/team/${teamId}/payments?links=invalid`:"/captain");
+  if(!confirmed)redirect(`/captain/team/${teamId}/payments?links=writeoff_confirmation_required`);
+  const access=await requireCaptain(teamId);
+  if(!access.user)redirect("/login");
+  const ledger=await getTeamPaymentLedger(teamId);
+  const entry=ledger?.entries.find(e=>e.chargeId===chargeId);
+  if(!entry?.fixtureId||!ledger?.relatedTeamIds.includes(entry.teamId))redirect(`/captain/team/${teamId}/payments?links=invalid`);
+  const fees=await prisma.playerMatchFee.findMany({where:{teamId:entry.teamId,fixtureId:entry.fixtureId,status:"OPEN"},select:{id:true}});
+  const result=await writeOffPlayerFeeBalances({
+    teamId:entry.teamId,
+    feeIds:fees.map(f=>f.id),
+    actorUserId:access.user.id,
+    reason:"Team chose to permanently remove all unpaid player links and write off the remaining player balances. The team fixture charge remains unchanged.",
+    linkAuditActor:{
+      actorKind:"USER",
+      actorUserId:access.user.id,
+      actorName:access.user.name||access.user.email||"Signed-in SIXFL user",
+      actorRole:access.isAdmin?"ADMIN":access.membership?.role??"CAPTAIN",
+      via:"Captain Payments · write off unpaid player links",
+    },
+  });
+  revalidatePath(`/captain/team/${teamId}/payments`);
+  revalidatePath(`/captain/team/${teamId}/player-payments`);
+  redirect(`/captain/team/${teamId}/payments?links=written_off&count=${result.writtenOffCount}&amount=${result.writtenOffPence}`);
+}
+
 export default async function CaptainPaymentsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string; flexpay?: string; flexAmount?: string; max?: string }>;
+  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string; count?: string; flexpay?: string; flexAmount?: string; max?: string }>;
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
