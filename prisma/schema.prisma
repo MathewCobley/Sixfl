@@ -1535,6 +1535,26 @@ model PlayerPaymentLinkHistory {
   @@index([feeId, createdAt])
 }
 
+model PlayerPaymentLinkEvent {
+  sequence BigInt @unique @default(autoincrement())
+  id String @id @default(uuid())
+  feeId String
+  teamId String
+  paymentToken String
+  eventType String
+  actorKind String
+  actorUserId String?
+  actorName String?
+  actorRole String?
+  via String
+  reason String?
+  createdAt DateTime @default(now())
+
+  @@index([feeId, paymentToken, createdAt])
+  @@index([teamId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
 model PlayerRepaymentPlan {
   id String @id @default(uuid())
   teamId String
