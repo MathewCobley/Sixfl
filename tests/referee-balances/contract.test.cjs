@@ -157,4 +157,5 @@ test("referee app ledger uses a simple app-native money heading", () => {
   const page = fs.readFileSync("src/app/(public)/referee/ledger/page.tsx", "utf8");
   assert.match(page, />Your money</);
   assert.doesNotMatch(page, /Referee earnings/i);
+  assert.doesNotMatch(page, /Payment history/i);
 });
