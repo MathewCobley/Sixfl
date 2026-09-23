@@ -236,9 +236,6 @@ export default function RefereeAvailabilityCalendar({
   useEffect(() => {
     if (!selectedDate) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setSelectedDate(null);
     }
@@ -246,7 +243,6 @@ export default function RefereeAvailabilityCalendar({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
     };
   }, [selectedDate]);
 
