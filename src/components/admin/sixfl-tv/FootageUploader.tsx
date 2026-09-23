@@ -40,6 +40,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
   const active = tasks.find(task => task.status === "UPLOADING");
   const latest = active || tasks.at(-1);
   const busy = localBusy || tasks.some(task => task.status === "UPLOADING" || task.status === "QUEUED");
+  const transferActive = tasks.some(task => task.status === "UPLOADING" || task.status === "QUEUED");
   // Shared intro/outro and clip order must not change while this tab retains queued inputs.
   const mutationBusy = localBusy || snapshot.tasks.some(uploadPending);
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
     return () => window.removeEventListener("beforeunload", warn);
   }, [localBusy]);
   function choose(files: FileList | null, kind: FootageKind, asset?: Asset) {
-    if (!files || running.current || busy) return;
+    if (!files || running.current) return;
     try {
       const added = Array.from(files).map(file => {
         footageSpec({ kind, filename: file.name, sizeBytes: file.size, lastModified: file.lastModified });
@@ -68,7 +69,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
     } catch (e) { setError(e instanceof Error ? e.message : "Choose an MP4 file."); }
   }
   function upload() {
-    if (busy || running.current || !selection.length) return;
+    if (localBusy || running.current || !selection.length) return;
     try {
       if (!sharedOnly && !fixtureId) throw new Error("Choose a fixture before uploading match footage.");
       const added = queue.enqueue(uploadScope, displayLabel, selection);
@@ -106,7 +107,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
     return <label className="block cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <span className="block text-lg font-semibold text-white">{labels[kind]}</span>
       <span className="mt-2 block text-sm leading-6 text-white/60">{help} MP4 only; up to {sizeLabel(FOOTAGE_LIMITS[kind])} per file.</span>
-      <input aria-label={`Choose ${labels[kind].toLowerCase()}`} type="file" accept="video/mp4,.mp4" multiple={kind === "CLIP"} disabled={busy || !state.configured}
+      <input aria-label={`Choose ${labels[kind].toLowerCase()}`} type="file" accept="video/mp4,.mp4" multiple={kind === "CLIP"} disabled={localBusy || !state.configured}
         className="sr-only"
         onChange={event => { choose(event.currentTarget.files, kind); event.currentTarget.value = ""; }} />
       <span className="mt-4 flex flex-wrap items-center gap-3">
@@ -154,7 +155,7 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
       {selection.length ? <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5">
         <p className="font-semibold text-white">Selected: {selection.length} file{selection.length === 1 ? "" : "s"} · {sizeLabel(selection.reduce((sum, s) => sum + s.file.size, 0))}</p>
         <p className="mt-2 break-words text-sm text-white/60">{selection.map(s => s.file.name).join(" · ")}</p>
-        <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={busy || !state.configured} onClick={upload}>Upload selected files</button><button type="button" className={button} disabled={busy} onClick={() => setSelection([])}>Clear selection</button></div>
+        <div className="mt-4 flex gap-3"><button type="button" className={button} disabled={localBusy || !state.configured} onClick={upload}>Upload selected files</button><button type="button" className={button} disabled={localBusy} onClick={() => setSelection([])}>Clear selection</button></div>
       </div> : null}
       {active ? <div className="space-y-2"><progress aria-label="Current shared branding upload progress" value={progress} max={100} className="h-3 w-full accent-emerald-400" /><button type="button" className={button} onClick={() => queue.pause(active.id)}>Pause after current part</button></div> : null}
       {tasks.filter(task => task.status === "PAUSED" || task.status === "FAILED").map(task => <div key={task.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 p-3"><span className="break-words text-sm text-white/70">{task.filename}</span><button type="button" className={button} onClick={() => { setMessage(""); setError(""); queue.resume(task.id); }}>Resume upload</button><button type="button" className={button} onClick={() => queue.forget(task.id)}>Remove from queue</button><span className="text-xs text-white/45">Saved parts are kept.</span></div>)}
@@ -182,6 +183,11 @@ export default function FootageUploader({ fixtureId, fixtureLabel = "Match foota
       {picker("CLIP", "Choose several goals, saves or other clips. You can change their order below.")}
       {picker("FULL_MATCH", "Choose the complete match recording. This is separate from the clips.")}
     </div>
+    {transferActive ? (
+      <p className="rounded-xl border border-sky-400/20 bg-sky-500/[0.06] px-3 py-2 text-xs leading-5 text-sky-100/75">
+        An upload is already running for this match. You can still choose more footage and add it to the queue; it will upload next.
+      </p>
+    ) : null}
     <details className="rounded-2xl border border-white/10 p-4"><summary className="cursor-pointer font-semibold text-white/80">Already have an edited highlights video?</summary><div className="mt-4">{picker("HIGHLIGHTS", "Upload one assembled highlights file instead of individual clips, or keep it alongside them.")}</div></details>
     {selection.length ? <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5">
       <p className="font-semibold text-white">Selected: {selection.length} file{selection.length === 1 ? "" : "s"} · {sizeLabel(selection.reduce((sum, s) => sum + s.file.size, 0))}</p>
