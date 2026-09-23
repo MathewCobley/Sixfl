@@ -3,10 +3,13 @@ on:
   pull_request:
     paths:
       - 'src/app/(public)/referee/**'
+      - 'src/app/(admin)/admin/referee-nights/**'
+      - 'src/lib/referee-nights.ts'
       - 'src/components/referee/**'
       - 'src/components/layout/SiteFooter.tsx'
       - 'src/components/RouteScopedBridges.tsx'
       - 'tests/referee-app-home/**'
+      - 'tests/referee-balances/**'
       - '.github/workflows/referee-app-home.yml'
   workflow_dispatch:
 permissions:
@@ -26,7 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run prebuild
       - run: npx prisma generate
-      - run: node --test tests/referee-app-home/contract.test.cjs
+      - run: node --test tests/referee-app-home/contract.test.cjs tests/referee-balances/contract.test.cjs
       - name: Install isolated browser tooling
         run: |
           npm install --prefix /tmp/sixfl-referee-tools --no-package-lock --ignore-scripts playwright@1.58.2

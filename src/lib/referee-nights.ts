@@ -104,6 +104,35 @@ export function getRefereeRemainingDueToSixflPence(night: Pick<RefereeNightSumma
   return Math.max(0, night.dueToSixflPence - night.cashReceivedFromRefereePence);
 }
 
+export function isRefereeNightPayable(
+  night: Pick<RefereeNightSummary, "status" | "nightDate">,
+  todayLondonDate: string,
+) {
+  return night.status !== "CANCELLED" && night.nightDate < todayLondonDate;
+}
+
+export function getRefereePayableDueToRefereePence(
+  night: Pick<
+    RefereeNightSummary,
+    "status" | "nightDate" | "dueToRefereePence" | "cashPaidToRefereePence"
+  >,
+  todayLondonDate: string,
+) {
+  if (!isRefereeNightPayable(night, todayLondonDate) || night.status === "SETTLED") return 0;
+  return getRefereeRemainingDueToRefereePence(night);
+}
+
+export function getRefereePayableDueToSixflPence(
+  night: Pick<
+    RefereeNightSummary,
+    "status" | "nightDate" | "dueToSixflPence" | "cashReceivedFromRefereePence"
+  >,
+  todayLondonDate: string,
+) {
+  if (!isRefereeNightPayable(night, todayLondonDate) || night.status === "SETTLED") return 0;
+  return getRefereeRemainingDueToSixflPence(night);
+}
+
 export function formatNightDate(value: string | Date) {
   if (value instanceof Date) {
     return formatDateTimeInLondon(value, {

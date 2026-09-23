@@ -21,6 +21,9 @@ import {
   formatNightDate,
   getRefereeNightSummaries,
   getRefereeNightFixtures,
+  getRefereePayableDueToRefereePence,
+  getRefereePayableDueToSixflPence,
+  isRefereeNightPayable,
   type RefereeNightStatus,
   type RefereeNightSummary,
 } from "@/lib/referee-nights";
@@ -70,27 +73,21 @@ function sortNightNewestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
 }
 
 function isNightPayable(night: RefereeNightSummary, todayLondonDate: string) {
-  if (night.status === "CANCELLED") return false;
-  if (night.nightDate < todayLondonDate) return true;
-  if (night.nightDate > todayLondonDate) return false;
-
-  // On the same day, the fee only becomes due once the referee has finished
-  // and submitted the night (or admin has subsequently approved/settled it).
-  return Boolean(night.submittedAt || night.approvedAt || night.settledAt);
+  return isRefereeNightPayable(night, todayLondonDate);
 }
 
 function getPayableDueToRefereePence(
   night: RefereeNightSummary,
   todayLondonDate: string,
 ) {
-  return isNightPayable(night, todayLondonDate) ? night.dueToRefereePence : 0;
+  return getRefereePayableDueToRefereePence(night, todayLondonDate);
 }
 
 function getPayableDueToSixflPence(
   night: RefereeNightSummary,
   todayLondonDate: string,
 ) {
-  return isNightPayable(night, todayLondonDate) ? night.dueToSixflPence : 0;
+  return getRefereePayableDueToSixflPence(night, todayLondonDate);
 }
 
 function formatLedgerDate(value: Date | null) {
@@ -276,35 +273,51 @@ function NightCard({
 function getLedgerBalanceLabel(night: RefereeNightSummary, todayLondonDate: string) {
   if (!isNightPayable(night, todayLondonDate)) return "Not due yet";
 
-  if (night.dueToRefereePence > 0) {
-    return night.status === "SETTLED" ? "Paid to you" : "Owed to you";
-  }
+  const dueToRef = getPayableDueToRefereePence(night, todayLondonDate);
+  const dueToSixfl = getPayableDueToSixflPence(night, todayLondonDate);
 
-  if (night.dueToSixflPence > 0) {
-    return night.status === "SETTLED" ? "Settled to SIXFL" : "You owe SIXFL";
-  }
-
+  if (dueToRef > 0) return "Owed to you";
+  if (dueToSixfl > 0) return "You owe SIXFL";
+  if (night.cashPaidToRefereePence > 0) return "Paid to you";
+  if (night.cashReceivedFromRefereePence > 0) return "Paid to SIXFL";
   return "Balanced";
 }
 
 function getLedgerBalanceAmount(night: RefereeNightSummary, todayLondonDate: string) {
-  if (!isNightPayable(night, todayLondonDate)) return 0;
-  if (night.dueToRefereePence > 0) return night.dueToRefereePence;
-  if (night.dueToSixflPence > 0) return night.dueToSixflPence;
+  const dueToRef = getPayableDueToRefereePence(night, todayLondonDate);
+  if (dueToRef > 0) return dueToRef;
+
+  const dueToSixfl = getPayableDueToSixflPence(night, todayLondonDate);
+  if (dueToSixfl > 0) return dueToSixfl;
+
   return 0;
 }
 
 function getLedgerSettlementLabel(night: RefereeNightSummary, todayLondonDate: string) {
   if (!isNightPayable(night, todayLondonDate)) return "Due after the night";
+  if (night.status === "CANCELLED") return "Cancelled";
+
+  const dueToRef = getPayableDueToRefereePence(night, todayLondonDate);
+  const dueToSixfl = getPayableDueToSixflPence(night, todayLondonDate);
+
+  if (dueToRef > 0) return "Not paid yet";
+  if (dueToSixfl > 0) return "Not settled yet";
+
+  if (night.cashPaidToRefereePence > 0) {
+    return night.cashDistributedAt
+      ? `Paid to you ${formatLedgerDate(night.cashDistributedAt)}`
+      : "Paid to you";
+  }
+  if (night.cashReceivedFromRefereePence > 0) {
+    return night.cashDistributedAt
+      ? `Paid to SIXFL ${formatLedgerDate(night.cashDistributedAt)}`
+      : "Paid to SIXFL";
+  }
 
   if (night.status === "SETTLED") {
     return night.settledAt ? `Settled ${formatLedgerDate(night.settledAt)}` : "Settled";
   }
 
-  if (night.status === "CANCELLED") return "Cancelled";
-
-  if (night.dueToRefereePence > 0) return "Not paid yet";
-  if (night.dueToSixflPence > 0) return "Not settled yet";
   return "No balance due";
 }
 
@@ -490,15 +503,12 @@ export default async function RefereePage() {
   const activeNights = nights.filter((night) => night.status !== "CANCELLED");
   const submittedNights = nights.filter((night) => night.status === "SUBMITTED");
   const settledNights = nights.filter((night) => night.status === "SETTLED");
-  const outstandingNights = activeNights.filter(
-    (night) => night.status !== "SETTLED" && isNightPayable(night, todayLondonDate),
-  );
-  const outstandingDueToSixfl = outstandingNights.reduce(
-    (sum, night) => sum + night.dueToSixflPence,
+  const outstandingDueToSixfl = activeNights.reduce(
+    (sum, night) => sum + getPayableDueToSixflPence(night, todayLondonDate),
     0,
   );
-  const outstandingDueToReferee = outstandingNights.reduce(
-    (sum, night) => sum + night.dueToRefereePence,
+  const outstandingDueToReferee = activeNights.reduce(
+    (sum, night) => sum + getPayableDueToRefereePence(night, todayLondonDate),
     0,
   );
   const totalFixtures = nights.reduce((sum, night) => sum + night.fixtureCount, 0);
