@@ -25,7 +25,7 @@ function fixtureLabel(fee: PlayerLedgerAccount["fees"][number] | undefined) {
   )}`;
 }
 
-export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAccount}){
+export default function PlayerLedgerStatement({account, showAudit = false}:{account:PlayerLedgerAccount; showAudit?: boolean}){
   const stateByFeeId = new Map(account.states.map(state => [state.feeId, state]));
   const feeById = new Map(account.fees.map(fee => [fee.id, fee]));
   const runningBalanceByEntryId = new Map<string, number>();
@@ -56,7 +56,7 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
     <div className="mt-7 border-t border-white/10 pt-5">
       <h3 className="text-base font-semibold">Payment link history</h3>
       <p className="mt-1 text-sm text-white/60">
-        Every recorded player payment link remains visible here, including links that were later removed.
+        Your current and previous payment links.
       </p>
       {account.paymentLinks.length === 0 ? (
         <p className="mt-4 text-sm text-white/45">No player payment links have been recorded for this account.</p>
@@ -85,16 +85,16 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                       </div>
                     </div>
                     <span className={
-                      settlementLabel ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-100" : link.isRemoved
+                      settlementLabel ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-100" : showAudit && link.isRemoved
                         ? "rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-semibold text-red-100"
                         : active
                           ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-100"
                           : "rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-white/55"
                     }>
-                      {settlementLabel ?? (link.isRemoved ? "Removed" : active ? "Active" : "Closed")}
+                      {settlementLabel ?? (showAudit ? (link.isRemoved ? "Removed" : active ? "Active" : "Closed") : (active ? "Ready to pay" : "Inactive"))}
                     </span>
                   </div>
-                  {(() => {
+                  {showAudit && (() => {
                     const events = account.paymentLinkEvents.filter(
                       (event) =>
                         event.feeId === link.feeId &&
@@ -150,6 +150,7 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                     );
                   })()}
 
+                  {showAudit ? <>
                   <div className="mt-2 break-all rounded-lg bg-black/20 px-2.5 py-2 font-mono text-[10px] leading-5 text-white/35">
                     {link.paymentUrl}
                   </div>
@@ -158,7 +159,8 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                       ? `Opened ${link.openCount} time${link.openCount === 1 ? "" : "s"} · first ${formatDateTimeInLondon(link.firstOpenedAt!,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}${link.openCount > 1 && link.lastOpenedAt ? ` · last ${formatDateTimeInLondon(link.lastOpenedAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}` : ""}`
                       : "Never opened"}
                   </div>
-                  {settlementLabel ? <p className="mt-2 text-xs text-emerald-100/70">This match fee is settled. No payment is due.</p> : link.isRemoved ? (
+                  </> : null}
+                  {settlementLabel ? <p className="mt-2 text-xs text-emerald-100/70">This match fee is settled. No payment is due.</p> : showAudit && link.isRemoved ? (
                     <p className="mt-2 text-xs leading-5 text-red-100/65">
                       {link.removedAt
                         ? `Removed ${formatDateTimeInLondon(link.removedAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}. `

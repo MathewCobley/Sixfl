@@ -55,6 +55,6 @@ export default async function PlayerAccountPage({params,searchParams}:{params:Pr
       </form></details>:null}</div>;})}
     </div></section>
     {requests.length?<details className="rounded-2xl border border-white/10 p-5"><summary className="cursor-pointer font-semibold">Checkout history</summary><div className="mt-3 space-y-3">{requests.map(r=><div key={r.id} className="rounded-xl border border-white/10 p-3"><p>{date(r.createdAt)} · {money(r.amountPence)} · {r.status}{r.refundedPence?` · Refunded ${money(r.refundedPence)}`:""}</p>{r.failureReason?<p className="text-sm text-amber-100">{r.failureReason}</p>:null}{["READY","CREATING"].includes(r.status)?<form action={savePlayerAccountAction} className="mt-2">{hidden}<input type="hidden" name="requestId" value={r.id}/><button className="text-sm text-emerald-200 underline" name="action" value="cancel-checkout">Cancel checkout — keep debt</button></form>:null}</div>)}</div></details>:null}
-    <PlayerLedgerStatement account={account}/>
+    <PlayerLedgerStatement account={account} showAudit/>
   </main>;
 }

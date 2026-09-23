@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getLegacyPaymentLinkClosureContext, getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
+import { getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
@@ -291,58 +291,12 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
         fee?.paymentToken === link.paymentToken &&
         fee.status === "OPEN";
 
-      const events = account.paymentLinkEvents.filter(
-        (event) =>
-          event.feeId === link.feeId &&
-          event.paymentToken === link.paymentToken,
-      );
-      const createdEvent = events.find((event) => event.eventType === "CREATED") ?? null;
-      const latestEndEvent =
-        [...events]
-          .reverse()
-          .find((event) =>
-            ["REMOVED", "CLOSED", "REOPENED"].includes(event.eventType),
-          ) ?? null;
-      const eventActor = (event: (typeof events)[number] | null) => {
-        if (!event) return null;
-        if (event.actorKind === "LEGACY") return "Legacy · actor not recorded";
-        if (event.actorKind === "SYSTEM") return "SIXFL System";
-        const role = event.actorRole ? ` · ${event.actorRole.toLowerCase().replaceAll("_", " ")}` : "";
-        return `${event.actorName || "Signed-in SIXFL user"}${role}`;
-      };
-
       return {
         id: link.id,
         settlementLabel,
         fixtureLabel: link.fixtureLabel ?? (fee ? fixtureLabel(fee) : null),
         amountPence: link.amountPence,
         createdLabel: formatLinkDate(link.createdAt),
-        historicalBackfill: link.source.endsWith("BACKFILL"),
-        createdByLabel: eventActor(createdEvent),
-        createdVia: createdEvent?.via ?? null,
-        endedByLabel: eventActor(latestEndEvent),
-        endedVia: latestEndEvent?.via ?? null,
-        endedReason:
-          [
-            latestEndEvent?.reason ?? null,
-            latestEndEvent?.actorKind === "LEGACY"
-              ? getLegacyPaymentLinkClosureContext(fee)
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ") || null,
-        endedEventType: latestEndEvent?.eventType ?? null,
-        firstOpenedLabel: link.firstOpenedAt
-          ? formatLinkDate(link.firstOpenedAt)
-          : null,
-        lastOpenedLabel: link.lastOpenedAt
-          ? formatLinkDate(link.lastOpenedAt)
-          : null,
-        openCount: link.openCount,
-        isRemoved: link.isRemoved,
-        removedLabel: link.removedAt ? formatLinkDate(link.removedAt) : null,
-        removedReason: link.removedReason,
-        paymentUrl: link.paymentUrl,
         activePath: isCurrentActiveLink
           ? `/pay/player-match-fee/${link.paymentToken}`
           : null,
