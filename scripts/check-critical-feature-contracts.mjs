@@ -371,6 +371,20 @@ expectText("team referrals", referralPreparationPath, referralPreparation, "atta
 expectText("team referrals", referralPreparationPath, referralPreparation, 'name="referralCode"', "team registration must continue carrying the referral code through the form");
 
 // ---------------------------------------------------------------------------
+// DRAFT FIXTURE NOTIFICATIONS — deleting an unpublished fixture must remain
+// silent. Draft fixtures have never been communicated to teams.
+// ---------------------------------------------------------------------------
+const fixtureCancellationNotificationsPath = "src/lib/fixtures/cancellation-notifications.ts";
+const deleteFixtureActionPath = "src/app/(admin)/admin/fixtures/delete-fixture-action.ts";
+const fixtureCancellationNotifications = read(fixtureCancellationNotificationsPath);
+const deleteFixtureAction = read(deleteFixtureActionPath);
+
+expectText("draft fixture notifications", fixtureCancellationNotificationsPath, fixtureCancellationNotifications, "publishedAt: Date | null", "fixture cancellation notification input must carry publication state");
+expectText("draft fixture notifications", fixtureCancellationNotificationsPath, fixtureCancellationNotifications, "if (!fixture.publishedAt)", "cancellation helper must reject unpublished fixtures before resolving recipients");
+expectText("draft fixture notifications", deleteFixtureActionPath, deleteFixtureAction, "publishedAt: true", "fixture deletion must read publication state before deleting the fixture");
+expectText("draft fixture notifications", deleteFixtureActionPath, deleteFixtureAction, "fixture.publishedAt", "fixture deletion must only queue cancellation mail for a published fixture");
+
+// ---------------------------------------------------------------------------
 // PLAYER PAYMENT-LINK HISTORY — player ledgers must retain every issued link,
 // record opens, and preserve removed links as permanent audit history.
 // ---------------------------------------------------------------------------
