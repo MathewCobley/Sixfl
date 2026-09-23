@@ -59,7 +59,7 @@ test("home exposes real night details and operational routes without website esc
     "£30.00",
     "£10.00",
     "Refereeing with: Mathew.",
-    "Open night sheet",
+    "View match night",
     "Referee Portal",
   ])
     assert.ok(html.includes(text), text);
@@ -74,7 +74,7 @@ test("empty and overdue states are explicit and retain useful actions", () => {
     React.createElement(Home, { ...base, nextNight: null }),
   );
   assert.match(empty, /No night assigned yet/);
-  assert.doesNotMatch(empty, /Open night sheet/);
+  assert.doesNotMatch(empty, /View match night|Run match night|Complete match night/);
   assert.match(empty, /Mark your dates/);
   assert.match(
     renderToStaticMarkup(
@@ -250,6 +250,7 @@ test("all referee work pages use the app shell and future balances are clearly n
   const files = {
     availability: fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8"),
     rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
+    nights: fs.readFileSync("src/app/(public)/referee/nights/page.tsx", "utf8"),
     night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
     fixture: fs.readFileSync("src/app/(public)/referee/fixture/[id]/page.tsx", "utf8"),
     ledger: fs.readFileSync("src/app/(public)/referee/ledger/page.tsx", "utf8"),
@@ -261,6 +262,7 @@ test("all referee work pages use the app shell and future balances are clearly n
   }
   assert.match(files.availability, /active="availability"/);
   assert.match(files.rules, /active="rules"/);
+  assert.match(files.nights, /active="nights"/);
   assert.match(files.night, /active="nights"/);
   assert.match(files.fixture, /active="nights"/);
   assert.match(files.ledger, /active="ledger"/);
@@ -277,6 +279,21 @@ test("all referee work pages use the app shell and future balances are clearly n
   assert.match(files.ledger, /Your money/);
   assert.match(files.ledger, /Money received/);
   assert.match(files.ledger, /getRefereePayableDueToRefereePence/);
+});
+
+test("Nights is a dedicated app screen with plain-English match-night actions", () => {
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  const nights = fs.readFileSync("src/app/(public)/referee/nights/page.tsx", "utf8");
+  assert.match(shell, /href: "\/referee\/nights"/);
+  assert.match(home, /href="\/referee\/nights"/);
+  assert.doesNotMatch(home, /#referee-night-picker/);
+  assert.doesNotMatch(home, /Open night sheet/);
+  assert.match(nights, /Complete match night/);
+  assert.match(nights, /Run match night/);
+  assert.match(nights, /View match night/);
+  assert.match(nights, /Needs action/);
+  assert.match(nights, /Previous nights/);
 });
 
 test("referee app navigation exposes a dedicated ledger tab", () => {

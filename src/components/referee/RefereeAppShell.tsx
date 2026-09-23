@@ -23,7 +23,7 @@ export default function RefereeAppShell({
     { key: "home" as const, href: "/referee", label: "Home", Icon: HomeIcon },
     {
       key: "nights" as const,
-      href: "/referee#referee-night-picker",
+      href: "/referee/nights",
       label: "Nights",
       Icon: ClipboardDocumentListIcon,
     },

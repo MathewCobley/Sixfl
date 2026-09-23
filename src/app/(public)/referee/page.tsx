@@ -64,6 +64,13 @@ function formatStatus(status: RefereeNightStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+function matchNightActionLabel(night: RefereeNightSummary, todayLondonDate: string) {
+  if (isClosedNight(night)) return "View match night";
+  if (night.nightDate < todayLondonDate) return "Complete match night";
+  if (night.nightDate === todayLondonDate) return "Run match night";
+  return "View match night";
+}
+
 function sortNightSoonestFirst(a: RefereeNightSummary, b: RefereeNightSummary) {
   return a.nightDate.localeCompare(b.nightDate);
 }
@@ -202,7 +209,6 @@ function NightCard({
   todayLondonDate: string;
   onsite?: OnsiteRefereeSummary;
 }) {
-  const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
   const isPayable = isNightPayable(night, todayLondonDate);
   const isSettled = night.status === "SETTLED";
   const dueNowPence = isSettled
@@ -264,7 +270,7 @@ function NightCard({
         href={`/referee/night/${night.id}`}
         className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-[#04130c] active:bg-emerald-300"
       >
-        {canOpen ? "Open night sheet" : "View night"}
+        {matchNightActionLabel(night, todayLondonDate)}
       </Link>
     </article>
   );
@@ -572,7 +578,7 @@ export default async function RefereePage() {
           desktopTabs={<RefereeTabs active="overview" previewRefereeId={previewRefereeId} />}
           preview={null}
         >
-          {nightSheets}
+          {null}
         </RefereeAppHome>
       </RefereePortalViewMode>
 
@@ -678,12 +684,12 @@ export default async function RefereePage() {
                 <p className="mt-2 text-sm leading-5 text-white/60">Quick reference for how SIXFL matches should be managed.</p>
               </Link>
               <Link
-                href={nextNight ? `/referee/night/${nextNight.id}` : "#referee-night-picker"}
+                href={nextNight ? `/referee/night/${nextNight.id}` : "/referee/nights"}
                 className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 transition hover:bg-white/[0.07]"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">Next action</p>
                 <p className="mt-3 text-xl font-semibold text-white">
-                  {nextNight ? "Open night sheet" : "View night sheets"}
+                  {nextNight ? matchNightActionLabel(nextNight, todayLondonDate) : "View match nights"}
                 </p>
                 <p className="mt-2 text-sm leading-5 text-white/60">
                   {nextNight ? "Enter results, cash and notes for your next night." : "No open night is currently assigned."}
