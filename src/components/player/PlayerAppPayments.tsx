@@ -54,6 +54,14 @@ export type PlayerAppPaymentLinkHistory = {
   removedReason: string | null;
   paymentUrl: string;
   activePath: string | null;
+  actorEvents: Array<{
+    id: string;
+    actionLabel: string;
+    dateLabel: string;
+    actorLabel: string;
+    via: string;
+    reason: string | null;
+  }>;
 };
 
 export type PlayerAppPaymentPlan = {
@@ -373,6 +381,25 @@ export default function PlayerAppPayments({
                       <div className="mt-2 break-all rounded-lg bg-black/15 px-2 py-1.5 font-mono text-[9px] leading-4 text-white/25">
                         {link.paymentUrl}
                       </div>
+                      <div className="mt-2 space-y-1.5">
+                        {link.actorEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className="rounded-lg border border-white/[0.06] bg-black/15 px-2.5 py-2 text-[10px] leading-4 text-white/50"
+                          >
+                            <div className="font-semibold text-white/70">
+                              {event.actionLabel} by: {event.actorLabel}
+                            </div>
+                            <div className="mt-0.5 text-white/35">
+                              {event.dateLabel} · {event.via}
+                            </div>
+                            {event.reason ? (
+                              <div className="mt-0.5 text-white/35">{event.reason}</div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+
 
                       <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-white/40">
                         <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-1">
