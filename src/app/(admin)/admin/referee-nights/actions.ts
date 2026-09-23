@@ -226,6 +226,110 @@ export async function chaseRefereeNightConfirmationAction(formData: FormData) {
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}chased=1`);
 }
 
+type RefereePaymentNightRow = {
+  id: string;
+  nightDate: Date | string;
+  dueToRefereePence: number;
+  cashPaidToRefereePence: number;
+};
+
+function paymentMethodLabel(value: string) {
+  if (value === "CASH") return "cash";
+  if (value === "BANK") return "bank transfer";
+  return "other payment";
+}
+
+export async function recordRefereePaymentAction(formData: FormData) {
+  const { user } = await requireAdmin();
+
+  const refereeId = readRequired(formData, "refereeId", "Referee");
+  const paymentPence = parseMoneyToPence(formData.get("paymentPounds"));
+  if (!paymentPence || paymentPence <= 0) {
+    throw new Error("Enter a referee payment greater than £0.");
+  }
+
+  const requestedMethod = readString(formData, "paymentMethod").toUpperCase();
+  const paymentMethod = ["CASH", "BANK", "OTHER"].includes(requestedMethod)
+    ? requestedMethod
+    : "OTHER";
+  const todayLondonDate = toLondonDateInputValue(new Date());
+
+  const nights = await prisma.$queryRaw<RefereePaymentNightRow[]>(Prisma.sql`
+    SELECT
+      id,
+      "nightDate",
+      "dueToRefereePence"::int AS "dueToRefereePence",
+      COALESCE("cashPaidToRefereePence", 0)::int AS "cashPaidToRefereePence"
+    FROM "RefereeNight"
+    WHERE "refereeId" = ${refereeId}
+      AND status NOT IN ('CANCELLED', 'SETTLED')
+      AND "nightDate" < ${todayLondonDate}::date
+      AND "dueToRefereePence" > COALESCE("cashPaidToRefereePence", 0)
+    ORDER BY "nightDate" ASC, id ASC
+  `);
+
+  const totalOutstanding = nights.reduce(
+    (sum, night) =>
+      sum + Math.max(0, night.dueToRefereePence - night.cashPaidToRefereePence),
+    0,
+  );
+
+  if (totalOutstanding <= 0) {
+    throw new Error("This referee does not currently have an outstanding balance.");
+  }
+  if (paymentPence > totalOutstanding) {
+    throw new Error(
+      `Payment is higher than the referee's outstanding balance of £${(totalOutstanding / 100).toFixed(2)}.`,
+    );
+  }
+
+  let remaining = paymentPence;
+  const allocations: Array<{ nightId: string; amountPence: number }> = [];
+  for (const night of nights) {
+    if (remaining <= 0) break;
+    const outstanding = Math.max(
+      0,
+      night.dueToRefereePence - night.cashPaidToRefereePence,
+    );
+    if (outstanding <= 0) continue;
+    const allocation = Math.min(outstanding, remaining);
+    allocations.push({ nightId: night.id, amountPence: allocation });
+    remaining -= allocation;
+  }
+
+  if (remaining !== 0) {
+    throw new Error("Could not allocate the full referee payment.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const allocation of allocations) {
+      const note = `Referee payment recorded: £${(allocation.amountPence / 100).toFixed(2)} by ${paymentMethodLabel(paymentMethod)} via referee balance summary.`;
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "RefereeNight"
+        SET
+          "cashPaidToRefereePence" = COALESCE("cashPaidToRefereePence", 0) + ${allocation.amountPence},
+          "cashDistributionNotes" = concat_ws(E'\\n', NULLIF("cashDistributionNotes", ''), ${note}),
+          "cashDistributedAt" = NOW(),
+          "cashDistributedByUserId" = ${user?.id ?? null},
+          "updatedAt" = NOW()
+        WHERE id = ${allocation.nightId}
+      `);
+    }
+  });
+
+  revalidatePath("/admin/referee-nights");
+  revalidatePath("/admin/referees");
+  revalidatePath(`/admin/referees/${refereeId}`);
+  revalidatePath("/referee");
+  for (const allocation of allocations) {
+    revalidatePath(`/admin/referee-nights/${allocation.nightId}`);
+  }
+
+  redirect(
+    `/admin/referee-nights?payment=recorded&refereeId=${encodeURIComponent(refereeId)}&amount=${paymentPence}&method=${paymentMethod}`,
+  );
+}
+
 export async function refreshRefereeNightFixturesAction(formData: FormData) {
   await requireAdmin();
 
