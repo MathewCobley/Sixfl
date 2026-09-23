@@ -60,7 +60,6 @@ test("home exposes real night details and operational routes without website esc
     "£10.00",
     "Refereeing with: Mathew.",
     "View match night",
-    "Referee Portal",
   ])
     assert.ok(html.includes(text), text);
   for (const href of [...html.matchAll(/<a[^>]*href="([^"]*)"/g)].map(
@@ -323,3 +322,23 @@ test("availability is a calendar with usual nights highlighted and instant-save 
 });
 
 module.exports = { base };
+
+
+test("decorative website-style eyebrows are removed from referee app screens", () => {
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  const nights = fs.readFileSync("src/app/(public)/referee/nights/page.tsx", "utf8");
+  const ledger = fs.readFileSync("src/app/(public)/referee/ledger/page.tsx", "utf8");
+  const rules = fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8");
+  const night = fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8");
+  const refereePage = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
+
+  assert.doesNotMatch(home, /Referee Portal|Ready for match night/);
+  assert.match(home, />\s*Home\s*</);
+  assert.doesNotMatch(nights, />\s*Match nights\s*</);
+  assert.doesNotMatch(ledger, />\s*Payment history\s*</);
+  assert.doesNotMatch(rules, />\s*Quick reference\s*</);
+  assert.match(night, /title="Match night"/);
+  assert.doesNotMatch(night, /title="Night sheet"/);
+  assert.doesNotMatch(refereePage, />\s*Night sheets\s*</);
+  assert.doesNotMatch(refereePage, /No open night sheets\./);
+});
