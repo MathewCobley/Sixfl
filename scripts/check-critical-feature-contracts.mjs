@@ -101,6 +101,9 @@ expectText("payments", playerPaymentActionPath, playerPaymentAction, 'error=miss
 expectText("payments", playerPaymentPagePath, playerPaymentPage, "emailRequired:", "captain payment rows must expose missing-email state");
 expectText("payments", playerPaymentPagePath, playerPaymentPage, "disabled={ledgerControlled || (player.emailRequired && !player.fee)}", "players without email must not be newly selected for payment links");
 expectText("payments", playerPaymentPagePath, playerPaymentPage, "Email required — add an email before sending a payment link", "missing-email reason must remain visible to captains");
+expectText("payments", playerPaymentActionPath, playerPaymentAction, "Deselection is intentionally non-destructive.", "ordinary squad edits must preserve existing player payment links when a player is unticked");
+expectRegex("payments", playerPaymentActionPath, playerPaymentAction, /^(?![\s\S]*Voided: Removed from captain squad payment collection)[\s\S]*$/, "ordinary squad edits must not silently cancel deselected player links");
+expectText("payments", playerPaymentPagePath, playerPaymentPage, "Unticking a player here will not cancel or delete an existing link.", "captains must be told that deselection is non-destructive");
 
 expectText("payments", squadEditActionPath, squadEditAction, "const nextPlayerMatchFeeOverride = access.isAdmin", "captains must not be able to change player fee overrides server-side");
 expectText("payments", squadEditActionPath, squadEditAction, "TeamMemberFeeOverrideAudit", "player fee override changes must retain an audit trail");
