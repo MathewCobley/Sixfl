@@ -3,6 +3,11 @@
 // ========================================
 
 import { playerFeeCollectionHold } from "./player-ledger";
+import {
+  setPlayerPaymentLinkAuditActor,
+  systemPlayerPaymentLinkActor,
+  type PlayerPaymentLinkAuditActor,
+} from "./player-payment-link-history";
 import { randomBytes } from "node:crypto";
 import {
   NotificationAudience,
@@ -232,7 +237,12 @@ export function buildPlayerMatchFeePaymentUrl(paymentToken: string) {
   ).toString();
 }
 
-export async function ensurePlayerMatchFeePaymentDetails(feeId: string) {
+export async function ensurePlayerMatchFeePaymentDetails(
+  feeId: string,
+  auditActor: PlayerPaymentLinkAuditActor = systemPlayerPaymentLinkActor(
+    "Automatic payment-link creation",
+  ),
+) {
   const fee = await prisma.playerMatchFee.findUnique({
     where: { id: feeId },
     select: {
@@ -256,26 +266,36 @@ export async function ensurePlayerMatchFeePaymentDetails(feeId: string) {
     return fee;
   }
 
-  return prisma.playerMatchFee.update({
-    where: { id: fee.id },
-    data: {
-      paymentToken: token,
-      paymentUrl,
-    },
-    select: {
-      id: true,
-      paymentToken: true,
-      paymentUrl: true,
-      status: true,
-    },
+  return prisma.$transaction(async (tx) => {
+    await setPlayerPaymentLinkAuditActor(tx, auditActor);
+
+    return tx.playerMatchFee.update({
+      where: { id: fee.id },
+      data: {
+        paymentToken: token,
+        paymentUrl,
+      },
+      select: {
+        id: true,
+        paymentToken: true,
+        paymentUrl: true,
+        status: true,
+      },
+    });
   });
 }
 
-export async function ensurePlayerMatchFeePaymentDetailsForFees(feeIds: string[]) {
+export async function ensurePlayerMatchFeePaymentDetailsForFees(
+  feeIds: string[],
+  auditActor?: PlayerPaymentLinkAuditActor,
+) {
   const uniqueFeeIds = Array.from(new Set(feeIds.filter(Boolean)));
 
   for (const feeId of uniqueFeeIds) {
-    await ensurePlayerMatchFeePaymentDetails(feeId);
+    await ensurePlayerMatchFeePaymentDetails(
+      feeId,
+      auditActor ?? systemPlayerPaymentLinkActor("Automatic payment-link creation"),
+    );
   }
 }
 
@@ -425,10 +445,19 @@ export async function queuePlayerMatchFeeReminder(input: {
   mode: PlayerMatchFeeReminderMode;
   channels?: ReminderChannel[];
   force?: boolean;
+  linkAuditActor?: PlayerPaymentLinkAuditActor;
 }) {
   if (await playerFeeCollectionHold(input.feeId)) return { queued: 0, skipped: 1, status: "collection_held" as const };
   await ensurePlayerMatchFeeReminderTemplates();
-  const ensured = await ensurePlayerMatchFeePaymentDetails(input.feeId);
+  const ensured = await ensurePlayerMatchFeePaymentDetails(
+    input.feeId,
+    input.linkAuditActor ??
+      systemPlayerPaymentLinkActor(
+        input.mode === "request"
+          ? "Payment request automation"
+          : "Payment reminder automation",
+      ),
+  );
 
   if (!ensured || ensured.status !== PlayerMatchFeeStatus.OPEN) {
     return { queued: 0, skipped: 1, status: "not_open" as const };
