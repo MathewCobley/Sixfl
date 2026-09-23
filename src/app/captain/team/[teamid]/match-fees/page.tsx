@@ -574,7 +574,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
         </div>
       ) : null}
 
-      <section className="captain-app-secondary rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 text-sm text-sky-50/80">
+      <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 text-sm text-sky-50/80">
         <p className="font-semibold text-white">How availability and fees work together</p>
         <p className="mt-2 leading-6">
           Unavailable does not silently alter money. Remove the player from this matchday squad to cancel an unpaid fee. If they have already paid, SIXFL will ask for confirmation, retain the payment for audit and create player credit.
