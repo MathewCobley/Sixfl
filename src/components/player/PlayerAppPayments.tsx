@@ -388,7 +388,7 @@ export default function PlayerAppPayments({
                             className="rounded-lg border border-white/[0.06] bg-black/15 px-2.5 py-2 text-[10px] leading-4 text-white/50"
                           >
                             <div className="font-semibold text-white/70">
-                              {event.actionLabel} by: {event.actorLabel}
+                              {event.actionLabel === "Created" ? "Created by:" : `${event.actionLabel} by:`} {event.actorLabel}
                             </div>
                             <div className="mt-0.5 text-white/35">
                               {event.dateLabel} · {event.via}
