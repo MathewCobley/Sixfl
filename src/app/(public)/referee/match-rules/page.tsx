@@ -79,10 +79,7 @@ export default async function RefereeMatchRulesPage() {
     <RefereeAppShell active="rules" title="Match rules">
 
       <section className="rounded-[1.35rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">
-          Quick reference
-        </p>
-        <h1 className="mt-1 text-lg font-black text-white">SIXFL match guide</h1>
+        <h1 className="text-lg font-black text-white">SIXFL match guide</h1>
         <p className="mt-1 text-xs text-white/45">
           {MATCH_RULES_VERSION} · Effective {MATCH_RULES_EFFECTIVE_DATE}
         </p>
