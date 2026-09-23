@@ -176,7 +176,7 @@ export default async function DashboardPage({
               SIXFL app
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              ${isAppLaunch ? "Switch app viewer" : "Choose a portal"}
+              {isAppLaunch ? "Switch app viewer" : "Choose a portal"}
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/70">
               This account has more than one SIXFL role. Choose the portal you want to open.
