@@ -39,20 +39,25 @@ test('pending score renders no zero-goal HTML cap, established score still caps 
   html=renderToStaticMarkup(React.createElement(Fields,{players,goalsFor:3}));
   assert.match(html.match(/<input[^>]*name="scorerGoals_m0"[^>]*>/)[0],/max="3"/);
 });
-test('server rejects future, unpublished, cancelled, postponed, foreign fixtures and result-arrival race before writing', async () => {
-  const base={id:'f',homeTeamId:'a',awayTeamId:'b',kickoffAt:new Date(0),publishedAt:new Date(0),status:'SCHEDULED',result:null,league:{publicAt:new Date(0)}};
+test('server rejects future, unpublished, cancelled, postponed, foreign, stale-new fixtures and result-arrival race before writing', async () => {
+  const base={id:'f',homeTeamId:'a',awayTeamId:'b',kickoffAt:new Date(Date.now()-60*60*1000),publishedAt:new Date(Date.now()-60*60*1000),status:'SCHEDULED',result:null,league:{publicAt:new Date(Date.now()-60*60*1000)}};
   let fixture=base; let writes=0; let locks=0;
-  const tx={ $queryRaw: async () => { locks++; return []; }, fixture:{findUnique:async()=>fixture}, teamMember:{findMany:async()=>members}, fixtureMatchReport:{findUnique:async()=>null,upsert:async()=>{writes++;}} };
+  let existingReport=null;
+  const tx={ $queryRaw: async () => { locks++; return []; }, fixture:{findUnique:async()=>fixture}, teamMember:{findMany:async()=>members}, fixtureMatchReport:{findUnique:async()=>existingReport,upsert:async()=>{writes++;}} };
   const { saveEarlyMatchReport }=load(earlyFile,{'@/lib/prisma':{prisma:{$transaction:async callback=>callback(tx)}}});
-  for(const patch of [{league:{publicAt:null}},{league:{publicAt:new Date(Date.now()+86400000)}},{kickoffAt:new Date(Date.now()+86400000)},{publishedAt:null},{status:'CANCELLED'},{status:'POSTPONED'},{homeTeamId:'c',awayTeamId:'d'},{result:{id:'r'}}]){
-    fixture={...base,...patch}; await assert.rejects(saveEarlyMatchReport('a','f',new FormData()));
+  for(const patch of [{league:{publicAt:null}},{league:{publicAt:new Date(Date.now()+86400000)}},{kickoffAt:new Date(Date.now()+86400000)},{publishedAt:null},{status:'CANCELLED'},{status:'POSTPONED'},{homeTeamId:'c',awayTeamId:'d'},{result:{id:'r'}},{kickoffAt:new Date(Date.now()-8*24*60*60*1000)}]){
+    fixture={...base,...patch}; existingReport=null; await assert.rejects(saveEarlyMatchReport('a','f',new FormData()));
   }
-  assert.equal(writes,0); assert.equal(locks,8);
-  fixture=base; await saveEarlyMatchReport('a','f',new FormData()); assert.equal(writes,1);
+  assert.equal(writes,0); assert.equal(locks,9);
+  fixture=base; existingReport=null; await saveEarlyMatchReport('a','f',new FormData()); assert.equal(writes,1);
+  fixture={...base,kickoffAt:new Date(Date.now()-8*24*60*60*1000)}; existingReport={id:'existing'}; await saveEarlyMatchReport('a','f',new FormData()); assert.equal(writes,2);
 });
 test('early report action authenticates; both admin entry surfaces retain shared warning component after prebuild',()=>{
   const component=fs.readFileSync('src/components/captain/EarlyMatchReports.tsx','utf8');
   assert.ok(component.indexOf('await requireCaptain(teamId)')<component.indexOf('await saveEarlyMatchReport'));
+  assert.match(component,/getEarlyMatchReportCutoff/);
+  assert.match(component,/kickoffAt: \{ gte: recentCutoff, lte: now \}/);
+  assert.match(component,/earlyReports: \{ some: \{ teamId \} \}/);
   assert.match(component,/result: \{ is: null \}/); assert.match(component,/Awaiting official result/);
   assert.match(fs.readFileSync('src/app/captain/team/[teamid]/results/page.tsx','utf8'),/<EarlyMatchReports/);
   for(const file of ['src/app/(admin)/admin/results/page.tsx','src/app/(admin)/admin/fixtures/page.tsx','src/app/(admin)/admin/fixtures/[id]/result/page.tsx']) assert.match(fs.readFileSync(file,'utf8'),/<MatchReportWarnings/);

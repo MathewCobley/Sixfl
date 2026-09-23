@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma";
 export type EarlyContribution = { teamMemberId: string; name: string; goals: number; assists: number };
 export type EarlyPerformance = { teamMemberId: string; rating: number | null };
 
+export const EARLY_MATCH_REPORT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function getEarlyMatchReportCutoff(now = new Date()) {
+  return new Date(now.getTime() - EARLY_MATCH_REPORT_WINDOW_MS);
+}
+
 export function readEarlyReport(form: FormData, members: Array<{ id: string; user: { name: string | null; email: string | null } }>) {
   const pomId = String(form.get("playerOfMatchTeamMemberId") ?? "");
   const ownGoalsText = String(form.get("ownGoals") ?? "0").trim();
@@ -43,14 +49,20 @@ export async function saveEarlyMatchReport(teamId: string, fixtureId: string, fo
     await tx.$queryRaw`SELECT "id" FROM "Fixture" WHERE "id" = ${fixtureId} FOR UPDATE`;
     const fixture = await tx.fixture.findUnique({ where: { id: fixtureId }, include: { result: { select: { id: true } }, league: { select: { publicAt: true } } } });
     if (!fixture || ![fixture.homeTeamId, fixture.awayTeamId].includes(teamId)) throw new Error("This fixture does not belong to your team.");
-    if (!fixture.league.publicAt || fixture.league.publicAt > new Date() || !fixture.publishedAt || fixture.kickoffAt > new Date() || !["SCHEDULED", "COMPLETED"].includes(fixture.status)) {
+
+    const now = new Date();
+    const existing = await tx.fixtureMatchReport.findUnique({ where: { fixtureId_teamId: { fixtureId, teamId } } });
+
+    if (!fixture.league.publicAt || fixture.league.publicAt > now || !fixture.publishedAt || fixture.kickoffAt > now || !["SCHEDULED", "COMPLETED"].includes(fixture.status)) {
       throw new Error("Match reports open from kick-off for published fixtures that have not been cancelled or postponed.");
     }
     if (fixture.result) throw new Error("The official result has just arrived. Please reload and save using Update match details.");
+    if (fixture.kickoffAt < getEarlyMatchReportCutoff(now) && !existing) {
+      throw new Error("This fixture is too old to start an awaiting-result match report. Please ask SIXFL to correct the missing result.");
+    }
+
     const members = await tx.teamMember.findMany({ where: { teamId }, select: { id: true, user: { select: { name: true, email: true } } } });
     const report = readEarlyReport(form, members);
-    const existing = await tx.fixtureMatchReport.findUnique({ where: { fixtureId_teamId: { fixtureId, teamId } } });
-    const now = new Date();
     const data = {
       contributions: report.contributions as unknown as Prisma.InputJsonValue,
       performances: report.performances as unknown as Prisma.InputJsonValue,
