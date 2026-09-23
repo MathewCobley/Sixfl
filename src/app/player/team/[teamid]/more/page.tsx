@@ -28,7 +28,10 @@ function withPreview(href: string, previewMembershipId: string | null) {
   return `${path}${separator}previewMembershipId=${encodeURIComponent(previewMembershipId)}${hash ? `#${hash}` : ""}`;
 }
 
-export default async function PlayerMorePage({ params, searchParams }: PageProps) {
+export default async function PlayerMorePage({
+  params,
+  searchParams,
+}: PageProps) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
   const session = await getServerSession(authOptions);
@@ -58,14 +61,14 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       : null;
 
   const previewMembershipId =
-    user?.role === UserRole.ADMIN ? previewMembership?.id ?? null : null;
+    user?.role === UserRole.ADMIN ? (previewMembership?.id ?? null) : null;
   const effectiveUserId =
     previewMembership?.userId ?? user?.teamMembers[0]?.userId ?? null;
   const membershipMap = effectiveUserId
     ? await getPlayerTeamMembershipsByUserId([effectiveUserId])
     : new Map();
   const linkedTeamAccounts = effectiveUserId
-    ? membershipMap.get(effectiveUserId) ?? []
+    ? (membershipMap.get(effectiveUserId) ?? [])
     : [];
 
   const rows = [
@@ -82,25 +85,37 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       icon: PlayCircleIcon,
     },
     {
-      href: withPreview(`/player/team/${teamid}/goal-of-the-month`, previewMembershipId),
+      href: withPreview(
+        `/player/team/${teamid}/goal-of-the-month`,
+        previewMembershipId,
+      ),
       label: "Goal of the Month",
       description: "Nominate goals, vote and watch the winners",
       icon: TrophyIcon,
     },
     {
-      href: withPreview(`/player/team/${teamid}/referrals`, previewMembershipId),
+      href: withPreview(
+        `/player/team/${teamid}/referrals`,
+        previewMembershipId,
+      ),
       label: "Refer a team · £75",
       description: "Share your referral link and track rewards",
       icon: GiftIcon,
     },
     {
-      href: withPreview(`/player/team/${teamid}/league-rules`, previewMembershipId),
+      href: withPreview(
+        `/player/team/${teamid}/league-rules`,
+        previewMembershipId,
+      ),
       label: "League Rules",
       description: "Competition, payments, conduct and fixture rules",
       icon: BookOpenIcon,
     },
     {
-      href: withPreview(`/player/team/${teamid}/match-rules`, previewMembershipId),
+      href: withPreview(
+        `/player/team/${teamid}/match-rules`,
+        previewMembershipId,
+      ),
       label: "Match Rules",
       description: "The rules and procedures used on the pitch",
       icon: BookOpenIcon,
@@ -129,42 +144,43 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
   return (
     <main className="min-h-screen bg-[#07130f] px-4 pb-28 pt-5 text-white">
       <div className="mx-auto w-full max-w-xl">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300/70">
-            Player app
-          </p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight">More</h1>
-          <p className="mt-2 text-sm leading-6 text-white/45">
-            Everything here stays inside the SIXFL player app.
-          </p>
-        </div>
+        <h1 className="text-2xl font-black tracking-tight">More</h1>
 
-        <section className="mt-5 overflow-hidden rounded-[1.6rem] bg-white/[0.045]">
-          {rows.map((row, index) => {
-            const Icon = row.icon;
-            return (
-              <Link
-                key={row.href}
-                href={row.href}
-                className={[
-                  "flex min-h-[4.6rem] items-center gap-4 px-4 py-3 active:bg-white/[0.05]",
-                  index < rows.length - 1 ? "border-b border-white/[0.06]" : "",
-                ].join(" ")}
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/[0.055] text-emerald-200">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-white">{row.label}</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-white/40">
-                    {row.description}
-                  </span>
-                </span>
-                <ChevronRightIcon className="h-5 w-5 shrink-0 text-white/25" />
-              </Link>
-            );
-          })}
-        </section>
+        {[rows.slice(0, 4), rows.slice(4, 7), rows.slice(7)]
+          .filter((group) => group.length)
+          .map((group, groupIndex) => (
+            <section
+              key={groupIndex}
+              aria-label={["Explore", "Rules and help", "Account"][groupIndex]}
+              className="mt-4 overflow-hidden rounded-2xl bg-white/[0.045]"
+            >
+              {group.map((row, index) => {
+                const Icon = row.icon;
+                return (
+                  <Link
+                    key={row.href}
+                    href={row.href}
+                    className={[
+                      "flex min-h-14 items-center gap-4 px-4 py-3 active:bg-white/[0.05]",
+                      index < group.length - 1
+                        ? "border-b border-white/[0.06]"
+                        : "",
+                    ].join(" ")}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-white/[0.055] text-emerald-200">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-white">
+                        {row.label}
+                      </span>
+                    </span>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-white/25" />
+                  </Link>
+                );
+              })}
+            </section>
+          ))}
 
         <div className="mt-5">
           <Link
