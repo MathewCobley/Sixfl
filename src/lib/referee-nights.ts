@@ -118,7 +118,7 @@ export function getRefereePayableDueToRefereePence(
   >,
   todayLondonDate: string,
 ) {
-  if (!isRefereeNightPayable(night, todayLondonDate)) return 0;
+  if (!isRefereeNightPayable(night, todayLondonDate) || night.status === "SETTLED") return 0;
   return getRefereeRemainingDueToRefereePence(night);
 }
 
@@ -129,7 +129,7 @@ export function getRefereePayableDueToSixflPence(
   >,
   todayLondonDate: string,
 ) {
-  if (!isRefereeNightPayable(night, todayLondonDate)) return 0;
+  if (!isRefereeNightPayable(night, todayLondonDate) || night.status === "SETTLED") return 0;
   return getRefereeRemainingDueToSixflPence(night);
 }
 
