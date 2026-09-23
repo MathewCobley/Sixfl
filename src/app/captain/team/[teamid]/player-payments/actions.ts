@@ -4,7 +4,7 @@
 
 "use server";
 
-import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection, readPlayerLedgerState } from "@/lib/payments/player-ledger";
+import { pausePlayerFeeCollection, readPlayerLedgerState } from "@/lib/payments/player-ledger";
 import {
   setPlayerPaymentLinkAuditActor,
   type PlayerPaymentLinkAuditActor,
@@ -590,51 +590,10 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
     }
   }
 
-  const removableFees = await prisma.playerMatchFee.findMany({
-    where: {
-      teamId,
-      fixtureId,
-      status: { in: ["OPEN", "WAIVED", "CANCELLED"] },
-      OR: [{ teamMemberId: { not: null } }, { prospectId: { not: null } }],
-    },
-    select: {
-      id: true,
-      note: true,
-      teamMemberId: true,
-      prospectId: true,
-    },
-  });
-
-  for (const fee of removableFees) {
-    if (await isPlayerFeeLedgerControlled(fee.id)) continue;
-    const isSelectedMember = fee.teamMemberId
-      ? selectedMemberIds.includes(fee.teamMemberId)
-      : false;
-    const isSelectedProspect = fee.prospectId
-      ? selectedProspectIds.includes(fee.prospectId)
-      : false;
-
-    if (isSelectedMember || isSelectedProspect) continue;
-
-    await prisma.$transaction(async (tx) => {
-      await setPlayerPaymentLinkAuditActor(tx, linkAuditActor);
-      await tx.playerMatchFee.update({
-        where: { id: fee.id },
-        data: {
-          status: "CANCELLED",
-          paidAt: null,
-          waivedAt: null,
-          cancelledAt: new Date(),
-          paymentUrl: null,
-          paymentToken: null,
-          note: appendNote({
-            existingNote: fee.note,
-            note: "Voided: Removed from captain squad payment collection",
-          }),
-        },
-      });
-    });
-  }
+  // Deselection is intentionally non-destructive. An existing player fee/link
+  // must survive an ordinary collection edit even when that player is unchecked.
+  // Stopping collection or forgiving debt belongs to the explicit pause/write-off
+  // controls, where the consequences are shown and the action is audited.
 
   await syncTeamChargeForZeroFeeWaivers({ teamId, fixtureId });
   await ensurePlayerMatchFeePaymentDetailsForFees(
