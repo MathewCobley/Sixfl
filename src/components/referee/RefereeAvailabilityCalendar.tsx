@@ -215,6 +215,7 @@ export default function RefereeAvailabilityCalendar({
   initialSlots: RefereeAvailabilityCalendarSlot[];
 }) {
   const [slots, setSlots] = useState(initialSlots);
+  void todayDate;
 
   const slotsByDate = useMemo(() => {
     const grouped = new Map<string, RefereeAvailabilityCalendarSlot[]>();
@@ -224,27 +225,30 @@ export default function RefereeAvailabilityCalendar({
     return grouped;
   }, [slots]);
 
-  const initialSelectedDate = useMemo(() => {
-    const sorted = Array.from(slotsByDate.keys()).sort();
-    return (
-      sorted.find(
-        (value) =>
-          value >= todayDate &&
-          (slotsByDate.get(value) ?? []).some((slot) => slot.status === "NO_RESPONSE"),
-      ) ??
-      sorted.find((value) => value >= todayDate) ??
-      sorted[0] ??
-      null
-    );
-  }, [slotsByDate, todayDate]);
-
-  const [selectedDate, setSelectedDate] = useState<string | null>(initialSelectedDate);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedDate || !slotsByDate.has(selectedDate)) {
-      setSelectedDate(initialSelectedDate);
+    if (selectedDate && !slotsByDate.has(selectedDate)) {
+      setSelectedDate(null);
     }
-  }, [initialSelectedDate, selectedDate, slotsByDate]);
+  }, [selectedDate, slotsByDate]);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedDate(null);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedDate]);
 
   const [yearText, monthText] = monthKey.split("-");
   const year = Number(yearText);
@@ -363,7 +367,9 @@ export default function RefereeAvailabilityCalendar({
                     type="button"
                     aria-label={`${formatSelectedDate(value)}, usual referee night`}
                     aria-pressed={selected}
-                    onClick={() => setSelectedDate(value)}
+                    onClick={() =>
+                      setSelectedDate((current) => (current === value ? null : value))
+                    }
                     className={`relative flex h-12 flex-col items-center justify-center rounded-xl border text-xs font-black transition active:scale-95 ${calendarDateClasses(
                       statuses,
                       selected,
@@ -398,32 +404,53 @@ export default function RefereeAvailabilityCalendar({
           </section>
 
           {selectedDate && selectedSlots.length > 0 ? (
-            <section className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/70">
-                    Usual referee night
-                  </p>
-                  <h2 className="mt-1 text-base font-black text-white">
-                    {formatSelectedDate(selectedDate)}
-                  </h2>
+            <>
+              <button
+                type="button"
+                aria-label="Close availability options"
+                onClick={() => setSelectedDate(null)}
+                className="fixed inset-0 z-50 cursor-default bg-black/55 backdrop-blur-[2px]"
+              />
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="availability-date-title"
+                className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-h-[min(72dvh,36rem)] max-w-xl overflow-y-auto rounded-[1.4rem] border border-emerald-400/25 bg-[#08130f] p-3.5 shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+              >
+                <div className="sticky top-0 z-10 -mx-1 flex items-start justify-between gap-3 rounded-xl bg-[#08130f]/95 px-1 pb-3 backdrop-blur">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300/70">
+                      Set availability
+                    </p>
+                    <h2 id="availability-date-title" className="mt-1 text-lg font-black text-white">
+                      {formatSelectedDate(selectedDate)}
+                    </h2>
+                    <p className="mt-1 text-xs text-white/45">
+                      Tap an option below — it saves straight away.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(null)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-lg font-bold text-white/70 active:bg-white/10"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
                 </div>
-                <span className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-white/45">
-                  {selectedSlots.length} league{selectedSlots.length === 1 ? "" : "s"}
-                </span>
-              </div>
 
-              <div className="mt-3 space-y-2">
-                {selectedSlots.map((slot) => (
-                  <SlotEditor
-                    key={`${slot.leagueId}-${slot.date}`}
-                    month={monthKey}
-                    slot={slot}
-                    onSaved={updateSavedSlot}
-                  />
-                ))}
-              </div>
-            </section>
+                <div className="space-y-2">
+                  {selectedSlots.map((slot) => (
+                    <SlotEditor
+                      key={`${slot.leagueId}-${slot.date}`}
+                      month={monthKey}
+                      slot={slot}
+                      onSaved={updateSavedSlot}
+                    />
+                  ))}
+                </div>
+              </section>
+            </>
           ) : null}
         </>
       )}
