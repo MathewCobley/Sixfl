@@ -6,17 +6,24 @@ import Link from "next/link";
 import { Prisma, UserRole } from "@prisma/client";
 import { ensureRefereeNightConfirmationColumns } from "@/lib/referee-night-confirmations";
 import { getCurrentLeagueIds } from "@/lib/current-leagues";
+import { toLondonDateInputValue } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
   formatMoney,
   formatNightDate,
   getRefereeNightSummaries,
+  getRefereePayableDueToRefereePence,
+  getRefereePayableDueToSixflPence,
   type RefereeNightStatus,
 } from "@/lib/referee-nights";
 import { getRefereeProfilesByUserIds } from "@/lib/referees/profile";
 import FormListboxField from "@/components/ui/FormListboxField";
-import { chaseRefereeNightConfirmationAction, createRefereeNightAction } from "./actions";
+import {
+  chaseRefereeNightConfirmationAction,
+  createRefereeNightAction,
+  recordRefereePaymentAction,
+} from "./actions";
 
 type ConfirmationInfo = {
   id: string;
@@ -111,7 +118,13 @@ async function getConfirmationMap(nightIds: string[]) {
 export default async function AdminRefereeNightsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ chased?: string }>;
+  searchParams?: Promise<{
+    chased?: string;
+    payment?: string;
+    refereeId?: string;
+    amount?: string;
+    method?: string;
+  }>;
 }) {
   await requireAdmin();
 
@@ -165,15 +178,55 @@ export default async function AdminRefereeNightsPage({
     label: venue.name,
   }));
 
+  const todayLondonDate = toLondonDateInputValue(new Date());
   const submittedCount = visibleNights.filter((night) => night.status === "SUBMITTED").length;
   const unsettledCount = visibleNights.filter(
     (night) => night.status !== "SETTLED" && night.status !== "CANCELLED",
   ).length;
-  const dueToSixfl = visibleNights.reduce((sum, night) => sum + night.dueToSixflPence, 0);
-  const dueToReferees = visibleNights.reduce((sum, night) => sum + night.dueToRefereePence, 0);
+  const dueToSixfl = visibleNights.reduce(
+    (sum, night) => sum + getRefereePayableDueToSixflPence(night, todayLondonDate),
+    0,
+  );
+  const dueToReferees = visibleNights.reduce(
+    (sum, night) => sum + getRefereePayableDueToRefereePence(night, todayLondonDate),
+    0,
+  );
   const confirmedCount = visibleNights.filter((night) => confirmationMap.get(night.id)?.confirmationStatus === "CONFIRMED").length;
   const declinedCount = visibleNights.filter((night) => confirmationMap.get(night.id)?.confirmationStatus === "DECLINED").length;
   const pendingCount = Math.max(0, visibleNights.length - confirmedCount - declinedCount);
+
+  const refereeIdsWithNights = new Set(
+    visibleNights
+      .filter((night) => night.status !== "CANCELLED")
+      .map((night) => night.refereeId),
+  );
+  const refereeBalances = referees
+    .filter((referee) => refereeIdsWithNights.has(referee.id))
+    .map((referee) => {
+      const refereeNights = visibleNights.filter((night) => night.refereeId === referee.id);
+      const owedNights = refereeNights
+        .map((night) => ({
+          night,
+          owedPence: getRefereePayableDueToRefereePence(night, todayLondonDate),
+        }))
+        .filter((entry) => entry.owedPence > 0);
+      const owedPence = owedNights.reduce((sum, entry) => sum + entry.owedPence, 0);
+      const lastPaymentAt = refereeNights
+        .filter((night) => night.cashPaidToRefereePence > 0 && night.cashDistributedAt)
+        .map((night) => night.cashDistributedAt!)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+
+      return {
+        id: referee.id,
+        name: referee.name || referee.email || "Unnamed referee",
+        email: referee.email,
+        owedPence,
+        owedNightCount: owedNights.length,
+        lastPaymentAt,
+      };
+    })
+    .sort((a, b) => b.owedPence - a.owedPence || a.name.localeCompare(b.name));
+  const refereesOwedCount = refereeBalances.filter((referee) => referee.owedPence > 0).length;
 
   return (
     <div className="space-y-8">
@@ -209,8 +262,8 @@ export default async function AdminRefereeNightsPage({
               <div className="mt-1 text-lg font-semibold text-white">{declinedCount}</div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Due refs</div>
-              <div className="mt-1 text-lg font-semibold text-white">{formatMoney(dueToReferees)}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">Refs owed</div>
+              <div className="mt-1 text-lg font-semibold text-white">{refereesOwedCount} · {formatMoney(dueToReferees)}</div>
             </div>
           </div>
         </div>
@@ -222,13 +275,122 @@ export default async function AdminRefereeNightsPage({
         </div>
       ) : null}
 
+      {sp.payment === "recorded" ? (
+        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/12 px-4 py-3 text-sm text-emerald-100">
+          Referee payment recorded. The referee balance has been updated automatically.
+        </div>
+      ) : null}
+
+      <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),rgba(255,255,255,0.03)]">
+        <div className="flex flex-col gap-4 border-b border-white/10 px-5 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300/80">
+              Referee balances
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white">Who do we owe?</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/55">
+              One balance per referee. Completed past nights are rolled together here. Future nights do not count.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Refs owed</div>
+              <div className="mt-1 text-xl font-black text-white">{refereesOwedCount}</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-right">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/55">Total owed</div>
+              <div className="mt-1 text-xl font-black text-emerald-100">{formatMoney(dueToReferees)}</div>
+            </div>
+          </div>
+        </div>
+
+        {refereeBalances.length === 0 ? (
+          <div className="px-6 py-8 text-sm text-white/55">No referee balances yet.</div>
+        ) : (
+          <div className="divide-y divide-white/10">
+            {refereeBalances.map((referee) => (
+              <div key={referee.id} className="grid gap-4 px-5 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-lg font-black text-white">{referee.name}</h3>
+                    <span className={[
+                      "rounded-full border px-2.5 py-1 text-[11px] font-bold",
+                      referee.owedPence > 0
+                        ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
+                        : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+                    ].join(" ")}>
+                      {referee.owedPence > 0 ? "Payment due" : "Nothing owed"}
+                    </span>
+                  </div>
+                  {referee.email ? <p className="mt-1 text-xs text-white/40">{referee.email}</p> : null}
+                  <p className="mt-2 text-sm text-white/55">
+                    {referee.owedNightCount > 0
+                      ? `${referee.owedNightCount} completed night${referee.owedNightCount === 1 ? "" : "s"} included`
+                      : "No unpaid completed nights"}
+                    {referee.lastPaymentAt
+                      ? ` · last payment recorded ${formatDateTime(referee.lastPaymentAt)}`
+                      : ""}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end xl:justify-end">
+                  <div className="min-w-[150px] sm:text-right">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">Owed now</div>
+                    <div className={[
+                      "mt-1 text-3xl font-black tabular-nums",
+                      referee.owedPence > 0 ? "text-amber-100" : "text-emerald-200",
+                    ].join(" ")}>
+                      {formatMoney(referee.owedPence)}
+                    </div>
+                  </div>
+
+                  {referee.owedPence > 0 ? (
+                    <form action={recordRefereePaymentAction} className="flex flex-wrap items-end gap-2 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <input type="hidden" name="refereeId" value={referee.id} />
+                      <label className="block">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/35">Amount paid</span>
+                        <div className="mt-1 flex h-10 w-28 items-center overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                          <span className="pl-3 text-sm text-white/45">£</span>
+                          <input
+                            name="paymentPounds"
+                            inputMode="decimal"
+                            defaultValue={(referee.owedPence / 100).toFixed(2)}
+                            className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm font-bold text-white outline-none"
+                          />
+                        </div>
+                      </label>
+                      <button
+                        type="submit"
+                        name="paymentMethod"
+                        value="CASH"
+                        className="min-h-10 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 text-xs font-bold text-amber-100 hover:bg-amber-400/15"
+                      >
+                        Paid cash
+                      </button>
+                      <button
+                        type="submit"
+                        name="paymentMethod"
+                        value="BANK"
+                        className="min-h-10 rounded-xl bg-emerald-400 px-3 text-xs font-black text-black hover:bg-emerald-300"
+                      >
+                        Bank paid
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="grid gap-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
           <div className="border-b border-white/10 px-6 py-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">Confirmation ledger</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Referee nights</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/35">Night-by-night audit</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Referee night detail</h2>
               </div>
               <div className="text-sm text-white/45">{unsettledCount} open or submitted · {submittedCount} submitted</div>
             </div>
