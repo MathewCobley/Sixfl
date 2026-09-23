@@ -149,7 +149,7 @@ test("captain bulk write-off forgives player balance but does not create a team 
  const fee=await feeRow(t);assert.equal(fee.status,"WAIVED");assert.equal(fee.amountPence,0);assert.equal(fee.paymentToken,null);
  assert.equal(await prisma.paymentTransaction.count({where:{teamId:t.team.id}}),beforeTransactions);
  const events=await prisma.playerPaymentLinkEvent.findMany({where:{feeId:t.fee.id},orderBy:{sequence:"asc"}});
- assert.equal(events.at(-1)?.eventType,"REMOVED");assert.equal(events.at(-1)?.actorName,"Test Captain");assert.match(events.at(-1)?.via,/write off/i);
+ assert.equal(events.at(-1)?.eventType,"REMOVED");assert.equal(events.at(-1)?.actorName,"Test Captain");assert.match(events.at(-1)?.via ?? "",/write off/i);
  const entries=(await account(t)).entries;assert.ok(entries.some(e=>e.kind==="WAIVER"&&e.actorUserId===t.user.id&&e.amountPence===-1200));
 });
 
