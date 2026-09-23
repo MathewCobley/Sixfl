@@ -40,6 +40,12 @@ export type PlayerAppPaymentLinkHistory = {
   amountPence: number | null;
   createdLabel: string;
   historicalBackfill: boolean;
+  createdByLabel: string | null;
+  createdVia: string | null;
+  endedByLabel: string | null;
+  endedVia: string | null;
+  endedReason: string | null;
+  endedEventType: string | null;
   firstOpenedLabel: string | null;
   lastOpenedLabel: string | null;
   openCount: number;
@@ -340,6 +346,28 @@ export default function PlayerAppPayments({
                             {link.isRemoved ? "Removed" : link.activePath ? "Active" : "Closed"}
                           </span>
                         </div>
+                      </div>
+
+                      <div className="mt-2 grid gap-1.5 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2 text-[10px] leading-4 text-white/45">
+                        <div>
+                          <span className="font-bold text-white/65">Created by:</span>{" "}
+                          {link.createdByLabel || "Actor not recorded"}
+                          {link.createdVia ? ` · ${link.createdVia}` : ""}
+                        </div>
+                        {link.endedByLabel ? (
+                          <div>
+                            <span className="font-bold text-white/65">
+                              {link.endedEventType === "REMOVED"
+                                ? "Removed by:"
+                                : link.endedEventType === "REOPENED"
+                                  ? "Reopened by:"
+                                  : "Closed by:"}
+                            </span>{" "}
+                            {link.endedByLabel}
+                            {link.endedVia ? ` · ${link.endedVia}` : ""}
+                            {link.endedReason ? ` · ${link.endedReason}` : ""}
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="mt-2 break-all rounded-lg bg-black/15 px-2 py-1.5 font-mono text-[9px] leading-4 text-white/25">
