@@ -573,7 +573,6 @@ export default async function RefereePage() {
           preview={null}
         >
           {nightSheets}
-          {ledger}
         </RefereeAppHome>
       </RefereePortalViewMode>
 
