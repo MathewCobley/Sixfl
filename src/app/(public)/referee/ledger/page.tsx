@@ -115,10 +115,7 @@ export default async function RefereeLedgerPage() {
   return (
     <RefereeAppShell active="ledger" title="Ledger">
       <section className="rounded-[1.35rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">
-          Referee earnings
-        </p>
-        <h1 className="mt-1 text-lg font-black text-white">Your money</h1>
+        <h1 className="text-lg font-black text-white">Your money</h1>
         <p className="mt-1 text-xs leading-5 text-white/45">
           Completed nights only. Future nights are not counted until they become payable.
         </p>
