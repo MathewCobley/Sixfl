@@ -672,9 +672,23 @@ export default async function CaptainPaymentsPage({
                     ? "Stripe could not open the payment page. Please try again."
                     : null;
   const canOpenPortal = hasSavedCard;
+  const linkWriteOffMessage =
+    sp.links === "written_off"
+      ? "Unpaid player balances were written off. Those players no longer owe those amounts and SIXFL will not collect them. The team fixture balance remains unchanged."
+      : sp.links === "writeoff_confirmation_required"
+        ? "Write-off not completed. You must confirm that the player debt will be forgiven and the team still owes the fixture balance."
+        : null;
 
   return (
     <div className="space-y-8">
+      {linkWriteOffMessage ? (
+        <p
+          role={sp.links === "written_off" ? "status" : "alert"}
+          className="rounded-xl border border-red-300/25 bg-red-500/10 p-4 text-sm text-red-50"
+        >
+          {linkWriteOffMessage}
+        </p>
+      ) : null}
       {paymentOrder.enabled ? (
         <section data-team-payment-order="oldest-first" className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
           <h2 className="font-semibold">
