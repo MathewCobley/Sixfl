@@ -173,10 +173,10 @@ export default async function DashboardPage({
         <div className="mx-auto max-w-4xl space-y-6">
           <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
-              SIXFL portals
+              SIXFL app
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Choose a portal
+              {isAppLaunch ? "Switch app viewer" : "Choose a portal"}
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/70">
               This account has more than one SIXFL role. Choose the portal you want to open.

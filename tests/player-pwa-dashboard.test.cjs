@@ -307,3 +307,18 @@ test("More contains only secondary app-native destinations", () => {
   assert.match(switchAccount, /VIEWING/);
   assert.match(switchAccount, /SWITCH/);
 });
+
+
+test("dual-role player accounts expose the app viewer switch without blocking referee users from player access", () => {
+  const more = read("src/app/player/team/[teamid]/more/page.tsx");
+  const page = read("src/app/player/team/[teamid]/page.tsx");
+  const dashboard = read("src/app/(public)/dashboard/page.tsx");
+
+  assert.match(more, /user\?\.role === UserRole\.REFEREE/);
+  assert.match(more, /label: "Switch app viewer"/);
+  assert.match(more, /href: "\/dashboard\?app=1"/);
+  assert.doesNotMatch(page, /user\.role !== UserRole\.USER/);
+  assert.match(dashboard, /isReferee && hasTeamAccess/);
+  assert.match(dashboard, /href="\/referee"/);
+  assert.match(dashboard, /Switch app viewer/);
+});

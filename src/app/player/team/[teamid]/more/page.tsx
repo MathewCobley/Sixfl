@@ -126,6 +126,16 @@ export default async function PlayerMorePage({
       description: "Get help or send SIXFL a private message",
       icon: LifebuoyIcon,
     },
+    ...(user?.role === UserRole.REFEREE && !previewMembershipId
+      ? [
+          {
+            href: "/dashboard?app=1",
+            label: "Switch app viewer",
+            description: "Move between your Player and Referee apps",
+            icon: ArrowsRightLeftIcon,
+          },
+        ]
+      : []),
     ...(linkedTeamAccounts.length > 1
       ? [
           {
