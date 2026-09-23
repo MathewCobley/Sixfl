@@ -49,6 +49,7 @@ export async function deleteFixtureAction(formData: FormData) {
     select: {
       id: true,
       leagueId: true,
+      publishedAt: true,
       kickoffAt: true,
       pitch: true,
       venue: { select: { name: true } },
@@ -69,16 +70,19 @@ export async function deleteFixtureAction(formData: FormData) {
 
   await cancelQueuedFixtureMessages(id);
 
-  const cancellationResults = await queueFixtureCancellationEmails({
-    fixtureId: fixture.id,
-    kickoffAt: fixture.kickoffAt,
-    pitch: fixture.pitch,
-    venueName: fixture.venue?.name ?? null,
-    leagueName: fixture.league.name,
-    leagueSeason: fixture.league.season,
-    homeTeam: fixture.homeTeam,
-    awayTeam: fixture.awayTeam,
-  });
+  const cancellationResults = fixture.publishedAt
+    ? await queueFixtureCancellationEmails({
+        fixtureId: fixture.id,
+        publishedAt: fixture.publishedAt,
+        kickoffAt: fixture.kickoffAt,
+        pitch: fixture.pitch,
+        venueName: fixture.venue?.name ?? null,
+        leagueName: fixture.league.name,
+        leagueSeason: fixture.league.season,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+      })
+    : [];
 
   for (const result of cancellationResults) {
     if (result.status === "rejected") {

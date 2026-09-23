@@ -10,6 +10,7 @@ const CANCELLATION_SOURCE_TYPE = "FIXTURE_CANCELLATION";
 
 export type CancelledFixtureNotification = {
   fixtureId: string;
+  publishedAt: Date | null;
   kickoffAt: Date;
   pitch: string | null;
   venueName: string | null;
@@ -105,6 +106,10 @@ async function queueTeamCancellationEmail(
 export async function queueFixtureCancellationEmails(
   fixture: CancelledFixtureNotification,
 ) {
+  if (!fixture.publishedAt) {
+    return [];
+  }
+
   return Promise.allSettled([
     queueTeamCancellationEmail(fixture, fixture.homeTeam),
     queueTeamCancellationEmail(fixture, fixture.awayTeam),
