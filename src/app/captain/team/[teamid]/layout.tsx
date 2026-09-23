@@ -145,6 +145,11 @@ body:has(.captain-app-header) .captain-team-main img[src*="player pool"] {
   width: auto !important;
 }
 
+body:has(.captain-app-header) .captain-app-web-only,
+body:has(.captain-app-header) .captain-app-secondary {
+  display: none !important;
+}
+
 body:has(.captain-app-header) .captain-team-main table {
   font-size: 0.75rem;
 }
