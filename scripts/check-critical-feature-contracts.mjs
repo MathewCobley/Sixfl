@@ -321,7 +321,7 @@ expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Squad"', "c
 expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Payments"', "captain app bottom navigation must keep Payments");
 expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Inbox"', "captain app bottom navigation must keep Inbox");
 expectText("captain pwa", captainAppNavPath, captainAppNav, "grid-cols-5", "captain app bottom navigation must remain a five-tab mobile bar");
-expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "SIXFL captain home", "captain app must have a native sticky app header");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, "captain-app-header", "captain app must have a native sticky app header");
 expectText("captain pwa", captainAppModePath, captainAppMode, 'window.parent.location.pathname === "/admin/pwa"', "captain app must render exactly inside the admin phone preview");
 expectText("captain pwa", captainAppModePath, captainAppMode, "display-mode: standalone", "captain app mode must work when installed as a PWA");
 expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "CaptainAppHeader", "all captain app routes must use the route-aware app header");
