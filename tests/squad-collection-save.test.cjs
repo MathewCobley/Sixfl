@@ -99,6 +99,16 @@ test('paid and ledger-protected rows are unchanged when absent from editable For
   const h=harness({initial,headroom:1000});const result=await h.save(form('0'));
   assert.equal(result.status,'saved');assert.deepEqual(h.rows.slice(0,2),initial);assert.ok(h.writes.every(([,id])=>!['protected','paid'].includes(id)));assert.ok(h.emails.every(e=>!['protected','paid'].includes(e.feeId)));
 });
+test('unticking an existing open player preserves the payment link and debt',async()=>{
+  const existing={id:'existing-link',teamId:'team',fixtureId:'fixture',teamMemberId:'m1',status:'OPEN',amountPence:500,paymentToken:'existing-token',paymentUrl:'https://example.invalid/pay/existing-token',note:null};
+  const h=harness({initial:[existing],headroom:1000});
+  const data=form('5');data.delete('player');for(let i=2;i<=8;i++)data.append('player',`member:m${i}`);
+  const result=await h.save(data);
+  assert.equal(result.status,'saved');
+  assert.deepEqual(h.rows.find(row=>row.id==='existing-link'),existing);
+  assert.ok(h.writes.every(([,id])=>id!=='existing-link'));
+  assert.ok(h.emails.every(email=>email.feeId!=='existing-link'));
+});
 test('missing email still blocks new player links',async()=>{
   const h=harness({missingEmail:true});const result=await h.save(form('5'));assert.equal(result.status,'error');assert.match(result.message,/email/);assert.equal(h.writes.length,0);assert.equal(h.emails.length,0);
 });
