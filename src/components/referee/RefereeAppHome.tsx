@@ -97,12 +97,12 @@ export default function RefereeAppHome({
             </div>
           </div>
           <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/[0.07] bg-black/25 py-2 text-center">
-            <a href="#referee-night-picker" className="min-h-11">
+            <Link href="/referee/nights" className="min-h-11">
               <strong className="block text-lg tabular-nums">
                 {openCount}
               </strong>
               <span className="text-[10px] text-white/50">Open nights</span>
-            </a>
+            </Link>
             <Link href="/referee/ledger" className="min-h-11">
               <strong className="block text-lg tabular-nums">
                 {submittedCount}
@@ -130,12 +130,12 @@ export default function RefereeAppHome({
                   ? "Tonight"
                   : "Next referee night"}
             </p>
-            <a
-              href="#referee-night-picker"
+            <Link
+              href="/referee/nights"
               className="py-2 text-xs font-semibold text-sky-300"
             >
               All nights →
-            </a>
+            </Link>
           </div>
           {nextNight ? (
             <>
@@ -167,7 +167,11 @@ export default function RefereeAppHome({
                 href={`/referee/night/${nextNight.id}`}
                 className="mt-4 flex min-h-12 items-center justify-between rounded-xl bg-emerald-400 px-4 text-sm font-black text-[#04130c] active:bg-emerald-300"
               >
-                Open night sheet
+                {nextNight.isPast
+                  ? "Complete match night"
+                  : nextNight.isToday
+                    ? "Run match night"
+                    : "View match night"}
                 <ArrowRightIcon className="h-5 w-5" />
               </Link>
             </>
@@ -229,7 +233,7 @@ export default function RefereeAppHome({
           {[
             { href: "/referee", label: "Home", Icon: HomeIcon },
             {
-              href: "#referee-night-picker",
+              href: "/referee/nights",
               label: "Nights",
               Icon: ClipboardDocumentListIcon,
             },
