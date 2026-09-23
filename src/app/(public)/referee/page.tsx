@@ -207,7 +207,10 @@ function NightCard({
 }) {
   const canOpen = night.status !== "SETTLED" && night.status !== "CANCELLED";
   const isPayable = isNightPayable(night, todayLondonDate);
-  const dueNowPence = getPayableDueToRefereePence(night, todayLondonDate);
+  const isSettled = night.status === "SETTLED";
+  const dueNowPence = isSettled
+    ? 0
+    : getPayableDueToRefereePence(night, todayLondonDate);
 
   return (
     <article className="rounded-[1.2rem] border border-white/10 bg-black/20 p-3.5">
@@ -244,7 +247,7 @@ function NightCard({
           </div>
         </div>
         <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-2.5">
-          <div className="text-[10px] text-emerald-100/55">Due now</div>
+          <div className="text-[10px] text-emerald-100/55">{isSettled ? "Balance" : "Due now"}</div>
           <div className="mt-0.5 text-sm font-black text-emerald-100">
             {formatMoney(dueNowPence)}
           </div>
@@ -487,14 +490,14 @@ export default async function RefereePage() {
   const activeNights = nights.filter((night) => night.status !== "CANCELLED");
   const submittedNights = nights.filter((night) => night.status === "SUBMITTED");
   const settledNights = nights.filter((night) => night.status === "SETTLED");
-  const payableActiveNights = activeNights.filter((night) =>
-    isNightPayable(night, todayLondonDate),
+  const outstandingNights = activeNights.filter(
+    (night) => night.status !== "SETTLED" && isNightPayable(night, todayLondonDate),
   );
-  const outstandingDueToSixfl = payableActiveNights.reduce(
+  const outstandingDueToSixfl = outstandingNights.reduce(
     (sum, night) => sum + night.dueToSixflPence,
     0,
   );
-  const outstandingDueToReferee = payableActiveNights.reduce(
+  const outstandingDueToReferee = outstandingNights.reduce(
     (sum, night) => sum + night.dueToRefereePence,
     0,
   );
