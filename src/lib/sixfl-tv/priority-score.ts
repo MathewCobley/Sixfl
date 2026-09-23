@@ -16,6 +16,7 @@ export const SIXFL_TV_PRIORITY_RELIABILITY_MAX = 80;
 export const SIXFL_TV_PRIORITY_AUDIENCE_MAX = 10;
 export const SIXFL_TV_PRIORITY_PARTICIPATION_MAX = 10;
 export const SIXFL_TV_PRIORITY_CORE_MIN_RATE = 0.6;
+export const SIXFL_TV_PRIORITY_PAYMENT_GRACE_HOURS = 72;
 
 type Db = Pick<typeof prisma, "$queryRaw" | "$executeRaw">;
 
@@ -151,15 +152,20 @@ function confirmationDeadline(kickoffAt: Date) {
   return new Date(kickoffAt.getTime() - 72 * 60 * 60 * 1000);
 }
 
-function paymentSettledOnTime(settledAt: Date, dueDate: Date) {
-  // Match fees are due on match day, not at the exact kick-off minute.
-  // Compare London calendar dates so cash taken by the referee during/after the
-  // game and card/bank payments later that same match day still count on time.
-  return toLondonDateInputValue(settledAt) <= toLondonDateInputValue(dueDate);
+function paymentLateDeadline(dueDate: Date) {
+  return new Date(
+    dueDate.getTime() + SIXFL_TV_PRIORITY_PAYMENT_GRACE_HOURS * 60 * 60 * 1000,
+  );
 }
 
-function paymentStillWithinMatchDay(dueDate: Date, now: Date) {
-  return toLondonDateInputValue(dueDate) >= toLondonDateInputValue(now);
+function paymentSettledOnTime(settledAt: Date, dueDate: Date) {
+  // SIXFL does not class a fixture payment as late until the 72-hour reminder
+  // point has passed. Use the same exact 72-hour window as payment reminders.
+  return settledAt <= paymentLateDeadline(dueDate);
+}
+
+function paymentStillWithinGracePeriod(dueDate: Date, now: Date) {
+  return now <= paymentLateDeadline(dueDate);
 }
 
 function firstSettlementAt(input: {
@@ -422,7 +428,7 @@ async function getSixflTvReliabilityScores(
       } else if (settledAt) {
         paymentPoints = 2;
         paymentStatus = "LATE";
-      } else if (paymentStillWithinMatchDay(dueDate, now)) {
+      } else if (paymentStillWithinGracePeriod(dueDate, now)) {
         paymentPoints = 6;
         paymentStatus = "NOT_REQUIRED";
       } else {
