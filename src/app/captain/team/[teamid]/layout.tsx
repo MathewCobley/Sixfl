@@ -15,6 +15,7 @@ import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadge
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
 import CaptainPwaBottomNav from "@/components/captain/CaptainPwaBottomNav";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import CaptainRedirectErrorNoticeFix from "@/components/captain/CaptainRedirectErrorNoticeFix";
 import CaptainSupportPanel from "@/components/captain/CaptainSupportPanel";
 import CaptainViewModeHeader from "@/components/captain/CaptainViewModeHeader";
@@ -445,8 +446,32 @@ export default async function CaptainTeamLayout({
       {access.isAdmin ? <PendingActivationReturnLinks /> : null}
       {access.isAdmin ? <AdminPlayerPreviewLinks /> : null}
 
+      <CaptainPwaModeOnly mode="app">
+        <header
+          className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
+          style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
+        >
+          <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+            <Link href={`/captain/team/${team.id}`} aria-label="SIXFL captain home" className="shrink-0">
+              <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto object-contain" />
+            </Link>
+            <div className="min-w-0 flex-1 truncate text-center text-sm font-black tracking-tight text-white">
+              {team.name}
+            </div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
+              {team.logoUrl ? (
+                <img src={team.logoUrl} alt={`${team.name} badge`} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[10px] font-black text-emerald-100">{getTeamInitials(team.name)}</span>
+              )}
+            </div>
+          </div>
+        </header>
+      </CaptainPwaModeOnly>
+
       <div className="captain-team-container mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-3 pb-24 pt-4 sm:gap-8 sm:px-10 sm:py-6">
-        <header className="captain-team-header overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-3xl">
+        <CaptainPwaModeOnly mode="web">
+          <header className="captain-team-header overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:rounded-3xl">
           <div className="captain-team-header-top border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
             <div className="mb-5">
               <CaptainViewModeHeader
@@ -588,20 +613,28 @@ export default async function CaptainTeamLayout({
               </div>
             ))}
           </nav>
-        </header>
+          </header>
+        </CaptainPwaModeOnly>
 
         <main className="captain-team-main min-w-0 space-y-8">
-          <CaptainSupportPanel teamId={team.id} />
-          {access.isCaptain && access.user ? <CupInvitationNotice teamId={team.id} userId={access.user.id} /> : null}
+          <CaptainPwaModeOnly mode="web">
+            <CaptainSupportPanel teamId={team.id} />
+            {access.isCaptain && access.user ? <CupInvitationNotice teamId={team.id} userId={access.user.id} /> : null}
+          </CaptainPwaModeOnly>
           {children}
-          <CaptainAdminFeeRouteNotice teamId={team.id} />
+          <CaptainPwaModeOnly mode="web">
+            <CaptainAdminFeeRouteNotice teamId={team.id} />
+          </CaptainPwaModeOnly>
         </main>
       </div>
 
-      <CaptainPwaBottomNav
-        teamId={team.id}
-        squadHref={squadHref}
-      />
+      <CaptainPwaModeOnly mode="app">
+        <CaptainPwaBottomNav
+          teamId={team.id}
+          squadHref={squadHref}
+          unreadMessageCount={unreadMessageCount}
+        />
+      </CaptainPwaModeOnly>
     </div>
   );
 }
