@@ -168,6 +168,7 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
       props = p;
       return null;
     },
+    "@/components/referee/RefereePortalViewMode": ({ children }) => children,
     "@/components/referee/RefereeNightConfirmation": () => null,
     "@/components/referee/RefereeTabs": () => null,
     "@/lib/admin": {
