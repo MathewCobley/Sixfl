@@ -8,7 +8,6 @@ import {
   getChargeOutstandingPence,
   getChargePaidTotal,
 } from "@/lib/payments/charge-status";
-import { applyExistingTeamCreditToChargeFirst } from "@/lib/payments/team-credit-policy";
 import { getTeamPaymentOrder } from "@/lib/payments/team-payment-order";
 import { reusableTeamChargeCheckout } from "@/lib/payments/team-payment-order-checkouts";
 import { prisma } from "@/lib/prisma";
@@ -117,18 +116,6 @@ export async function POST(
       }),
       303,
     );
-  }
-
-  // Match-fee credit must be consumed before Stripe takes new cash. This keeps
-  // direct charge links consistent with Captain Payments and prevents a team
-  // with available credit from being charged the pre-credit amount.
-  if (charge.fixtureId) {
-    await applyExistingTeamCreditToChargeFirst({
-      teamId: charge.teamId,
-      chargeId: charge.id,
-      fixtureFeePence: charge.amountPence,
-      description: `Team credit automatically used before card payment for ${charge.title}.`,
-    });
   }
 
   // Re-read the actual ledger after credit/player settlement and before using
