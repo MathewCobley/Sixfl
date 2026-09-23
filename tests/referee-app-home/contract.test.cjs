@@ -229,6 +229,7 @@ test("all referee work pages use the app shell and future balances are clearly n
     rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
     night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
     fixture: fs.readFileSync("src/app/(public)/referee/fixture/[id]/page.tsx", "utf8"),
+    ledger: fs.readFileSync("src/app/(public)/referee/ledger/page.tsx", "utf8"),
     home: fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8"),
   };
   for (const [name, source] of Object.entries(files)) {
@@ -239,12 +240,41 @@ test("all referee work pages use the app shell and future balances are clearly n
   assert.match(files.rules, /active="rules"/);
   assert.match(files.night, /active="nights"/);
   assert.match(files.fixture, /active="nights"/);
+  assert.match(files.ledger, /active="ledger"/);
   assert.doesNotMatch(files.night, /← Referee dashboard/);
   assert.doesNotMatch(files.fixture, /Back to referee dashboard|>Cancel</);
   assert.match(files.home, /Due now/);
   assert.match(files.home, /Earns after night/);
   assert.match(files.night, /Due to you now/);
   assert.match(files.night, /No referee balance is due until after this night has taken place/);
+  assert.doesNotMatch(files.availability, /Save availability|Admin preview/);
+  assert.doesNotMatch(files.rules, /Admin preview|Referee preview mode/);
+  assert.doesNotMatch(files.night, /Admin preview|Referee preview mode/);
+  assert.match(files.availability, /RefereeAvailabilityControls/);
+  assert.match(files.ledger, /Your money/);
+  assert.match(files.ledger, /Money received/);
+  assert.match(files.ledger, /getRefereePayableDueToRefereePence/);
+});
+
+test("referee app navigation exposes a dedicated ledger tab", () => {
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  assert.match(shell, /href: "\/referee\/ledger"/);
+  assert.match(shell, /label: "Ledger"/);
+  assert.match(home, /href="\/referee\/ledger"/);
+  assert.match(home, /grid-cols-5/);
+});
+
+test("availability is instant-save with no page-level submit button", () => {
+  const page = fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8");
+  const controls = fs.readFileSync("src/components/referee/RefereeAvailabilityControls.tsx", "utf8");
+  const actions = fs.readFileSync("src/app/(public)/referee/availability/actions.ts", "utf8");
+  assert.doesNotMatch(page, /Save availability/);
+  assert.match(page, /RefereeAvailabilityControls/);
+  assert.match(controls, /updateRefereeAvailabilitySlotAction/);
+  assert.match(controls, /onClick=\{\(\) => choose\(option\.value\)\}/);
+  assert.match(controls, /onBlur=\{saveNoteIfChanged\}/);
+  assert.match(actions, /export async function updateRefereeAvailabilitySlotAction/);
 });
 
 module.exports = { base };
