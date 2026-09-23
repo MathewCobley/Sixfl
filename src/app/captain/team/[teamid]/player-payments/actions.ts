@@ -428,9 +428,6 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   const selectedMemberIds = players
     .filter((player) => player.type === "member")
     .map((player) => player.id);
-  const selectedProspectIds = players
-    .filter((player) => player.type === "prospect")
-    .map((player) => player.id);
   const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(selectedMemberIds);
   const createdOrUpdatedFeeIds: string[] = [];
   const forceEmailFeeIds = new Set<string>();
