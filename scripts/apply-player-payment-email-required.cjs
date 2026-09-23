@@ -26,7 +26,7 @@ if (!page.includes(statusImport)) {
 // count. The page wrapper enforces the same rule in the UI; this server-side check
 // also protects stale/open forms.
 if (!actions.includes("squadMembersForEmailReadiness")) {
-  const readinessAnchor = `export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
+  const legacyReadinessAnchor = `export async function createCaptainSquadPaymentCollectionAction(formData: FormData) {
   const teamId = getString(formData, "teamId");
   const fixtureId = getString(formData, "fixtureId");
   const defaultAmountPence = parseAmountPence(getString(formData, "amount"));
@@ -37,6 +37,13 @@ if (!actions.includes("squadMembersForEmailReadiness")) {
   }
 
   await requireCaptain(teamId);`;
+  const actorAwareReadinessAnchor = `  const linkAuditActor = paymentLinkAuditActor(
+    access,
+    "Captain Squad Payments",
+  );`;
+  const readinessAnchor = actions.includes(actorAwareReadinessAnchor)
+    ? actorAwareReadinessAnchor
+    : legacyReadinessAnchor;
 
   if (!actions.includes(readinessAnchor)) {
     throw new Error("Captain squad-payment action readiness anchor not found.");
