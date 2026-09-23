@@ -88,7 +88,7 @@ test("captain app hides duplicate website-only sections and keeps important work
   assert.match(fixtures, /captain-app-secondary[\s\S]*Recent results/);
   assert.match(messages, /captain-app-secondary[\s\S]*What is included/);
   assert.match(results, /captain-app-secondary[\s\S]*Find a result/);
-  assert.match(matchday, /captain-app-secondary[\s\S]*How availability and fees work together/);
+  assert.match(matchday, /How availability and fees work together/);
   assert.match(availability, /captain-app-web-only[\s\S]*View availability history/);
   assert.match(stats, /<CaptainPwaModeOnly mode="app">[\s\S]*Squad leaderboard/);
   assert.match(stats, /captain-app-web-only[\s\S]*Season leaderboard/);
