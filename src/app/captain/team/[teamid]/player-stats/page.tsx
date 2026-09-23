@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
@@ -342,7 +343,38 @@ export default async function CaptainPlayerStatsPage({
         ))}
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+      <CaptainPwaModeOnly mode="app">
+        <section className="overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.035]">
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-3">
+            <h3 className="text-sm font-black text-white">Squad leaderboard</h3>
+            <span className="text-[10px] text-white/35">{sortedSquad.length} players</span>
+          </div>
+          <div className="divide-y divide-white/[0.06]">
+            {sortedSquad.length === 0 ? (
+              <div className="p-4 text-sm text-white/45">No squad players are available yet.</div>
+            ) : (
+              sortedSquad.map((player, index) => (
+                <div key={player.teamMemberId} className="flex items-center gap-3 px-3.5 py-3">
+                  <span className="w-5 shrink-0 text-center text-xs font-black text-white/30">{index + 1}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[10px] font-black text-white/55">
+                    {initials(player.name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-white">{player.name}</span>
+                    <span className="mt-0.5 block text-[10px] text-white/35">{player.appearances} apps · {formatRating(player.averageRating)} avg</span>
+                  </span>
+                  <span className="shrink-0 text-right text-[10px] text-white/35">
+                    <strong className="block text-sm text-amber-100">{player.goals}G</strong>
+                    {player.assists}A · {player.playerOfMatchAwards} MOTM
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </CaptainPwaModeOnly>
+
+      <section className="captain-app-web-only overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
         <div className="border-b border-white/10 p-5 sm:p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/70">
             Full squad
