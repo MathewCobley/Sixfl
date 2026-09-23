@@ -88,7 +88,10 @@ async function main() {
     const confirmationAt = new Date(kickoffAt.getTime() - 4 * 24 * 60 * 60 * 1000);
     const completionAt = new Date(kickoffAt.getTime() + 14 * 60 * 60 * 1000);
     const dueDate = kickoffAt;
-    const paidAt = new Date(kickoffAt.getTime() + (n === 5 ? 60 : -60) * 60 * 1000);
+    const paidAt = new Date(
+      kickoffAt.getTime() +
+        (n === 5 ? 26 * 60 : n === 4 ? 2 * 60 : -60) * 60 * 1000,
+    );
 
     await prisma.fixture.create({
       data: {
@@ -169,8 +172,14 @@ async function main() {
         teamId: id("team"),
         chargeId: charge.id,
         amountPence: 4000,
+        method: n === 4 ? "CASH" : "BANK_TRANSFER",
         paidAt,
-        reference: n === 5 ? "late payment test" : "on-time payment test",
+        reference:
+          n === 5
+            ? "next-day late payment test"
+            : n === 4
+              ? "cash paid on the match night after kick-off"
+              : "on-time payment test",
       },
     });
   }
@@ -195,6 +204,16 @@ async function main() {
   assert.equal(score.matches.reduce((sum, match) => sum + match.assistsPoints, 0), 5);
   assert.equal(score.matches.reduce((sum, match) => sum + match.ratingsPoints, 0), 5);
   assert.equal(score.matches.filter((match) => match.paymentStatus === "LATE").length, 1);
+  assert.equal(
+    score.matches.find((match) => match.fixtureId === id("fixture_4"))?.paymentStatus,
+    "ON_TIME",
+    "cash recorded after kick-off on the same London match day must still count as on time",
+  );
+  assert.equal(
+    score.matches.find((match) => match.fixtureId === id("fixture_5"))?.paymentStatus,
+    "LATE",
+    "a payment first completing the charge on the following day must remain late",
+  );
   assert.equal(
     score.matches.find((match) => match.fixtureId === id("fixture_1"))?.coreComplete,
     true,
