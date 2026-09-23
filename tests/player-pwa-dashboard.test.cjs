@@ -220,7 +220,7 @@ test("player PWA navigation is a closed app and does not expose public website l
 
   for (const source of [home, fixtures, more, appTabs]) {
     assert.doesNotMatch(source, /\/leagues\//);
-    assert.doesNotMatch(source, /\/goal-of-the-month/);
+    assert.doesNotMatch(source, /["'`]\/goal-of-the-month/);
     assert.doesNotMatch(source, /\/player\/referrals/);
     assert.doesNotMatch(source, /href=["']\/faq/);
   }
@@ -280,6 +280,8 @@ test("More contains only secondary app-native destinations", () => {
 
   assert.match(more, /My stats/);
   assert.match(more, /SIXFL TV/);
+  assert.match(more, /label: "Goal of the Month"/);
+  assert.match(more, /withPreview\(`\/player\/team\/\$\{teamid\}\/goal-of-the-month`, previewMembershipId\)/);
   assert.match(more, /Refer a team · £75/);
   assert.match(more, /League Rules/);
   assert.match(more, /Match Rules/);

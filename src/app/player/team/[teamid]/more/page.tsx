@@ -13,6 +13,7 @@ import {
   GiftIcon,
   LifebuoyIcon,
   PlayCircleIcon,
+  TrophyIcon,
 } from "@heroicons/react/24/outline";
 
 type PageProps = {
@@ -79,6 +80,12 @@ export default async function PlayerMorePage({ params, searchParams }: PageProps
       label: "SIXFL TV",
       description: "Your team's highlights and recorded matches",
       icon: PlayCircleIcon,
+    },
+    {
+      href: withPreview(`/player/team/${teamid}/goal-of-the-month`, previewMembershipId),
+      label: "Goal of the Month",
+      description: "Nominate goals, vote and watch the winners",
+      icon: TrophyIcon,
     },
     {
       href: withPreview(`/player/team/${teamid}/referrals`, previewMembershipId),

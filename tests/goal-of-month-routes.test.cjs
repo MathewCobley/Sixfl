@@ -135,3 +135,36 @@ test('shared dashboard owner inventory contains no old generic nomination title'
   assert.ok(!found.some(line=>line.includes('Goal of the Month — current nominees')));
   console.log('Monthly dashboard source owners:\n'+found.join('\n'));
 });
+
+test('player monthly route requires team access and keeps authorised preview navigation separate from voting', async () => {
+  async function render({signedIn=true,role='PLAYER',member=true,team=true,preview=true}={}) {
+    const route=load('src/app/player/team/[teamid]/goal-of-the-month/page.tsx', {
+      'next/link':{default:props=>React.createElement('a',props)},
+      'next-auth':{getServerSession:async()=>signedIn?{user:{email:'player@example.invalid'}}:null},
+      'next/navigation':{redirect:href=>{throw new Error(href);},notFound:()=>{throw new Error('not-found');}},
+      '@prisma/client':{UserRole:{ADMIN:'ADMIN'}},'@/auth':{authOptions:{}},
+      '@/lib/prisma':{prisma:{user:{findUnique:async()=>({role,teamMembers:member?[{id:'member'}]:[]})},team:{findUnique:async()=>team?{id:'team-one'}:null},teamMember:{findFirst:async()=>preview?{id:'membership-one'}:null}}},
+      '@/components/goal-of-month/MonthlyGoalsPanel':{default:props=>{assert.deepEqual(props,{playerApp:true});return React.createElement('p',null,'Shared monthly competition');}},
+    }).default;
+    return renderToStaticMarkup(await route({params:Promise.resolve({teamid:'team-one'}),searchParams:Promise.resolve({previewMembershipId:'membership-one'})}));
+  }
+  await assert.rejects(render({signedIn:false}),/callbackUrl=%2Fplayer%2Fteam%2Fteam-one%2Fgoal-of-the-month/);
+  await assert.rejects(render({member:false}),/not-found/);
+  await assert.rejects(render({team:false}),/not-found/);
+  const player=await render();assert.match(player,/Shared monthly competition/);assert.match(player,/href="\/player\/team\/team-one\/more"/);assert.doesNotMatch(player,/previewMembershipId/);
+  const admin=await render({role:'ADMIN',member:false});assert.match(admin,/\/more\?previewMembershipId=membership-one/);
+  assert.doesNotMatch(await render({role:'ADMIN',preview:false}),/previewMembershipId/);
+});
+
+test('shared monthly panel keeps public website links out of the player app', () => {
+  const data={viewer:{eligible:false},nominations:[],voting:{open:false},legacy:{votingMayBeOpen:true},winners:[]};
+  const Panel=load('src/components/goal-of-month/MonthlyGoalsPanel.tsx',{
+    'next/link':{default:props=>React.createElement('a',props)},
+    './GoalNomineeCard':{default:()=>null},'@/components/ui/FormListboxField':{default:()=>null},
+    './useMonthlyGoals':{useMonthlyGoals:()=>({data,loading:false,error:null,refresh:async()=>{}})},
+  }).default;
+  const app=renderToStaticMarkup(React.createElement(Panel,{playerApp:true}));
+  assert.doesNotMatch(app,/href="\/(?:login|goal-of-the-week)/);
+  const publicPage=renderToStaticMarkup(React.createElement(Panel));
+  assert.match(publicPage,/href="\/goal-of-the-week\?legacy=1"/);assert.match(publicPage,/href="\/login/);
+});
