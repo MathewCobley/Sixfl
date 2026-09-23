@@ -20,11 +20,14 @@ import { getPlayerPaymentDisplay } from "../src/lib/payments/player-payment-disp
 import { getChargeStatusFromAmounts } from "../src/lib/payments/charge-status";
 import { POST as stripeWebhook } from "../src/app/api/stripe/webhook/route";
 import { getStripeServerClient } from "../src/lib/stripe/client";
+import { ensurePlayerMatchFeePaymentDetails } from "../src/lib/payments/player-match-fees";
+import { recordPlayerPaymentLinkOpened } from "../src/lib/payments/player-payment-link-history";
 
 const database=new URL(process.env.DATABASE_URL||"http://invalid");
 assert.ok(process.env.SIXFL_PLAYER_LEDGER_TEST==="1"&&database.hostname==="127.0.0.1"&&database.pathname==="/sixfl_player_ledger_test","Disposable local database only");
 globalThis.fetch=async()=>{throw Error("External provider/network calls are forbidden in ledger tests");};
 const migration="prisma/migrations/20260908140000_player_ledger_and_repayments/migration.sql";
+const paymentLinkHistoryMigration="prisma/migrations/20260922235500_player_payment_link_history/migration.sql";
 const migrate=(path:string)=>execFileSync("psql",[process.env.DATABASE_URL!,"-v","ON_ERROR_STOP=1","-f",path],{stdio:"pipe"});
 function signedTestHeader(payload: string, secret: string) {
   const timestamp = Math.floor(Date.now() / 1000);
@@ -36,6 +39,7 @@ before(async()=>{
   for(const name of ["20260424162000_add_team_member_profile","20260702162500_add_team_credit_pot","20260709210000_team_credit_ledger","20260804230000_add_private_player_codes_and_temporary_match_fees","20260809002500_captain_collected_remittance_checkout","20260810183500_add_fixture_context_to_team_credit_overpayments","20260813004500_standard_credit_conversion_boundary","20260825231500_player_fee_assigned_share"])migrate(`prisma/migrations/${name}/migration.sql`);
   const old=await target(800);legacyId=old.fee.id;
   migrate(migration);
+  migrate(paymentLinkHistoryMigration);
   migrate("prisma/migrations/20260909001000_player_receipt_amount_integrity/migration.sql");
 });
 after(async()=>{await prisma.$disconnect();});
@@ -88,6 +92,31 @@ test("migration imports current £8, never guesses an overwritten £12, and reru
  const s=await prisma.playerFeeLedgerState.findUniqueOrThrow({where:{feeId:legacyId}});assert.equal(s.balancePence,800);
  const before=await prisma.playerLedgerEntry.count();migrate(migration);assert.equal(await prisma.playerLedgerEntry.count(),before);
 });
+test("payment-link history keeps created, opened, removed and replacement links permanently",async()=>{
+ const t=await target();
+ const first=await ensurePlayerMatchFeePaymentDetails(t.fee.id);
+ assert.ok(first?.paymentToken&&first.paymentUrl);
+ let links=await prisma.playerPaymentLinkHistory.findMany({where:{feeId:t.fee.id},orderBy:{createdAt:"asc"}});
+ assert.equal(links.length,1);assert.equal(links[0].isRemoved,false);assert.equal(links[0].openCount,0);
+ await recordPlayerPaymentLinkOpened({feeId:t.fee.id,paymentToken:first.paymentToken!});
+ await recordPlayerPaymentLinkOpened({feeId:t.fee.id,paymentToken:first.paymentToken!});
+ links=await prisma.playerPaymentLinkHistory.findMany({where:{feeId:t.fee.id},orderBy:{createdAt:"asc"}});
+ assert.equal(links[0].openCount,2);assert.ok(links[0].firstOpenedAt);assert.ok(links[0].lastOpenedAt);
+ await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{status:"CANCELLED",cancelledAt:new Date(),paymentToken:null,paymentUrl:null,note:"Removed from collection"}});
+ links=await prisma.playerPaymentLinkHistory.findMany({where:{feeId:t.fee.id},orderBy:{createdAt:"asc"}});
+ assert.equal(links.length,1);assert.equal(links[0].isRemoved,true);assert.ok(links[0].removedAt);assert.match(links[0].removedReason||"",/cancelled/i);
+ await assert.rejects(prisma.playerPaymentLinkHistory.delete({where:{id:links[0].id}}),/permanent/i);
+ await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{status:"OPEN",cancelledAt:null}});
+ const second=await ensurePlayerMatchFeePaymentDetails(t.fee.id);
+ assert.ok(second?.paymentToken&&second.paymentToken!==first.paymentToken);
+ const accountWithHistory=await account(t);
+ assert.equal(accountWithHistory.paymentLinks.length,2);
+ const oldLink=accountWithHistory.paymentLinks.find(link=>link.paymentToken===first.paymentToken);
+ const replacementLink=accountWithHistory.paymentLinks.find(link=>link.paymentToken===second.paymentToken);
+ assert.ok(oldLink);assert.ok(replacementLink);
+ assert.equal(oldLink.isRemoved,true);assert.equal(oldLink.openCount,2);assert.equal(replacementLink.isRemoved,false);
+});
+
 test("ordinary fee creation, genuine edit, waiver and payment retain simple existing behavior with an immutable statement",async()=>{
  const t=await target();assert.equal((await account(t)).balancePence,1200);
  await prisma.playerMatchFee.update({where:{id:t.fee.id},data:{amountPence:800}});assert.equal((await account(t)).balancePence,800);

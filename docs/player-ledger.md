@@ -16,6 +16,12 @@ Database capture covers normal existing fee writers. A BEFORE guard protects con
 
 Special concessions, subsidies and existing applied player credits are not automatically converted into ordinary debt. Existing managed-team no-credit and standard-team credit limits remain enforced. Unresolved checkout creation, an in-progress payment or an inconsistent allocation is held for review rather than treated as paid or erased.
 
+## Payment-link audit history
+
+Every unique player match-fee link is now retained in `PlayerPaymentLinkHistory`, independently of the current `PlayerMatchFee.paymentUrl/paymentToken` fields. Creating a link snapshots the player/team/fixture identity, fixture label, amount and original URL. Opening the payment page records the first and latest open time plus an open count. Clearing, replacing, waiving or cancelling a link marks the historical row removed rather than deleting it.
+
+The migration backfills current links and recovers older links from stored player-match-fee notification metadata where possible. Legacy links that are known to be inactive but pre-date removal auditing are marked removed with the exact removal time explicitly unavailable rather than inventing a date. Ledger UI distinguishes Active links, Closed links that still exist but are no longer payable, and genuinely Removed links. Payment-link history rows cannot be deleted and their original identity/URL fields cannot be rewritten; only lifecycle fields may change.
+
 ## Messaging and permissions
 
 Only expressly saved plans are picked up by the normal notifications job. Each due instalment has one editable System Template email. Existing individual fee chases are held during an active/paused/review arrangement and checked again before provider delivery. No additional automatic SMS or stored-card debit is created. Existing preferences and suppression are preserved.

@@ -370,6 +370,38 @@ expectText("team referrals", homepagePath, homepage, "Refer a team · Earn £75"
 expectText("team referrals", referralPreparationPath, referralPreparation, "attachReferralToLead", "registration preparation must continue attaching valid referral codes to team leads");
 expectText("team referrals", referralPreparationPath, referralPreparation, 'name="referralCode"', "team registration must continue carrying the referral code through the form");
 
+// ---------------------------------------------------------------------------
+// PLAYER PAYMENT-LINK HISTORY — player ledgers must retain every issued link,
+// record opens, and preserve removed links as permanent audit history.
+// ---------------------------------------------------------------------------
+const playerPaymentLinkSchemaPath = "prisma/schema.prisma";
+const playerPaymentLinkMigrationPath = "prisma/migrations/20260922235500_player_payment_link_history/migration.sql";
+const playerPaymentLinkOpenPath = "src/lib/payments/player-payment-link-history.ts";
+const publicPlayerPaymentLinkPagePath = "src/app/pay/player-match-fee/[token]/page.tsx";
+const playerLedgerPath = "src/app/player/team/[teamid]/ledger/page.tsx";
+const playerLedgerAppPath = "src/components/player/PlayerAppPayments.tsx";
+const playerLedgerStatementPath = "src/components/payments/PlayerLedgerStatement.tsx";
+
+const playerPaymentLinkSchema = read(playerPaymentLinkSchemaPath);
+const playerPaymentLinkMigration = read(playerPaymentLinkMigrationPath);
+const playerPaymentLinkOpen = read(playerPaymentLinkOpenPath);
+const publicPlayerPaymentLinkPage = read(publicPlayerPaymentLinkPagePath);
+const playerLedgerPage = read(playerLedgerPath);
+const playerLedgerApp = read(playerLedgerAppPath);
+const playerLedgerStatement = read(playerLedgerStatementPath);
+
+expectText("player payment link history", playerPaymentLinkSchemaPath, playerPaymentLinkSchema, "model PlayerPaymentLinkHistory", "schema must retain permanent player payment-link history");
+expectText("player payment link history", playerPaymentLinkSchemaPath, playerPaymentLinkSchema, "@@unique([feeId, paymentToken])", "each unique fee/token link must have one lifecycle row");
+expectText("player payment link history", playerPaymentLinkMigrationPath, playerPaymentLinkMigration, "NOTIFICATION_BACKFILL", "migration must recover historical links from stored notification metadata");
+expectText("player payment link history", playerPaymentLinkMigrationPath, playerPaymentLinkMigration, "exact removal time was not recorded", "legacy removed links must state when an exact timestamp is unavailable");
+expectText("player payment link history", playerPaymentLinkMigrationPath, playerPaymentLinkMigration, "Player payment-link history is permanent", "link-history rows must not be deletable");
+expectText("player payment link history", playerPaymentLinkOpenPath, playerPaymentLinkOpen, '"openCount"="PlayerPaymentLinkHistory"."openCount"+1', "opening a payment link must increment its audit counter");
+expectText("player payment link history", publicPlayerPaymentLinkPagePath, publicPlayerPaymentLinkPage, "recordPlayerPaymentLinkOpened", "the real payment page must record link opens");
+expectText("player payment link history", playerLedgerPath, playerLedgerPage, "account.paymentLinks", "player ledger route must load link history from the account");
+expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Payment link history", "player app ledger must display all recorded payment links");
+expectText("player payment link history", playerLedgerStatementPath, playerLedgerStatement, "Payment link history", "web ledger statement must display link history");
+expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Every recorded player payment link stays here, even after it is removed.", "player app must explain that removed links remain in history");
+
 if (failures.length) {
   console.error("\nSIXFL CRITICAL FEATURE CONTRACTS FAILED\n");
   for (const failure of failures) console.error(` - ${failure}`);

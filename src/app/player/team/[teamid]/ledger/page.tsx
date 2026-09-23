@@ -7,6 +7,7 @@ import { authOptions } from "@/auth";
 import PlayerAppPayments, {
   type PlayerAppPaymentActivity,
   type PlayerAppPaymentFee,
+  type PlayerAppPaymentLinkHistory,
   type PlayerAppPaymentPlan,
 } from "@/components/player/PlayerAppPayments";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
@@ -72,6 +73,17 @@ function formatActivityDate(value: Date) {
     minute: "2-digit",
   });
 }
+
+function formatLinkDate(value: Date) {
+  return formatDateTimeInLondon(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 
 function fixtureLabel(fee: {
   fixture: {
@@ -158,6 +170,7 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
             paidPence={0}
             outstandingFees={[]}
             recentActivity={[]}
+            paymentLinks={[]}
             activePlan={null}
           />
         </PlayerPwaModeOnly>
@@ -266,6 +279,38 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
     0,
   );
 
+  const paymentLinks: PlayerAppPaymentLinkHistory[] = [...account.paymentLinks]
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .map((link) => {
+      const fee = feeById.get(link.feeId);
+      const isCurrentActiveLink =
+        !link.isRemoved &&
+        fee?.paymentToken === link.paymentToken &&
+        fee.status === "OPEN";
+
+      return {
+        id: link.id,
+        fixtureLabel: link.fixtureLabel ?? (fee ? fixtureLabel(fee) : null),
+        amountPence: link.amountPence,
+        createdLabel: formatLinkDate(link.createdAt),
+        historicalBackfill: link.source.endsWith("BACKFILL"),
+        firstOpenedLabel: link.firstOpenedAt
+          ? formatLinkDate(link.firstOpenedAt)
+          : null,
+        lastOpenedLabel: link.lastOpenedAt
+          ? formatLinkDate(link.lastOpenedAt)
+          : null,
+        openCount: link.openCount,
+        isRemoved: link.isRemoved,
+        removedLabel: link.removedAt ? formatLinkDate(link.removedAt) : null,
+        removedReason: link.removedReason,
+        paymentUrl: link.paymentUrl,
+        activePath: isCurrentActiveLink
+          ? `/pay/player-match-fee/${link.paymentToken}`
+          : null,
+      };
+    });
+
   return (
     <main className="text-white">
       <PlayerPwaModeOnly mode="app">
@@ -276,6 +321,7 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
           paidPence={paidPence}
           outstandingFees={outstandingFees}
           recentActivity={recentActivity}
+          paymentLinks={paymentLinks}
           activePlan={activePlan}
         />
       </PlayerPwaModeOnly>
