@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
@@ -12,10 +11,8 @@ export const metadata = { title: "Goal of the Month | SIXFL Player App" };
 
 export default async function PlayerGoalOfTheMonthPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ previewMembershipId?: string }>;
 }) {
   const { teamid } = await params;
   const session = await getServerSession(authOptions);
@@ -40,33 +37,15 @@ export default async function PlayerGoalOfTheMonthPage({
   });
   if (!team) notFound();
 
-  const requestedPreviewMembershipId = (
-    await searchParams
-  )?.previewMembershipId?.trim();
-  const preview =
-    user.role === UserRole.ADMIN && requestedPreviewMembershipId
-      ? await prisma.teamMember.findFirst({
-          where: { id: requestedPreviewMembershipId, teamId: teamid },
-          select: { id: true },
-        })
-      : null;
-  const moreHref = `/player/team/${teamid}/more${preview ? `?previewMembershipId=${encodeURIComponent(preview.id)}` : ""}`;
-
   return (
     <main className="min-h-screen bg-[#07130f] px-4 pb-28 pt-2 text-white">
       <div className="mx-auto w-full max-w-xl space-y-3">
-        <header>
-          <Link
-            href={moreHref}
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-emerald-200"
-          >
-            ← More
-          </Link>
-          <h1 className="mt-1 text-xl font-black tracking-tight">
+        <header className="flex min-h-11 items-center">
+          <h1 className="min-w-0 text-lg font-bold tracking-tight">
             Goal of the Month
           </h1>
         </header>
-        {/* Preview context is navigation only: the shared API uses the signed-in voter. */}
+        {/* The shared API always uses the signed-in voter. */}
         <MonthlyGoalsPanel playerApp />
       </div>
     </main>

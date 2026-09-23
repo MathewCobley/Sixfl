@@ -136,7 +136,7 @@ test('shared dashboard owner inventory contains no old generic nomination title'
   console.log('Monthly dashboard source owners:\n'+found.join('\n'));
 });
 
-test('player monthly route requires team access and keeps authorised preview navigation separate from voting', async () => {
+test('player monthly route requires team access and uses app navigation without a back link', async () => {
   async function render({signedIn=true,role='PLAYER',member=true,team=true,preview=true}={}) {
     const route=load('src/app/player/team/[teamid]/goal-of-the-month/page.tsx', {
       'next/link':{default:props=>React.createElement('a',props)},
@@ -151,8 +151,8 @@ test('player monthly route requires team access and keeps authorised preview nav
   await assert.rejects(render({signedIn:false}),/callbackUrl=%2Fplayer%2Fteam%2Fteam-one%2Fgoal-of-the-month/);
   await assert.rejects(render({member:false}),/not-found/);
   await assert.rejects(render({team:false}),/not-found/);
-  const player=await render();assert.match(player,/Shared monthly competition/);assert.match(player,/href="\/player\/team\/team-one\/more"/);assert.doesNotMatch(player,/previewMembershipId/);
-  const admin=await render({role:'ADMIN',member:false});assert.match(admin,/\/more\?previewMembershipId=membership-one/);
+  const player=await render();assert.match(player,/Shared monthly competition/);assert.doesNotMatch(player,/<a\b/);assert.doesNotMatch(player,/previewMembershipId/);
+  const admin=await render({role:'ADMIN',member:false});assert.doesNotMatch(admin,/<a\b/);
   assert.doesNotMatch(await render({role:'ADMIN',preview:false}),/previewMembershipId/);
 });
 
