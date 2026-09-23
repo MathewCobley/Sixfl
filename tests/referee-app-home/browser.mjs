@@ -108,7 +108,7 @@ try {
     );
     const open = page.getByRole("link", { name: "View match night" });
     assert.equal(await open.getAttribute("href"), "/referee/night/n1");
-    assert.equal(await page.getByRole("link", { name: "Nights" }).getAttribute("href"), "/referee/nights");
+    assert.equal(await page.getByRole("link", { name: "Nights", exact: true }).getAttribute("href"), "/referee/nights");
     const box = await open.boundingBox();
     assert.ok(box.height >= 44);
     if (width < 640)
