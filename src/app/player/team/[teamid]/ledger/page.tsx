@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
+import { getLegacyPaymentLinkClosureContext, getPlayerPaymentLinkSettlementLabel } from "@/lib/payments/player-payment-display";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
@@ -322,7 +322,15 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
         createdVia: createdEvent?.via ?? null,
         endedByLabel: eventActor(latestEndEvent),
         endedVia: latestEndEvent?.via ?? null,
-        endedReason: latestEndEvent?.reason ?? null,
+        endedReason:
+          [
+            latestEndEvent?.reason ?? null,
+            latestEndEvent?.actorKind === "LEGACY"
+              ? getLegacyPaymentLinkClosureContext(fee)
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || null,
         endedEventType: latestEndEvent?.eventType ?? null,
         firstOpenedLabel: link.firstOpenedAt
           ? formatLinkDate(link.firstOpenedAt)
