@@ -103,18 +103,18 @@ export default function RefereeAppHome({
               </strong>
               <span className="text-[10px] text-white/50">Open nights</span>
             </a>
-            <a href="#referee-ledger" className="min-h-11">
+            <Link href="/referee/ledger" className="min-h-11">
               <strong className="block text-lg tabular-nums">
                 {submittedCount}
               </strong>
               <span className="text-[10px] text-white/50">Submitted</span>
-            </a>
-            <a href="#referee-ledger" className="min-h-11">
+            </Link>
+            <Link href="/referee/ledger" className="min-h-11">
               <strong className="block text-lg tabular-nums text-emerald-200">
                 {dueToYou}
               </strong>
               <span className="text-[10px] text-white/50">Due to you</span>
-            </a>
+            </Link>
           </div>
         </section>
         <section
@@ -205,8 +205,8 @@ export default function RefereeAppHome({
             </div>
           </Link>
         </section>
-        <a
-          href="#referee-ledger"
+        <Link
+          href="/referee/ledger"
           className="flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/20 bg-amber-400/[0.06] p-3"
         >
           <BanknotesIcon className="h-6 w-6 shrink-0 text-amber-200" />
@@ -217,7 +217,7 @@ export default function RefereeAppHome({
             </p>
           </div>
           <ArrowRightIcon className="h-4 w-4 text-white/40" />
-        </a>
+        </Link>
         <div className="hidden sm:block">{desktopTabs}</div>
         {children}
       </div>
@@ -225,7 +225,7 @@ export default function RefereeAppHome({
         aria-label="Referee app navigation"
         className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl sm:hidden"
       >
-        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {[
             { href: "/referee", label: "Home", Icon: HomeIcon },
             {
@@ -237,6 +237,11 @@ export default function RefereeAppHome({
               href: "/referee/availability",
               label: "Availability",
               Icon: CalendarDaysIcon,
+            },
+            {
+              href: "/referee/ledger",
+              label: "Ledger",
+              Icon: BanknotesIcon,
             },
             {
               href: "/referee/match-rules",
