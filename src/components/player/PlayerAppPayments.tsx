@@ -8,7 +8,6 @@ import {
   ChevronRightIcon,
   ClockIcon,
   CreditCardIcon,
-  EyeIcon,
   LinkIcon,
   ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
@@ -40,20 +39,6 @@ export type PlayerAppPaymentLinkHistory = {
   fixtureLabel: string | null;
   amountPence: number | null;
   createdLabel: string;
-  historicalBackfill: boolean;
-  createdByLabel: string | null;
-  createdVia: string | null;
-  endedByLabel: string | null;
-  endedVia: string | null;
-  endedReason: string | null;
-  endedEventType: string | null;
-  firstOpenedLabel: string | null;
-  lastOpenedLabel: string | null;
-  openCount: number;
-  isRemoved: boolean;
-  removedLabel: string | null;
-  removedReason: string | null;
-  paymentUrl: string;
   activePath: string | null;
 };
 
@@ -294,11 +279,11 @@ export default function PlayerAppPayments({
           <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
             <div>
               <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-200/70">
-                Audit trail
+                Payments
               </p>
               <h2 className="mt-1 text-lg font-black">Payment link history</h2>
               <p className="mt-1 text-[11px] leading-5 text-white/35">
-                Every recorded player payment link stays here, even after it is removed.
+                Your current and previous payment links.
               </p>
             </div>
             <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-bold text-white/45">
@@ -308,7 +293,7 @@ export default function PlayerAppPayments({
 
           {paymentLinks.length === 0 ? (
             <div className="border-t border-white/[0.06] px-4 py-5 text-sm text-white/45">
-              No player payment links have been recorded for this account.
+              No payment links yet.
             </div>
           ) : (
             <div className="divide-y divide-white/[0.06]">
@@ -325,7 +310,7 @@ export default function PlayerAppPayments({
                             {link.fixtureLabel || "Player payment link"}
                           </h3>
                           <p className="mt-0.5 text-[10px] text-white/35">
-                            {link.historicalBackfill ? "First recorded" : "Created"} {link.createdLabel}
+                            {link.createdLabel}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
@@ -337,70 +322,22 @@ export default function PlayerAppPayments({
                           <span
                             className={[
                               "mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]",
-                              link.settlementLabel ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : link.isRemoved
-                                ? "border border-red-400/20 bg-red-500/10 text-red-100"
-                                : link.activePath
+                              link.settlementLabel ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100" : link.activePath
                                   ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
                                   : "border border-white/10 bg-white/[0.04] text-white/55",
                             ].join(" ")}
                           >
-                            {link.settlementLabel ?? (link.isRemoved ? "Removed" : link.activePath ? "Active" : "Closed")}
+                            {link.settlementLabel ?? (link.activePath ? "Ready to pay" : "Inactive")}
                           </span>
                         </div>
                       </div>
 
-                      <div className="mt-2 grid gap-1.5 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2 text-[10px] leading-4 text-white/45">
-                        <div>
-                          <span className="font-bold text-white/65">Created by:</span>{" "}
-                          {link.createdByLabel || "Actor not recorded"}
-                          {link.createdVia ? ` · ${link.createdVia}` : ""}
-                        </div>
-                        {link.endedByLabel ? (
-                          <div>
-                            <span className="font-bold text-white/65">
-                              {link.endedEventType === "REMOVED"
-                                ? "Removed by:"
-                                : link.endedEventType === "REOPENED"
-                                  ? "Reopened by:"
-                                  : "Closed by:"}
-                            </span>{" "}
-                            {link.endedByLabel}
-                            {link.endedVia ? ` · ${link.endedVia}` : ""}
-                            {link.endedReason ? ` · ${link.endedReason}` : ""}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-2 break-all rounded-lg bg-black/15 px-2 py-1.5 font-mono text-[9px] leading-4 text-white/25">
-                        {link.paymentUrl}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-white/40">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-1">
-                          <EyeIcon className="h-3.5 w-3.5" />
-                          {link.openCount > 0
-                            ? `Opened ${link.openCount} time${link.openCount === 1 ? "" : "s"}`
-                            : "Never opened"}
-                        </span>
-                        {link.firstOpenedLabel ? (
-                          <span>First {link.firstOpenedLabel}</span>
-                        ) : null}
-                        {link.lastOpenedLabel && link.openCount > 1 ? (
-                          <span>Last {link.lastOpenedLabel}</span>
-                        ) : null}
-                      </div>
-
-                      {link.settlementLabel ? <p className="mt-3 text-xs text-emerald-100/70">This match fee is settled. No payment is due.</p> : link.isRemoved ? (
-                        <div className="mt-2 rounded-xl border border-red-400/10 bg-red-500/[0.05] px-3 py-2 text-[10px] leading-5 text-red-100/70">
-                          {link.removedLabel ? `Removed ${link.removedLabel}. ` : "Removed. "}
-                          {link.removedReason || "This payment link is no longer active."}
-                        </div>
-                      ) : link.activePath ? (
+                      {link.settlementLabel ? <p className="mt-3 text-xs text-emerald-100/70">This match fee is settled. No payment is due.</p> : link.activePath ? (
                         <Link
                           href={link.activePath}
                           className="mt-2.5 inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-sky-300/25 bg-sky-400/10 px-3 text-xs font-black text-sky-100"
                         >
-                          Open active link
+                          Pay this fee
                           <ChevronRightIcon className="h-3.5 w-3.5" />
                         </Link>
                       ) : null}

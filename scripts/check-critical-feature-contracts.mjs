@@ -414,7 +414,7 @@ expectText("player payment link history", publicPlayerPaymentLinkPagePath, publi
 expectText("player payment link history", playerLedgerPath, playerLedgerPage, "account.paymentLinks", "player ledger route must load link history from the account");
 expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Payment link history", "player app ledger must display all recorded payment links");
 expectText("player payment link history", playerLedgerStatementPath, playerLedgerStatement, "Payment link history", "web ledger statement must display link history");
-expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Every recorded player payment link stays here, even after it is removed.", "player app must explain that removed links remain in history");
+expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Your current and previous payment links.", "player app must explain payment history in plain language");
 
 // ---------------------------------------------------------------------------
 // PLAYER PAYMENT-LINK ACTOR AUDIT — creation and ending actions must preserve
@@ -433,13 +433,16 @@ expectText("player payment link actor audit", playerPaymentLinkEventMigrationPat
 expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "'REMOVED'", "removed/replaced links must create actor events");
 expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "'CLOSED'", "paid/waived/cancelled links must create closure events");
 expectText("player payment link actor audit", captainPlayerPaymentsActionPath, captainPlayerPaymentsAction, "paymentLinkAuditActor(", "captain Squad Payments must attribute payment-link changes to the signed-in user");
-expectText("player payment link actor audit", playerLedgerAppPath, playerLedgerApp, "Created by:", "player app ledger must show who created a payment link");
+expectText("player payment link actor audit", playerLedgerAppPath, playerLedgerApp, "Ready to pay", "player app ledger must use plain payment status wording");
 expectText("player payment link actor audit", playerLedgerStatementPath, playerLedgerStatement, "Created by:", "captain/admin player account must show who created a payment link");
 expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "Pause unpaid player links — keep debt", "safe pause must remain distinct from debt write-off");
 expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "Permanently remove links and write off player balances", "captains must have an explicitly destructive player-debt write-off control");
 expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "This is a write-off, not a pause.", "write-off control must clearly warn that player debt is being forgiven");
 expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "The team&apos;s fixture balance is not reduced.", "write-off warning must make team liability explicit");
 expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "confirmWriteOff", "server write-off path must require explicit confirmation");
+
+
+expectRegex("player payment privacy", playerLedgerAppPath, playerLedgerApp, /^(?![\s\S]*(?:Actor not recorded|Created by:|Never opened|link\.paymentUrl|link\.removedReason))[\s\S]*$/, "player app must not render internal audit details");
 
 if (failures.length) {
   console.error("\nSIXFL CRITICAL FEATURE CONTRACTS FAILED\n");
