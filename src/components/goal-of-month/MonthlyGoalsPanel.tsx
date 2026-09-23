@@ -11,7 +11,7 @@ function deadline(value: string) {
 }
 const field = "w-full min-w-0 rounded-xl border border-white/20 bg-[#101714] px-3 py-3 text-sm text-white";
 
-export default function MonthlyGoalsPanel() {
+export default function MonthlyGoalsPanel({ playerApp = false }: { playerApp?: boolean }) {
   const { data, loading, error, refresh } = useMonthlyGoals();
   const [month, setMonth] = useState("");
   const [fixtureId, setFixtureId] = useState("");
@@ -80,8 +80,8 @@ export default function MonthlyGoalsPanel() {
     <div className="space-y-8">
       <div role={failed ? "alert" : "status"} aria-live="polite" className={failed ? "text-red-200" : "text-emerald-100"}>{feedback}</div>
       {error ? <p role="alert" className="text-amber-200">{error} <button type="button" onClick={() => void refresh()} className="underline">Refresh</button></p> : null}
-      {!eligible ? <p className="rounded-xl border border-white/10 p-4 text-sm text-white/70">Anyone can watch. Nominations and voting need a verified SIXFL player or captain account. <Link href="/login?callbackUrl=%2Fgoal-of-the-month" className="text-emerald-200 underline">Sign in to take part</Link></p> : null}
-      {data.legacy.votingMayBeOpen ? <p className="rounded-xl border border-amber-300/20 bg-amber-400/5 p-4 text-sm text-amber-100">The final weekly round is finishing on its original timetable. Its existing nominations and votes are preserved. <Link href="/goal-of-the-week?legacy=1" className="underline">Open the final weekly round and archive</Link>.</p> : null}
+      {!eligible ? <p className="rounded-xl border border-white/10 p-4 text-sm text-white/70">Anyone can watch. Nominations and voting need a verified SIXFL player or captain account. {!playerApp ? <Link href="/login?callbackUrl=%2Fgoal-of-the-month" className="text-emerald-200 underline">Sign in to take part</Link> : null}</p> : null}
+      {!playerApp && data.legacy.votingMayBeOpen ? <p className="rounded-xl border border-amber-300/20 bg-amber-400/5 p-4 text-sm text-amber-100">The final weekly round is finishing on its original timetable. Its existing nominations and votes are preserved. <Link href="/goal-of-the-week?legacy=1" className="underline">Open the final weekly round and archive</Link>.</p> : null}
 
       {data.voting.open ? (
         <section aria-labelledby="monthly-voting" className="space-y-4 rounded-3xl border border-amber-300/25 bg-amber-400/5 p-5">
@@ -190,7 +190,7 @@ export default function MonthlyGoalsPanel() {
         <p className="text-sm text-white/60">Voting closes after the 12th. A tied vote is decided by nominations, then the earliest nominee. A round with no votes has no player-voted winner.</p>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{data.winners.map(goal => <GoalNomineeCard key={goal.id} goal={goal} winner />)}</div>
         {!data.winners.length ? <p className="text-sm text-white/60">The first monthly winner will appear after voting closes.</p> : null}
-        <Link href="/goal-of-the-week?legacy=1" className="inline-block text-sm text-emerald-200 underline">View the original weekly winners and final weekly round</Link>
+        {!playerApp ? <Link href="/goal-of-the-week?legacy=1" className="inline-block text-sm text-emerald-200 underline">View the original weekly winners and final weekly round</Link> : null}
       </section>
     </div>
   );
