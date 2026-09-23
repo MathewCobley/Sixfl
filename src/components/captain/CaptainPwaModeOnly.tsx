@@ -1,0 +1,47 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+
+type CaptainViewMode = "app" | "web";
+
+function isAdminPhonePreviewFrame() {
+  try {
+    return (
+      window.self !== window.top &&
+      window.parent.location.origin === window.location.origin &&
+      window.parent.location.pathname === "/admin/pwa"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function detectAppMode(explicitPreview: boolean) {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches;
+  const iosStandalone =
+    "standalone" in navigator &&
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+
+  return standalone || iosStandalone || explicitPreview || isAdminPhonePreviewFrame();
+}
+
+export default function CaptainPwaModeOnly({
+  mode,
+  children,
+}: {
+  mode: CaptainViewMode;
+  children: ReactNode;
+}) {
+  const [resolvedMode, setResolvedMode] = useState<CaptainViewMode | null>(null);
+
+  useEffect(() => {
+    const explicitPreview =
+      new URLSearchParams(window.location.search).get("pwaPreview") === "1";
+    setResolvedMode(detectAppMode(explicitPreview) ? "app" : "web");
+  }, []);
+
+  if (resolvedMode === null) return null;
+
+  return resolvedMode === mode ? <>{children}</> : null;
+}

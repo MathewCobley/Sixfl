@@ -289,6 +289,37 @@ expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "ge
 expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "Switch team account", "team switch screen must use the requested account wording");
 
 // ---------------------------------------------------------------------------
+// CAPTAIN PWA — keep the first captain app screen native, compact and separate
+// from the existing website dashboard.
+// ---------------------------------------------------------------------------
+const captainAppHomePath = "src/components/captain/CaptainAppHome.tsx";
+const captainAppModePath = "src/components/captain/CaptainPwaModeOnly.tsx";
+const captainAppNavPath = "src/components/captain/CaptainPwaBottomNav.tsx";
+const captainAppPagePath = "src/app/captain/team/[teamid]/page.tsx";
+const captainAppLayoutPath = "src/app/captain/team/[teamid]/layout.tsx";
+const captainAppHome = read(captainAppHomePath);
+const captainAppMode = read(captainAppModePath);
+const captainAppNav = read(captainAppNavPath);
+const captainAppPage = read(captainAppPagePath);
+const captainAppLayout = read(captainAppLayoutPath);
+
+expectText("captain pwa", captainAppPagePath, captainAppPage, '<CaptainPwaModeOnly mode="app">', "captain overview must expose a dedicated app presentation");
+expectText("captain pwa", captainAppPagePath, captainAppPage, "<CaptainAppHome", "captain app must use the native app home component");
+expectText("captain pwa", captainAppPagePath, captainAppPage, '<CaptainPwaModeOnly mode="web">', "existing captain web overview must remain separate");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "Next match", "captain app home must keep the next match prominent");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "Needs attention", "captain app home must surface action items");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "Quick actions", "captain app home must retain compact operational shortcuts");
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Home"', "captain app bottom navigation must keep Home");
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Fixtures"', "captain app bottom navigation must keep Fixtures");
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Squad"', "captain app bottom navigation must keep Squad");
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Payments"', "captain app bottom navigation must keep Payments");
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Inbox"', "captain app bottom navigation must keep Inbox");
+expectText("captain pwa", captainAppNavPath, captainAppNav, "grid-cols-5", "captain app bottom navigation must remain a five-tab mobile bar");
+expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "SIXFL captain home", "captain app must have a native sticky app header");
+expectText("captain pwa", captainAppModePath, captainAppMode, 'window.parent.location.pathname === "/admin/pwa"', "captain app must render exactly inside the admin phone preview");
+expectText("captain pwa", captainAppModePath, captainAppMode, "display-mode: standalone", "captain app mode must work when installed as a PWA");
+
+// ---------------------------------------------------------------------------
 // ADMIN PWA VIEWER — keep the selected test subject and phone-preview route
 // when an administrator leaves and returns to the diagnostics page.
 // ---------------------------------------------------------------------------

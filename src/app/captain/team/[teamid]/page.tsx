@@ -7,8 +7,10 @@ import { notFound } from "next/navigation";
 
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { getPredictorResult, RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
+import CaptainAppHome from "@/components/captain/CaptainAppHome";
 import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLeagueTable";
 import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import CaptainVeoPriorityCard from "@/components/captain/CaptainVeoPriorityCard";
 import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
@@ -268,8 +270,43 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
     return goalsRecorded < goalsFor || !playerOfMatchName;
   }).length;
 
+  const appNextFixture =
+    nextFixture && nextFixtureStatus
+      ? {
+          label: getFixtureLabel({
+            homeTeamName: nextFixture.homeTeam.name,
+            awayTeamName: nextFixture.awayTeam.name,
+          }),
+          dateLabel: formatDateTime(nextFixture.kickoffAt),
+          venueLabel:
+            nextFixture.venue?.name ??
+            currentLeague?.venueName ??
+            team.league?.venueName ??
+            "Venue TBC",
+          statusLabel: nextFixtureStatus.label,
+          statusTone: nextFixtureStatus.tone,
+          countdownLabel: getFixtureCountdownLabel(nextFixture.kickoffAt),
+        }
+      : null;
+
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <CaptainAppHome
+          teamId={teamid}
+          nextFixture={appNextFixture}
+          leaguePosition={
+            currentTeamPosition >= 0 ? formatOrdinal(currentTeamPosition + 1) : "—"
+          }
+          reportsDue={needsCompletionCount}
+          openIssues={activeDisputeCount}
+          paymentDueNowLabel={formatMoney(paymentDueNowPence)}
+          overdueConfirmations={overdueConfirmationFixtures.length}
+        />
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       {hasUrgentWarnings ? (
         <section className="rounded-3xl border border-red-400/30 bg-red-500/12 p-5 shadow-[0_24px_80px_rgba(127,29,29,0.22)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-100/70">Urgent captain action</p>
@@ -504,6 +541,8 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
       <div id="captain-league-table">
         <CaptainDashboardLeagueTable rows={leagueTable} title={leagueTableTitle} description={leagueTableDescription} emptyMessage={currentLeagueId ? "The league table will appear here once teams have been added." : "Your team is not assigned to a league yet, so there is no table to show here."} />
       </div>
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
