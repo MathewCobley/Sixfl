@@ -273,7 +273,7 @@ test("all referee work pages use the app shell and future balances are clearly n
   assert.doesNotMatch(files.availability, /Save availability|Admin preview/);
   assert.doesNotMatch(files.rules, /Admin preview|Referee preview mode/);
   assert.doesNotMatch(files.night, /Admin preview|Referee preview mode/);
-  assert.match(files.availability, /RefereeAvailabilityControls/);
+  assert.match(files.availability, /RefereeAvailabilityCalendar/);
   assert.match(files.ledger, /Your money/);
   assert.match(files.ledger, /Money received/);
   assert.match(files.ledger, /getRefereePayableDueToRefereePence/);
@@ -288,15 +288,19 @@ test("referee app navigation exposes a dedicated ledger tab", () => {
   assert.match(home, /grid-cols-5/);
 });
 
-test("availability is instant-save with no page-level submit button", () => {
+test("availability is a calendar with usual nights highlighted and instant-save editing", () => {
   const page = fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8");
-  const controls = fs.readFileSync("src/components/referee/RefereeAvailabilityControls.tsx", "utf8");
+  const calendar = fs.readFileSync("src/components/referee/RefereeAvailabilityCalendar.tsx", "utf8");
   const actions = fs.readFileSync("src/app/(public)/referee/availability/actions.ts", "utf8");
   assert.doesNotMatch(page, /Save availability/);
-  assert.match(page, /RefereeAvailabilityControls/);
-  assert.match(controls, /updateRefereeAvailabilitySlotAction/);
-  assert.match(controls, /onClick=\{\(\) => choose\(option\.value\)\}/);
-  assert.match(controls, /onBlur=\{saveNoteIfChanged\}/);
+  assert.match(page, /RefereeAvailabilityCalendar/);
+  assert.match(calendar, /grid-cols-7/);
+  assert.match(calendar, /Usual nights are highlighted/);
+  assert.match(calendar, /Usual referee night/);
+  assert.match(calendar, /label: "Unset"/);
+  assert.doesNotMatch(calendar, /label: "No response"/);
+  assert.match(calendar, /updateRefereeAvailabilitySlotAction/);
+  assert.match(calendar, /onBlur=\{saveNoteIfChanged\}/);
   assert.match(actions, /export async function updateRefereeAvailabilitySlotAction/);
 });
 
