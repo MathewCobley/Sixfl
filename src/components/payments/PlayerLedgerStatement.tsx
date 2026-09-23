@@ -179,7 +179,7 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                           className="rounded-lg border border-white/[0.06] bg-black/15 px-2.5 py-2 text-xs leading-5 text-white/55"
                         >
                           <div className="font-medium text-white/75">
-                            {linkEventActionLabel(event.eventType)} by: {linkActorLabel(event)}
+                            {event.eventType === "CREATED" ? "Created by:" : `${linkEventActionLabel(event.eventType)} by:`} {linkActorLabel(event)}
                           </div>
                           <div className="text-white/40">
                             {formatDateTimeInLondon(event.createdAt,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} · {event.via}
