@@ -2,6 +2,37 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
+export type PlayerPaymentLinkAuditActor = {
+  actorKind: "USER" | "SYSTEM";
+  actorUserId?: string | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  via: string;
+};
+
+export function systemPlayerPaymentLinkActor(via: string): PlayerPaymentLinkAuditActor {
+  return {
+    actorKind: "SYSTEM",
+    actorUserId: null,
+    actorName: "SIXFL System",
+    actorRole: "SYSTEM",
+    via,
+  };
+}
+
+export async function setPlayerPaymentLinkAuditActor(
+  db: Pick<Prisma.TransactionClient, "$executeRaw">,
+  actor: PlayerPaymentLinkAuditActor,
+) {
+  await db.$executeRaw(Prisma.sql`
+    SELECT set_config(
+      'sixfl.player_payment_link_actor',
+      ${JSON.stringify(actor)},
+      true
+    )
+  `);
+}
+
 /**
  * Records a real visit to a player match-fee link.
  * One history row exists per unique fee/token; repeat visits increment openCount.
