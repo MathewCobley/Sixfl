@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import type Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/prisma";
-import { createPlayerRepaymentPlan, getPlayerLedgerAccount, getPlayerLedgerSummaryForUser, adjustPlayerLedgerBalance, changePlayerRepaymentPlan, pausePlayerFeeCollection, playerFeeCollectionHold, parseLedgerMoney, repaymentAmount, PlayerLedgerError } from "../src/lib/payments/player-ledger";
+import { createPlayerRepaymentPlan, getPlayerLedgerAccount, getPlayerLedgerSummaryForUser, adjustPlayerLedgerBalance, changePlayerRepaymentPlan, pausePlayerFeeCollection, writeOffPlayerFeeBalances, playerFeeCollectionHold, parseLedgerMoney, repaymentAmount, PlayerLedgerError } from "../src/lib/payments/player-ledger";
 import { startPlayerRepaymentCheckout, settlePlayerRepaymentSession, cancelPlayerRepaymentCheckout, handlePlayerRepaymentExpiry, handlePlayerRepaymentRefund, getPlayerRepaymentTarget, allocationsOf } from "../src/lib/payments/player-repayment-checkout";
 import { runPlayerRepaymentReminderJob, playerRepaymentReminderDeliveryBlock } from "../src/lib/payments/player-repayment-reminders";
 import { getTeamPaymentLedger } from "../src/lib/payments/team-payment-ledger";
@@ -21,13 +21,14 @@ import { getChargeStatusFromAmounts } from "../src/lib/payments/charge-status";
 import { POST as stripeWebhook } from "../src/app/api/stripe/webhook/route";
 import { getStripeServerClient } from "../src/lib/stripe/client";
 import { ensurePlayerMatchFeePaymentDetails } from "../src/lib/payments/player-match-fees";
-import { recordPlayerPaymentLinkOpened } from "../src/lib/payments/player-payment-link-history";
+import { recordPlayerPaymentLinkOpened, setPlayerPaymentLinkAuditActor } from "../src/lib/payments/player-payment-link-history";
 
 const database=new URL(process.env.DATABASE_URL||"http://invalid");
 assert.ok(process.env.SIXFL_PLAYER_LEDGER_TEST==="1"&&database.hostname==="127.0.0.1"&&database.pathname==="/sixfl_player_ledger_test","Disposable local database only");
 globalThis.fetch=async()=>{throw Error("External provider/network calls are forbidden in ledger tests");};
 const migration="prisma/migrations/20260908140000_player_ledger_and_repayments/migration.sql";
 const paymentLinkHistoryMigration="prisma/migrations/20260922235500_player_payment_link_history/migration.sql";
+const paymentLinkActorMigration="prisma/migrations/20260923004500_player_payment_link_actor_events/migration.sql";
 const migrate=(path:string)=>execFileSync("psql",[process.env.DATABASE_URL!,"-v","ON_ERROR_STOP=1","-f",path],{stdio:"pipe"});
 function signedTestHeader(payload: string, secret: string) {
   const timestamp = Math.floor(Date.now() / 1000);
@@ -40,6 +41,7 @@ before(async()=>{
   const old=await target(800);legacyId=old.fee.id;
   migrate(migration);
   migrate(paymentLinkHistoryMigration);
+  migrate(paymentLinkActorMigration);
   migrate("prisma/migrations/20260909001000_player_receipt_amount_integrity/migration.sql");
 });
 after(async()=>{await prisma.$disconnect();});
@@ -115,6 +117,50 @@ test("payment-link history keeps created, opened, removed and replacement links 
  const replacementLink=accountWithHistory.paymentLinks.find(link=>link.paymentToken===second.paymentToken);
  assert.ok(oldLink);assert.ok(replacementLink);
  assert.equal(oldLink.isRemoved,true);assert.equal(oldLink.openCount,2);assert.equal(replacementLink.isRemoved,false);
+});
+
+test("payment-link actor events record creator and remover without rewriting history",async()=>{
+ const t=await target();
+ const actor={actorKind:"USER" as const,actorUserId:t.user.id,actorName:"Test Captain",actorRole:"CAPTAIN",via:"Captain Squad Payments"};
+ const created=await ensurePlayerMatchFeePaymentDetails(t.fee.id,actor);
+ assert.ok(created?.paymentToken);
+ let events=await prisma.playerPaymentLinkEvent.findMany({where:{feeId:t.fee.id},orderBy:{sequence:"asc"}});
+ assert.equal(events.length,1);assert.equal(events[0].eventType,"CREATED");assert.equal(events[0].actorUserId,t.user.id);assert.equal(events[0].actorName,"Test Captain");assert.equal(events[0].via,"Captain Squad Payments");
+ await prisma.$transaction(async db=>{
+   await setPlayerPaymentLinkAuditActor(db,{...actor,via:"Captain Squad Payments · player deselected"});
+   await db.playerMatchFee.update({where:{id:t.fee.id},data:{status:"CANCELLED",cancelledAt:new Date(),paymentToken:null,paymentUrl:null}});
+ });
+ events=await prisma.playerPaymentLinkEvent.findMany({where:{feeId:t.fee.id},orderBy:{sequence:"asc"}});
+ assert.equal(events.length,2);assert.equal(events[1].eventType,"REMOVED");assert.equal(events[1].actorUserId,t.user.id);assert.match(events[1].via,/deselected/);
+ await assert.rejects(prisma.playerPaymentLinkEvent.delete({where:{id:events[0].id}}),/append-only/i);
+});
+
+test("captain bulk write-off forgives player balance but does not create a team payment",async()=>{
+ const t=await target(1200);
+ await ensurePlayerMatchFeePaymentDetails(t.fee.id,{actorKind:"USER",actorUserId:t.user.id,actorName:"Test Captain",actorRole:"CAPTAIN",via:"Captain Payments"});
+ const beforeTransactions=await prisma.paymentTransaction.count({where:{teamId:t.team.id}});
+ const {writtenOffPence,writtenOffCount}=await writeOffPlayerFeeBalances({
+   teamId:t.team.id,feeIds:[t.fee.id],actorUserId:t.user.id,
+   reason:"Captain confirmed player debt write-off; team charge remains unchanged.",
+   linkAuditActor:{actorKind:"USER",actorUserId:t.user.id,actorName:"Test Captain",actorRole:"CAPTAIN",via:"Captain Payments · write off unpaid player links"}
+ });
+ assert.equal(writtenOffPence,1200);assert.equal(writtenOffCount,1);
+ assert.equal((await state(t)).balancePence,0);
+ const fee=await feeRow(t);assert.equal(fee.status,"WAIVED");assert.equal(fee.amountPence,0);assert.equal(fee.paymentToken,null);
+ assert.equal(await prisma.paymentTransaction.count({where:{teamId:t.team.id}}),beforeTransactions);
+ const events=await prisma.playerPaymentLinkEvent.findMany({where:{feeId:t.fee.id},orderBy:{sequence:"asc"}});
+ assert.equal(events.at(-1)?.eventType,"REMOVED");assert.equal(events.at(-1)?.actorName,"Test Captain");assert.match(events.at(-1)?.via ?? "",/write off/i);
+ const entries=(await account(t)).entries;assert.ok(entries.some(e=>e.kind==="WAIVER"&&e.actorUserId===t.user.id&&e.amountPence===-1200));
+});
+
+test("captain payments UI clearly separates pause from destructive player write-off",()=>{
+ const source=readFileSync("src/app/captain/team/[teamid]/payments/page.tsx","utf8");
+ assert.match(source,/Pause unpaid player links — keep debt/);
+ assert.match(source,/Permanently remove links and write off player balances/);
+ assert.match(source,/This is a write-off, not a pause/);
+ assert.match(source,/The team&apos;s fixture balance is not reduced/);
+ assert.match(source,/confirmWriteOff/);
+ assert.match(source,/I understand that these players will no longer owe this money/);
 });
 
 test("ordinary fee creation, genuine edit, waiver and payment retain simple existing behavior with an immutable statement",async()=>{

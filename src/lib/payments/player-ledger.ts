@@ -2,10 +2,14 @@ import { getFeePreservedAbandonmentIds } from "@/lib/fixtures/abandonment-fee-po
 import { randomBytes, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  setPlayerPaymentLinkAuditActor,
+  type PlayerPaymentLinkAuditActor,
+} from "@/lib/payments/player-payment-link-history";
 
 export { PLAYER_LEDGER_RECEIPT_MARKER } from "./player-ledger-markers";
 export class PlayerLedgerError extends Error {}
-export type LedgerDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "playerFeeLedgerState" | "playerLedgerEntry" | "playerPaymentLinkHistory" | "playerRepaymentPlan" | "playerRepaymentRequest" | "playerMatchFee" | "notificationDispatch" | "teamMember" | "user" | "paymentCharge" | "team">;
+export type LedgerDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "playerFeeLedgerState" | "playerLedgerEntry" | "playerPaymentLinkHistory" | "playerPaymentLinkEvent" | "playerRepaymentPlan" | "playerRepaymentRequest" | "playerMatchFee" | "notificationDispatch" | "teamMember" | "user" | "paymentCharge" | "team">;
 
 export function visiblePlayerLedgerStateSql() {
   return Prisma.sql`(s.controlled OR s."deletedAt" IS NOT NULL OR EXISTS (
@@ -69,13 +73,14 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     : anchor.prospectId ? Prisma.sql`s."prospectId"=${anchor.prospectId}` : Prisma.sql`s."feeId"=${anchorFeeId}`;
   const states = await db.$queryRaw<LedgerState[]>(Prisma.sql`SELECT s.* FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND ${owner} ORDER BY s."createdAt",s."feeId"`);
   const ids = states.map(s => s.feeId);
-  const [savedFees, entries, paymentLinks, plans] = await Promise.all([
+  const [savedFees, entries, paymentLinks, paymentLinkEvents, plans] = await Promise.all([
     db.playerMatchFee.findMany({ where: { id: { in: ids }, teamId }, orderBy: [{ fixture: { kickoffAt: "asc" } }, { id: "asc" }],
       include: { fixture: { select: { id: true, kickoffAt: true, publishedAt: true, status: true, homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } } },
         team: { select: { name: true, logoUrl: true, teamMode: true } }, teamMember: { select: { user: { select: { id: true, name: true, email: true } } } },
         prospect: { select: { firstName: true, lastName: true, email: true } } } }),
     db.playerLedgerEntry.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: { sequence: "asc" } }),
     db.playerPaymentLinkHistory.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
+    db.playerPaymentLinkEvent.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: [{ sequence: "asc" }] }),
     db.playerRepaymentPlan.findMany({ where: { teamId, OR: [{ anchorFeeId: { in: ids } }, { id: { in: states.map(s => s.planId).filter((id): id is string => Boolean(id)) } }] }, orderBy: { createdAt: "desc" } }),
   ]);
   const preservedFixtureIds = await getFeePreservedAbandonmentIds(savedFees.filter(f => f.fixture.status === "CANCELLED").map(f => f.fixture.id), db);
@@ -121,6 +126,7 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     fees,
     entries,
     paymentLinks,
+    paymentLinkEvents,
     plans,
     balancePence,
     identityRecoveredFromHistory: Boolean(historicalIdentity),
@@ -244,6 +250,104 @@ export async function adjustPlayerLedgerBalance(input: { teamId:string; feeId:st
       paidAt:balance===0?new Date():null,note:[fee.note,`${input.kind==="CAPTAIN_RECEIPT"?"Payment received by captain (not SIXFL)":"Player balance reduced"}: ${money(input.amountPence)}. ${input.reason}`].filter(Boolean).join("\n")}});
     if (s.planId) await advanceRepaymentProgress(db, s.planId, receipt);
   },{maxWait:5000,timeout:15000});
+}
+
+export async function writeOffPlayerFeeBalances(input: {
+  teamId: string;
+  feeIds: string[];
+  actorUserId: string;
+  reason: string;
+  linkAuditActor: PlayerPaymentLinkAuditActor;
+}) {
+  if (!input.actorUserId || !input.reason.trim()) {
+    throw new PlayerLedgerError("Record who is writing off these player balances and why.");
+  }
+
+  const ids = [...new Set(input.feeIds.filter(Boolean))].sort();
+  if (!ids.length) return { writtenOffPence: 0, writtenOffCount: 0 };
+
+  return prisma.$transaction(async (db) => {
+    await db.$queryRaw(
+      Prisma.sql`SELECT id FROM "Team" WHERE id=${input.teamId} FOR UPDATE`,
+    );
+    await lockLedgerFees(db, ids);
+
+    const states = await db.playerFeeLedgerState.findMany({
+      where: { teamId: input.teamId, feeId: { in: ids } },
+    });
+    if (states.length !== ids.length) {
+      throw new PlayerLedgerError("One or more player balances no longer belong to this team.");
+    }
+
+    await assertNoOpenRequest(db, ids);
+
+    let writtenOffPence = 0;
+    let writtenOffCount = 0;
+
+    for (const state of states) {
+      if (state.balancePence <= 0 || state.deletedAt) continue;
+
+      const fee = await db.playerMatchFee.findUniqueOrThrow({
+        where: { id: state.feeId },
+      });
+
+      await db.playerFeeLedgerState.update({
+        where: { feeId: state.feeId },
+        data: { controlled: true, collectionPaused: false, planId: null },
+      });
+
+      await setLedgerContext(db, {
+        feeId: state.feeId,
+        kind: "WAIVER",
+        actorUserId: input.actorUserId,
+        reason: input.reason.trim(),
+        sourceKey: `bulk-writeoff:${state.feeId}:${randomUUID()}`,
+      });
+      await setPlayerPaymentLinkAuditActor(db, input.linkAuditActor);
+
+      await db.playerMatchFee.update({
+        where: { id: state.feeId },
+        data: {
+          amountPence: 0,
+          status: "WAIVED",
+          paidAt: null,
+          waivedAt: new Date(),
+          cancelledAt: null,
+          paymentUrl: null,
+          paymentToken: null,
+          note: [fee.note, `Player balance written off by team: ${money(state.balancePence)}. ${input.reason.trim()}`]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      });
+
+      writtenOffPence += state.balancePence;
+      writtenOffCount += 1;
+    }
+
+    await db.notificationDispatch.updateMany({
+      where: {
+        sourceId: { in: ids },
+        sourceType: {
+          in: [
+            "PLAYER_MATCH_FEE_REQUEST",
+            "PLAYER_MATCH_FEE_CHASE_24H",
+            "PLAYER_MATCH_FEE_CHASE_72H",
+            "PLAYER_MATCH_FEE_WARNING",
+          ],
+        },
+        status: { in: ["QUEUED", "PROCESSING"] },
+      },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+        failureReason:
+          "Player balance was written off by the team; collection must not continue.",
+      },
+    });
+
+    return { writtenOffPence, writtenOffCount };
+  }, { maxWait: 5000, timeout: 15000 });
 }
 
 export async function pausePlayerFeeCollection(input:{teamId:string;feeIds:string[];paused:boolean;actorUserId:string}){

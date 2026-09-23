@@ -5,6 +5,10 @@
 "use server";
 
 import { isPlayerFeeLedgerControlled, pausePlayerFeeCollection, readPlayerLedgerState } from "@/lib/payments/player-ledger";
+import {
+  setPlayerPaymentLinkAuditActor,
+  type PlayerPaymentLinkAuditActor,
+} from "@/lib/payments/player-payment-link-history";
 import { parseSquadCollectionAmount, validateSquadCollectionAmounts } from "@/lib/payments/squad-collection-form";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -45,6 +49,22 @@ function formatMoney(amountPence: number) {
     currency: "GBP",
   }).format(amountPence / 100);
 }
+
+function paymentLinkAuditActor(
+  access: Awaited<ReturnType<typeof requireCaptain>>,
+  via: string,
+): PlayerPaymentLinkAuditActor {
+  return {
+    actorKind: "USER",
+    actorUserId: access.user?.id ?? null,
+    actorName: access.user?.name || access.user?.email || "Signed-in SIXFL user",
+    actorRole: access.isAdmin
+      ? "ADMIN"
+      : access.membership?.role ?? "CAPTAIN",
+    via,
+  };
+}
+
 
 function getSelectedPlayers(formData: FormData) {
   return formData
@@ -238,6 +258,7 @@ async function syncTeamChargeForZeroFeeWaivers(input: {
 async function emailPlayerPaymentLinks(
   feeIds: string[],
   forceFeeIds: Set<string> = new Set(),
+  linkAuditActor?: PlayerPaymentLinkAuditActor,
 ) {
   const uniqueFeeIds = Array.from(new Set(feeIds.filter(Boolean)));
   let queued = 0;
@@ -249,6 +270,7 @@ async function emailPlayerPaymentLinks(
       mode: "request",
       channels: ["EMAIL"],
       ...(forceFeeIds.has(feeId) ? { force: true } : {}),
+      linkAuditActor,
     });
 
     queued += result.queued;
@@ -280,7 +302,12 @@ export async function resendCaptainPlayerPaymentLinkAction(formData: FormData) {
     redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=payment_request_not_found"));
   }
 
-  await requireCaptain(teamId);
+  const access = await requireCaptain(teamId);
+  if (!access.user) redirect("/login");
+  const linkAuditActor = paymentLinkAuditActor(
+    access,
+    "Captain Squad Payments · resend payment link",
+  );
 
   const fee = await prisma.playerMatchFee.findFirst({
     where: {
@@ -301,6 +328,7 @@ export async function resendCaptainPlayerPaymentLinkAction(formData: FormData) {
     mode: "request",
     channels: ["EMAIL"],
     force: true,
+    linkAuditActor,
   });
 
   revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));
@@ -326,7 +354,12 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
     redirect(getPlayerPaymentsPath(teamId, fixtureId, "&error=missing_fixture"));
   }
 
-  await requireCaptain(teamId);
+  const access = await requireCaptain(teamId);
+  if (!access.user) redirect("/login");
+  const linkAuditActor = paymentLinkAuditActor(
+    access,
+    "Captain Squad Payments",
+  );
 
   // Validate every selected amount before any collection write. A default is
   // required only for blank individual amounts, not for eight explicit £5 shares.
@@ -470,10 +503,15 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
       };
 
       const fee = existing
-        ? await prisma.playerMatchFee.update({
-            where: { id: existing.id },
-            data,
-            select: { id: true, status: true },
+        ? await prisma.$transaction(async (tx) => {
+            if (clearPaymentLink) {
+              await setPlayerPaymentLinkAuditActor(tx, linkAuditActor);
+            }
+            return tx.playerMatchFee.update({
+              where: { id: existing.id },
+              data,
+              select: { id: true, status: true },
+            });
           })
         : await prisma.playerMatchFee.create({
             data: {
@@ -522,10 +560,15 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
       };
 
       const fee = existing
-        ? await prisma.playerMatchFee.update({
-            where: { id: existing.id },
-            data,
-            select: { id: true, status: true },
+        ? await prisma.$transaction(async (tx) => {
+            if (clearPaymentLink) {
+              await setPlayerPaymentLinkAuditActor(tx, linkAuditActor);
+            }
+            return tx.playerMatchFee.update({
+              where: { id: existing.id },
+              data,
+              select: { id: true, status: true },
+            });
           })
         : await prisma.playerMatchFee.create({
             data: {
@@ -573,25 +616,31 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
 
     if (isSelectedMember || isSelectedProspect) continue;
 
-    await prisma.playerMatchFee.update({
-      where: { id: fee.id },
-      data: {
-        status: "CANCELLED",
-        paidAt: null,
-        waivedAt: null,
-        cancelledAt: new Date(),
-        paymentUrl: null,
-        paymentToken: null,
-        note: appendNote({
-          existingNote: fee.note,
-          note: "Voided: Removed from captain squad payment collection",
-        }),
-      },
+    await prisma.$transaction(async (tx) => {
+      await setPlayerPaymentLinkAuditActor(tx, linkAuditActor);
+      await tx.playerMatchFee.update({
+        where: { id: fee.id },
+        data: {
+          status: "CANCELLED",
+          paidAt: null,
+          waivedAt: null,
+          cancelledAt: new Date(),
+          paymentUrl: null,
+          paymentToken: null,
+          note: appendNote({
+            existingNote: fee.note,
+            note: "Voided: Removed from captain squad payment collection",
+          }),
+        },
+      });
     });
   }
 
   await syncTeamChargeForZeroFeeWaivers({ teamId, fixtureId });
-  await ensurePlayerMatchFeePaymentDetailsForFees(createdOrUpdatedFeeIds);
+  await ensurePlayerMatchFeePaymentDetailsForFees(
+    createdOrUpdatedFeeIds,
+    linkAuditActor,
+  );
   await cancelQueuedPlayerMatchFeeNotificationDispatches(
     Array.from(forceEmailFeeIds),
     "Player match fee amount or collection method was updated before delivery; replaced by an updated payment request.",
@@ -599,6 +648,7 @@ export async function createCaptainSquadPaymentCollectionAction(formData: FormDa
   const delivery = await emailPlayerPaymentLinks(
     createdOrUpdatedFeeIds,
     forceEmailFeeIds,
+    linkAuditActor,
   );
 
   revalidatePath(getPlayerPaymentsPath(teamId, fixtureId));

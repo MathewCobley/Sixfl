@@ -90,6 +90,59 @@ export default function PlayerLedgerStatement({account}:{account:PlayerLedgerAcc
                       {link.isRemoved ? "Removed" : active ? "Active" : "Closed"}
                     </span>
                   </div>
+                  {(() => {
+                    const events = account.paymentLinkEvents.filter(
+                      (event) =>
+                        event.feeId === link.feeId &&
+                        event.paymentToken === link.paymentToken,
+                    );
+                    const createdEvent =
+                      events.find((event) => event.eventType === "CREATED") ?? null;
+                    const latestEndEvent =
+                      [...events]
+                        .reverse()
+                        .find((event) =>
+                          ["REMOVED", "CLOSED", "REOPENED"].includes(event.eventType),
+                        ) ?? null;
+                    const actorLabel = (
+                      event: (typeof events)[number] | null,
+                    ) => {
+                      if (!event) return "Actor not recorded";
+                      if (event.actorKind === "LEGACY") {
+                        return "Legacy · actor not recorded";
+                      }
+                      if (event.actorKind === "SYSTEM") return "SIXFL System";
+                      const role = event.actorRole
+                        ? ` · ${event.actorRole.toLowerCase().replaceAll("_", " ")}`
+                        : "";
+                      return `${event.actorName || "Signed-in SIXFL user"}${role}`;
+                    };
+
+                    return (
+                      <div className="mt-2 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs leading-5 text-white/50">
+                        <div>
+                          <span className="font-semibold text-white/70">Created by:</span>{" "}
+                          {actorLabel(createdEvent)}
+                          {createdEvent?.via ? ` · ${createdEvent.via}` : ""}
+                        </div>
+                        {latestEndEvent ? (
+                          <div>
+                            <span className="font-semibold text-white/70">
+                              {latestEndEvent.eventType === "REMOVED"
+                                ? "Removed by:"
+                                : latestEndEvent.eventType === "REOPENED"
+                                  ? "Reopened by:"
+                                  : "Closed by:"}
+                            </span>{" "}
+                            {actorLabel(latestEndEvent)}
+                            {latestEndEvent.via ? ` · ${latestEndEvent.via}` : ""}
+                            {latestEndEvent.reason ? ` · ${latestEndEvent.reason}` : ""}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+
                   <div className="mt-2 break-all rounded-lg bg-black/20 px-2.5 py-2 font-mono text-[10px] leading-5 text-white/35">
                     {link.paymentUrl}
                   </div>

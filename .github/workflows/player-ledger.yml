@@ -15,6 +15,7 @@ on:
       - "prisma/migrations/20260506170000_link_player_match_fee_payments/**"
       - "prisma/migrations/20260713200000_make_player_payments_searchable/**"
       - "prisma/migrations/20260922235500_player_payment_link_history/**"
+      - "prisma/migrations/20260923004500_player_payment_link_actor_events/**"
       - ".github/workflows/player-ledger.yml"
   workflow_dispatch:
 permissions:
@@ -70,7 +71,7 @@ jobs:
           const u=new URL(process.env.DATABASE_URL);
           if(u.hostname!=='127.0.0.1'||u.pathname!=='/sixfl_player_ledger_test')throw Error('Local disposable database only');
           let schema=fs.readFileSync('prisma/schema.prisma','utf8');
-          for(const name of ['PlayerFeeLedgerState','PlayerLedgerEntry','PlayerPaymentLinkHistory','PlayerRepaymentPlan','PlayerRepaymentRequest']){
+          for(const name of ['PlayerFeeLedgerState','PlayerLedgerEntry','PlayerPaymentLinkHistory','PlayerPaymentLinkEvent','PlayerRepaymentPlan','PlayerRepaymentRequest']){
             const pattern=new RegExp('model '+name+' \\{[^}]*\\}','g');
             if(!pattern.test(schema))throw Error('Missing ledger schema model '+name);
             schema=schema.replace(pattern,'');

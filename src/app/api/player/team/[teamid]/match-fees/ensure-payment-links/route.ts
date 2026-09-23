@@ -27,10 +27,11 @@ export async function POST(
     where: { email },
     select: {
       id: true,
+      name: true,
       role: true,
       teamMembers: {
         where: { teamId: teamid },
-        select: { id: true },
+        select: { id: true, role: true },
         take: 1,
       },
     },
@@ -60,7 +61,16 @@ export async function POST(
   const needsLink = openFees.filter((fee) => !fee.paymentUrl || !fee.paymentToken);
 
   if (needsLink.length > 0) {
-    await ensurePlayerMatchFeePaymentDetailsForFees(needsLink.map((fee) => fee.id));
+    await ensurePlayerMatchFeePaymentDetailsForFees(
+      needsLink.map((fee) => fee.id),
+      {
+        actorKind: "USER",
+        actorUserId: user!.id,
+        actorName: user!.name || session.user.email,
+        actorRole: membership?.role ?? user!.role,
+        via: "Player Payments",
+      },
+    );
   }
 
   return NextResponse.json({

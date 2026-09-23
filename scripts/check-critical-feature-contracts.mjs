@@ -416,6 +416,31 @@ expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, 
 expectText("player payment link history", playerLedgerStatementPath, playerLedgerStatement, "Payment link history", "web ledger statement must display link history");
 expectText("player payment link history", playerLedgerAppPath, playerLedgerApp, "Every recorded player payment link stays here, even after it is removed.", "player app must explain that removed links remain in history");
 
+// ---------------------------------------------------------------------------
+// PLAYER PAYMENT-LINK ACTOR AUDIT — creation and ending actions must preserve
+// who performed them, and player-debt write-off must remain explicit/destructive.
+// ---------------------------------------------------------------------------
+const playerPaymentLinkEventMigrationPath = "prisma/migrations/20260923004500_player_payment_link_actor_events/migration.sql";
+const captainPlayerPaymentsActionPath = "src/app/captain/team/[teamid]/player-payments/actions.ts";
+const captainPaymentsPagePath = "src/app/captain/team/[teamid]/payments/page.tsx";
+const playerPaymentLinkEventMigration = read(playerPaymentLinkEventMigrationPath);
+const captainPlayerPaymentsAction = read(captainPlayerPaymentsActionPath);
+const captainPaymentsPage = read(captainPaymentsPagePath);
+
+expectText("player payment link actor audit", playerPaymentLinkSchemaPath, playerPaymentLinkSchema, "model PlayerPaymentLinkEvent", "schema must retain append-only actor events for player payment links");
+expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "Player payment-link events are append-only", "actor events must not be mutable or deletable");
+expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "'CREATED'", "new payment links must create actor events");
+expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "'REMOVED'", "removed/replaced links must create actor events");
+expectText("player payment link actor audit", playerPaymentLinkEventMigrationPath, playerPaymentLinkEventMigration, "'CLOSED'", "paid/waived/cancelled links must create closure events");
+expectText("player payment link actor audit", captainPlayerPaymentsActionPath, captainPlayerPaymentsAction, "paymentLinkAuditActor(", "captain Squad Payments must attribute payment-link changes to the signed-in user");
+expectText("player payment link actor audit", playerLedgerAppPath, playerLedgerApp, "Created by:", "player app ledger must show who created a payment link");
+expectText("player payment link actor audit", playerLedgerStatementPath, playerLedgerStatement, "Created by:", "captain/admin player account must show who created a payment link");
+expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "Pause unpaid player links — keep debt", "safe pause must remain distinct from debt write-off");
+expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "Permanently remove links and write off player balances", "captains must have an explicitly destructive player-debt write-off control");
+expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "This is a write-off, not a pause.", "write-off control must clearly warn that player debt is being forgiven");
+expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "The team&apos;s fixture balance is not reduced.", "write-off warning must make team liability explicit");
+expectText("player payment link actor audit", captainPaymentsPagePath, captainPaymentsPage, "confirmWriteOff", "server write-off path must require explicit confirmation");
+
 if (failures.length) {
   console.error("\nSIXFL CRITICAL FEATURE CONTRACTS FAILED\n");
   for (const failure of failures) console.error(` - ${failure}`);

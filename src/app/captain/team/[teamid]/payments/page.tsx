@@ -9,7 +9,7 @@ import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/
 // File: src/app/captain/team/[teamid]/payments/page.tsx
 // ========================================
 
-import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql } from "@/lib/payments/player-ledger";
+import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql, writeOffPlayerFeeBalances } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";
 import { revalidatePath } from "next/cache";
@@ -312,12 +312,43 @@ async function closeSettledChargePlayerLinksAction(formData: FormData) {
   redirect(`/captain/team/${teamId}/payments?links=paused`);
 }
 
+async function writeOffUnpaidPlayerLinksAction(formData: FormData) {
+  "use server";
+  const teamId=String(formData.get("teamId")??"").trim();
+  const chargeId=String(formData.get("chargeId")??"").trim();
+  const confirmed=String(formData.get("confirmWriteOff")??"")==="yes";
+  if(!teamId||!chargeId)redirect(teamId?`/captain/team/${teamId}/payments?links=invalid`:"/captain");
+  if(!confirmed)redirect(`/captain/team/${teamId}/payments?links=writeoff_confirmation_required`);
+  const access=await requireCaptain(teamId);
+  if(!access.user)redirect("/login");
+  const ledger=await getTeamPaymentLedger(teamId);
+  const entry=ledger?.entries.find(e=>e.chargeId===chargeId);
+  if(!entry?.fixtureId||!ledger?.relatedTeamIds.includes(entry.teamId))redirect(`/captain/team/${teamId}/payments?links=invalid`);
+  const fees=await prisma.playerMatchFee.findMany({where:{teamId:entry.teamId,fixtureId:entry.fixtureId,status:"OPEN"},select:{id:true}});
+  const result=await writeOffPlayerFeeBalances({
+    teamId:entry.teamId,
+    feeIds:fees.map(f=>f.id),
+    actorUserId:access.user.id,
+    reason:"Team chose to permanently remove all unpaid player links and write off the remaining player balances. The team fixture charge remains unchanged.",
+    linkAuditActor:{
+      actorKind:"USER",
+      actorUserId:access.user.id,
+      actorName:access.user.name||access.user.email||"Signed-in SIXFL user",
+      actorRole:access.isAdmin?"ADMIN":access.membership?.role??"CAPTAIN",
+      via:"Captain Payments · write off unpaid player links",
+    },
+  });
+  revalidatePath(`/captain/team/${teamId}/payments`);
+  revalidatePath(`/captain/team/${teamId}/player-payments`);
+  redirect(`/captain/team/${teamId}/payments?links=written_off&count=${result.writtenOffCount}&amount=${result.writtenOffPence}`);
+}
+
 export default async function CaptainPaymentsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ teamid: string }>;
-  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string; flexpay?: string; flexAmount?: string; max?: string }>;
+  searchParams?: Promise<{ autopay?: string; subscription?: string; credit?: string; amount?: string; links?: string; count?: string; flexpay?: string; flexAmount?: string; max?: string }>;
 }) {
   const { teamid } = await params;
   const sp = (await searchParams) ?? {};
@@ -641,9 +672,23 @@ export default async function CaptainPaymentsPage({
                     ? "Stripe could not open the payment page. Please try again."
                     : null;
   const canOpenPortal = hasSavedCard;
+  const linkWriteOffMessage =
+    sp.links === "written_off"
+      ? "Unpaid player balances were written off. Those players no longer owe those amounts and SIXFL will not collect them. The team fixture balance remains unchanged."
+      : sp.links === "writeoff_confirmation_required"
+        ? "Write-off not completed. You must confirm that the player debt will be forgiven and the team still owes the fixture balance."
+        : null;
 
   return (
     <div className="space-y-8">
+      {linkWriteOffMessage ? (
+        <p
+          role={sp.links === "written_off" ? "status" : "alert"}
+          className="rounded-xl border border-red-300/25 bg-red-500/10 p-4 text-sm text-red-50"
+        >
+          {linkWriteOffMessage}
+        </p>
+      ) : null}
       {paymentOrder.enabled ? (
         <section data-team-payment-order="oldest-first" className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
           <h2 className="font-semibold">
@@ -1220,11 +1265,47 @@ export default async function CaptainPaymentsPage({
                               <input type="hidden" name="chargeId" value={entry.chargeId} />
                               <button
                                 type="submit"
-                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-red-300/25 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/25"
+                                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-300/25 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-50 transition hover:bg-amber-500/20"
                               >
                                 Pause unpaid player links — keep debt
                               </button>
                             </form>
+
+                            <details className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 p-3">
+                              <summary className="cursor-pointer text-sm font-semibold text-red-100">
+                                Permanently remove links and write off player balances
+                              </summary>
+                              <div className="mt-3 space-y-3 text-xs leading-5 text-red-50/80">
+                                <p>
+                                  <strong>This is a write-off, not a pause.</strong> It will remove the unpaid player links and forgive {formatMoney(playerLinksOpenPence)} from the affected players&apos; SIXFL accounts. SIXFL will stop collecting this money from those players.
+                                </p>
+                                <p>
+                                  <strong>The team&apos;s fixture balance is not reduced.</strong> The team remains responsible for the fixture fee even though these player balances are being written off.
+                                </p>
+                                <form action={writeOffUnpaidPlayerLinksAction} className="space-y-3">
+                                  <input type="hidden" name="teamId" value={team.id} />
+                                  <input type="hidden" name="chargeId" value={entry.chargeId} />
+                                  <label className="flex items-start gap-2 rounded-lg border border-red-300/20 bg-black/15 p-2.5">
+                                    <input
+                                      type="checkbox"
+                                      name="confirmWriteOff"
+                                      value="yes"
+                                      required
+                                      className="mt-0.5"
+                                    />
+                                    <span>
+                                      I understand that these players will no longer owe this money, SIXFL will not collect it from them, and the team still owes the fixture balance.
+                                    </span>
+                                  </label>
+                                  <button
+                                    type="submit"
+                                    className="inline-flex min-h-10 items-center justify-center rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-400"
+                                  >
+                                    Write off player balances · {formatMoney(playerLinksOpenPence)}
+                                  </button>
+                                </form>
+                              </div>
+                            </details>
                           </div>
                         ) : null}
 
