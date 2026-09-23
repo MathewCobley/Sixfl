@@ -7,6 +7,15 @@ const pagePath = path.join(
 );
 let source = fs.readFileSync(pagePath, "utf8");
 
+if (
+  source.includes("Pause unpaid player links — keep debt") &&
+  source.includes("Permanently remove links and write off player balances") &&
+  source.includes("writeOffUnpaidPlayerLinksAction")
+) {
+  console.log("Native pause/write-off player-link controls already present.");
+  return;
+}
+
 function replaceRequired(before, after, label) {
   if (source.includes(after)) return;
   if (!source.includes(before)) {
