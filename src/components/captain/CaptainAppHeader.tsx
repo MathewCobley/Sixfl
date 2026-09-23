@@ -27,6 +27,7 @@ function sectionTitle(pathname: string, teamId: string) {
   if (pathname.startsWith(`${base}/guide`)) return "Captain guide";
   if (pathname.startsWith(`${base}/help`)) return "Help";
   if (pathname.startsWith(`${base}/prospects`)) return "Prospects";
+  if (pathname.startsWith(`${base}/more`)) return "More";
   return "Captain";
 }
 
@@ -69,13 +70,17 @@ export default function CaptainAppHeader({
           ) : null}
         </div>
 
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
+        <Link
+          href={`/captain/team/${teamId}/more`}
+          aria-label="Open captain app menu"
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20 active:bg-white/[0.06]"
+        >
           {teamLogoUrl ? (
             <img src={teamLogoUrl} alt={`${teamName} badge`} className="h-full w-full object-cover" />
           ) : (
             <span className="text-[10px] font-black text-emerald-100">{initials(teamName)}</span>
           )}
-        </div>
+        </Link>
       </div>
     </header>
   );
