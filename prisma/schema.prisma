@@ -1548,6 +1548,7 @@ model PlayerPaymentLinkEvent {
   actorRole String?
   via String
   reason String?
+  sourceKey String? @unique
   createdAt DateTime @default(now())
 
   @@index([feeId, paymentToken, createdAt])
