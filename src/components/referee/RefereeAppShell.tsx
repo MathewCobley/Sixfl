@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  ArrowsRightLeftIcon,
   BanknotesIcon,
   BookOpenIcon,
   CalendarDaysIcon,
@@ -8,9 +9,12 @@ import {
   HomeIcon,
 } from "@heroicons/react/24/outline";
 
+import { requireReferee } from "@/lib/admin";
+import { prisma } from "@/lib/prisma";
+
 type RefereeAppSection = "home" | "nights" | "availability" | "ledger" | "rules";
 
-export default function RefereeAppShell({
+export default async function RefereeAppShell({
   active,
   title,
   children,
@@ -19,6 +23,15 @@ export default function RefereeAppShell({
   title: string;
   children: ReactNode;
 }) {
+  const { authenticatedUser, isAdminPreview } = await requireReferee();
+  const linkedPlayerMembership = !isAdminPreview
+    ? await prisma.teamMember.findFirst({
+        where: { userId: authenticatedUser.id },
+        select: { id: true },
+      })
+    : null;
+  const canSwitchViewer = Boolean(linkedPlayerMembership);
+
   const items = [
     { key: "home" as const, href: "/referee", label: "Home", Icon: HomeIcon },
     {
@@ -60,7 +73,18 @@ export default function RefereeAppShell({
           <div className="min-w-0 flex-1 text-center text-sm font-black tracking-tight text-white">
             {title}
           </div>
-          <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+          {canSwitchViewer ? (
+            <Link
+              href="/dashboard?app=1"
+              aria-label="Switch app viewer"
+              title="Switch app viewer"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 active:bg-white/[0.08] active:text-white"
+            >
+              <ArrowsRightLeftIcon className="h-5 w-5" />
+            </Link>
+          ) : (
+            <div className="h-9 w-9 shrink-0" aria-hidden="true" />
+          )}
         </div>
       </header>
 
