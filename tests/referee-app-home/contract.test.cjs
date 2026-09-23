@@ -190,6 +190,28 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
     "@/lib/referee-nights": {
       formatMoney: (p) => `£${(p / 100).toFixed(2)}`,
       formatNightDate: (x) => x,
+      isRefereeNightPayable: (night, today) =>
+        night.status !== "CANCELLED" && night.nightDate < today,
+      getRefereePayableDueToRefereePence: (night, today) =>
+        night.status !== "CANCELLED" &&
+        night.status !== "SETTLED" &&
+        night.nightDate < today
+          ? Math.max(
+              0,
+              (night.dueToRefereePence ?? 0) -
+                (night.cashPaidToRefereePence ?? 0),
+            )
+          : 0,
+      getRefereePayableDueToSixflPence: (night, today) =>
+        night.status !== "CANCELLED" &&
+        night.status !== "SETTLED" &&
+        night.nightDate < today
+          ? Math.max(
+              0,
+              (night.dueToSixflPence ?? 0) -
+                (night.cashReceivedFromRefereePence ?? 0),
+            )
+          : 0,
       getRefereeNightFixtures: async (id) => {
         assert.equal(id, "next");
         return [{ kickoffAt: new Date() }];
@@ -210,12 +232,13 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
   appHome.type(appHome.props);
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
-  assert.equal(props.dueToYou, "£100.00", "future referee fees must not show as owed; a same-day submitted night may become due");
+  assert.equal(props.dueToYou, "£30.00", "only past unpaid referee nights count as owed");
   const page = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
   assert.match(page, /RefereePortalViewMode mode="app"/);
   assert.match(page, /RefereePortalViewMode mode="web"/);
-  assert.match(page, /night\.nightDate > todayLondonDate/);
-  assert.match(page, /night\.submittedAt \|\| night\.approvedAt \|\| night\.settledAt/);
+  assert.match(page, /isRefereeNightPayable/);
+  assert.match(page, /getRefereePayableDueToRefereePence/);
+  assert.match(page, /getRefereePayableDueToSixflPence/);
   assert.match(page, /Open reopened night/);
   assert.match(page, /onsiteByNightId/);
   assert.doesNotMatch(
