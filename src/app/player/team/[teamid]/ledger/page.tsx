@@ -84,6 +84,26 @@ function formatLinkDate(value: Date) {
   });
 }
 
+function paymentLinkEventActionLabel(eventType: string) {
+  if (eventType === "CREATED") return "Created";
+  if (eventType === "REMOVED") return "Removed";
+  if (eventType === "CLOSED") return "Closed";
+  if (eventType === "REOPENED") return "Reopened";
+  return eventType.toLowerCase().replaceAll("_", " ");
+}
+
+function paymentLinkActorLabel(event: {
+  actorKind: string;
+  actorName: string | null;
+  actorRole: string | null;
+}) {
+  if (event.actorKind === "LEGACY") return "Legacy — actor not recorded";
+  if (event.actorKind === "SYSTEM") return event.actorName || "SIXFL System";
+  const role = event.actorRole ? ` (${event.actorRole.replaceAll("_", " ").toLowerCase()})` : "";
+  return `${event.actorName || "Signed-in SIXFL user"}${role}`;
+}
+
+
 
 function fixtureLabel(fee: {
   fixture: {
@@ -308,6 +328,21 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
         return `${event.actorName || "Signed-in SIXFL user"}${role}`;
       };
 
+      const actorEvents = account.paymentLinkEvents
+        .filter((event) => event.paymentToken === link.paymentToken)
+        .sort((left, right) => {
+          if (left.sequence === right.sequence) return 0;
+          return left.sequence < right.sequence ? -1 : 1;
+        })
+        .map((event) => ({
+          id: event.id,
+          actionLabel: paymentLinkEventActionLabel(event.eventType),
+          dateLabel: formatLinkDate(event.createdAt),
+          actorLabel: paymentLinkActorLabel(event),
+          via: event.via,
+          reason: event.reason,
+        }));
+
       return {
         id: link.id,
         fixtureLabel: link.fixtureLabel ?? (fee ? fixtureLabel(fee) : null),
@@ -331,6 +366,7 @@ export default async function PlayerPaymentsPage({ params, searchParams }: PageP
         removedLabel: link.removedAt ? formatLinkDate(link.removedAt) : null,
         removedReason: link.removedReason,
         paymentUrl: link.paymentUrl,
+        actorEvents,
         activePath: isCurrentActiveLink
           ? `/pay/player-match-fee/${link.paymentToken}`
           : null,
