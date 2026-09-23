@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export { PLAYER_LEDGER_RECEIPT_MARKER } from "./player-ledger-markers";
 export class PlayerLedgerError extends Error {}
-export type LedgerDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "playerFeeLedgerState" | "playerLedgerEntry" | "playerRepaymentPlan" | "playerRepaymentRequest" | "playerMatchFee" | "notificationDispatch" | "teamMember" | "user" | "paymentCharge" | "team">;
+export type LedgerDb = Pick<typeof prisma, "$queryRaw" | "$executeRaw" | "playerFeeLedgerState" | "playerLedgerEntry" | "playerPaymentLinkHistory" | "playerRepaymentPlan" | "playerRepaymentRequest" | "playerMatchFee" | "notificationDispatch" | "teamMember" | "user" | "paymentCharge" | "team">;
 
 export function visiblePlayerLedgerStateSql() {
   return Prisma.sql`(s.controlled OR s."deletedAt" IS NOT NULL OR EXISTS (
@@ -69,12 +69,13 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     : anchor.prospectId ? Prisma.sql`s."prospectId"=${anchor.prospectId}` : Prisma.sql`s."feeId"=${anchorFeeId}`;
   const states = await db.$queryRaw<LedgerState[]>(Prisma.sql`SELECT s.* FROM "PlayerFeeLedgerState" s WHERE s."teamId"=${teamId} AND ${visiblePlayerLedgerStateSql()} AND ${owner} ORDER BY s."createdAt",s."feeId"`);
   const ids = states.map(s => s.feeId);
-  const [savedFees, entries, plans] = await Promise.all([
+  const [savedFees, entries, paymentLinks, plans] = await Promise.all([
     db.playerMatchFee.findMany({ where: { id: { in: ids }, teamId }, orderBy: [{ fixture: { kickoffAt: "asc" } }, { id: "asc" }],
       include: { fixture: { select: { id: true, kickoffAt: true, publishedAt: true, status: true, homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } } },
         team: { select: { name: true, logoUrl: true, teamMode: true } }, teamMember: { select: { user: { select: { id: true, name: true, email: true } } } },
         prospect: { select: { firstName: true, lastName: true, email: true } } } }),
     db.playerLedgerEntry.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: { sequence: "asc" } }),
+    db.playerPaymentLinkHistory.findMany({ where: { teamId, feeId: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
     db.playerRepaymentPlan.findMany({ where: { teamId, OR: [{ anchorFeeId: { in: ids } }, { id: { in: states.map(s => s.planId).filter((id): id is string => Boolean(id)) } }] }, orderBy: { createdAt: "desc" } }),
   ]);
   const preservedFixtureIds = await getFeePreservedAbandonmentIds(savedFees.filter(f => f.fixture.status === "CANCELLED").map(f => f.fixture.id), db);
@@ -119,6 +120,7 @@ async function readPlayerLedgerAccount(teamId: string, anchorFeeId: string, db: 
     states,
     fees,
     entries,
+    paymentLinks,
     plans,
     balancePence,
     identityRecoveredFromHistory: Boolean(historicalIdentity),

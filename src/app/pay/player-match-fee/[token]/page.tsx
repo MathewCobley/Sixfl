@@ -3,6 +3,7 @@
 // ========================================
 
 import PlayerRepaymentPanel from "@/components/payments/PlayerRepaymentPanel";
+import { recordPlayerPaymentLinkOpened } from "@/lib/payments/player-payment-link-history";
 import { readPlayerLedgerState } from "@/lib/payments/player-ledger";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -112,6 +113,12 @@ export default async function PayPlayerMatchFeePage({
   if (!fee) {
     notFound();
   }
+
+  await recordPlayerPaymentLinkOpened({
+    feeId: fee.id,
+    paymentToken: token,
+  });
+
   const ledgerState = await readPlayerLedgerState(fee.id);
   if(ledgerState?.controlled || ledgerState?.collectionPaused) return <PlayerRepaymentPanel feeToken={token} message={(await searchParams)?.error} />;
 

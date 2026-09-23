@@ -1505,6 +1505,36 @@ model PlayerLedgerEntry {
   @@index([teamId, feeId, createdAt])
 }
 
+model PlayerPaymentLinkHistory {
+  id String @id @default(uuid())
+  feeId String
+  teamId String
+  fixtureId String
+  teamMemberId String?
+  prospectId String?
+  userId String?
+  playerName String?
+  fixtureLabel String?
+  amountPence Int?
+  paymentToken String
+  paymentUrl String
+  source String @default("LIVE")
+  firstOpenedAt DateTime?
+  lastOpenedAt DateTime?
+  openCount Int @default(0)
+  isRemoved Boolean @default(false)
+  removedAt DateTime?
+  removedReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([feeId, paymentToken])
+  @@index([teamId, userId, createdAt])
+  @@index([teamId, teamMemberId, createdAt])
+  @@index([teamId, prospectId, createdAt])
+  @@index([feeId, createdAt])
+}
+
 model PlayerRepaymentPlan {
   id String @id @default(uuid())
   teamId String
