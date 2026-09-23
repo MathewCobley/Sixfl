@@ -293,11 +293,17 @@ expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "Sw
 // from the existing website dashboard.
 // ---------------------------------------------------------------------------
 const captainAppHomePath = "src/components/captain/CaptainAppHome.tsx";
+const captainAppHeaderPath = "src/components/captain/CaptainAppHeader.tsx";
+const captainAppFocusPath = "src/components/captain/CaptainAppPageFocus.tsx";
+const captainAppMorePath = "src/app/captain/team/[teamid]/more/page.tsx";
 const captainAppModePath = "src/components/captain/CaptainPwaModeOnly.tsx";
 const captainAppNavPath = "src/components/captain/CaptainPwaBottomNav.tsx";
 const captainAppPagePath = "src/app/captain/team/[teamid]/page.tsx";
 const captainAppLayoutPath = "src/app/captain/team/[teamid]/layout.tsx";
 const captainAppHome = read(captainAppHomePath);
+const captainAppHeader = read(captainAppHeaderPath);
+const captainAppFocus = read(captainAppFocusPath);
+const captainAppMore = read(captainAppMorePath);
 const captainAppMode = read(captainAppModePath);
 const captainAppNav = read(captainAppNavPath);
 const captainAppPage = read(captainAppPagePath);
@@ -318,6 +324,17 @@ expectText("captain pwa", captainAppNavPath, captainAppNav, "grid-cols-5", "capt
 expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "SIXFL captain home", "captain app must have a native sticky app header");
 expectText("captain pwa", captainAppModePath, captainAppMode, 'window.parent.location.pathname === "/admin/pwa"', "captain app must render exactly inside the admin phone preview");
 expectText("captain pwa", captainAppModePath, captainAppMode, "display-mode: standalone", "captain app mode must work when installed as a PWA");
+expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "CaptainAppHeader", "all captain app routes must use the route-aware app header");
+expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "CaptainAppPageFocus", "all captain app routes must explain the important task for that screen");
+expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "body:has(.captain-app-header)", "captain app routes must use the compact app-only presentation layer");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "Fixtures"', "captain app header must identify the Fixtures screen");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "Match reports"', "captain app header must identify Match reports");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "More"', "captain app header must identify More");
+expectText("captain pwa", captainAppFocusPath, captainAppFocus, "The important number is who has not replied yet", "availability must tell captains what matters");
+expectText("captain pwa", captainAppFocusPath, captainAppFocus, "Complete players, goals, assists and Player of the Match", "match reports must surface the reporting task");
+expectText("captain pwa", captainAppMorePath, captainAppMore, "Help / Contact SIXFL", "captain More must keep secondary app destinations available");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "/more", "captain Home must expose the More menu");
+
 
 // ---------------------------------------------------------------------------
 // ADMIN PWA VIEWER — keep the selected test subject and phone-preview route

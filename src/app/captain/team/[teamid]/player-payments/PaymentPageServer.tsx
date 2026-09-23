@@ -514,7 +514,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           <Link href={`/captain/team/${teamid}/player-payments/accounts`} className="rounded-full border border-white/10 px-5 py-3 text-sm text-emerald-200">Player balances and smaller payments</Link>
           <Link
             href={`/captain/team/${team.id}`}
-            className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80"
+            className="captain-app-web-only inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80"
           >
             Back to captain hub
           </Link>

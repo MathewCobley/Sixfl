@@ -690,7 +690,7 @@ export default async function CaptainMessagesPage({
         </section>
       ) : null}
 
-      <section className="rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 text-sm leading-6 text-sky-50/80">
+      <section className="captain-app-secondary rounded-3xl border border-sky-400/20 bg-sky-500/[0.07] p-5 text-sm leading-6 text-sky-50/80">
         <p className="font-semibold text-white">What is included</p>
         <p className="mt-2">
           This is the team&apos;s official SIXFL communication history. Private conversations between an individual player and SIXFL are not shown unless they form part of a team-level message.

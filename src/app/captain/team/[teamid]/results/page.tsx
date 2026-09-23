@@ -697,7 +697,7 @@ export default async function CaptainResultsPage({
         </section>
       ) : null}
 
-      <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+      <section className="captain-app-secondary rounded-3xl border border-white/10 bg-white/[0.04] p-6">
         <h2 className="text-xl font-semibold text-white">Find a result</h2>
         <form className="mt-4 grid gap-3 md:grid-cols-4">
           <input

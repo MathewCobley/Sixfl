@@ -538,7 +538,7 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/captain/team/${team.id}`}
-              className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+              className="captain-app-web-only inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
             >
               Back to captain hub
             </Link>

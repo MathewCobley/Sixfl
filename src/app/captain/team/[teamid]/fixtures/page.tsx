@@ -818,7 +818,7 @@ export default async function CaptainFixturesPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Upcoming fixtures</p>
               <h2 className="mt-2 text-xl font-semibold text-white">Other upcoming fixtures</h2>
             </div>
-            <Link href={`/captain/team/${teamid}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white">
+            <Link href={`/captain/team/${teamid}`} className="captain-app-web-only inline-flex items-center rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-white">
               Back to overview
             </Link>
           </div>
@@ -886,7 +886,7 @@ export default async function CaptainFixturesPage({
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
+        <div className="captain-app-secondary rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Recent results</p>
