@@ -2,7 +2,6 @@
 // File: src/app/(public)/referee/night/[id]/page.tsx
 // ========================================
 
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma, UserRole } from "@prisma/client";
 import DisciplinaryNoteForm from "@/components/referee/DisciplinaryNoteForm";
@@ -241,7 +240,7 @@ function CashForm({
 }
 
 export default async function RefereeNightPage({ params, searchParams }: PageProps) {
-  const { user, isAdminPreview } = await requireReferee();
+  const { user } = await requireReferee();
   const { id } = await params;
   const sp = (await searchParams) ?? {};
 
@@ -300,33 +299,6 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
     <RefereeAppShell active="nights" title="Night sheet">
       <RefereeCashupSubmitFeedback />
       <div className="space-y-3">
-        {isAdminPreview ? (
-          <section className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm text-amber-100">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="font-semibold text-white">Referee preview mode</div>
-                <p className="mt-1 text-amber-50/80">
-                  You are seeing this night as {user.name || user.email || "this referee"}.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/admin/referees/${user.id}/referee-preview/exit?to=${encodeURIComponent(`/admin/referee-nights/${night.id}`)}`}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold text-white transition hover:bg-black/30"
-                >
-                  Switch back to admin view
-                </Link>
-                <Link
-                  href={`/admin/referee-nights/${night.id}`}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-semibold text-white transition hover:bg-black/30"
-                >
-                  Admin night record
-                </Link>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
         {savedMessage ? (
           <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
             {savedMessage}

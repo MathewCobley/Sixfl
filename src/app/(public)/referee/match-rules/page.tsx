@@ -1,6 +1,4 @@
 import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";
-import Link from "next/link";
-
 import RefereeAppShell from "@/components/referee/RefereeAppShell";
 import { requireReferee } from "@/lib/admin";
 import {
@@ -75,22 +73,10 @@ function RuleCard({
 }
 
 export default async function RefereeMatchRulesPage() {
-  const { user, isAdminPreview } = await requireReferee();
-  const refereeName = user.name || user.email || "this referee";
+  await requireReferee();
 
   return (
     <RefereeAppShell active="rules" title="Match rules">
-      {isAdminPreview ? (
-        <details className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
-          <summary className="cursor-pointer font-bold">Admin preview · {refereeName}</summary>
-          <Link
-            href={`/admin/referees/${user.id}/referee-preview/exit?to=${encodeURIComponent(`/admin/referees/${user.id}`)}`}
-            className="mt-2 inline-flex min-h-11 items-center underline"
-          >
-            Switch back to admin
-          </Link>
-        </details>
-      ) : null}
 
       <section className="rounded-[1.35rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/75">

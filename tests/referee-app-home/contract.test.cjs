@@ -190,6 +190,28 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
     "@/lib/referee-nights": {
       formatMoney: (p) => `£${(p / 100).toFixed(2)}`,
       formatNightDate: (x) => x,
+      isRefereeNightPayable: (night, today) =>
+        night.status !== "CANCELLED" && night.nightDate < today,
+      getRefereePayableDueToRefereePence: (night, today) =>
+        night.status !== "CANCELLED" &&
+        night.status !== "SETTLED" &&
+        night.nightDate < today
+          ? Math.max(
+              0,
+              (night.dueToRefereePence ?? 0) -
+                (night.cashPaidToRefereePence ?? 0),
+            )
+          : 0,
+      getRefereePayableDueToSixflPence: (night, today) =>
+        night.status !== "CANCELLED" &&
+        night.status !== "SETTLED" &&
+        night.nightDate < today
+          ? Math.max(
+              0,
+              (night.dueToSixflPence ?? 0) -
+                (night.cashReceivedFromRefereePence ?? 0),
+            )
+          : 0,
       getRefereeNightFixtures: async (id) => {
         assert.equal(id, "next");
         return [{ kickoffAt: new Date() }];
@@ -210,12 +232,13 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
   appHome.type(appHome.props);
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
-  assert.equal(props.dueToYou, "£100.00", "future referee fees must not show as owed; a same-day submitted night may become due");
+  assert.equal(props.dueToYou, "£30.00", "only past unpaid referee nights count as owed");
   const page = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
   assert.match(page, /RefereePortalViewMode mode="app"/);
   assert.match(page, /RefereePortalViewMode mode="web"/);
-  assert.match(page, /night\.nightDate > todayLondonDate/);
-  assert.match(page, /night\.submittedAt \|\| night\.approvedAt \|\| night\.settledAt/);
+  assert.match(page, /isRefereeNightPayable/);
+  assert.match(page, /getRefereePayableDueToRefereePence/);
+  assert.match(page, /getRefereePayableDueToSixflPence/);
   assert.match(page, /Open reopened night/);
   assert.match(page, /onsiteByNightId/);
   assert.doesNotMatch(
@@ -229,6 +252,7 @@ test("all referee work pages use the app shell and future balances are clearly n
     rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
     night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
     fixture: fs.readFileSync("src/app/(public)/referee/fixture/[id]/page.tsx", "utf8"),
+    ledger: fs.readFileSync("src/app/(public)/referee/ledger/page.tsx", "utf8"),
     home: fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8"),
   };
   for (const [name, source] of Object.entries(files)) {
@@ -239,12 +263,41 @@ test("all referee work pages use the app shell and future balances are clearly n
   assert.match(files.rules, /active="rules"/);
   assert.match(files.night, /active="nights"/);
   assert.match(files.fixture, /active="nights"/);
+  assert.match(files.ledger, /active="ledger"/);
   assert.doesNotMatch(files.night, /← Referee dashboard/);
   assert.doesNotMatch(files.fixture, /Back to referee dashboard|>Cancel</);
   assert.match(files.home, /Due now/);
   assert.match(files.home, /Earns after night/);
   assert.match(files.night, /Due to you now/);
   assert.match(files.night, /No referee balance is due until after this night has taken place/);
+  assert.doesNotMatch(files.availability, /Save availability|Admin preview/);
+  assert.doesNotMatch(files.rules, /Admin preview|Referee preview mode/);
+  assert.doesNotMatch(files.night, /Admin preview|Referee preview mode/);
+  assert.match(files.availability, /RefereeAvailabilityControls/);
+  assert.match(files.ledger, /Your money/);
+  assert.match(files.ledger, /Money received/);
+  assert.match(files.ledger, /getRefereePayableDueToRefereePence/);
+});
+
+test("referee app navigation exposes a dedicated ledger tab", () => {
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  assert.match(shell, /href: "\/referee\/ledger"/);
+  assert.match(shell, /label: "Ledger"/);
+  assert.match(home, /href="\/referee\/ledger"/);
+  assert.match(home, /grid-cols-5/);
+});
+
+test("availability is instant-save with no page-level submit button", () => {
+  const page = fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8");
+  const controls = fs.readFileSync("src/components/referee/RefereeAvailabilityControls.tsx", "utf8");
+  const actions = fs.readFileSync("src/app/(public)/referee/availability/actions.ts", "utf8");
+  assert.doesNotMatch(page, /Save availability/);
+  assert.match(page, /RefereeAvailabilityControls/);
+  assert.match(controls, /updateRefereeAvailabilitySlotAction/);
+  assert.match(controls, /onClick=\{\(\) => choose\(option\.value\)\}/);
+  assert.match(controls, /onBlur=\{saveNoteIfChanged\}/);
+  assert.match(actions, /export async function updateRefereeAvailabilitySlotAction/);
 });
 
 module.exports = { base };
