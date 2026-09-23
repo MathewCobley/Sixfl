@@ -25,17 +25,25 @@ test("explicit regenerate never reuses a completed READY render", () => {
   );
 });
 
-test("regenerate hides stale video immediately and labels the fresh state clearly", () => {
+test("normal regenerate hides only normal stale previews and leaves test style independent", () => {
   const source = fs.readFileSync(controlsPath, "utf8");
+  const studio = fs.readFileSync(studioPath, "utf8");
 
   assert.match(source, /const previousRenders = state\.renders/);
   assert.match(source, /render\.state === "READY"/);
   assert.match(source, /state: "QUEUED" as const/);
+  assert.match(source, /render\.kind !== "HIGHLIGHTS_ALT"/);
   assert.match(
     source,
-    /Fresh preview jobs queued\. Old previews stay hidden until the new versions are ready\./,
+    /Fresh normal highlights and full-match previews queued\. The test-style preview has not been changed\./,
   );
-  assert.match(source, /hasReadyPreview \? "Regenerate all previews" : "Generate all previews"/);
+  assert.match(source, /hasReadyPublicPreview \? "Regenerate normal previews" : "Generate normal previews"/);
+  assert.match(source, /requestedRenderIsActive/);
+  assert.match(source, /activeRenders\.some\(render => render\.kind === kind\)/);
   assert.match(source, /Regenerate \$\{kindLabel\(kind\)\} only/);
+  assert.match(source, /The Highlights test style is completely separate and only runs from its own preview card/);
   assert.match(source, /try \{ await refresh\(\); \} catch \{ setState/);
+
+  assert.match(studio, /specs\.filter\(spec => spec\.kind !== "HIGHLIGHTS_ALT"\)/);
+  assert.match(studio, /"kind" IN \('HIGHLIGHTS','FULL_MATCH'\)/);
 });
