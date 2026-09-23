@@ -412,14 +412,19 @@ export async function recordRefereeNightCashAction(formData: FormData) {
   }
 
   if (remainingPence > 0 || allocations.length === 0) {
-    const existingNightCash = await prisma.paymentTransaction.aggregate({
-      where: { refereeNightId, teamId },
-      _sum: { amountPence: true },
-    });
+    const [existingNightCash] = await prisma.$queryRaw<
+      Array<{ amountPence: bigint | number | null }>
+    >(Prisma.sql`
+      SELECT COALESCE(SUM("amountPence"), 0)::bigint AS "amountPence"
+      FROM "PaymentTransaction"
+      WHERE "refereeNightId" = ${refereeNightId}
+        AND "teamId" = ${teamId}
+    `);
+    const existingNightCashPence = Number(existingNightCash?.amountPence ?? 0);
 
     redirectCashEntryError(refereeNightId, "too_high", {
       maxCashPence: totalOpenOutstandingPence,
-      existingNightCashPence: existingNightCash._sum.amountPence ?? 0,
+      existingNightCashPence,
     });
   }
 
