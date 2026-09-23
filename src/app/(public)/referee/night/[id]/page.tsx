@@ -592,7 +592,6 @@ export default async function RefereeNightPage({ params, searchParams }: PagePro
           </a>
         </div>
       ) : null}
-      </div>
     </RefereeAppShell>
   );
 }
