@@ -763,7 +763,7 @@ export default async function AdminTeamPage({
                   Change primary captain
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-                  Current primary captain: <span className="font-semibold text-white">${captainUser?.name?.trim() || captainUser?.email || "None linked"}</span>. Choose any existing squad member below. The new captain gets captain access immediately and becomes the primary team contact.
+                  Current primary captain: <span className="font-semibold text-white">{captainUser?.name?.trim() || captainUser?.email || "None linked"}</span>. Choose any existing squad member below. The new captain gets captain access immediately and becomes the primary team contact.
                 </p>
               </div>
               <Link
