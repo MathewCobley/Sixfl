@@ -198,6 +198,7 @@ type Props = {
     channel?: string;
     composeError?: string;
     captainChanged?: string;
+    captainSignin?: string;
   }>;
 };
 
@@ -633,6 +634,18 @@ export default async function AdminTeamPage({
           {sp.captainChanged === "1" ? (
             <div className="text-emerald-300">
               Primary captain changed. Captain access and the team&apos;s primary contact have been updated.
+            </div>
+          ) : null}
+
+          {sp.captainChanged === "1" && sp.captainSignin === "sent" ? (
+            <div className="text-emerald-300">
+              Fresh Captain Portal sign-in sent to the new captain.
+            </div>
+          ) : null}
+
+          {sp.captainChanged === "1" && sp.captainSignin === "failed" ? (
+            <div className="text-amber-300">
+              Captain access was changed, but the sign-in email could not be sent. They can still use the normal SIXFL sign-in page.
             </div>
           ) : null}
 
