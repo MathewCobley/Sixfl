@@ -28,7 +28,12 @@ export async function POST(request: Request, context: Context) {
     const actor = user?.id || session?.user?.email || "development-admin";
     if (data.action === "render") {
       const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
-      return NextResponse.json(await requestRenders(fixtureId, actor, kind), { status: 202, headers });
+      return NextResponse.json(
+        await requestRenders(fixtureId, actor, kind, {
+          autoPublish: data.autoPublish === true,
+        }),
+        { status: 202, headers },
+      );
     }
     if (data.action === "cancel-render") {
       const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
