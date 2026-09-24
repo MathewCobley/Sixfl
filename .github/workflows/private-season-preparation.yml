@@ -1,0 +1,78 @@
+name: Private season preparation
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/league-competitions.ts"
+      - "src/lib/league-season-teams.ts"
+      - "src/lib/leagues/season-activation.ts"
+      - "src/app/api/admin/leagues/**/competition/route.ts"
+      - "src/app/api/admin/leagues/**/season-teams/route.ts"
+      - "src/components/admin/leagues/AdminLeagueSeasonsBridge.tsx"
+      - "prisma/migrations/20260924233000_preserve_private_and_historical_seasons/**"
+      - "tests/private-season/**"
+      - ".github/workflows/private-season-preparation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-season-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: season_ci_only
+          POSTGRES_DB: season_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d season_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:season_ci_only@127.0.0.1:5432/season_test
+      SEASON_TEST_DATABASE_URL: postgresql://postgres:season_ci_only@127.0.0.1:5432/season_test
+      NEXTAUTH_SECRET: isolated-private-season-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+      SEASON_BROWSER_TOOLS: /tmp/private-season-browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Real PostgreSQL trigger and endpoint regressions
+        run: node --test tests/private-season/*.test.cjs
+      - name: Prepare exact production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Repeat season protections after preparation
+        run: node --test tests/private-season/*.test.cjs
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - run: npx tsc --noEmit
+      - name: Install isolated browser tooling
+        run: npm install --prefix "$SEASON_BROWSER_TOOLS" --no-audit --no-fund playwright@1.51.1
+      - name: Install Chromium
+        run: "$SEASON_BROWSER_TOOLS/node_modules/.bin/playwright install --with-deps chromium"
+      - name: Exercise create privately and separate switch confirmation
+        run: node tests/private-season/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: private-season-checks-${{ github.sha }}
+          path: artifacts/private-season/
+          retention-days: 7
