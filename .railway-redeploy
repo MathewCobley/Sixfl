@@ -1,2 +1,2 @@
-force redeploy: 2026-06-26T16:05:00Z
-reason: trigger Railway deploy after SMS template Prisma fix
+force redeploy: 2026-09-24T21:04:00Z
+reason: deploy mandatory Player, Captain and Referee agreement acceptance with Player More type fix
