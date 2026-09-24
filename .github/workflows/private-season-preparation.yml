@@ -8,7 +8,9 @@ on:
       - "src/lib/leagues/season-activation.ts"
       - "src/app/api/admin/leagues/**/competition/route.ts"
       - "src/app/api/admin/leagues/**/season-teams/route.ts"
+      - "src/app/(admin)/admin/leagues/**/layout.tsx"
       - "src/components/admin/leagues/AdminLeagueSeasonsBridge.tsx"
+      - "src/components/admin/leagues/AdminLeagueSeasonsPanel.tsx"
       - "prisma/migrations/20260924233000_preserve_private_and_historical_seasons/**"
       - "tests/private-season/**"
       - ".github/workflows/private-season-preparation.yml"
@@ -65,7 +67,7 @@ jobs:
       - run: node scripts/check-critical-feature-contracts.mjs
       - run: npx tsc --noEmit
       - name: Install isolated browser tooling
-        run: npm install --prefix "$SEASON_BROWSER_TOOLS" --no-audit --no-fund playwright@1.51.1
+        run: npm install --prefix "$SEASON_BROWSER_TOOLS" --no-audit --no-fund playwright@1.51.1 esbuild@0.25.0
       - name: Install Chromium
         run: "$SEASON_BROWSER_TOOLS/node_modules/.bin/playwright install --with-deps chromium"
       - name: Exercise create privately and separate switch confirmation
