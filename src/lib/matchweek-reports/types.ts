@@ -1,3 +1,33 @@
+export type ReportStandingRow = {
+  position: number;
+  team: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+  recentForm: Array<"W" | "D" | "L">;
+};
+
+export type ReportTableGroup = {
+  division: string | null;
+  rows: ReportStandingRow[];
+};
+
+export type ReportTeamForm = {
+  team: string;
+  results: Array<{
+    date: string;
+    opponent: string;
+    goalsFor: number;
+    goalsAgainst: number;
+    outcome: "W" | "D" | "L";
+  }>;
+};
+
 export type ReportMatch = {
   fixtureId: string;
   teamA: string;
@@ -22,6 +52,9 @@ export type ReportSource = {
   area: string | null;
   matchDate: string;
   matches: ReportMatch[];
+  standingsBeforeNight?: ReportTableGroup[];
+  standingsAfterNight?: ReportTableGroup[];
+  recentForm?: ReportTeamForm[];
   omittedFixtures: number;
   pendingFixtures: number;
   warnings: string[];
