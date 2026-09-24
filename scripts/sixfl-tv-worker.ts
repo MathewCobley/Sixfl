@@ -1262,6 +1262,7 @@ async function queueAutomaticYoutubePublish() {
       WHERE r."state"='READY'
         AND r."kind" IN ('HIGHLIGHTS','FULL_MATCH')
         AND r."createdAt" >= NOW() - INTERVAL '7 days'
+        AND COALESCE((r."metadataJson"->>'autoYoutubePublishRequested')::boolean, FALSE)=TRUE
       ORDER BY r."fixtureId", r."kind", r."createdAt" DESC, r."id" DESC
     )
     SELECT
