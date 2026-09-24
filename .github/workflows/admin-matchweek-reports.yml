@@ -6,6 +6,8 @@ on:
       - "src/app/(admin)/admin/matchweek-reports/**"
       - "src/components/admin/matchweek-reports/**"
       - "src/lib/matchweek-reports/**"
+      - "src/lib/standings.ts"
+      - "src/lib/leagueTable.ts"
       - "src/app/(admin)/admin/layout.tsx"
       - "src/components/admin/AdminSidebar.tsx"
       - "src/components/layout/AppHeader.tsx"
