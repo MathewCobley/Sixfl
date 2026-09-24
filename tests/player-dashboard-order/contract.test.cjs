@@ -77,11 +77,23 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
       },
       user: {
         findUnique: async () => ({
+          id: 'example-user',
+          name: 'Example Player',
           role,
-          teamMembers: role === 'CAPTAIN' ? [{ id: 'example-captain' }] : [],
+          teamMembers:
+            role === 'CAPTAIN'
+              ? [{ id: 'example-captain', role: 'CAPTAIN' }]
+              : role === 'ADMIN'
+                ? []
+                : [{ id: 'example-player', role: 'PLAYER' }],
         }),
       },
     } },
+    '@/lib/agreements': { hasAcceptedCurrentAgreement: async () => true },
+    '@/components/agreements/MandatoryAgreementGate': {
+      __esModule: true,
+      default: () => h('section', { 'data-agreement-gate': true }, 'Agreement gate'),
+    },
     '@/components/player/PlayerTeamNav': nav,
     '@/components/player/PlayerDashboardOnly': only,
     '@/components/player/PlayerPwaModeOnly': ({ children }) => children,
