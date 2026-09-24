@@ -13,6 +13,7 @@ import {
   type FixtureAiPreview,
 } from "@/lib/fixtures/aiPredictor";
 import { recoverMissingHistoricalAiPredictions } from "@/lib/fixtures/recoverHistoricalAiPredictions";
+import { buildNameAwareWinChanceFixtures } from "@/lib/fixtures/winChanceHistory";
 import { calculateFixtureWinChance, type FixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
 import { prisma } from "@/lib/prisma";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
@@ -31,6 +32,7 @@ type StoredPredictionRow = {
 type PredictionFixture = {
   id: string;
   leagueId: string;
+  kickoffAt: Date;
   status: string;
   homeTeam: { id: string; name: string };
   awayTeam: { id: string; name: string };
@@ -143,6 +145,34 @@ function hasAtLeastOneCompletedMatch(teamId: string, fixtures: WinChanceFixture[
   );
 }
 
+async function loadCareerPredictionHistory(fixture: PredictionFixture) {
+  const historyFixtures = await prisma.fixture.findMany({
+    where: {
+      publishedAt: { not: null },
+      status: "COMPLETED",
+      kickoffAt: { lt: fixture.kickoffAt },
+      result: {
+        is: {
+          enteredAt: { lt: fixture.kickoffAt },
+        },
+      },
+    },
+    orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
+    select: {
+      kickoffAt: true,
+      status: true,
+      homeTeam: { select: { id: true, name: true } },
+      awayTeam: { select: { id: true, name: true } },
+      result: { select: PREDICTOR_RESULT_SELECT },
+    },
+  });
+
+  return buildNameAwareWinChanceFixtures({
+    historyFixtures,
+    targetFixtures: [fixture],
+  });
+}
+
 export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
   const ids = Array.from(new Set(fixtureIds.filter(Boolean)));
 
@@ -176,8 +206,7 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
         SELECT 1
         FROM "Fixture" prior_home
         JOIN "MatchResult" prior_home_result ON prior_home_result."fixtureId" = prior_home."id"
-        WHERE prior_home."leagueId" = fixture."leagueId"
-          AND prior_home."status"::text = 'COMPLETED'
+        WHERE prior_home."status"::text = 'COMPLETED'
           AND prior_home."kickoffAt" < fixture."kickoffAt"
           AND fixture."homeTeamId" IN (prior_home."homeTeamId", prior_home."awayTeamId")
       )
@@ -185,8 +214,7 @@ export async function getStoredAiPreviewsByFixtureIds(fixtureIds: string[]) {
         SELECT 1
         FROM "Fixture" prior_away
         JOIN "MatchResult" prior_away_result ON prior_away_result."fixtureId" = prior_away."id"
-        WHERE prior_away."leagueId" = fixture."leagueId"
-          AND prior_away."status"::text = 'COMPLETED'
+        WHERE prior_away."status"::text = 'COMPLETED'
           AND prior_away."kickoffAt" < fixture."kickoffAt"
           AND fixture."awayTeamId" IN (prior_away."homeTeamId", prior_away."awayTeamId")
       )
@@ -331,6 +359,7 @@ export async function refreshStoredAiPreviewForFixture(fixtureId: string, option
     select: {
       id: true,
       leagueId: true,
+      kickoffAt: true,
       status: true,
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
@@ -339,19 +368,8 @@ export async function refreshStoredAiPreviewForFixture(fixtureId: string, option
 
   if (!fixture) return null;
 
-  const fixtures = await prisma.fixture.findMany({
-    where: { leagueId: fixture.leagueId },
-    select: {
-      id: true,
-      kickoffAt: true,
-      status: true,
-      homeTeam: { select: { id: true } },
-      awayTeam: { select: { id: true } },
-      result: { select: PREDICTOR_RESULT_SELECT },
-    },
-  });
-
-  return generateAndSave({ fixture, fixtures, force: options?.force });
+  const history = await loadCareerPredictionHistory(fixture);
+  return generateAndSave({ fixture, fixtures: history, force: options?.force });
 }
 
 export async function refreshStoredAiPreviewsForLeague(leagueId: string, options?: { force?: boolean; fixtureIds?: string[] }) {
@@ -364,7 +382,6 @@ export async function refreshStoredAiPreviewsForLeague(leagueId: string, options
       status: true,
       homeTeam: { select: { id: true, name: true } },
       awayTeam: { select: { id: true, name: true } },
-      result: { select: PREDICTOR_RESULT_SELECT },
     },
   });
 
@@ -373,6 +390,7 @@ export async function refreshStoredAiPreviewsForLeague(leagueId: string, options
   for (const fixture of fixtures) {
     if (fixture.status !== "SCHEDULED") continue;
     if (targetIds && !targetIds.has(fixture.id)) continue;
-    await generateAndSave({ fixture, fixtures, force: options?.force });
+    const history = await loadCareerPredictionHistory(fixture);
+    await generateAndSave({ fixture, fixtures: history, force: options?.force });
   }
 }

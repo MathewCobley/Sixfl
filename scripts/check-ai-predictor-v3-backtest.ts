@@ -217,12 +217,13 @@ const pageSource = fs.readFileSync(
   "utf8",
 );
 
-// The live control acquired a minimum-one-game gate in #499. That version
-// label is not a promotion of either experimental V3 laboratory candidate.
+// The live control now carries career-wide, opponent-adjusted strength across
+// SIXFL seasons. That version label is still separate from the experimental V3
+// score-shape candidates below.
 assert.equal(
   /const PREDICTOR_MODEL_VERSION = "([^"]+)"/.exec(integritySource)?.[1],
-  "opponent-adjusted-poisson-v3-min-one-game",
-  "Retain the currently deployed control model and its first-match gate.",
+  "career-opponent-adjusted-poisson-v4",
+  "Retain the career-wide opponent-adjusted live control and its first-match gate.",
 );
 assert.doesNotMatch(integritySource, /predictorV3Candidate/);
 assert.doesNotMatch(

@@ -1,22 +1,28 @@
-name: AI Predictor V3 laboratory
+name: AI Predictor laboratory
 
 on:
   pull_request:
     paths:
+      - "src/lib/fixtures/winChance.ts"
+      - "src/lib/fixtures/winChanceHistory.ts"
+      - "src/lib/fixtures/storedAiPredictions.ts"
+      - "src/lib/fixtures/recoverHistoricalAiPredictions.ts"
+      - "src/lib/fixtures/aiPredictionIntegrity.ts"
       - "src/lib/fixtures/predictorV3Candidate.ts"
       - "src/lib/fixtures/predictorBacktest.ts"
       - "src/app/(admin)/admin/ai-predictor/backtest/page.tsx"
+      - "scripts/check-ai-predictor-opponent-adjusted.ts"
       - "scripts/check-ai-predictor-v3-backtest.ts"
       - ".github/workflows/ai-predictor-v3-laboratory.yml"
   workflow_dispatch:
 
 concurrency:
-  group: ai-predictor-v3-${{ github.event.pull_request.number || github.ref }}
+  group: ai-predictor-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   laboratory:
-    name: Keep V3 read-only and measurable
+    name: Verify live predictor and V3 laboratory
     runs-on: ubuntu-latest
 
     steps:
@@ -34,6 +40,9 @@ jobs:
 
       - name: Apply production source preparation
         run: npm run prebuild
+
+      - name: Check live opponent-adjusted predictor contract
+        run: npx tsx scripts/check-ai-predictor-opponent-adjusted.ts
 
       - name: Check V3 laboratory contract
         run: npx tsx scripts/check-ai-predictor-v3-backtest.ts

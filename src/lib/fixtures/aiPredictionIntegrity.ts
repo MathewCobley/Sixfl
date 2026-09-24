@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { refreshStoredAiPreviewForFixture } from "@/lib/fixtures/storedAiPredictions";
 import { prisma } from "@/lib/prisma";
 
-const PREDICTOR_MODEL_VERSION = "opponent-adjusted-poisson-v3-min-one-game";
+const PREDICTOR_MODEL_VERSION = "career-opponent-adjusted-poisson-v4";
 
 type PredictionRepairRow = {
   fixtureId: string;

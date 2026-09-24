@@ -88,8 +88,8 @@ stored = replaceOnce(
 
 stored = replaceOnce(
   stored,
-  '      leagueId: true,\n      status: true,\n      homeTeam: { select: { id: true, name: true } },',
-  '      leagueId: true,\n      status: true,\n      publishedAt: true,\n      homeTeam: { select: { id: true, name: true } },',
+  '      leagueId: true,\n      kickoffAt: true,\n      status: true,\n      homeTeam: { select: { id: true, name: true } },',
+  '      leagueId: true,\n      kickoffAt: true,\n      status: true,\n      publishedAt: true,\n      homeTeam: { select: { id: true, name: true } },',
   "single prediction publication select",
 );
 

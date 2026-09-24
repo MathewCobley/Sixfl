@@ -57,6 +57,19 @@ type OpponentPerformance = {
   time: number;
 };
 
+type CareerTeamSignals = {
+  attack: OpponentPerformance[];
+  conceding: OpponentPerformance[];
+  form: OpponentPerformance[];
+  opponentStrength: OpponentPerformance[];
+};
+
+type CareerStrengthModel = {
+  ratings: Map<string, number>;
+  signalsByTeamId: Map<string, CareerTeamSignals>;
+  referenceTime: number;
+};
+
 export type PredictedResult = {
   homeScore: number;
   awayScore: number;
@@ -84,6 +97,13 @@ const ELO_SCALE = 1200;
 const MAX_ELO_DIFFERENCE = 350;
 const HEAD_TO_HEAD_WINDOW = 4;
 const COMMON_OPPONENT_WINDOW = 4;
+const CAREER_HALF_LIFE_DAYS = 240;
+const ELO_INACTIVITY_HALF_LIFE_DAYS = 365;
+const CAREER_GOAL_PRIOR_GAMES = 1.75;
+const ADJUSTED_FORM_WINDOW = 8;
+const OPPONENT_GOAL_RATING_SCALE = 750;
+const EXPECTED_MARGIN_RATING_SCALE = 40;
+const SCHEDULE_STRENGTH_RATING_SCALE = 240;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -253,17 +273,65 @@ function getScoringProfile(input: {
   return seasonRate * (1 - recentWeight) + recentRate * recentWeight;
 }
 
-function buildEloRatings(fixtures: WinChanceFixture[]) {
+function decayRatingTowardNeutral(
+  rating: number,
+  previousTime: number | undefined,
+  currentTime: number,
+) {
+  if (!previousTime || currentTime <= previousTime) return rating;
+
+  const days = (currentTime - previousTime) / 86_400_000;
+  const retained = Math.pow(0.5, days / ELO_INACTIVITY_HALF_LIFE_DAYS);
+  return 1500 + (rating - 1500) * retained;
+}
+
+function getOrCreateCareerSignals(
+  signalsByTeamId: Map<string, CareerTeamSignals>,
+  teamId: string,
+) {
+  const existing = signalsByTeamId.get(teamId);
+  if (existing) return existing;
+
+  const created: CareerTeamSignals = {
+    attack: [],
+    conceding: [],
+    form: [],
+    opponentStrength: [],
+  };
+  signalsByTeamId.set(teamId, created);
+  return created;
+}
+
+function buildCareerStrengthModel(fixtures: WinChanceFixture[]): CareerStrengthModel {
   const ratings = new Map<string, number>();
+  const lastPlayedAt = new Map<string, number>();
+  const signalsByTeamId = new Map<string, CareerTeamSignals>();
   const getRating = (teamId: string) => ratings.get(teamId) ?? 1500;
 
   const completedFixtures = fixtures
     .filter(hasUsableResult)
     .sort((a, b) => getFixtureTime(a.kickoffAt) - getFixtureTime(b.kickoffAt));
 
+  const referenceTime = completedFixtures.reduce(
+    (latest, fixture) => Math.max(latest, getFixtureTime(fixture.kickoffAt)),
+    0,
+  );
+
   for (const fixture of completedFixtures) {
-    const homeRating = getRating(fixture.homeTeam.id);
-    const awayRating = getRating(fixture.awayTeam.id);
+    const time = getFixtureTime(fixture.kickoffAt) || referenceTime;
+    const homeTeamId = fixture.homeTeam.id;
+    const awayTeamId = fixture.awayTeam.id;
+    const homeRating = decayRatingTowardNeutral(
+      getRating(homeTeamId),
+      lastPlayedAt.get(homeTeamId),
+      time,
+    );
+    const awayRating = decayRatingTowardNeutral(
+      getRating(awayTeamId),
+      lastPlayedAt.get(awayTeamId),
+      time,
+    );
+
     const expectedHome = 1 / (1 + Math.pow(10, (awayRating - homeRating) / 400));
     const actualHome =
       fixture.result.homeScore > fixture.result.awayScore
@@ -271,15 +339,183 @@ function buildEloRatings(fixtures: WinChanceFixture[]) {
         : fixture.result.homeScore < fixture.result.awayScore
           ? 0
           : 0.5;
+
+    const observedMargin = clamp(
+      fixture.result.homeScore - fixture.result.awayScore,
+      -10,
+      10,
+    );
+    const expectedMargin = clamp(
+      (homeRating - awayRating) / EXPECTED_MARGIN_RATING_SCALE,
+      -5,
+      5,
+    );
+    const marginSurprise = clamp(
+      (observedMargin - expectedMargin) / 4,
+      -1.5,
+      1.5,
+    );
+    const resultSurprise = clamp((actualHome - expectedHome) * 2, -1.5, 1.5);
+    const homePerformance = clamp(
+      resultSurprise * 0.08 + marginSurprise * 0.92,
+      -1.5,
+      1.5,
+    );
+
+    // Compare the score margin achieved with the score margin this opponent
+    // strength implied. A one-goal loss when a three-goal loss was expected is
+    // positive evidence; a one-goal win when a three-goal win was expected is
+    // negative evidence. Result direction still contributes, but margin quality
+    // carries most of the schedule-strength information.
+    const marginPerformance = 1 / (1 + Math.exp(-observedMargin / 1.7));
+    const expectedMarginPerformance =
+      1 / (1 + Math.exp(-expectedMargin / 1.7));
+    const performanceScore = clamp(
+      actualHome * 0.18 + marginPerformance * 0.82,
+      0,
+      1,
+    );
+    const expectedPerformanceScore = clamp(
+      expectedHome * 0.18 + expectedMarginPerformance * 0.82,
+      0,
+      1,
+    );
+
+    const homeSignals = getOrCreateCareerSignals(signalsByTeamId, homeTeamId);
+    const awaySignals = getOrCreateCareerSignals(signalsByTeamId, awayTeamId);
+
+    const homeAttackMultiplier = Math.exp(
+      (awayRating - 1500) / OPPONENT_GOAL_RATING_SCALE,
+    );
+    const awayAttackMultiplier = Math.exp(
+      (homeRating - 1500) / OPPONENT_GOAL_RATING_SCALE,
+    );
+    const homeConcedeMultiplier = Math.exp(
+      (1500 - awayRating) / OPPONENT_GOAL_RATING_SCALE,
+    );
+    const awayConcedeMultiplier = Math.exp(
+      (1500 - homeRating) / OPPONENT_GOAL_RATING_SCALE,
+    );
+
+    homeSignals.attack.push({
+      value: fixture.result.homeScore * homeAttackMultiplier,
+      time,
+    });
+    homeSignals.conceding.push({
+      value: fixture.result.awayScore * homeConcedeMultiplier,
+      time,
+    });
+    homeSignals.form.push({ value: homePerformance, time });
+    homeSignals.opponentStrength.push({ value: awayRating, time });
+
+    awaySignals.attack.push({
+      value: fixture.result.awayScore * awayAttackMultiplier,
+      time,
+    });
+    awaySignals.conceding.push({
+      value: fixture.result.homeScore * awayConcedeMultiplier,
+      time,
+    });
+    awaySignals.form.push({ value: -homePerformance, time });
+    awaySignals.opponentStrength.push({ value: homeRating, time });
+
     const margin = Math.abs(fixture.result.homeScore - fixture.result.awayScore);
     const marginMultiplier = 1 + Math.log1p(margin) * 0.22;
-    const change = ELO_K * marginMultiplier * (actualHome - expectedHome);
+    const change =
+      ELO_K * marginMultiplier * (performanceScore - expectedPerformanceScore);
 
-    ratings.set(fixture.homeTeam.id, homeRating + change);
-    ratings.set(fixture.awayTeam.id, awayRating - change);
+    ratings.set(homeTeamId, homeRating + change);
+    ratings.set(awayTeamId, awayRating - change);
+    lastPlayedAt.set(homeTeamId, time);
+    lastPlayedAt.set(awayTeamId, time);
   }
 
-  return ratings;
+  if (referenceTime > 0) {
+    for (const [teamId, rating] of ratings) {
+      ratings.set(
+        teamId,
+        decayRatingTowardNeutral(
+          rating,
+          lastPlayedAt.get(teamId),
+          referenceTime,
+        ),
+      );
+    }
+  }
+
+  return {
+    ratings,
+    signalsByTeamId,
+    referenceTime,
+  };
+}
+
+function decayedAverage(
+  values: OpponentPerformance[],
+  referenceTime: number,
+  options?: { window?: number; halfLifeDays?: number },
+) {
+  const ordered = [...values].sort((a, b) => a.time - b.time);
+  const selected = options?.window ? ordered.slice(-options.window) : ordered;
+  if (selected.length === 0) return null;
+
+  let weightedTotal = 0;
+  let totalWeight = 0;
+  const halfLifeDays = options?.halfLifeDays ?? CAREER_HALF_LIFE_DAYS;
+
+  for (const item of selected) {
+    const ageDays =
+      referenceTime > item.time ? (referenceTime - item.time) / 86_400_000 : 0;
+    const weight = Math.pow(0.5, ageDays / halfLifeDays);
+    weightedTotal += item.value * weight;
+    totalWeight += weight;
+  }
+
+  return totalWeight > 0
+    ? { value: weightedTotal / totalWeight, evidence: totalWeight }
+    : null;
+}
+
+function getCareerScoringProfile(input: {
+  samples: OpponentPerformance[];
+  referenceTime: number;
+  leagueAverage: number;
+  fallback: number;
+}) {
+  const adjusted = decayedAverage(input.samples, input.referenceTime);
+  if (!adjusted) return input.fallback;
+
+  return (
+    adjusted.value * adjusted.evidence +
+    input.leagueAverage * CAREER_GOAL_PRIOR_GAMES
+  ) / (adjusted.evidence + CAREER_GOAL_PRIOR_GAMES);
+}
+
+function getCareerAdjustedForm(
+  signals: CareerTeamSignals | undefined,
+  referenceTime: number,
+) {
+  const adjusted = decayedAverage(signals?.form ?? [], referenceTime, {
+    window: ADJUSTED_FORM_WINDOW,
+    halfLifeDays: 120,
+  });
+  return adjusted?.value ?? 0;
+}
+
+function getCareerScheduleStrength(
+  signals: CareerTeamSignals | undefined,
+  referenceTime: number,
+) {
+  const adjusted = decayedAverage(
+    signals?.opponentStrength ?? [],
+    referenceTime,
+    { halfLifeDays: CAREER_HALF_LIFE_DAYS },
+  );
+  return adjusted?.value ?? 1500;
+}
+
+function buildEloRatings(fixtures: WinChanceFixture[]) {
+  return buildCareerStrengthModel(fixtures).ratings;
 }
 
 function weightedAverage(values: Array<{ value: number; time: number }>, window: number) {
@@ -540,29 +776,58 @@ export function calculateFixtureWinChance(input: {
     8,
   );
 
-  const homeAttack = getScoringProfile({
+  const careerStrength = buildCareerStrengthModel(input.fixtures);
+  const homeCareerSignals = careerStrength.signalsByTeamId.get(input.homeTeamId);
+  const awayCareerSignals = careerStrength.signalsByTeamId.get(input.awayTeamId);
+
+  const homeAttackFallback = getScoringProfile({
     total: homeStats?.goalsFor ?? 0,
     played: homeGames,
     recentValues: homeStats?.recentGoalsFor ?? [],
     leagueAverage: leagueScoringRate,
   });
-  const awayAttack = getScoringProfile({
+  const awayAttackFallback = getScoringProfile({
     total: awayStats?.goalsFor ?? 0,
     played: awayGames,
     recentValues: awayStats?.recentGoalsFor ?? [],
     leagueAverage: leagueScoringRate,
   });
-  const homeConceding = getScoringProfile({
+  const homeConcedingFallback = getScoringProfile({
     total: homeStats?.goalsAgainst ?? 0,
     played: homeGames,
     recentValues: homeStats?.recentGoalsAgainst ?? [],
     leagueAverage: leagueScoringRate,
   });
-  const awayConceding = getScoringProfile({
+  const awayConcedingFallback = getScoringProfile({
     total: awayStats?.goalsAgainst ?? 0,
     played: awayGames,
     recentValues: awayStats?.recentGoalsAgainst ?? [],
     leagueAverage: leagueScoringRate,
+  });
+
+  const homeAttack = getCareerScoringProfile({
+    samples: homeCareerSignals?.attack ?? [],
+    referenceTime: careerStrength.referenceTime,
+    leagueAverage: leagueScoringRate,
+    fallback: homeAttackFallback,
+  });
+  const awayAttack = getCareerScoringProfile({
+    samples: awayCareerSignals?.attack ?? [],
+    referenceTime: careerStrength.referenceTime,
+    leagueAverage: leagueScoringRate,
+    fallback: awayAttackFallback,
+  });
+  const homeConceding = getCareerScoringProfile({
+    samples: homeCareerSignals?.conceding ?? [],
+    referenceTime: careerStrength.referenceTime,
+    leagueAverage: leagueScoringRate,
+    fallback: homeConcedingFallback,
+  });
+  const awayConceding = getCareerScoringProfile({
+    samples: awayCareerSignals?.conceding ?? [],
+    referenceTime: careerStrength.referenceTime,
+    leagueAverage: leagueScoringRate,
+    fallback: awayConcedingFallback,
   });
 
   const homeExpectedBase =
@@ -574,7 +839,7 @@ export function calculateFixtureWinChance(input: {
     Math.pow(clamp(awayAttack / leagueScoringRate, 0.25, 3), 0.64) *
     Math.pow(clamp(homeConceding / leagueScoringRate, 0.25, 3), 0.36);
 
-  const ratings = buildEloRatings(input.fixtures);
+  const ratings = careerStrength.ratings;
   const homeRating = ratings.get(input.homeTeamId) ?? 1500;
   const awayRating = ratings.get(input.awayTeamId) ?? 1500;
   const eloDifference = clamp(homeRating - awayRating, -MAX_ELO_DIFFERENCE, MAX_ELO_DIFFERENCE);
@@ -583,10 +848,41 @@ export function calculateFixtureWinChance(input: {
 
   const headToHeadAdjustment = getHeadToHeadGoalAdjustment(input);
   const commonOpponentAdjustment = getCommonOpponentGoalAdjustment(input);
+  const homeAdjustedForm = getCareerAdjustedForm(
+    homeCareerSignals,
+    careerStrength.referenceTime,
+  );
+  const awayAdjustedForm = getCareerAdjustedForm(
+    awayCareerSignals,
+    careerStrength.referenceTime,
+  );
+  const opponentAdjustedForm = clamp(
+    (homeAdjustedForm - awayAdjustedForm) * 0.56,
+    -0.75,
+    0.75,
+  );
+  const homeScheduleStrength = getCareerScheduleStrength(
+    homeCareerSignals,
+    careerStrength.referenceTime,
+  );
+  const awayScheduleStrength = getCareerScheduleStrength(
+    awayCareerSignals,
+    careerStrength.referenceTime,
+  );
+  const scheduleStrengthAdjustment = clamp(
+    ((homeScheduleStrength - awayScheduleStrength) /
+      SCHEDULE_STRENGTH_RATING_SCALE) *
+      0.48,
+    -0.65,
+    0.65,
+  );
   const matchupAdjustment = clamp(
-    headToHeadAdjustment + commonOpponentAdjustment,
-    -0.85,
-    0.85,
+    headToHeadAdjustment +
+      commonOpponentAdjustment +
+      opponentAdjustedForm +
+      scheduleStrengthAdjustment,
+    -1.2,
+    1.2,
   );
 
   const homeExpected = clamp(
@@ -620,7 +916,7 @@ export function calculateFixtureWinChance(input: {
     },
     confidence: getConfidence(homeGames, awayGames),
     explanation: isEarlySeason
-      ? "Early-season estimate: limited results are blended with league scoring levels, recent goals, opponent-adjusted strength, common-opponent results and any direct head-to-head meetings."
-      : "Based on team scoring and conceding rates, recent goals, opponent-adjusted strength, common-opponent comparisons and direct head-to-head history. Win, draw and loss percentages are derived from the same Poisson score model as the predicted score.",
+      ? "Limited-history estimate: every previous SIXFL result available is blended with time-decayed career strength, opponent-adjusted goals, schedule-adjusted form, common-opponent results and any direct head-to-head meetings."
+      : "Based on every previous SIXFL match available, with older results gradually down-weighted. Team strength, recent form, strength of schedule and scoring/conceding rates are adjusted for the quality of the opposition, alongside common-opponent and head-to-head evidence. Win, draw and loss percentages come from the same score model as the predicted score.",
   };
 }

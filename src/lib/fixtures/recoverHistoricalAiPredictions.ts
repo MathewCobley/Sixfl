@@ -28,7 +28,7 @@ function recoveryHash(input: {
   return createHash("sha256")
     .update(
       JSON.stringify({
-        recoveryVersion: 1,
+        recoveryVersion: 2,
         fixtureId: input.fixture.id,
         homeTeamId: input.fixture.homeTeam.id,
         homeTeamName: input.fixture.homeTeam.name,
@@ -102,13 +102,14 @@ export async function recoverMissingHistoricalAiPredictions(fixtureIds: string[]
     ]);
     if (placeholderTeamIds.size > 0) continue;
 
-    // Only use results that were actually entered before this fixture kicked off.
-    // That prevents this fixture's result, future results, or late backfills from
-    // leaking into the recovered pre-match prediction.
+    // Use the team's full SIXFL career history, not only this league/season, but
+    // still only results that were genuinely known before this fixture kicked off.
+    // That prevents the target result, future results or late backfills leaking
+    // into a recovered pre-match prediction.
     const historyFixtures = await prisma.fixture.findMany({
       where: {
-        leagueId: fixture.leagueId,
         publishedAt: { not: null },
+        status: "COMPLETED",
         kickoffAt: { lt: fixture.kickoffAt },
         result: {
           is: {
