@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 import {
   NotificationChannel,
@@ -630,6 +631,7 @@ export default async function CaptainMessagesPage({
 
   return (
     <div className="space-y-6">
+      <CaptainPwaModeOnly mode="web">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_36%),rgba(255,255,255,0.04)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -677,6 +679,32 @@ export default async function CaptainMessagesPage({
           ))}
         </div>
       </section>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="app">
+        <div className="flex min-h-12 items-center justify-between gap-3 rounded-[1.05rem] border border-white/[0.07] bg-white/[0.035] px-3.5 py-2.5">
+          <div className="min-w-0">
+            <div className="text-sm font-black text-white">
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/40">
+              Official SIXFL messages for {team.name}
+            </div>
+          </div>
+          {canMarkRead && unreadCount > 0 ? (
+            <form action={markAllCaptainMessagesReadAction}>
+              <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="filter" value={selectedFilter} />
+              <button
+                type="submit"
+                className="shrink-0 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-100"
+              >
+                Mark all read
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </CaptainPwaModeOnly>
 
       {readNotice ? (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
