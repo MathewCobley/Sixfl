@@ -27,6 +27,7 @@ type TeamSchedulingRule = {
   earliestKickoffTime: string | null;
   latestKickoffTime: string | null;
   standardMatchFeePence: number | null;
+  singleRoundDoublePoints: boolean;
 };
 
 type FixtureDeletionDbClient = Pick<typeof prisma, "fixture" | "paymentCharge" | "notificationDispatch">;
@@ -156,8 +157,16 @@ function generateRounds(teamIds: string[]): Pair[][] {
   return rounds;
 }
 
-function repeatRounds(rounds: Pair[][]): Pair[][] {
-  return rounds.map((pairs) => pairs.map((pair) => ({ homeId: pair.homeId, awayId: pair.awayId })));
+function repeatRounds(rounds: Pair[][], singleRoundTeamIds: Set<string>): Pair[][] {
+  return rounds.map((pairs) =>
+    pairs
+      .filter(
+        (pair) =>
+          !singleRoundTeamIds.has(pair.homeId) &&
+          !singleRoundTeamIds.has(pair.awayId),
+      )
+      .map((pair) => ({ homeId: pair.homeId, awayId: pair.awayId })),
+  );
 }
 
 function sortPairsByRestriction(pairs: Pair[], teamMap: Map<string, TeamSchedulingRule>) {
@@ -278,7 +287,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
 
   if (input.divisionId) {
     return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
+      SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${input.leagueId}
@@ -290,7 +299,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
   }
 
   return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-    SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
+    SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
     FROM "LeagueSeasonTeam" lst
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
@@ -386,10 +395,15 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   const invalidRefereeIds = selectedRefereeIds.filter((refereeId) => !validRefereeIds.has(refereeId));
   if (invalidRefereeIds.length > 0) throw new Error("One or more selected pitch referees could not be found.");
 
-  let rounds = generateRounds(teams.map((team) => team.id));
-  if (doubleRoundRobin) rounds = [...rounds, ...repeatRounds(rounds)];
-
   const teamMap = new Map<string, TeamSchedulingRule>(teams.map((team) => [team.id, team]));
+  const singleRoundTeamIds = new Set(
+    teams.filter((team) => team.singleRoundDoublePoints).map((team) => team.id),
+  );
+
+  let rounds = generateRounds(teams.map((team) => team.id));
+  if (doubleRoundRobin) {
+    rounds = [...rounds, ...repeatRounds(rounds, singleRoundTeamIds)];
+  }
   const fixturesToCreate: Array<{
     leagueId: string;
     divisionId: string | null;
