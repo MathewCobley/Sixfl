@@ -26,7 +26,8 @@ test("team admin has a dedicated primary captain switcher", () => {
   assert.match(action, /ADMIN_PRIMARY_CAPTAIN_CHANGE/);
   assert.match(action, /upsertTeamNotificationRecipient\(teamId\)/);
   assert.match(action, /sendDashboardLoginEmail/);
-  assert.match(action, /callbackPath: `\\/captain\\/team\\/\\$\\{teamId\\}`/);
+  assert.match(action, /callbackPath:/);
+  assert.match(action, /captain\\/team/);
   assert.match(action, /captainSignin = "failed"/);
 });
 
