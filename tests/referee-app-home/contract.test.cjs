@@ -385,3 +385,16 @@ test("referee agreement is available inside the referee app", () => {
   assert.match(source, /Independent contractor status/);
   assert.match(source, /Match administration/);
 });
+
+
+test("referee portal requires the current Referee Agreement and bypasses admin preview", () => {
+  const layout = fs.readFileSync("src/app/(public)/referee/layout.tsx", "utf8");
+  const action = fs.readFileSync("src/app/actions/agreements.ts", "utf8");
+
+  assert.match(layout, /hasAcceptedCurrentAgreement\(access\.authenticatedUser\.id, "REFEREE"\)/);
+  assert.match(layout, /<MandatoryAgreementGate[\s\S]*agreementType="REFEREE"/);
+  assert.match(layout, /!access\.isAdminPreview/);
+  assert.match(layout, /authenticatedUser\.role === UserRole\.REFEREE/);
+  assert.match(action, /user\.role !== UserRole\.REFEREE/);
+  assert.match(action, /Only referee accounts can accept the Referee Agreement/);
+});
