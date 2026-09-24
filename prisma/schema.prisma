@@ -45,6 +45,21 @@ model User {
   portalConversationMemberships PortalConversationMember[]
   pushSubscriptions           PushSubscription[]
   pushNotifications           PushNotification[]
+  agreementAcceptances        AgreementAcceptance[]
+}
+
+model AgreementAcceptance {
+  id            String   @id @default(uuid())
+  userId        String
+  agreementType String
+  version       String
+  acceptedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, agreementType, version])
+  @@index([agreementType, version, acceptedAt])
+  @@index([userId, acceptedAt])
 }
 
 enum UserRole {

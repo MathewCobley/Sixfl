@@ -333,3 +333,34 @@ test("dual-role player accounts expose the app viewer switch without blocking re
   assert.match(dashboard, /href="\/referee"/);
   assert.match(dashboard, /Switch app viewer/);
 });
+
+
+test("player app requires the current Player Agreement before portal access", () => {
+  const layout = read("src/app/player/team/[teamid]/layout.tsx");
+  const gate = read("src/components/agreements/MandatoryAgreementGate.tsx");
+  const action = read("src/app/actions/agreements.ts");
+  const migration = read("prisma/migrations/20260924212500_add_role_agreement_acceptances/migration.sql");
+
+  assert.match(layout, /hasAcceptedCurrentAgreement\(viewer\.id, "PLAYER"\)/);
+  assert.match(layout, /<MandatoryAgreementGate[\s\S]*agreementType="PLAYER"/);
+  assert.match(layout, /!isAdmin/);
+  assert.match(layout, /hasTeamMembership/);
+
+  assert.match(gate, /I have read and agree/);
+  assert.match(gate, /name="agree"/);
+  assert.match(gate, /required/);
+  assert.match(gate, /Accept and continue/);
+  assert.match(gate, /agreement version and acceptance date\/time/);
+
+  assert.match(action, /agreementAcceptance\.upsert/);
+  assert.match(action, /userId_agreementType_version/);
+  assert.match(action, /Only registered SIXFL players can accept the Player Agreement/);
+  assert.match(action, /Admin preview sessions cannot accept agreements/);
+
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "AgreementAcceptance"/);
+  assert.match(migration, /"userId"/);
+  assert.match(migration, /"agreementType"/);
+  assert.match(migration, /"version"/);
+  assert.match(migration, /"acceptedAt"/);
+  assert.match(migration, /AgreementAcceptance_userId_agreementType_version_key/);
+});
