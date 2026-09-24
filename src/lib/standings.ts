@@ -5,7 +5,7 @@
 
 import { Prisma } from "@prisma/client";
 
-import { getLeagueTable, type LeagueTableRow } from "@/lib/leagueTable";
+import { getLeagueTable, type LeagueTableOptions, type LeagueTableRow } from "@/lib/leagueTable";
 import { prisma } from "@/lib/prisma";
 
 export type StandingDivision = {
@@ -67,7 +67,10 @@ type MembershipConflictRow = {
  * Pages, APIs, PDFs and graphics must consume this service rather than query
  * LeagueSeasonTeam, LeagueDivision, Fixture or MatchResult independently.
  */
-export async function getLeagueStandings(leagueId: string): Promise<LeagueStandings> {
+export async function getLeagueStandings(
+  leagueId: string,
+  options: Pick<LeagueTableOptions, "beforeKickoffAt"> = {},
+): Promise<LeagueStandings> {
   const [league, divisionRows, membershipConflicts] = await Promise.all([
     prisma.league.findUnique({
       where: { id: leagueId },
@@ -107,7 +110,10 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
     const divisions = await Promise.all(
       divisionRows.map(async (division) => ({
         ...division,
-        rows: await getLeagueTable(leagueId, { divisionId: division.id }),
+        rows: await getLeagueTable(leagueId, {
+          divisionId: division.id,
+          ...options,
+        }),
       })),
     );
 
@@ -119,7 +125,9 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
     // Fall back to the authoritative active season-team list rather than showing
     // "0 teams" or reconstructing membership from historical fixtures.
     const rows =
-      dividedRows.length > 0 ? dividedRows : await getLeagueTable(leagueId);
+      dividedRows.length > 0
+        ? dividedRows
+        : await getLeagueTable(leagueId, options);
 
     return {
       league,
@@ -130,7 +138,7 @@ export async function getLeagueStandings(leagueId: string): Promise<LeagueStandi
     };
   }
 
-  const rows = await getLeagueTable(leagueId);
+  const rows = await getLeagueTable(leagueId, options);
   return {
     league,
     divisions: [],
