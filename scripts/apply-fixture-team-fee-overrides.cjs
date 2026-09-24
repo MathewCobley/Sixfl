@@ -158,22 +158,24 @@ replaceOnce(
   'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  return Math.max(\n    homeTeam.standardMatchFeePence ?? 4000,\n    awayTeam.standardMatchFeePence ?? 4000,\n  );\n}',
 );
 
+// Match just the fee fields, not the closing type/object. Native division
+// generation now also stores doublePoints after these fields.
 replaceOnce(
   "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
-  '    status: FixtureStatus;\n    matchFeePence: number | null;\n  }> = [];',
-  '    status: FixtureStatus;\n    matchFeePence: number | null;\n    homeMatchFeePence: number;\n    awayMatchFeePence: number;\n  }> = [];',
+  '    status: FixtureStatus;\n    matchFeePence: number | null;',
+  '    status: FixtureStatus;\n    matchFeePence: number | null;\n    homeMatchFeePence: number;\n    awayMatchFeePence: number;',
 );
 
 replaceOnce(
   "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
-  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n        });',
-  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,\n          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,\n        });',
+  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),',
+  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,\n          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,',
 );
 
 replaceOnce(
   "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
-  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n        },',
-  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n          homeMatchFeePence: fixtureData.homeMatchFeePence,\n          awayMatchFeePence: fixtureData.awayMatchFeePence,\n        },',
+  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,',
+  '          status: fixtureData.status,\n          matchFeePence: fixtureData.matchFeePence,\n          homeMatchFeePence: fixtureData.homeMatchFeePence,\n          awayMatchFeePence: fixtureData.awayMatchFeePence,',
 );
 
 // Publishing fee inheritance is native in fixture-fee-policy.ts and the two
