@@ -24,7 +24,7 @@ test("captain PWA home is a dedicated app dashboard while web overview remains i
   assert.match(home, /SIXFL TV/);
 });
 
-test("captain PWA has a native header and five primary tabs", () => {
+test("captain PWA has a native header and six primary tabs", () => {
   const layout = read("src/app/captain/team/[teamid]/layout.tsx");
   const nav = read("src/components/captain/CaptainPwaBottomNav.tsx");
 
@@ -32,11 +32,12 @@ test("captain PWA has a native header and five primary tabs", () => {
   assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*captain-team-header/);
   assert.match(layout, /unreadMessageCount=\{unreadMessageCount\}/);
 
-  for (const label of ["Home", "Fixtures", "Squad", "Payments", "Inbox"]) {
+  for (const label of ["Home", "Fixtures", "Squad", "Payments", "Inbox", "More"]) {
     assert.match(nav, new RegExp(`label: "${label}"`));
   }
-  assert.match(nav, /grid-cols-5/);
+  assert.match(nav, /grid-cols-6/);
   assert.match(nav, /ChatBubbleLeftRightIcon/);
+  assert.match(nav, /EllipsisHorizontalCircleIcon/);
 });
 
 test("captain app mode works in installed PWA and admin phone preview", () => {
