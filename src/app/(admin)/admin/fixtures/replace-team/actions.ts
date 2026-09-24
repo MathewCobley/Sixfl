@@ -56,6 +56,7 @@ export async function replaceTeamInFutureFixturesAction(formData: FormData) {
         name: true,
         leagueId: true,
         league: { select: { id: true, name: true, season: true } },
+        singleRoundDoublePoints: true,
       },
     }),
   ]);
@@ -88,6 +89,8 @@ export async function replaceTeamInFutureFixturesAction(formData: FormData) {
       awayTeamId: true,
       kickoffAt: true,
       publishedAt: true,
+      homeTeam: { select: { singleRoundDoublePoints: true } },
+      awayTeam: { select: { singleRoundDoublePoints: true } },
     },
     orderBy: [{ kickoffAt: "asc" }],
   });
@@ -114,12 +117,27 @@ export async function replaceTeamInFutureFixturesAction(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     for (const fixture of targetFixtures) {
+      const opponentSingleRoundDoublePoints =
+        fixture.homeTeamId === fromTeam.id
+          ? fixture.awayTeam.singleRoundDoublePoints
+          : fixture.homeTeam.singleRoundDoublePoints;
+
       await tx.fixture.update({
         where: { id: fixture.id },
         data:
           fixture.homeTeamId === fromTeam.id
-            ? { homeTeamId: toTeam.id }
-            : { awayTeamId: toTeam.id },
+            ? {
+                homeTeamId: toTeam.id,
+                doublePoints:
+                  toTeam.singleRoundDoublePoints ||
+                  opponentSingleRoundDoublePoints,
+              }
+            : {
+                awayTeamId: toTeam.id,
+                doublePoints:
+                  toTeam.singleRoundDoublePoints ||
+                  opponentSingleRoundDoublePoints,
+              },
       });
 
       await tx.fixtureCaptainConfirmation.deleteMany({
