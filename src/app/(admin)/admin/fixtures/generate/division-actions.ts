@@ -419,6 +419,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     matchFeePence: number | null;
     homeMatchFeePence: number;
     awayMatchFeePence: number;
+    doublePoints: boolean;
   }> = [];
 
   let nightOffset = 0;
@@ -459,6 +460,9 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
           homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,
           awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,
+          doublePoints:
+            homeTeam.singleRoundDoublePoints ||
+            awayTeam.singleRoundDoublePoints,
         });
       });
 
@@ -489,6 +493,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           matchFeePence: fixtureData.matchFeePence,
           homeMatchFeePence: fixtureData.homeMatchFeePence,
           awayMatchFeePence: fixtureData.awayMatchFeePence,
+          doublePoints: fixtureData.doublePoints,
         },
         select: { id: true },
       });
