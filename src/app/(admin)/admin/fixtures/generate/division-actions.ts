@@ -27,6 +27,7 @@ type TeamSchedulingRule = {
   earliestKickoffTime: string | null;
   latestKickoffTime: string | null;
   standardMatchFeePence: number | null;
+  playsOnceDoublePoints: boolean;
 };
 
 type FixtureDeletionDbClient = Pick<typeof prisma, "fixture" | "paymentCharge" | "notificationDispatch">;
@@ -278,7 +279,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
 
   if (input.divisionId) {
     return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
+      SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence", t."playsOnceDoublePoints"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${input.leagueId}
@@ -290,7 +291,7 @@ async function getGenerationTeams(input: { leagueId: string; divisionId: string 
   }
 
   return prisma.$queryRaw<TeamSchedulingRule[]>(Prisma.sql`
-    SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence"
+    SELECT t."id", t."name", t."logoUrl", t."earliestKickoffTime", t."latestKickoffTime", t."standardMatchFeePence", t."playsOnceDoublePoints"
     FROM "LeagueSeasonTeam" lst
     JOIN "Team" t ON t."id" = lst."teamId"
     WHERE lst."leagueId" = ${input.leagueId}
@@ -387,7 +388,19 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   if (invalidRefereeIds.length > 0) throw new Error("One or more selected pitch referees could not be found.");
 
   let rounds = generateRounds(teams.map((team) => team.id));
-  if (doubleRoundRobin) rounds = [...rounds, ...repeatRounds(rounds)];
+  if (doubleRoundRobin) {
+    const singleRoundTeamIds = new Set(
+      teams.filter((team) => team.playsOnceDoublePoints).map((team) => team.id),
+    );
+    const returnRounds = repeatRounds(rounds).map((pairs) =>
+      pairs.filter(
+        (pair) =>
+          !singleRoundTeamIds.has(pair.homeId) &&
+          !singleRoundTeamIds.has(pair.awayId),
+      ),
+    );
+    rounds = [...rounds, ...returnRounds];
+  }
 
   const teamMap = new Map<string, TeamSchedulingRule>(teams.map((team) => [team.id, team]));
   const fixturesToCreate: Array<{
@@ -405,6 +418,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     matchFeePence: number | null;
     homeMatchFeePence: number;
     awayMatchFeePence: number;
+    doublePoints: boolean;
   }> = [];
 
   let nightOffset = 0;
@@ -445,6 +459,8 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
           homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,
           awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,
+          doublePoints:
+            homeTeam.playsOnceDoublePoints || awayTeam.playsOnceDoublePoints,
         });
       });
 
@@ -475,6 +491,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
           matchFeePence: fixtureData.matchFeePence,
           homeMatchFeePence: fixtureData.homeMatchFeePence,
           awayMatchFeePence: fixtureData.awayMatchFeePence,
+          doublePoints: fixtureData.doublePoints,
         },
         select: { id: true },
       });
