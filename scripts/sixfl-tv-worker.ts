@@ -1,5 +1,5 @@
 import { createDecipheriv, createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, statfs, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -393,13 +393,126 @@ async function saveGoalClipPoster(assetId: string, candidate: PosterCandidate | 
   return true;
 }
 
+// Local, disposable cache: never a source of truth and never required for rendering.
+// Entries are byte-verified, published atomically, and bounded to 4 GiB / 48 hours.
+const SEGMENT_CACHE_BYTES = 4 * 1024 ** 3;
+const SEGMENT_CACHE_TTL_MS = 48 * 60 * 60 * 1000;
+const segmentCacheRoot = path.join(os.tmpdir(), "sixfl-tv-segments-v1");
+
+async function fileDigest(file: string) {
+  const handle = await open(file, "r");
+  try {
+    const digest = createHash("sha256");
+    const buffer = Buffer.alloc(1024 * 1024);
+    let position = 0;
+    while (true) {
+      checkAbort();
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+      if (!bytesRead) break;
+      digest.update(buffer.subarray(0, bytesRead));
+      position += bytesRead;
+    }
+    return digest.digest("hex");
+  } finally { await handle.close(); }
+}
+
+async function pruneSegmentCache(root: string, incomingBytes: number, maxBytes: number) {
+  const entries = [];
+  for (const name of await readdir(root)) {
+    if (name.startsWith(".writing-")) {
+      const temporary = path.join(root, name);
+      const info = await stat(temporary).catch(() => null);
+      if (info && Date.now() - info.mtimeMs > SEGMENT_CACHE_TTL_MS) await rm(temporary, { recursive: true, force: true });
+      continue;
+    }
+    if (!/^[a-f0-9]{64}$/.test(name)) continue;
+    const dir = path.join(root, name);
+    try {
+      const info = await stat(dir), video = await stat(path.join(dir, "video.mp4"));
+      if (Date.now() - info.mtimeMs > SEGMENT_CACHE_TTL_MS) await rm(dir, { recursive: true, force: true });
+      else entries.push({ dir, bytes: video.size, used: info.mtimeMs });
+    } catch { await rm(dir, { recursive: true, force: true }); }
+  }
+  let total = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  for (const entry of entries.sort((a, b) => a.used - b.used)) {
+    if (total + incomingBytes <= maxBytes) break;
+    await rm(entry.dir, { recursive: true, force: true });
+    total -= entry.bytes;
+  }
+}
+
+async function cachedSegment(
+  target: string, inputs: string[], settings: unknown, render: () => Promise<void>,
+  root = segmentCacheRoot, maxBytes = SEGMENT_CACHE_BYTES,
+) {
+  checkAbort();
+  let key: string | undefined;
+  let entry: string | undefined;
+  try {
+    const digests = [];
+    for (const input of inputs) digests.push(await fileDigest(input));
+    // Include renderer/filter implementations, not filenames or mutable database IDs.
+    // Thus code, encoding options, overlays and source bytes all invalidate old entries.
+    key = createHash("sha256").update(JSON.stringify({ settings, digests,
+      renderer: [encodeCardVideo, encodeSwipeVideo, encodeNormaliseVideo, canvasBaseFilter, overlayFilter, run].map(fn => fn.toString()),
+      threads: [FFMPEG_THREADS, FFMPEG_FILTER_THREADS], swipe: [SWIPE_FRAMES, SWIPE_FPS],
+    })).digest("hex");
+    await mkdir(root, { recursive: true });
+    await pruneSegmentCache(root, 0, maxBytes);
+    entry = path.join(root, key);
+    const manifest = JSON.parse(await readFile(path.join(entry, "manifest.json"), "utf8"));
+    const video = path.join(entry, "video.mp4");
+    if (manifest.sha256 !== await fileDigest(video)) throw new Error("Cache checksum mismatch");
+    await copyFile(video, target);
+    checkAbort();
+    await utimes(entry, new Date(), new Date());
+    console.log(`SIXFL TV segment cache hit ${key.slice(0, 12)}`);
+    return true;
+  } catch { checkAbort(); }
+
+  // Only successful, complete renders enter the cache. Cache failures cannot fail a job.
+  await render();
+  checkAbort();
+  let temporary: string | undefined;
+  try {
+    if (!entry || !key) return false;
+    const { size } = await stat(target);
+    if (!size || size > maxBytes) return false;
+    await pruneSegmentCache(root, size, maxBytes);
+    const space = await statfs(root);
+    if (space.bavail * space.bsize < size + 1024 ** 3) return false;
+    temporary = await mkdtemp(path.join(root, ".writing-"));
+    await copyFile(target, path.join(temporary, "video.mp4"));
+    await writeFile(path.join(temporary, "manifest.json"), JSON.stringify({ sha256: await fileDigest(target) }));
+    await rm(entry, { recursive: true, force: true });
+    await rename(temporary, entry);
+    console.log(`SIXFL TV segment cache stored ${key.slice(0, 12)}`);
+  } catch { checkAbort(); }
+  finally { if (temporary) await rm(temporary, { recursive: true, force: true }).catch(() => undefined); }
+  return false;
+}
+
 async function cardVideo(png: string, target: string, seconds = 3, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
+  await cachedSegment(target, [png], { type: "card", seconds, canvas }, () => encodeCardVideo(png, target, seconds, canvas));
+}
+
+async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT", canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
+  await cachedSegment(target, [], { type: "swipe", style, canvas }, () => encodeSwipeVideo(dir, target, style, canvas));
+}
+
+async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
+  const reused = await cachedSegment(target, scoreBug ? [source, scoreBug] : [source], { type: "video", premium, canvas },
+    () => encodeNormaliseVideo(source, target, scoreBug, onProgress, premium, canvas));
+  if (reused) onProgress?.(1);
+}
+
+async function encodeCardVideo(png: string, target: string, seconds = 3, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   await run("ffmpeg", ["-y", "-loop", "1", "-i", png, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000", "-t", String(seconds), "-shortest",
     "-vf", canvasBaseFilter(canvas),
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT", canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
+async function encodeSwipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_YELLOW" = "DEFAULT", canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   const frameDir = path.join(dir, "swipe-frames");
   await mkdir(frameDir, { recursive: true });
   const palette = style === "ALT_YELLOW"
@@ -424,7 +537,7 @@ async function swipeVideo(dir: string, target: string, style: "DEFAULT" | "ALT_Y
     "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", target]);
 }
 
-async function normaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
+async function encodeNormaliseVideo(source: string, target: string, scoreBug?: string, onProgress?: (fraction: number) => void, premium = false, canvas: VideoCanvas = DEFAULT_VIDEO_CANVAS) {
   const seconds = await durationSeconds(source), audio = await hasAudio(source);
   const ffmpegProgress = onProgress ? { durationSeconds: seconds, onFraction: onProgress } : undefined;
   const videoPreset = premium ? "slow" : "medium";
@@ -1775,7 +1888,7 @@ async function main() {
 }
 
 // Importing the worker for isolated executable tests must never start its polling loop.
-export { run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, normaliseVideoSegment, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
+export { cachedSegment, fileDigest, run, reconstructAsset, verifiedPart, storeOutput, finishOutput, processJob, failJob, renderSignals, swipeVideo, normaliseVideo, normaliseVideoSegment, slowMotionReplay, claimGoalOfMonthClipRender, processGoalOfMonthClipRender, cleanupMaturedGoalOfMonthFootage, cleanupOneSupersededYoutubeVideo, queueAutomaticYoutubePublish };
 if (process.argv[1] && /(?:^|[\\/])sixfl-tv-worker\.(?:ts|js)$/.test(process.argv[1])) {
   const stop = () => {
     if (shutdown.signal.aborted) return;

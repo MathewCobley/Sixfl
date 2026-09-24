@@ -32,6 +32,7 @@ type FixtureValues = {
   position: number | null;
   pitch: string | null;
   status: string;
+  kickoffRulesOverride?: boolean;
   homeMatchFeePounds: string;
   awayMatchFeePounds: string;
 };
@@ -180,6 +181,7 @@ export default function FixtureEditForm({
             <input
               type="checkbox"
               name="overrideLatestKickoff"
+              defaultChecked={fixture.kickoffRulesOverride}
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-black/50 text-amber-300 focus:ring-amber-300/30"
             />
             <span>

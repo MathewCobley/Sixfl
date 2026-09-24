@@ -91,7 +91,7 @@ test("YouTube publishing stays background-only and does not lock the studio", ()
   assert.match(studio, /You do not need to keep this match open/);
   assert.match(studio, /href="\/admin\/sixfl-tv\/fixtures"/);
   assert.match(studio, /const activePublishes = useMemo/);
-  assert.match(studio, /if \(busy \|\| activeRenders\.length > 0\) return/);
+  assert.match(studio, /if \(busy \|\| requestedRenderIsActive\) return/);
   assert.doesNotMatch(studio, /if \(busy \|\| activePublishes\.length > 0\) return/);
   assert.doesNotMatch(studio, /disabled=\{[^}]*activePublishes/);
 });
