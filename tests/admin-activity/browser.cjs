@@ -10,7 +10,7 @@ async function main() {
   const output = path.resolve('artifacts/admin-activity');
   fs.mkdirSync(output, { recursive: true });
   const result = await build({
-    absWorkingDir: root, bundle: true, write: false, platform: 'browser', format: 'iife',
+    absWorkingDir: root, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
     stdin: { resolveDir: root, loader: 'tsx', contents: `
       import React from 'react';
       import { createRoot } from 'react-dom/client';
