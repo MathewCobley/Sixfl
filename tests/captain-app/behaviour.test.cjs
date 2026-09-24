@@ -63,6 +63,13 @@ test('More retains secondary destinations, restores history access and has no de
   const { html } = await renderScreen({ more: true, pathname: '/captain/team/demo/more' });
   for (const route of ['availability', 'availability/history', 'results', 'results-history', 'match-fees', 'payments', 'player-pool', 'player-stats', 'kit', 'weeks-unavailable', 'whatsapp', 'tv', 'veo-priority', 'cup-invitations', 'rules', 'guide', 'help']) assert.ok(html.includes(`href="/captain/team/demo/${route}"`), route);
   assert.doesNotMatch(html, /Everything that does not need|permanent bottom tab/);
+  assert.match(html, /href="\/player\/team\/demo"/);
+  assert.match(html, /Switch to Player Portal/);
   // React may emit <link rel="preload" href="/logo2.png">. Audit navigation, not assets.
-  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"/g)) assert.ok(match[1].startsWith('/captain/team/demo'), match[1]);
+  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"/g)) {
+    assert.ok(
+      match[1].startsWith('/captain/team/demo') || match[1] === '/player/team/demo',
+      match[1],
+    );
+  }
 });
