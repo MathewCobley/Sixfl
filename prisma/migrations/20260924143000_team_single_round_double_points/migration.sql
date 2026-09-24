@@ -15,8 +15,15 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF TG_OP = 'INSERT'
-     OR NEW."homeTeamId" IS DISTINCT FROM OLD."homeTeamId"
+  IF TG_OP = 'INSERT' THEN
+    SELECT EXISTS (
+      SELECT 1
+      FROM "Team" t
+      WHERE t."id" IN (NEW."homeTeamId", NEW."awayTeamId")
+        AND COALESCE(t."playsOnceDoublePoints", FALSE) = TRUE
+    )
+    INTO NEW."doublePoints";
+  ELSIF NEW."homeTeamId" IS DISTINCT FROM OLD."homeTeamId"
      OR NEW."awayTeamId" IS DISTINCT FROM OLD."awayTeamId" THEN
     SELECT EXISTS (
       SELECT 1
