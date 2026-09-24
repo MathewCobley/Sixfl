@@ -7,6 +7,7 @@ import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   HomeIcon,
+  EllipsisHorizontalCircleIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 
@@ -64,6 +65,11 @@ export default function CaptainPwaBottomNav({
       unreadCount: unreadMessageCount,
       icon: ChatBubbleLeftRightIcon,
     },
+    {
+      href: `/captain/team/${teamId}/more`,
+      label: "More",
+      icon: EllipsisHorizontalCircleIcon,
+    },
   ];
 
   return (
@@ -72,7 +78,7 @@ export default function CaptainPwaBottomNav({
       className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#07130f]/95 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:hidden"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
     >
-      <div className="mx-auto grid max-w-xl grid-cols-5 gap-0.5 px-1 pt-1.5">
+      <div className="mx-auto grid max-w-xl grid-cols-6 gap-0.5 px-1 pt-1.5">
         {items.map((item) => {
           const active = isActivePath(pathname, item);
           const Icon = item.icon;
@@ -88,7 +94,7 @@ export default function CaptainPwaBottomNav({
                   : item.label
               }
               className={[
-                "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition",
+                "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-1.5 text-[9px] font-semibold transition",
                 active
                   ? "bg-emerald-400/15 text-emerald-200"
                   : "text-white/55 active:bg-white/[0.06] active:text-white",
