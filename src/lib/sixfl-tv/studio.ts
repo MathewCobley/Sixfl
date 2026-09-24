@@ -403,7 +403,7 @@ export async function requestRenders(
       progressPercent: 0,
       progressLabel: "Waiting for video worker",
       autoYoutubePublishRequested:
-        Boolean(options?.autoPublish) && spec.kind !== "HIGHLIGHTS_ALT",
+        options?.autoPublish !== false && spec.kind !== "HIGHLIGHTS_ALT",
     };
     const fingerprint = sha(JSON.stringify({ kind: spec.kind, assets: ordered.map(asset => asset.id), metadata }));
     const row = await prisma.$transaction(async tx => {
