@@ -1,0 +1,2 @@
+ALTER TABLE "Team"
+  ADD COLUMN "singleRoundDoublePoints" BOOLEAN NOT NULL DEFAULT FALSE;
