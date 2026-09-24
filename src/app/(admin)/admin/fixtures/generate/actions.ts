@@ -551,6 +551,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     pitch: string;
     status: FixtureStatus;
     matchFeePence: number | null;
+    doublePoints: boolean;
   }[] = [];
 
   let nightOffset = 0;
@@ -601,6 +602,9 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
           pitch: `Pitch ${pitchNumber}`,
           status,
           matchFeePence,
+          doublePoints:
+            homeTeam.singleRoundDoublePoints ||
+            awayTeam.singleRoundDoublePoints,
         });
       });
 
