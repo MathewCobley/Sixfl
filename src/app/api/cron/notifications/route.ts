@@ -37,6 +37,11 @@ type FailedCronStep = {
   error: string;
 };
 
+type CronWarning = {
+  step: string;
+  warning: string;
+};
+
 type CronStepResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: string };
@@ -120,6 +125,7 @@ export async function GET(request: NextRequest) {
   }
 
   const failures: FailedCronStep[] = [];
+  const warnings: CronWarning[] = [];
 
   // Critical safety rule: always try to drain notifications that are already
   // queued BEFORE running any reminder/reconciliation job. An unrelated failing
@@ -230,10 +236,22 @@ export async function GET(request: NextRequest) {
     runAutomaticMatchnightReports,
   );
   if (matchnightReports.ok && matchnightReports.value.failed > 0) {
-    failures.push({
-      step: "automatic-matchnight-reports",
-      error: `${matchnightReports.value.failed} league report${matchnightReports.value.failed === 1 ? "" : "s"} could not be published automatically.`,
-    });
+    const failedReports = matchnightReports.value.results.filter(
+      (result) => result.status === "failed",
+    );
+    for (const result of failedReports) {
+      const detail =
+        "error" in result && result.error
+          ? result.error
+          : "Automatic report could not be published.";
+      warnings.push({
+        step: "automatic-matchnight-reports",
+        warning: `${result.league || result.slug || "League"}: ${detail}`,
+      });
+      console.warn(
+        `[notifications-cron] automatic-matchnight-reports held for ${result.league || result.slug || "league"}: ${detail}`,
+      );
+    }
   }
 
   await runCronStep("player-pool-response-delivery", failures, logConfiguredPlayerPoolResponseDelivery);
@@ -268,10 +286,13 @@ export async function GET(request: NextRequest) {
   const response = {
     ok: failures.length === 0,
     diagnosis:
-      failures.length === 0
-        ? "All notification cron steps completed."
-        : `Cron completed with ${failures.length} failed step${failures.length === 1 ? "" : "s"}. See failedSteps for the exact component.`,
+      failures.length > 0
+        ? `Cron completed with ${failures.length} failed step${failures.length === 1 ? "" : "s"}. See failedSteps for the exact component.`
+        : warnings.length > 0
+          ? `Notification cron completed successfully with ${warnings.length} non-fatal matchnight report warning${warnings.length === 1 ? "" : "s"}: ${warnings.map((item) => item.warning).join(" | ")}`
+          : "All notification cron steps completed.",
     failedSteps: failures,
+    warnings,
     existingQueue,
     playerRepaymentReminders,
     pendingSquadActivations,
@@ -298,8 +319,8 @@ export async function GET(request: NextRequest) {
     sixflTvYoutubeAnalytics,
   };
 
-  // Keep a failed HTTP status so Railway correctly flags a partial cron failure,
-  // but only after already-queued messages and all independent steps have had a
-  // chance to run.
+  // Railway should only mark the notification cron failed when an actual cron
+  // step throws. A league report being held/failed is editorial work and is
+  // reported as a warning without turning healthy email/SMS processing red.
   return NextResponse.json(response, { status: failures.length === 0 ? 200 : 500 });
 }
