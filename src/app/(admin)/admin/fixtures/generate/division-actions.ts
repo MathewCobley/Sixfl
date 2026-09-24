@@ -392,13 +392,15 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     const singleRoundTeamIds = new Set(
       teams.filter((team) => team.playsOnceDoublePoints).map((team) => team.id),
     );
-    const returnRounds = repeatRounds(rounds).map((pairs) =>
-      pairs.filter(
-        (pair) =>
-          !singleRoundTeamIds.has(pair.homeId) &&
-          !singleRoundTeamIds.has(pair.awayId),
-      ),
-    );
+    const returnRounds = repeatRounds(rounds)
+      .map((pairs) =>
+        pairs.filter(
+          (pair) =>
+            !singleRoundTeamIds.has(pair.homeId) &&
+            !singleRoundTeamIds.has(pair.awayId),
+        ),
+      )
+      .filter((pairs) => pairs.length > 0);
     rounds = [...rounds, ...returnRounds];
   }
 
