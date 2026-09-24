@@ -32,7 +32,7 @@ type FixtureValues = {
   position: number | null;
   pitch: string | null;
   status: string;
-  kickoffRulesOverride?: boolean;
+  kickoffRulesOverride: boolean;
   homeMatchFeePounds: string;
   awayMatchFeePounds: string;
 };
