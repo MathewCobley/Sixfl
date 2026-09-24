@@ -3,11 +3,81 @@ import { matchAnchor, newsPath, type PublishedNews } from '@/lib/league-news/typ
 import NewsImage from './NewsImage';
 import { newsDate } from './NewsArticle';
 
-export default function NewsCard({ news, teamId, featured = false }: { news: PublishedNews; teamId?: string; featured?: boolean }) {
+export default function NewsCard({
+  news,
+  teamId,
+  featured = false,
+  compact = false,
+}: {
+  news: PublishedNews;
+  teamId?: string;
+  featured?: boolean;
+  compact?: boolean;
+}) {
   const a = news.article;
   const url = newsPath(news.leagueSlug, a.matchDate);
   const teamMatches = a.matches.filter((m) => teamId && [m.teamAId, m.teamBId].includes(teamId));
   const goals = a.matches.reduce((sum, match) => sum + match.scoreA + match.scoreB, 0);
+
+  if (compact) {
+    return (
+      <article className="overflow-hidden rounded-[1.15rem] border border-white/[0.08] bg-white/[0.035] text-white">
+        <div className="p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">
+              Latest from SIXFL
+            </p>
+            <span className="shrink-0 rounded-lg border border-white/[0.08] bg-black/20 px-2 py-1 text-[10px] font-bold text-white/55">
+              {news.matchweekNumber ? `MW ${news.matchweekNumber}` : "News"}
+            </span>
+          </div>
+
+          <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.1em] text-white/40">
+            {a.leagueName} · {newsDate(a.matchDate)}
+          </p>
+
+          <h3 className="mt-2 line-clamp-2 text-[15px] font-black leading-5 tracking-[-0.015em] text-white">
+            <Link href={url} className="active:text-emerald-200">
+              {a.title}
+            </Link>
+          </h3>
+
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/52">
+            {a.introduction}
+          </p>
+
+          <div className="mt-3">
+            <Link
+              href={url}
+              className="inline-flex min-h-10 items-center rounded-xl bg-emerald-400 px-3.5 text-xs font-black text-black active:bg-emerald-300"
+            >
+              Read report →
+            </Link>
+          </div>
+
+          {teamMatches.length ? (
+            <div className="mt-3 border-t border-white/[0.07] pt-2.5">
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-white/35">
+                Your match
+              </p>
+              <div className="mt-1.5 space-y-1">
+                {teamMatches.map((m) => (
+                  <Link
+                    key={m.fixtureId}
+                    href={`${url}#${matchAnchor(m.fixtureId)}`}
+                    className="flex min-h-9 items-center justify-between gap-3 rounded-lg px-1 text-xs text-white/72 active:bg-white/[0.04]"
+                  >
+                    <span className="min-w-0 truncate">{m.teamA} · {m.teamB}</span>
+                    <strong className="shrink-0 text-emerald-200">{m.scoreA}–{m.scoreB}</strong>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className={`overflow-hidden rounded-3xl border border-emerald-300/20 bg-[#07130f] text-white shadow-[0_24px_70px_rgba(0,0,0,0.28)] ${featured ? 'lg:grid lg:grid-cols-[0.85fr_1.15fr]' : ''}`}>
