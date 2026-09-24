@@ -9,6 +9,7 @@ import AdminCard from "@/components/admin/AdminCard";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import { getAdminLatestActivity, type AdminActivityKind } from "@/lib/admin/latest-activity";
 import AdminPwaHome from "@/components/admin/pwa/AdminPwaHome";
+import AdminLatestActivity from "@/components/admin/AdminLatestActivity";
 
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -71,7 +72,7 @@ function activityTone(kind: AdminActivityKind) {
   if (kind === "TEAM_PAYMENT" || kind === "PLAYER_PAYMENT") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
   if (kind === "CONFIRMATION") return "border-cyan-400/20 bg-cyan-500/10 text-cyan-100";
   if (kind === "POLL") return "border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-100";
-  if (kind === "CUP") return "border-amber-400/20 bg-amber-500/10 text-amber-100";
+  if (kind === "CUP") return "border-amber-400/20 bg-amber-100/10 text-amber-100";
   if (kind === "DISPUTE") return "border-red-400/20 bg-red-500/10 text-red-100";
   return "border-white/10 bg-white/[0.05] text-white/70";
 }
@@ -232,7 +233,7 @@ export default async function AdminHome() {
       },
     }),
     getAdminInboxSummary(),
-    getAdminLatestActivity(10),
+    getAdminLatestActivity(50),
     prisma.fixture.findMany({
       where: {
         status: "SCHEDULED",
@@ -431,56 +432,20 @@ export default async function AdminHome() {
         </section>
 
         <AdminCard title="Latest activity">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm leading-6 text-white/55">
-              The ten most recent actions made by captains, players, leads, payers and other external users.
-            </p>
-            <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-              Newest first
-            </span>
-          </div>
-
-          {latestActivity.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/55">
-              No external activity has been recorded yet.
-            </div>
-          ) : (
-            <div className="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-              {latestActivity.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className="group flex flex-col gap-3 px-4 py-4 transition hover:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between sm:px-5"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${activityTone(item.kind)}`}
-                      >
-                        {activityLabel(item.kind)}
-                      </span>
-                      <span className="text-xs font-semibold text-white/35">
-                        {formatRelativeActivityTime(item.occurredAt, now)}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm font-semibold text-white sm:text-base">
-                      {item.title}
-                    </div>
-                    <div className="mt-1 text-sm leading-5 text-white/50">
-                      {item.detail}
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-white/35 sm:text-right">
-                    <span>{formatDateTime(item.occurredAt)}</span>
-                    <span className="font-semibold text-emerald-300 transition group-hover:text-emerald-200">
-                      Open →
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+          <AdminLatestActivity
+            key={latestActivity[0]?.id ?? "empty"}
+            items={latestActivity.map((item) => ({
+              id: item.id,
+              href: item.href,
+              title: item.title,
+              detail: item.detail,
+              kindLabel: activityLabel(item.kind),
+              tone: activityTone(item.kind),
+              occurredAt: item.occurredAt.toISOString(),
+              occurredAtLabel: formatDateTime(item.occurredAt),
+              relativeLabel: formatRelativeActivityTime(item.occurredAt, now),
+            }))}
+          />
         </AdminCard>
 
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
