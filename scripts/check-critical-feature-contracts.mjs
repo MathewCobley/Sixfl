@@ -279,7 +279,7 @@ expectText("player pwa", playerAppTvPath, playerAppTv, '<PlayerPwaModeOnly mode=
 expectText("player pwa", playerAppReferralsPath, playerAppReferrals, "Player app", "referrals opened from More must stay inside the player app");
 expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "League Rules"', "More must expose app-native League Rules");
 expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Match Rules"', "More must expose app-native Match Rules");
-expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Help / Contact SIXFL"', "More must expose app-native Help / Contact SIXFL");
+expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Help / Contact SIXFL"', "Help / Contact SIXFL must open the private SIXFL conversation inside Chat");
 expectText("player pwa", playerAppMorePath, playerAppMore, 'label: "Switch team account"', "More must use the exact Switch team account wording");
 expectText("player pwa", playerAppMorePath, playerAppMore, "linkedTeamAccounts.length > 1", "Switch team account must only appear for multi-team players");
 expectText("player pwa", playerAppLeagueRulesPath, playerAppLeagueRules, "PlayerAppRulesPage", "League Rules must use the compact player app rules view");
@@ -289,20 +289,24 @@ expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "ge
 expectText("player pwa", playerAppSwitchAccountPath, playerAppSwitchAccount, "Switch team account", "team switch screen must use the requested account wording");
 
 // ---------------------------------------------------------------------------
-// CAPTAIN PWA — keep the first captain app screen native, compact and separate
-// from the existing website dashboard.
+// CAPTAIN PWA — data-backed Home, six permanent tabs, and owned mobile views.
+// View markup and shared route mapping now live separately from the server read.
 // ---------------------------------------------------------------------------
 const captainAppHomePath = "src/components/captain/CaptainAppHome.tsx";
+const captainAppViewPath = "src/components/captain/CaptainAppHomeView.tsx";
 const captainAppHeaderPath = "src/components/captain/CaptainAppHeader.tsx";
-const captainAppFocusPath = "src/components/captain/CaptainAppPageFocus.tsx";
+const captainAppRoutesPath = "src/lib/captain/app-navigation.ts";
+const captainAppCssPath = "src/components/captain/CaptainAppScreens.module.css";
 const captainAppMorePath = "src/app/captain/team/[teamid]/more/page.tsx";
 const captainAppModePath = "src/components/captain/CaptainPwaModeOnly.tsx";
 const captainAppNavPath = "src/components/captain/CaptainPwaBottomNav.tsx";
 const captainAppPagePath = "src/app/captain/team/[teamid]/page.tsx";
 const captainAppLayoutPath = "src/app/captain/team/[teamid]/layout.tsx";
 const captainAppHome = read(captainAppHomePath);
+const captainAppView = read(captainAppViewPath);
 const captainAppHeader = read(captainAppHeaderPath);
-const captainAppFocus = read(captainAppFocusPath);
+const captainAppRoutes = read(captainAppRoutesPath);
+const captainAppCss = read(captainAppCssPath);
 const captainAppMore = read(captainAppMorePath);
 const captainAppMode = read(captainAppModePath);
 const captainAppNav = read(captainAppNavPath);
@@ -312,28 +316,33 @@ const captainAppLayout = read(captainAppLayoutPath);
 expectText("captain pwa", captainAppPagePath, captainAppPage, '<CaptainPwaModeOnly mode="app">', "captain overview must expose a dedicated app presentation");
 expectText("captain pwa", captainAppPagePath, captainAppPage, "<CaptainAppHome", "captain app must use the native app home component");
 expectText("captain pwa", captainAppPagePath, captainAppPage, '<CaptainPwaModeOnly mode="web">', "existing captain web overview must remain separate");
-expectText("captain pwa", captainAppHomePath, captainAppHome, "Next match", "captain app home must keep the next match prominent");
-expectText("captain pwa", captainAppHomePath, captainAppHome, "Needs attention", "captain app home must surface action items");
-expectText("captain pwa", captainAppHomePath, captainAppHome, "Quick actions", "captain app home must retain compact operational shortcuts");
-expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Home"', "captain app bottom navigation must keep Home");
-expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Fixtures"', "captain app bottom navigation must keep Fixtures");
-expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Squad"', "captain app bottom navigation must keep Squad");
-expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Payments"', "captain app bottom navigation must keep Payments");
-expectText("captain pwa", captainAppNavPath, captainAppNav, 'label: "Inbox"', "captain app bottom navigation must keep Inbox");
-expectText("captain pwa", captainAppNavPath, captainAppNav, `grid-cols-${(captainAppNav.match(/label: "/g) || []).length}`, "captain app bottom navigation must give every destination its own column");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "requireCaptain(props.teamId)", "captain Home identity read must be authorised");
+expectText("captain pwa", captainAppHomePath, captainAppHome, "teamName={team.name}", "Home must use the saved team name rather than a generic label");
+expectText("captain pwa", captainAppViewPath, captainAppView, "<h1>{teamName}</h1>", "the saved team name must be the visible Home heading");
+expectText("captain pwa", captainAppViewPath, captainAppView, "Next match", "captain app home must keep the next match prominent");
+expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Needs attention"', "captain app home must retain confirmation and dispute action items");
+expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Team tools"', "captain app home must retain compact operational shortcuts");
+expectText("captain pwa", captainAppViewPath, captainAppView, "Reports to finish", "historic incomplete reports must stay accessible without claiming every report is currently overdue");
+expectText("captain pwa", captainAppViewPath, captainAppView, "Team balance", "the actual team payment balance must remain visible");
+for (const label of ["Home", "Fixtures", "Squad", "Payments", "Inbox", "More"]) {
+  expectText("captain pwa", captainAppNavPath, captainAppNav, `label: "${label}"`, `captain app bottom navigation must keep ${label}`);
+}
+expectText("captain pwa", captainAppCssPath, captainAppCss, "grid-template-columns: repeat(6,minmax(0,1fr))", "all six permanent captain tabs must have their own column");
 expectText("captain pwa", captainAppHeaderPath, captainAppHeader, "captain-app-header", "captain app must have a native sticky app header");
 expectText("captain pwa", captainAppModePath, captainAppMode, 'window.parent.location.pathname === "/admin/pwa"', "captain app must render exactly inside the admin phone preview");
 expectText("captain pwa", captainAppModePath, captainAppMode, "display-mode: standalone", "captain app mode must work when installed as a PWA");
 expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "CaptainAppHeader", "all captain app routes must use the route-aware app header");
-expectRegex("captain pwa", captainAppLayoutPath, captainAppLayout, /^(?![\s\S]*CaptainAppPageFocus)/, "captain app must keep its approved compact header without duplicate website coaching chrome");
-expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "body:has(.captain-app-header)", "captain app routes must use the compact app-only presentation layer");
-expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "Fixtures"', "captain app header must identify the Fixtures screen");
-expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "Match reports"', "captain app header must identify Match reports");
-expectText("captain pwa", captainAppHeaderPath, captainAppHeader, 'return "More"', "captain app header must identify More");
-expectText("captain pwa", captainAppFocusPath, captainAppFocus, "The important number is who has not replied yet", "availability must tell captains what matters");
-expectText("captain pwa", captainAppFocusPath, captainAppFocus, "Complete players, goals, assists and Player of the Match", "match reports must surface the reporting task");
+expectRegex("captain pwa", captainAppLayoutPath, captainAppLayout, /^(?![\s\S]*CaptainAppPageFocus)[\s\S]*$/, "the removed repeated coaching card must not return above every app screen");
+expectText("captain pwa", captainAppLayoutPath, captainAppLayout, "body:has(.captain-app-header)", "existing captain screens must retain their app-only presentation boundary");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, "getCaptainAppSection", "header titles must use the shared route map");
+expectText("captain pwa", captainAppNavPath, captainAppNav, "getCaptainAppSection", "active tabs must use the same route map as the header");
+for (const title of ["Fixtures", "Match reports", "More"]) {
+  expectText("captain pwa", captainAppRoutesPath, captainAppRoutes, `"${title}"`, `shared route map must identify ${title}`);
+}
+expectText("captain pwa", captainAppMorePath, captainAppMore, "Availability history", "availability history must remain reachable from More");
+expectText("captain pwa", captainAppMorePath, captainAppMore, "Match reports", "match reporting must remain reachable from More");
 expectText("captain pwa", captainAppMorePath, captainAppMore, "Help / Contact SIXFL", "captain More must keep secondary app destinations available");
-expectText("captain pwa", captainAppHomePath, captainAppHome, "/more", "captain Home must expose the More menu");
+expectText("captain pwa", captainAppNavPath, captainAppNav, "`${base}/more`", "More must be directly accessible from the permanent navigation");
 
 
 // ---------------------------------------------------------------------------
@@ -419,7 +428,7 @@ expectText("team referrals", playerTeamNavPath, playerTeamNav, "Refer a team · 
 expectText("team referrals", homepagePath, homepage, 'href: "/player/referrals"', "public homepage must expose the referral scheme");
 expectText("team referrals", homepagePath, homepage, "Refer a team · Earn £75", "homepage referral entry point must explain the reward");
 expectText("team referrals", referralPreparationPath, referralPreparation, "attachReferralToLead", "registration preparation must continue attaching valid referral codes to team leads");
-expectText("team referrals", referralPreparationPath, referralPreparation, 'name="referralCode"', "team registration must continue carrying the referral code through the form");
+expectText("team referrals", referralPreparationPath, referralPreparation, 'name="referralCode"', "registration preparation must continue carrying the referral code through the form");
 
 // ---------------------------------------------------------------------------
 // DRAFT FIXTURE NOTIFICATIONS — deleting an unpublished fixture must remain
