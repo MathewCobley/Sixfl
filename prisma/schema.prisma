@@ -248,6 +248,7 @@ model Team {
 
   latestKickoffTime     String?
   standardMatchFeePence Int?
+  singleRoundDoublePoints Boolean @default(false)
 
   createdByUserId String?
   createdByUser   User?   @relation("TeamCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
