@@ -213,3 +213,25 @@ test('studio source keeps publishing explicit, public and isolated from customer
   assert.match(ui,/first SIXFL TV video published each UK calendar day notifies subscribers/);assert.match(ui,/publish automatically as/);assert.match(ui,/manual fallback or retry/);
   const docker=fs.readFileSync('Dockerfile.sixfl-tv-worker','utf8');assert.match(docker,/ffmpeg/);assert.match(docker,/sixfl-tv-worker\.ts/);
 });
+
+
+test('background renders do not silently publish old or automatically-created previews',()=>{
+  const ui=fs.readFileSync('src/components/admin/sixfl-tv/StudioControls.tsx','utf8');
+  const api=fs.readFileSync('src/app/api/admin/sixfl-tv/studio/[fixtureId]/route.ts','utf8');
+  const studio=fs.readFileSync('src/lib/sixfl-tv/studio.ts','utf8');
+  const worker=fs.readFileSync('scripts/sixfl-tv-worker.ts','utf8');
+  const migration=fs.readFileSync('prisma/migrations/20260924015500_restore_accidental_youtube_replacements/migration.sql','utf8');
+
+  assert.match(ui,/autoPublish: kind !== "HIGHLIGHTS_ALT"/);
+  assert.match(api,/autoPublish: data\.autoPublish === true/);
+  assert.match(studio,/autoYoutubePublishRequested/);
+  assert.match(studio,/Boolean\(options\?\.autoPublish\)/);
+  assert.match(worker,/metadataJson"->>'autoYoutubePublishRequested'/);
+  assert.match(worker,/COALESCE\([\s\S]{0,120}FALSE\)=TRUE/);
+
+  assert.match(migration,/Dynamo Kebab 3-1 Inter Maignan/);
+  assert.match(migration,/Taking Part FC 4-2 The Units/);
+  assert.match(migration,/automatic-youtube-replacement/);
+  assert.match(migration,/Original SIXFL highlights link restored/);
+  assert.match(migration,/Expected exactly 2 accidental YouTube replacement fixtures/);
+});

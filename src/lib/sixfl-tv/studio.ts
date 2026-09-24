@@ -352,7 +352,12 @@ export async function cancelRenders(fixtureId: string, actor: string, kind?: Six
         RETURNING *`;
   return { stopped: rows.map(renderDto), actor: safeText(actor, 120) || "admin" };
 }
-export async function requestRenders(fixtureId: string, actor: string, kind?: SixflTvRenderKind) {
+export async function requestRenders(
+  fixtureId: string,
+  actor: string,
+  kind?: SixflTvRenderKind,
+  options?: { autoPublish?: boolean },
+) {
   if (kind && kind !== "HIGHLIGHTS" && kind !== "HIGHLIGHTS_ALT" && kind !== "FULL_MATCH") throw new StudioError("Unknown video type.");
   const fixture = await studioFixture(fixtureId);
   if (!fixture.result) throw new StudioError("Enter the final result before generating SIXFL TV previews.", 409);
@@ -397,6 +402,8 @@ export async function requestRenders(fixtureId: string, actor: string, kind?: Si
       contentAssetIds: spec.content.map(asset => asset.id),
       progressPercent: 0,
       progressLabel: "Waiting for video worker",
+      autoYoutubePublishRequested:
+        Boolean(options?.autoPublish) && spec.kind !== "HIGHLIGHTS_ALT",
     };
     const fingerprint = sha(JSON.stringify({ kind: spec.kind, assets: ordered.map(asset => asset.id), metadata }));
     const row = await prisma.$transaction(async tx => {
