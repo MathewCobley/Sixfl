@@ -3,6 +3,8 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
 const {randomUUID,createHash}=require('node:crypto');
 const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
 const {PrismaClient}=require('@prisma/client');
+// Run the captain's mutually exclusive app/web discovery checks in both CI phases.
+require('./league-news-discovery.test.cjs');
 const root=path.resolve(__dirname,'..');
 const hash=s=>createHash('sha256').update(JSON.stringify(s)).digest('hex');
 function loader(mocks={}) {
@@ -89,7 +91,8 @@ test('anonymous discovery API is GET-only, bounded and delegates only to publish
  fail=true;const bad=await get('team','stand-in');assert.equal(bad.status,503);assert.doesNotMatch(JSON.stringify(await bad.json()),/PRIVATE_DATABASE_ERROR/);
 });
 test('shared news, publishing and discovery survive full source preparation without a public draft route',()=>{
- for(const file of ['src/app/(public)/leagues/[slug]/template.tsx','src/app/(public)/teams/[id]/template.tsx','src/app/captain/team/[teamid]/template.tsx','src/app/player/team/[teamid]/template.tsx']) assert.equal((fs.readFileSync(path.join(root,file),'utf8').match(/<LatestNews\b/g)||[]).length,1,file);
+ // Captain placement is checked by executing each mode in league-news-discovery.test.cjs.
+ for(const file of ['src/app/(public)/leagues/[slug]/template.tsx','src/app/(public)/teams/[id]/template.tsx','src/app/player/team/[teamid]/template.tsx']) assert.equal((fs.readFileSync(path.join(root,file),'utf8').match(/<LatestNews\b/g)||[]).length,1,file);
  const read=f=>fs.readFileSync(path.join(root,f),'utf8');
  assert.match(read('src/components/leagues/LeagueQuickLinks.tsx'),/label: "League News"/);
  assert.match(read('src/components/news/LatestNews.tsx'),/api\/public\/league-news/);
