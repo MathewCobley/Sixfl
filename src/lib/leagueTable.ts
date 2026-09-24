@@ -275,11 +275,11 @@ export async function getLeagueTable(
           : {}),
       },
       orderBy: { kickoffAt: "asc" },
+      // Scalar fields, including doublePoints, are returned automatically.
       include: {
         homeTeam: { select: { id: true, name: true, logoUrl: true } },
         awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true } },
-        doublePoints: true,
       },
     }),
   ]);

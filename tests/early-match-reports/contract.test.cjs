@@ -17,7 +17,7 @@ function load(file, mocks = {}) {
 }
 const members = Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, user: { name: `Player ${i}`, email: null } }));
 const earlyFile = 'src/lib/match-reports/early.ts';
-const { readEarlyReport } = load(earlyFile, { '@/lib/prisma': { prisma: {} } });
+const { readEarlyReport, getEarlyMatchReportCutoff } = load(earlyFile, { '@/lib/prisma': { prisma: {} } });
 test('before a score exists, goals, assists, appearances, ratings and PoM save independently of any score', () => {
   const form = new FormData(); form.set('scorerGoals_m0','7'); form.set('ownGoals','2'); form.set('assists_m1','2'); form.set('rating_m2','9.2'); form.set('playerOfMatchTeamMemberId','m3');
   const report = readEarlyReport(form,members);
@@ -71,7 +71,7 @@ test('pending report UI reopens saved scorers, appearances and ratings without a
   const component=load('src/components/captain/EarlyMatchReports.tsx',{
     'next/cache':{revalidatePath(){}},'next/navigation':{redirect(){}},
     '@/lib/prisma':{prisma:{fixture:{findMany:async()=>[{id:'f',kickoffAt:new Date(),homeTeam:{name:'A'},awayTeam:{name:'B'},selections:[],earlyReports:[{contributions:[{teamMemberId:'m0',name:'Player 0',goals:7,assists:0}],performances:[{teamMemberId:'m0',rating:9.2}],ownGoals:1,playerOfMatchName:'Player 0'}]}]},teamMember:{findMany:async()=>members.map(m=>({...m,role:'PLAYER'}))}}},
-    '@/lib/requireCaptain':{requireCaptain:async()=>({})},'@/lib/match-reports/early':{saveEarlyMatchReport(){}},
+    '@/lib/requireCaptain':{requireCaptain:async()=>({})},'@/lib/match-reports/early':{saveEarlyMatchReport(){},getEarlyMatchReportCutoff},
     '@/lib/datetime/london':{formatDateTimeInLondon:()=> 'Test date'},'./MatchDetailsPlayerFields':Fields,
     '@/components/ui/FormListboxField':props=>React.createElement('input',{name:props.name,value:props.value,readOnly:true}),
   }).default;
