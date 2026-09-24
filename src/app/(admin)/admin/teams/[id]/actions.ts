@@ -148,9 +148,9 @@ export async function updateTeamDetailsAction(formData: FormData) {
       `);
     }
 
-    // Keep any unpublished draft fixtures in step with this admin setting.
-    // Published fixtures keep their snapshotted points treatment so historical
-    // standings cannot be rewritten by a later team-setting change.
+    // Keep every unplayed fixture in step with this admin setting, including a
+    // schedule that has already been published. Completed/resulted fixtures keep
+    // their snapshot so historical standings cannot be rewritten later.
     await tx.$executeRaw(Prisma.sql`
       UPDATE "Fixture" f
       SET
@@ -161,7 +161,10 @@ export async function updateTeamDetailsAction(formData: FormData) {
             AND COALESCE(t."playsOnceDoublePoints", false) = true
         ),
         "updatedAt" = NOW()
-      WHERE f."publishedAt" IS NULL
+      WHERE f."status" IN ('SCHEDULED','POSTPONED')
+        AND NOT EXISTS (
+          SELECT 1 FROM "MatchResult" mr WHERE mr."fixtureId" = f."id"
+        )
         AND (${id} = f."homeTeamId" OR ${id} = f."awayTeamId")
     `);
 
