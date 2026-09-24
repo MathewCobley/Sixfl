@@ -240,6 +240,14 @@ export default function LeagueTableCard({
                                 Your team
                               </span>
                             ) : null}
+                            {(row.doublePointsPlayed ?? 0) > 0 ? (
+                              <span
+                                className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-100"
+                                title="This team has played a double-points fixture: 6 points for a win, 2 for a draw."
+                              >
+                                2× points fixture
+                              </span>
+                            ) : null}
                           </div>
 
                           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -352,6 +360,14 @@ export default function LeagueTableCard({
                           {isCurrentTeam ? (
                             <div className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300/80">
                               Your team
+                            </div>
+                          ) : null}
+                          {(row.doublePointsPlayed ?? 0) > 0 ? (
+                            <div
+                              className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80"
+                              title="This team has played a double-points fixture: 6 points for a win, 2 for a draw."
+                            >
+                              2× points fixture
                             </div>
                           ) : null}
                         </div>

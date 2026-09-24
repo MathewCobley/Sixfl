@@ -397,6 +397,14 @@ export default async function LeagueFixturesPublic({
                           <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-white/65">
                             {fixture.pitch ?? "Pitch TBC"}
                           </span>
+                          {fixture.doublePoints ? (
+                            <span
+                              className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 font-semibold text-amber-100"
+                              title="This fixture counts double in the league table."
+                            >
+                              Double points · 6 win / 2 draw
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 

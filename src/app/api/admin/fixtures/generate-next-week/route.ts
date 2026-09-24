@@ -16,6 +16,7 @@ type TeamSeed = {
   id: string;
   name: string;
   standardMatchFeePence: number | null;
+  playsOnceDoublePoints: boolean;
 };
 
 type Pair = {
@@ -44,6 +45,10 @@ function addMinutes(value: Date, minutes: number) {
 
 function pairKey(a: string, b: string) {
   return [a, b].sort().join("::");
+}
+
+function pairMeetingLimit(a: TeamSeed, b: TeamSeed) {
+  return a.playsOnceDoublePoints || b.playsOnceDoublePoints ? 1 : 2;
 }
 
 function getFallbackKickoff() {
@@ -122,6 +127,7 @@ function chooseFixtures(input: {
       const opponent = remaining[index];
       const key = pairKey(first.id, opponent.id);
       const count = pairCounts.get(key) ?? 0;
+      if (count >= pairMeetingLimit(first, opponent)) continue;
       const latestRound = pairLatestRound.get(key) ?? 0;
       const recentPenalty =
         latestRound >= maxRound
@@ -142,6 +148,12 @@ function chooseFixtures(input: {
         bestScore = score;
         bestOpponentIndex = index;
       }
+    }
+
+    if (!Number.isFinite(bestScore)) {
+      // This team has already completed every permitted pairing. Treat it as
+      // the bye rather than creating an unauthorised repeat fixture.
+      continue;
     }
 
     const opponent = remaining.splice(bestOpponentIndex, 1)[0];
@@ -209,7 +221,7 @@ export async function POST(request: Request) {
       prisma.team.findMany({
         where: { leagueId },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, standardMatchFeePence: true },
+        select: { id: true, name: true, standardMatchFeePence: true, playsOnceDoublePoints: true },
       }),
       prisma.fixture.findMany({
         where: { leagueId },
@@ -269,12 +281,12 @@ export async function POST(request: Request) {
     const slotMinutes = 40;
 
     const pairs = chooseFixtures({ teams, existingFixtures });
-    const expectedPairCount = Math.floor(teams.length / 2);
 
-    if (pairs.length !== expectedPairCount) {
+    if (pairs.length === 0) {
       return NextResponse.json(
         {
-          error: `Only ${pairs.length} of ${expectedPairCount} required pairings could be prepared. No fixtures were created.`,
+          error:
+            "No permitted pairings remain for the next week. Teams marked as once-only double-points cannot be scheduled against the same opponent again.",
           requestId,
         },
         { status: 400 },
@@ -301,6 +313,8 @@ export async function POST(request: Request) {
           position: index + 1,
           pitch: `Pitch ${pitchNumber}`,
           status: FixtureStatus.SCHEDULED,
+          doublePoints:
+            homeTeam.playsOnceDoublePoints || awayTeam.playsOnceDoublePoints,
           ...snapshotFixtureMatchFees(homeTeam, awayTeam),
         };
       }),

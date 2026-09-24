@@ -57,6 +57,8 @@ export async function updateTeamDetailsAction(formData: FormData) {
 
   const teamMode = normaliseTeamMode(formData.get("teamMode"));
   const isRecruiting = String(formData.get("isRecruiting") ?? "") === "on";
+  const playsOnceDoublePoints =
+    String(formData.get("playsOnceDoublePoints") ?? "") === "on";
   const joinSlug = normaliseNullableString(formData.get("joinSlug"));
   const squadTargetSize = normaliseNullableInt(formData.get("squadTargetSize"));
   const matchdayTargetSize = normaliseNullableInt(
@@ -116,6 +118,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
         latestKickoffTime,
         teamMode,
         isRecruiting,
+        playsOnceDoublePoints,
         joinSlug,
         squadTargetSize,
         matchdayTargetSize,
@@ -144,6 +147,26 @@ export async function updateTeamDetailsAction(formData: FormData) {
         WHERE "id" = ${id}
       `);
     }
+
+    // Keep every unplayed fixture in step with this admin setting, including a
+    // schedule that has already been published. Completed/resulted fixtures keep
+    // their snapshot so historical standings cannot be rewritten later.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Fixture" f
+      SET
+        "doublePoints" = EXISTS (
+          SELECT 1
+          FROM "Team" t
+          WHERE t."id" IN (f."homeTeamId", f."awayTeamId")
+            AND COALESCE(t."playsOnceDoublePoints", false) = true
+        ),
+        "updatedAt" = NOW()
+      WHERE f."status" IN ('SCHEDULED','POSTPONED')
+        AND NOT EXISTS (
+          SELECT 1 FROM "MatchResult" mr WHERE mr."fixtureId" = f."id"
+        )
+        AND (${id} = f."homeTeamId" OR ${id} = f."awayTeamId")
+    `);
 
     if (leagueId) {
       await tx.$executeRaw(Prisma.sql`

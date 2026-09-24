@@ -22,6 +22,7 @@ export type LeagueTableRow = {
   goalsAgainst: number;
   goalDifference: number;
   points: number;
+  doublePointsPlayed?: number;
   recentForm: LeagueFormResult[];
   movement?: LeaguePositionMovement;
 };
@@ -59,6 +60,7 @@ function createRow(input: {
     goalsAgainst: 0,
     goalDifference: 0,
     points: 0,
+    doublePointsPlayed: 0,
     recentForm: [],
     movement: null,
   };
@@ -200,6 +202,7 @@ function buildTableRows(
     homeTeam: TableTeamRow;
     awayTeam: TableTeamRow;
     result: { homeScore: number; awayScore: number } | null;
+    doublePoints?: boolean;
   }>,
 ) {
   const table = new Map<string, LeagueTableRow>();
@@ -215,9 +218,14 @@ function buildTableRows(
     const away = getOrCreateRow(table, fixture.awayTeam);
     const homeScore = fixture.result.homeScore;
     const awayScore = fixture.result.awayScore;
+    const pointsMultiplier = fixture.doublePoints ? 2 : 1;
 
     home.played += 1;
     away.played += 1;
+    if (fixture.doublePoints) {
+      home.doublePointsPlayed = (home.doublePointsPlayed ?? 0) + 1;
+      away.doublePointsPlayed = (away.doublePointsPlayed ?? 0) + 1;
+    }
     home.goalsFor += homeScore;
     home.goalsAgainst += awayScore;
     away.goalsFor += awayScore;
@@ -225,21 +233,21 @@ function buildTableRows(
 
     if (homeScore > awayScore) {
       home.won += 1;
-      home.points += 3;
+      home.points += 3 * pointsMultiplier;
       away.lost += 1;
       home.recentForm.push("W");
       away.recentForm.push("L");
     } else if (awayScore > homeScore) {
       away.won += 1;
-      away.points += 3;
+      away.points += 3 * pointsMultiplier;
       home.lost += 1;
       away.recentForm.push("W");
       home.recentForm.push("L");
     } else {
       home.drawn += 1;
       away.drawn += 1;
-      home.points += 1;
-      away.points += 1;
+      home.points += 1 * pointsMultiplier;
+      away.points += 1 * pointsMultiplier;
       home.recentForm.push("D");
       away.recentForm.push("D");
     }
@@ -271,6 +279,7 @@ export async function getLeagueTable(
         homeTeam: { select: { id: true, name: true, logoUrl: true } },
         awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true } },
+        doublePoints: true,
       },
     }),
   ]);

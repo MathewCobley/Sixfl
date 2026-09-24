@@ -30,6 +30,7 @@ type TeamSchedulingRule = {
   name: string;
   logoUrl: string | null;
   latestKickoffTime: string | null;
+  playsOnceDoublePoints: boolean;
 };
 
 function addDays(date: Date, days: number) {
@@ -480,6 +481,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
         name: true,
         logoUrl: true,
         latestKickoffTime: true,
+        playsOnceDoublePoints: true,
       },
     }),
     venueId
@@ -521,7 +523,19 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
   let rounds = generateRounds(teams.map((team) => team.id));
 
   if (doubleRoundRobin) {
-    rounds = [...rounds, ...mirrorRounds(rounds)];
+    const singleRoundTeamIds = new Set(
+      teams.filter((team) => team.playsOnceDoublePoints).map((team) => team.id),
+    );
+    const returnRounds = mirrorRounds(rounds)
+      .map((pairs) =>
+        pairs.filter(
+          (pair) =>
+            !singleRoundTeamIds.has(pair.homeId) &&
+            !singleRoundTeamIds.has(pair.awayId),
+        ),
+      )
+      .filter((pairs) => pairs.length > 0);
+    rounds = [...rounds, ...returnRounds];
   }
 
   const teamMap = new Map<string, TeamSchedulingRule>(
