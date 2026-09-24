@@ -18,6 +18,7 @@ type TeamRow = {
   divisionId: string | null;
   latestKickoffTime: string | null;
   standardMatchFeePence: number | null;
+  singleRoundDoublePoints: boolean;
 };
 
 function required(formData: FormData, name: string, label: string) {
@@ -131,7 +132,8 @@ export async function createSingleDraftFixtureAction(formData: FormData) {
           t."name",
           lst."divisionId",
           t."latestKickoffTime",
-          t."standardMatchFeePence"::int AS "standardMatchFeePence"
+          t."standardMatchFeePence"::int AS "standardMatchFeePence",
+          COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
         FROM "LeagueSeasonTeam" lst
         JOIN "Team" t ON t."id" = lst."teamId"
         WHERE lst."leagueId" = ${leagueId}
@@ -226,6 +228,9 @@ export async function createSingleDraftFixtureAction(formData: FormData) {
         pitch,
         status,
         matchFeePence: standardFeePence > 0 ? standardFeePence : null,
+        doublePoints:
+          homeTeam.singleRoundDoublePoints ||
+          awayTeam.singleRoundDoublePoints,
         publishedAt: null,
       },
       select: { id: true },
