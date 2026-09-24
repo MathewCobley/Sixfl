@@ -9,6 +9,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import MandatoryAgreementGate from "@/components/agreements/MandatoryAgreementGate";
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRouteNotice";
 import CaptainAppHeader from "@/components/captain/CaptainAppHeader";
@@ -26,6 +27,7 @@ import PendingActivationDeleteLinks from "@/components/captain/PendingActivation
 import PendingActivationReturnLinks from "@/components/captain/PendingActivationReturnLinks";
 import ProspectsReadableLayout from "@/components/captain/ProspectsReadableLayout";
 import ManagedSquadInjuryBridge from "@/components/admin/teams/ManagedSquadInjuryBridge";
+import { hasAcceptedCurrentAgreement } from "@/lib/agreements";
 import { getCaptainUnreadMessageCount } from "@/lib/messaging/captain-inbox";
 import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
@@ -475,6 +477,20 @@ export default async function CaptainTeamLayout({
 }) {
   const { teamid } = await params;
   const access = await requireCaptain(teamid);
+
+  if (
+    access.user &&
+    !access.isAdmin &&
+    access.accessMode === "captain" &&
+    !(await hasAcceptedCurrentAgreement(access.user.id, "CAPTAIN"))
+  ) {
+    return (
+      <MandatoryAgreementGate
+        agreementType="CAPTAIN"
+        name={access.user.name}
+      />
+    );
+  }
 
   const team = await prisma.team.findUnique({
     where: { id: teamid },
