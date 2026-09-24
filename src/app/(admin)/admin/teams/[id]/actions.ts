@@ -326,8 +326,10 @@ export async function changePrimaryCaptainAction(formData: FormData) {
         captainUserId: selectedMember.userId,
         captainLinkedAt: now,
         captainLinkedSource: "ADMIN_PRIMARY_CAPTAIN_CHANGE",
-        captainClaimedAt: now,
-        captainClaimSource: "ADMIN_PRIMARY_CAPTAIN_CHANGE",
+        captainInviteSentAt: null,
+        captainInviteSentTo: null,
+        captainClaimedAt: null,
+        captainClaimSource: null,
         contactName:
           selectedMember.user.name?.trim() || captainEmail,
         contactEmail: captainEmail,
