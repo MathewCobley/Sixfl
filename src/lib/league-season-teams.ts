@@ -204,6 +204,15 @@ export async function setSeasonTeamDivision(input: {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Serialize membership changes with the explicit current-season switch.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT c."id"
+      FROM "LeagueCompetition" c
+      JOIN "League" l ON l."competitionId" = c."id"
+      WHERE l."id" = ${input.leagueId}
+      FOR UPDATE OF c
+    `);
+
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LeagueSeasonTeam" (
         "id",
@@ -230,6 +239,8 @@ export async function setSeasonTeamDivision(input: {
         "updatedAt" = NOW()
     `);
 
+    // Draft and previous seasons own only their season membership. They must
+    // never replace the live Team.leagueId or live Team.divisionId.
     await tx.$executeRaw(Prisma.sql`
       UPDATE "Team" t
       SET
@@ -240,6 +251,13 @@ export async function setSeasonTeamDivision(input: {
       FROM "League" l
       WHERE t."id" = ${input.teamId}
         AND l."id" = ${input.leagueId}
+        AND (
+          l."competitionId" IS NULL
+          OR EXISTS (
+            SELECT 1 FROM "LeagueCompetition" c
+            WHERE c."id" = l."competitionId" AND c."currentLeagueId" = l."id"
+          )
+        )
     `);
   });
 }
