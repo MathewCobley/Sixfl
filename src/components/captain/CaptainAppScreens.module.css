@@ -55,7 +55,8 @@
 .badgeLink img { width: 34px; height: 34px; object-fit: contain; }
 .badgeLink > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #173a28; color: #adf0cc; font-size: 12px; font-weight: 750; }
 .bottomNav { position: fixed; z-index: 50; inset: auto 0 0; padding-bottom: max(env(safe-area-inset-bottom), 6px); border-top: 1px solid #254035; background: #07130ffa; backdrop-filter: blur(16px); }
-.tabBar { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); max-width: 576px; margin: 0 auto; padding: 5px 4px 0; gap: 1px; }
+/* Use the full width at 320px so Payments stays readable without shrinking type. */
+.tabBar { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); max-width: 576px; margin: 0 auto; padding: 5px 0 0; gap: 0; }
 .tab { display: flex; min-width: 0; min-height: 54px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; border-radius: 12px; color: #b1c1b8; font-size: 11px; line-height: 1.2; font-weight: 650; text-decoration: none; }
 .tab[aria-current="page"] { color: #a3f0c7; background: #103321; }
 .tabIcon { position: relative; display: block; width: 21px; height: 21px; }
