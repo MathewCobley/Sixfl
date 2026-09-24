@@ -48,14 +48,13 @@ test("captain app mode works in installed PWA and admin phone preview", () => {
   assert.match(mode, /pwaPreview/);
 });
 
-test("every captain route gets app-native page chrome and route priorities", () => {
+test("captain app shell no longer stacks website coaching chrome above every screen", () => {
   const layout = read("src/app/captain/team/[teamid]/layout.tsx");
   const header = read("src/components/captain/CaptainAppHeader.tsx");
-  const focus = read("src/components/captain/CaptainAppPageFocus.tsx");
 
-  assert.match(layout, /CaptainAppHeader/);
-  assert.match(layout, /CaptainAppPageFocus/);
-  assert.match(layout, /body:has\(\.captain-app-header\)/);
+  assert.match(layout, /Installed captain app: treat route content as mobile screens, not a squeezed website/);
+  assert.doesNotMatch(layout, /CaptainAppPageFocus/);
+  assert.match(layout, /section\[class\*="radial-gradient"\]/);
   assert.match(layout, /captain-app-web-only/);
   assert.match(layout, /captain-app-secondary/);
 
@@ -68,13 +67,29 @@ test("every captain route gets app-native page chrome and route priorities", () 
   ]) {
     assert.ok(header.includes(title), title);
   }
+});
 
-  assert.match(focus, /Confirm the team/);
-  assert.match(focus, /Keep the current squad accurate/);
-  assert.match(focus, /Pick the fixture, choose who should pay/);
-  assert.match(focus, /What the team owes now comes first/);
-  assert.match(focus, /The important number is who has not replied yet/);
-  assert.match(focus, /Complete players, goals, assists and Player of the Match/);
+test("captain app puts operational home content before a compact news card", () => {
+  const template = read("src/app/captain/team/[teamid]/template.tsx");
+  const latest = read("src/components/news/LatestNews.tsx");
+  const card = read("src/components/news/NewsCard.tsx");
+
+  assert.match(template, /mode="web"[\s\S]*LatestNews scope="captain"[\s\S]*\{children\}[\s\S]*mode="app"[\s\S]*LatestNews scope="captain"/);
+  assert.match(latest, /<NewsCard news=\{items\[0\]\} teamId=\{id\} compact \/>/);
+  assert.match(latest, /captain-app-news/);
+  assert.match(card, /Latest from SIXFL/);
+  assert.match(card, /Read report →/);
+  assert.match(card, /Your match/);
+  assert.doesNotMatch(card.match(/if \(compact\)[\s\S]*?return \([\s\S]*?\n  \}/)?.[0] ?? "", /matches[\s\S]*goals/);
+});
+
+test("captain inbox and Priority screens remove duplicated desktop dashboard headers in app mode", () => {
+  const messages = read("src/app/captain/team/[teamid]/messages/page.tsx");
+  const priority = read("src/app/captain/team/[teamid]/veo-priority/page.tsx");
+
+  assert.match(messages, /<CaptainPwaModeOnly mode="web">[\s\S]*Team communications/);
+  assert.match(messages, /<CaptainPwaModeOnly mode="app">[\s\S]*unread[\s\S]*Mark all read/);
+  assert.match(priority, /captain-app-secondary[\s\S]*SIXFL TV[\s\S]*Priority Score/);
 });
 
 test("captain app hides duplicate website-only sections and keeps important work first", () => {
@@ -94,20 +109,25 @@ test("captain app hides duplicate website-only sections and keeps important work
   assert.match(stats, /captain-app-web-only[\s\S]*Season leaderboard/);
 });
 
-test("captain app More menu keeps secondary destinations inside the app", () => {
+test("captain app More menu contains only secondary destinations and is grouped like an app settings screen", () => {
   const more = read("src/app/captain/team/[teamid]/more/page.tsx");
   const header = read("src/components/captain/CaptainAppHeader.tsx");
   const home = read("src/components/captain/CaptainAppHome.tsx");
 
+  for (const group of ["Matchday", "Team", "SIXFL TV & competitions", "Help"]) {
+    assert.ok(more.includes(group), group);
+  }
+
   for (const label of [
-    "Availability", "Match reports", "Matchday squad", "SIXFL inbox",
-    "PlayerPool", "Player stats", "SIXFL TV", "Priority score",
-    "Team payments", "Team kit", "Fixture planning", "WhatsApp tools",
-    "Cup invitations", "Match rules", "Captain guide", "Help / Contact SIXFL",
+    "Availability", "Match reports", "Matchday squad", "PlayerPool",
+    "Player stats", "SIXFL TV", "Priority score", "Team payments",
+    "Team kit", "Fixture planning", "WhatsApp tools", "Cup invitations",
+    "Match rules", "Captain guide", "Help / Contact SIXFL",
   ]) {
     assert.ok(more.includes(label), label);
   }
 
+  assert.doesNotMatch(more, /SIXFL inbox/);
   assert.ok(header.includes("/more"));
   assert.match(home, />More</);
 });

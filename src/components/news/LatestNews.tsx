@@ -44,6 +44,30 @@ export default function LatestNews({ scope }: { scope: 'league' | 'team' | 'capt
 
   if (!visible) return null;
 
+  if (compact) {
+    return (
+      <section
+        aria-label="Latest SIXFL news"
+        className="captain-app-news mx-auto w-full max-w-xl px-3 pb-2 pt-2 text-white"
+      >
+        {items?.length ? (
+          <NewsCard news={items[0]} teamId={id} compact />
+        ) : (
+          <p
+            role="status"
+            className="rounded-[1.05rem] border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/50"
+          >
+            {error
+              ? "Latest SIXFL news is temporarily unavailable."
+              : items
+                ? "Match-night reports will appear here once published."
+                : "Loading latest SIXFL news…"}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section aria-label="Latest League News" className="relative z-10 mx-auto w-full max-w-[1400px] px-4 pb-5 pt-5 text-white sm:px-6 sm:pb-7 sm:pt-7 lg:px-10">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

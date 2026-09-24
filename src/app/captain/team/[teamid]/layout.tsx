@@ -12,7 +12,6 @@ import { TeamRole } from "@prisma/client";
 import AdminPlayerPreviewLinks from "@/components/captain/AdminPlayerPreviewLinks";
 import CaptainAdminFeeRouteNotice from "@/components/captain/CaptainAdminFeeRouteNotice";
 import CaptainAppHeader from "@/components/captain/CaptainAppHeader";
-import CaptainAppPageFocus from "@/components/captain/CaptainAppPageFocus";
 import CaptainFixtureBadgesBridge from "@/components/captain/CaptainFixtureBadgesBridge";
 import CaptainMatchdayAvailabilityBadgesBridge from "@/components/captain/CaptainMatchdayAvailabilityBadgesBridge";
 import CaptainOnboardingReminderBridge from "@/components/captain/CaptainOnboardingReminderBridge";
@@ -54,8 +53,8 @@ const captainMobileStyles = String.raw`
 
 body:has(.captain-app-header) .captain-team-container {
   max-width: 40rem !important;
-  gap: 0.75rem !important;
-  padding: 0.65rem 0.65rem calc(5.75rem + env(safe-area-inset-bottom)) !important;
+  gap: 0.6rem !important;
+  padding: 0.4rem 0.65rem calc(5.75rem + env(safe-area-inset-bottom)) !important;
 }
 
 body:has(.captain-app-header) .captain-team-main {
@@ -184,6 +183,112 @@ body:has(.captain-app-header) .captain-team-main [class*="xl:grid-cols-"] {
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > button,
 .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) > form:not(:first-child) {
   flex: 0 0 auto;
+}
+
+
+/* Installed captain app: treat route content as mobile screens, not a squeezed website. */
+body:has(.captain-app-header) .captain-team-main {
+  font-size: 0.875rem;
+}
+
+body:has(.captain-app-header) .captain-team-main > [class*="space-y-"] {
+  margin: 0 !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="shadow-["] {
+  box-shadow: none !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section[class*="radial-gradient"],
+body:has(.captain-app-header) .captain-team-main article[class*="radial-gradient"] {
+  background: rgba(255,255,255,0.025) !important;
+  border-color: rgba(255,255,255,0.075) !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section[class*="radial-gradient"] > div,
+body:has(.captain-app-header) .captain-team-main article[class*="radial-gradient"] > div {
+  padding: 0.85rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section[class*="radial-gradient"] h1,
+body:has(.captain-app-header) .captain-team-main section[class*="radial-gradient"] h2,
+body:has(.captain-app-header) .captain-team-main article[class*="radial-gradient"] h1,
+body:has(.captain-app-header) .captain-team-main article[class*="radial-gradient"] h2 {
+  margin-top: 0.2rem !important;
+  font-size: 1.1rem !important;
+  line-height: 1.25 !important;
+}
+
+body:has(.captain-app-header) .captain-team-main section[class*="radial-gradient"] p[class*="max-w-"],
+body:has(.captain-app-header) .captain-team-main article[class*="radial-gradient"] p[class*="max-w-"] {
+  margin-top: 0.4rem !important;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 0.75rem !important;
+  line-height: 1.25rem !important;
+  color: rgba(255,255,255,0.52) !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="rounded-3xl"] {
+  border-radius: 1.05rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="sticky"][class*="top-"] {
+  position: static !important;
+}
+
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="filter" i],
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="message" i] {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="filter" i]::-webkit-scrollbar,
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="message" i]::-webkit-scrollbar {
+  display: none;
+}
+
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="filter" i] a,
+body:has(.captain-app-header) .captain-team-main nav[aria-label*="message" i] a {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+body:has(.captain-app-header) .captain-team-main details > summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="xl:grid-cols-"],
+body:has(.captain-app-header) .captain-team-main [class*="lg:grid-cols-"] {
+  grid-template-columns: minmax(0,1fr) !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="mt-6"] {
+  margin-top: 0.85rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="mt-5"] {
+  margin-top: 0.7rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="gap-8"],
+body:has(.captain-app-header) .captain-team-main [class*="gap-6"] {
+  gap: 0.75rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main [class*="min-h-11"],
+body:has(.captain-app-header) .captain-team-main [class*="min-h-12"] {
+  min-height: 2.65rem !important;
+}
+
+body:has(.captain-app-header) .captain-team-main table {
+  white-space: nowrap;
 }
 
 @media (min-width: 1280px) {
@@ -562,7 +667,6 @@ export default async function CaptainTeamLayout({
             teamName={team.name}
             teamLogoUrl={team.logoUrl}
           />
-          <CaptainAppPageFocus teamId={team.id} />
         </>
       </CaptainPwaModeOnly>
 
