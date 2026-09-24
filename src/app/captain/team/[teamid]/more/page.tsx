@@ -30,6 +30,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
   const base = `/captain/team/${teamid}`;
   const groups = [
     { label: "Matchday", rows: [
+      { href: `${base}/table#captain-table`, label: "League table", icon: TrophyIcon },
       { href: `${base}/availability`, label: "Availability", icon: CalendarDaysIcon },
       { href: `${base}/results`, label: "Match reports", icon: ClipboardDocumentCheckIcon },
       { href: `${base}/match-fees`, label: "Matchday squad", icon: UserGroupIcon },
