@@ -860,6 +860,24 @@ export default async function AdminTeamPage({
                   </span>
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] px-4 py-4 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  name="playsOnceDoublePoints"
+                  defaultChecked={Boolean(team.playsOnceDoublePoints)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  <span className="block font-semibold text-emerald-100">
+                    Plays each team once — double-points fixtures
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-white/55">
+                    Use for teams with exceptional availability. In a double round-robin schedule this team is omitted from the return fixtures, so it plays every opponent once. Each of those fixtures awards 6 points for a win, 2 for a draw and 0 for a defeat to both teams. Goals and appearances still count once.
+                  </span>
+                </span>
+              </label>
+
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-2">
                   <FormListboxField
