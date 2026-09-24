@@ -33,6 +33,7 @@ export function getCaptainAppSection(pathname: string, teamId: string): {
     "weeks-unavailable": "Fixture planning",
     whatsapp: "WhatsApp",
     "cup-invitations": "Cup invitations",
+    agreement: "Captain agreement",
     rules: "Match rules",
     guide: "Captain guide",
     help: "Help",
