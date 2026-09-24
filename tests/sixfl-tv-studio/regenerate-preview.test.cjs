@@ -42,7 +42,8 @@ test("normal regenerate hides only normal stale previews and leaves test style i
   assert.match(source, /activeRenders\.some\(render => render\.kind === kind\)/);
   assert.match(source, /Regenerate \$\{kindLabel\(kind\)\} only/);
   assert.match(source, /The Highlights test style stays completely separate and only runs from its own preview card/);
-  assert.match(source, /automatically queues it to publish publicly on YouTube/);
+  assert.match(source, /Every newly created normal Highlights or Full match render automatically publishes publicly on YouTube/);
+  assert.match(source, /Old READY previews from before this change stay private/);
   assert.match(source, /try \{ await refresh\(\); \} catch \{ setState/);
 
   assert.match(studio, /specs\.filter\(spec => spec\.kind !== "HIGHLIGHTS_ALT"\)/);

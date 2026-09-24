@@ -30,7 +30,7 @@ export async function POST(request: Request, context: Context) {
       const kind = data.kind ? String(data.kind) as SixflTvRenderKind : undefined;
       return NextResponse.json(
         await requestRenders(fixtureId, actor, kind, {
-          autoPublish: data.autoPublish === true,
+          autoPublish: data.autoPublish !== false,
         }),
         { status: 202, headers },
       );

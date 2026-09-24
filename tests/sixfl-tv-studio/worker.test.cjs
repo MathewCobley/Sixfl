@@ -244,6 +244,11 @@ test('highlight normalisation overlays a persistent scorebug without removing ma
   await fs.writeFile(bug, await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect x="54" y="46" width="620" height="146" fill="#ffff00"/></svg>')).png().toBuffer());
   await w.normaliseVideo(source, plain);
   await w.normaliseVideo(source, scored, bug);
+  const reused = path.join(dir, 'reused.mp4');
+  const progress = [];
+  await w.normaliseVideo(source, reused, bug, fraction => progress.push(fraction));
+  assert.deepEqual(await fs.readFile(reused), await fs.readFile(scored), 'Cache must preserve the exact encoded picture and audio bytes');
+  assert.equal(progress.at(-1), 1);
   const hash = async file => (await w.run('ffmpeg', ['-i', file, '-map', '0:v:0', '-vf', "select='eq(n,10)'", '-vsync', '0', '-f', 'framemd5', '-'], true))
     .split('\n').find(line => /^[0-9]/.test(line))?.split(',').at(-1).trim();
   assert.notEqual(await hash(plain), await hash(scored), 'Scorebug must visibly alter the match-footage frame');
@@ -448,4 +453,66 @@ test('Goal of the Month thumbnail route uses fixture round and the stored 14-sec
   assert.match(route, /sixflTvGoalClipPosterKey\(row\.clipAssetId\)/);
   assert.match(route, /X-SIXFL-Thumbnail-Frame/);
   assert.match(worker, /sourcePosterCandidate\(source, dir, .*14\)/);
+});
+
+test('segment cache reuses exact bytes and invalidates changed footage, overlays and settings', async t => {
+  const w = await loadWorker(memoryDb(), new Map());
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-cache-test-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const root = path.join(dir, 'cache'), source = path.join(dir, 'source'), overlay = path.join(dir, 'overlay');
+  const target = path.join(dir, 'output.mp4');
+  await fs.writeFile(source, 'original footage'); await fs.writeFile(overlay, 'score 1-0');
+  let renders = 0;
+  const render = async () => fs.writeFile(target, Buffer.from(`encoded output ${++renders}`));
+  const get = (settings = { premium: true, width: 3840 }) => w.cachedSegment(target, [source, overlay], settings, render, root, 1000);
+  assert.equal(await get(), false);
+  const first = await fs.readFile(target);
+  await fs.rm(target);
+  assert.equal(await get(), true);
+  assert.deepEqual(await fs.readFile(target), first);
+  assert.equal(renders, 1);
+  await fs.writeFile(overlay, 'score 2-0'); assert.equal(await get(), false);
+  await fs.writeFile(source, 'different footage'); assert.equal(await get(), false);
+  assert.equal(await get({ premium: false, width: 1920 }), false);
+  assert.equal(renders, 4);
+  const old = new Date(Date.now() - 49 * 60 * 60 * 1000);
+  for (const name of await fs.readdir(root)) await fs.utimes(path.join(root, name), old, old);
+  assert.equal(await get({ premium: false, width: 1920 }), false, 'Expired entries must be rebuilt');
+  assert.equal((await fs.readdir(root)).length, 1);
+});
+
+test('segment cache recovers from corruption, enforces its size bound and never caches failed renders', async t => {
+  const w = await loadWorker(memoryDb(), new Map());
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-cache-test-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const root = path.join(dir, 'cache'), target = path.join(dir, 'output.mp4');
+  let renders = 0;
+  const render = async () => { renders++; await fs.writeFile(target, Buffer.alloc(32, renders)); };
+  const get = settings => w.cachedSegment(target, [], settings, render, root, 64);
+  await get('one');
+  const entry = (await fs.readdir(root))[0];
+  await fs.writeFile(path.join(root, entry, 'video.mp4'), 'corrupt');
+  assert.equal(await get('one'), false);
+  assert.equal(renders, 2);
+  await get('two'); await get('three');
+  const entries = await fs.readdir(root);
+  assert.equal(entries.length, 2);
+  const sizes = await Promise.all(entries.map(name => fs.stat(path.join(root, name, 'video.mp4'))));
+  assert.ok(sizes.reduce((n, s) => n + s.size, 0) <= 64);
+  await assert.rejects(w.cachedSegment(target, [], 'failed', async () => { await fs.writeFile(target, 'partial'); throw new Error('encode failed'); }, root, 64), /encode failed/);
+  assert.equal(await get('failed'), false);
+  const controller = new AbortController(); controller.abort(new Error('cancelled render'));
+  const before = renders;
+  await assert.rejects(w.renderSignals.run(controller.signal, () => get('failed')), /cancelled render/);
+  assert.equal(renders, before);
+});
+
+test('unavailable segment cache falls back to a normal render', async t => {
+  const w = await loadWorker(memoryDb(), new Map());
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sixfl-cache-test-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const root = path.join(dir, 'not-a-directory'), target = path.join(dir, 'output.mp4');
+  await fs.writeFile(root, 'occupied');
+  assert.equal(await w.cachedSegment(target, [], {}, () => fs.writeFile(target, 'complete'), root), false);
+  assert.equal(await fs.readFile(target, 'utf8'), 'complete');
 });
