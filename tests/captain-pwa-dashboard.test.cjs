@@ -104,3 +104,16 @@ test("Captain Agreement stays available inside the captain app", () => {
   assert.match(more, /\$\{base\}\/agreement/);
   assert.match(nav, /agreement: "Captain agreement"/);
 });
+
+
+test("captain portal requires the current Captain Agreement but admin previews never accept for captains", () => {
+  const layout = read("src/app/captain/team/[teamid]/layout.tsx");
+  const action = read("src/app/actions/agreements.ts");
+
+  assert.match(layout, /hasAcceptedCurrentAgreement\(access\.user\.id, "CAPTAIN"\)/);
+  assert.match(layout, /<MandatoryAgreementGate[\s\S]*agreementType="CAPTAIN"/);
+  assert.match(layout, /!access\.isAdmin/);
+  assert.match(layout, /access\.accessMode === "captain"/);
+  assert.match(action, /role: TeamRole\.CAPTAIN/);
+  assert.match(action, /Only registered captains can accept the Captain Agreement/);
+});
