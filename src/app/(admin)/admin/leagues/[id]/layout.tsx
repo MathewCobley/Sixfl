@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import AdminLeagueSeasonTeamsPanel from "@/components/admin/leagues/AdminLeagueSeasonTeamsPanel";
+import AdminLeagueSeasonsPanel from "@/components/admin/leagues/AdminLeagueSeasonsPanel";
 import MergeLeagueDivisionsButton from "@/components/admin/leagues/MergeLeagueDivisionsButton";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -48,6 +49,7 @@ export default async function AdminLeagueLayout({
         </Link>
       </div>
       <MergeLeagueDivisionsButton />
+      <AdminLeagueSeasonsPanel key={league.id} leagueId={league.id} />
       <AdminLeagueSeasonTeamsPanel />
       {children}
     </div>
