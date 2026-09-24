@@ -5,6 +5,8 @@ import {
   ChartBarSquareIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
+  NewspaperIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
 type FixtureTeam = {
@@ -386,6 +388,18 @@ export default function PlayerAppHome({
             </div>
           </Link>
         </section>
+
+        <Link
+          href={addPreviewMembershipId(`/player/team/${teamId}/news`, previewMembershipId)}
+          className="flex min-h-20 items-center gap-3 rounded-[1.35rem] border border-emerald-400/20 bg-emerald-400/[0.06] p-4 active:bg-emerald-400/10"
+        >
+          <NewspaperIcon className="h-6 w-6 shrink-0 text-emerald-300" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-black">League newsletters</h2>
+            <p className="mt-1 text-xs text-white/50">Read the latest matchnight stories</p>
+          </div>
+          <ChevronRightIcon className="h-5 w-5 shrink-0 text-emerald-200" />
+        </Link>
 
         <section className="rounded-[1.35rem] border border-sky-400/20 bg-white/[0.035] p-3">
           <div className="flex items-center justify-between gap-3">

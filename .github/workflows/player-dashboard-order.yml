@@ -7,6 +7,8 @@ on:
       - 'src/components/news/LatestNews.tsx'
       - 'src/components/goal-of-week/GoalOfWeekDashboardPromo.tsx'
       - 'tests/player-dashboard-order/**'
+      - 'tests/player-pwa-dashboard/**'
+      - 'tests/player-newsletters.test.cjs'
       - '.github/workflows/player-dashboard-order.yml'
   workflow_dispatch:
 permissions:
@@ -35,12 +37,12 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Native layout and template composition
-        run: node --test tests/player-dashboard-order/contract.test.cjs
+        run: node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs
       - name: Prepare application once
         run: npm run prebuild && npx prisma generate
       - name: Prepared order and existing feature safeguards
         run: |
-          node --test tests/player-dashboard-order/contract.test.cjs
+          node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs
           node scripts/check-critical-feature-contracts.mjs
       - name: Build prepared production application
         run: npx next build

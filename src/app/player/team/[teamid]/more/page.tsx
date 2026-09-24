@@ -13,6 +13,7 @@ import {
   GiftIcon,
   LifebuoyIcon,
   PlayCircleIcon,
+  NewspaperIcon,
   TrophyIcon,
 } from "@heroicons/react/24/outline";
 
@@ -72,6 +73,12 @@ export default async function PlayerMorePage({
     : [];
 
   const rows = [
+    {
+      href: withPreview(`/player/team/${teamid}/news`, previewMembershipId),
+      label: "Newsletters",
+      description: "Read the latest matchnight stories",
+      icon: NewspaperIcon,
+    },
     {
       href: withPreview(`/player/team/${teamid}/stats`, previewMembershipId),
       label: "My stats",
@@ -156,7 +163,7 @@ export default async function PlayerMorePage({
       <div className="mx-auto w-full max-w-xl">
         <h1 className="text-2xl font-black tracking-tight">More</h1>
 
-        {[rows.slice(0, 4), rows.slice(4, 7), rows.slice(7)]
+        {[rows.slice(0, 5), rows.slice(5, 8), rows.slice(8)]
           .filter((group) => group.length)
           .map((group, groupIndex) => (
             <section
