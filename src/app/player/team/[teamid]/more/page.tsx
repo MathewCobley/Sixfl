@@ -3,7 +3,10 @@ import { UserRole } from "@prisma/client";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/auth";
-import { getPlayerTeamMembershipsByUserId } from "@/lib/players/player-team-memberships";
+import {
+  getPlayerTeamMembershipsByUserId,
+  type PlayerTeamMembershipSummary,
+} from "@/lib/players/player-team-memberships";
 import { prisma } from "@/lib/prisma";
 import {
   ArrowsRightLeftIcon,
@@ -69,7 +72,7 @@ export default async function PlayerMorePage({
   const membershipMap = effectiveUserId
     ? await getPlayerTeamMembershipsByUserId([effectiveUserId])
     : new Map();
-  const linkedTeamAccounts = effectiveUserId
+  const linkedTeamAccounts: PlayerTeamMembershipSummary[] = effectiveUserId
     ? (membershipMap.get(effectiveUserId) ?? [])
     : [];
   const currentLinkedTeam = linkedTeamAccounts.find(
