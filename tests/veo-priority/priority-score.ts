@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 
 import { prisma } from "../../src/lib/prisma";
-import { getSixflTvPriorityScore } from "../../src/lib/sixfl-tv/priority-score";
+import { getPriorityDeductionDetails } from "../../src/lib/sixfl-tv/priority-deductions";
+import { getSixflTvPriorityScores, getSixflTvPriorityScore } from "../../src/lib/sixfl-tv/priority-score";
 
 const prefix = "priority_score_test";
 
@@ -234,6 +235,49 @@ async function main() {
   assert.equal(newTeam.provisional, true);
   assert.equal(newTeam.qualifies, true);
 
+  // Account-wide debt is independent of the latest five match cards.
+  const now = new Date("2026-09-24T21:30:00Z");
+  await prisma.paymentCharge.create({ data: { id: id("old_debt"), teamId: id("team"), title: "Old balance", amountPence: 1, dueDate: new Date("2026-08-01T12:00:00Z"), status: "OPEN" } });
+  const penalised = (await getSixflTvPriorityScores([id("team")], prisma, now)).get(id("team"))!;
+  assert.equal(penalised.deductionPoints, 10);
+  assert.equal(penalised.score, score.score - 10);
+  await prisma.$executeRaw`INSERT INTO "SixflTvPriorityReview" (id,"teamId",kind,"referenceId",reason,"createdBy") VALUES (${id("hold")},${id("team")},'PAYMENT_HOLD',${id("old_debt")},'Disputed amount','test-admin')`;
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0);
+  await prisma.$executeRaw`UPDATE "SixflTvPriorityReview" SET "revokedAt"=${now} WHERE id=${id("hold")}`;
+  await prisma.paymentTransaction.create({ data: { teamId: id("team"), chargeId: id("old_debt"), amountPence: 1, method: "OTHER", paidAt: now, notes: "SIXFL adjustment" } });
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0, "Recorded adjustments must clear the deduction");
+  await prisma.paymentCharge.update({ where: { id: id("old_debt") }, data: { amountPence: 101, description: "[SIXFL_TEAM_WAIVER:100]" } });
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0, "SIXFL waivers must also clear overdue debt");
+  await prisma.$executeRaw`INSERT INTO "TeamShinPadWarning" (id,"teamId","fixtureId","createdAt") VALUES (${id("warning")},${id("team")},${id("fixture_1")},${new Date("2026-09-23T20:00:00Z")})`;
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 5);
+  await prisma.$executeRaw`INSERT INTO "SixflTvPriorityReview" (id,"teamId",kind,"referenceId",reason,"createdBy") VALUES (${id("warning_review")},${id("team")},'SHIN_PAD_DISMISSED',${id("warning")},'Recorded against wrong team','test-admin')`;
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0);
+  await prisma.$executeRaw`INSERT INTO "SixflTvPriorityReview" (id,"teamId",kind,"referenceId",points,reason,"createdBy") VALUES (${id("red")},${id("team")},'RED_CARD',${id("fixture_1")},20,'Serious sending-off confirmed','test-admin')`;
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 20);
+  const afterExpiry = new Date("2026-10-30T21:30:00Z");
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, afterExpiry)).get(id("team"))!.deductionPoints, 0);
+
+  // The screenshot case: no payment points are earned until fully covered.
+  await prisma.$executeRaw`DELETE FROM "PaymentTransaction" WHERE "chargeId" IN (SELECT id FROM "PaymentCharge" WHERE "fixtureId"=${id("fixture_5")} AND "teamId"=${id("team")})`;
+  await prisma.$executeRaw`UPDATE "PaymentCharge" SET "dueDate"=${new Date(now.getTime() - 24 * 3600000)},status='PAID' WHERE "fixtureId"=${id("fixture_5")} AND "teamId"=${id("team")}`;
+  const pending = (await getSixflTvPriorityScores([id("team")], prisma, now)).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(pending.paymentStatus, "PENDING");
+  assert.equal(pending.paymentPoints, 0);
+  const chargeFive = await prisma.paymentCharge.findFirstOrThrow({ where: { fixtureId: id("fixture_5"), teamId: id("team") } });
+  await prisma.paymentTransaction.create({ data: { id: id("partial_payment"), teamId: id("team"), chargeId: chargeFive.id, amountPence: chargeFive.amountPence - 1, method: "OTHER", paidAt: now } });
+  const partial = (await getSixflTvPriorityScores([id("team")], prisma, now)).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(partial.paymentPoints, 0, "Even one penny remaining must earn zero payment points");
+  await prisma.paymentTransaction.create({ data: { id: id("final_penny"), teamId: id("team"), chargeId: chargeFive.id, amountPence: 1, method: "OTHER", paidAt: now } });
+  const paid = (await getSixflTvPriorityScores([id("team")], prisma, now)).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(paid.paymentStatus, "ON_TIME");
+  assert.equal(paid.paymentPoints, 6, "The points are earned when the final penny clears the charge");
+  await prisma.paymentTransaction.create({ data: { id: id("reversal"), teamId: id("team"), chargeId: chargeFive.id, amountPence: -1, method: "OTHER", paidAt: new Date(now.getTime() + 1000) } });
+  const reversed = (await getSixflTvPriorityScores([id("team")], prisma, new Date(now.getTime() + 1000))).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(reversed.paymentPoints, 0, "Reversing a penny must remove payment points while the balance is open");
+  await prisma.paymentTransaction.deleteMany({ where: { id: { in: [id("partial_payment"), id("final_penny"), id("reversal")] } } });
+  const late = (await getSixflTvPriorityScores([id("team")], prisma, new Date(now.getTime() + 72 * 3600000))).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(late.paymentStatus, "UNPAID", "A stale PAID flag must not bypass actual receipts or the 72-hour deadline");
+  assert.equal(late.paymentPoints, 0);
   console.log("SIXFL TV Priority score database checks passed");
 }
 

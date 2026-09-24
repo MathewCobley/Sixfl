@@ -85,7 +85,7 @@ export default async function VeoPriorityPage({ params, searchParams }: {
         const score = priorityScores.get(team.id);
         return <div key={team.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link>
+            <div><Link href={`/admin/teams/${team.id}`} className="font-semibold hover:underline">{team.name}</Link><Link href={`/admin/teams/${team.id}/priority`} className="mt-1 block text-xs text-amber-200 underline">Review Priority deductions</Link></div>
             <p className="mt-1 text-sm text-white/60">
               {score?.qualifies ? 'Eligible for recorded-pitch priority' : 'Not currently eligible for recorded-pitch priority'}
               {score ? ` · Core cards ${score.coreCompletedMatches}/${score.matchesCount || 0}` : ''}

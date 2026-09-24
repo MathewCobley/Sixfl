@@ -1,3 +1,4 @@
+import PriorityDeductions from "@/components/sixfl-tv/PriorityDeductions";
 import Link from 'next/link';
 
 import SixflTvPriorityScoreBadge from '@/components/sixfl-tv/SixflTvPriorityScoreBadge';
@@ -57,13 +58,15 @@ function ScoreLine({
   label,
   points,
   maxPoints,
+  pending = false,
 }: {
   label: string;
   points: number;
   maxPoints: number;
+  pending?: boolean;
 }) {
-  const full = points === maxPoints;
-  const partial = points > 0 && points < maxPoints;
+  const full = !pending && points === maxPoints;
+  const partial = pending || (points > 0 && points < maxPoints);
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
@@ -72,7 +75,7 @@ function ScoreLine({
           aria-hidden="true"
           className={full ? "text-emerald-300" : partial ? "text-amber-300" : "text-red-300"}
         >
-          {full ? '✓' : partial ? '!' : '✕'}
+          {pending ? '◷' : full ? '✓' : partial ? '!' : '✕'}
         </span>
         <span className="text-xs font-medium text-white/80">{label}</span>
       </div>
@@ -87,7 +90,9 @@ function paymentLabel(status: string) {
   if (status === 'ON_TIME') return 'Paid within 72 hours';
   if (status === 'LATE') return 'Paid after 72 hours';
   if (status === 'UNPAID') return 'Payment overdue by 72+ hours';
-  return 'Payment not late yet';
+  if (status === 'PENDING') return 'Unpaid — pay within 72 hours to earn 6 points';
+  if (status === 'NOT_RECORDED') return 'Payment not yet recorded — no points earned';
+  return 'No payment required';
 }
 
 function confirmationLabel(status: string) {
@@ -163,6 +168,8 @@ export default async function CaptainVeoPriorityCard({
         </div>
       </div>
 
+      <PriorityDeductions deductions={score.deductions} deductionPoints={score.deductionPoints} />
+
       <div>
         <h3 className="text-sm font-semibold text-white">Reliability detail</h3>
         <p className="mt-1 text-xs leading-5 text-white/55">
@@ -173,7 +180,7 @@ export default async function CaptainVeoPriorityCard({
       <div className="grid gap-3 sm:grid-cols-5">
         {[
           ['8', 'Match card', 'By 6pm next day'],
-          ['6', 'Payment', 'Late after 72h · then 2 pts'],
+          ['6', 'Payment', 'Paid within 72h · late 2 · unpaid 0'],
           ['4', 'Confirmation', '72h deadline'],
           ['1', 'Assists', 'Bonus · by 6pm next day'],
           ['1', 'Ratings', 'Bonus · by 6pm next day'],
@@ -211,7 +218,7 @@ export default async function CaptainVeoPriorityCard({
                     <div className="text-right">
                       <div className="text-sm font-bold">{match.points}/20</div>
                       <div className="text-[11px] text-white/45">
-                        {pointsMissed === 0 ? 'Full points' : `${pointsMissed} point${pointsMissed === 1 ? '' : 's'} missed`}
+                        {match.paymentStatus === 'PENDING' ? 'Payment points not yet earned' : pointsMissed === 0 ? 'Full points' : `${pointsMissed} point${pointsMissed === 1 ? '' : 's'} missed`}
                       </div>
                     </div>
                   </div>
@@ -224,6 +231,7 @@ export default async function CaptainVeoPriorityCard({
                     />
                     <ScoreLine
                       label={paymentLabel(match.paymentStatus)}
+                      pending={match.paymentStatus === 'PENDING'}
                       points={match.paymentPoints}
                       maxPoints={6}
                     />
