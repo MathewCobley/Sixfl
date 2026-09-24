@@ -36,7 +36,6 @@ type TableTeamRow = {
   id: string;
   name: string;
   logoUrl: string | null;
-  singleRoundDoublePoints: boolean;
 };
 
 type SeasonEntryPresenceRow = {
@@ -108,7 +107,7 @@ async function getLeagueTableTeams(
 ) {
   if (options.divisionId) {
     const divisionTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
+      SELECT t."id", t."name", t."logoUrl"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
@@ -128,7 +127,7 @@ async function getLeagueTableTeams(
         leagueId,
       },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true },
+      select: { id: true, name: true, logoUrl: true },
     });
 
     return removeFixturePlaceholderTeams(selectedTeams);
@@ -136,7 +135,7 @@ async function getLeagueTableTeams(
 
   const [seasonTeams, seasonEntryPresence] = await Promise.all([
     prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
+      SELECT t."id", t."name", t."logoUrl"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
@@ -165,7 +164,7 @@ async function getLeagueTableTeams(
   const legacyTeams = await prisma.team.findMany({
     where: { leagueId },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true },
+    select: { id: true, name: true, logoUrl: true },
   });
 
   return removeFixturePlaceholderTeams(legacyTeams);
@@ -200,6 +199,7 @@ function buildTableRows(
     awayTeamId: string;
     homeTeam: TableTeamRow;
     awayTeam: TableTeamRow;
+    doublePoints: boolean;
     result: { homeScore: number; awayScore: number } | null;
   }>,
 ) {
@@ -216,11 +216,7 @@ function buildTableRows(
     const away = getOrCreateRow(table, fixture.awayTeam);
     const homeScore = fixture.result.homeScore;
     const awayScore = fixture.result.awayScore;
-    const pointsMultiplier =
-      fixture.homeTeam.singleRoundDoublePoints ||
-      fixture.awayTeam.singleRoundDoublePoints
-        ? 2
-        : 1;
+    const pointsMultiplier = fixture.doublePoints ? 2 : 1;
 
     home.played += 1;
     away.played += 1;
@@ -274,8 +270,8 @@ export async function getLeagueTable(
       },
       orderBy: { kickoffAt: "asc" },
       include: {
-        homeTeam: { select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true } },
-        awayTeam: { select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true } },
       },
     }),
