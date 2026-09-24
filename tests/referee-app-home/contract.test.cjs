@@ -350,3 +350,22 @@ test("dual-role referees can switch back to the app viewer from the referee app"
   assert.match(shell, /href="\/dashboard\?app=1"/);
   assert.match(shell, /aria-label="Switch app viewer"/);
 });
+
+
+test("referee work routes have separate desktop and app shells", () => {
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+  const publicHeader = fs.readFileSync("src/components/layout/PublicHeader.tsx", "utf8");
+  const footer = fs.readFileSync("src/components/layout/SiteFooter.tsx", "utf8");
+
+  assert.match(shell, /RefereePortalViewMode mode="app"/);
+  assert.match(shell, /RefereePortalViewMode mode="web"/);
+  assert.match(shell, /aria-label="Referee desktop navigation"/);
+  assert.match(shell, /max-w-6xl/);
+  assert.match(shell, /aria-label="Referee app navigation"/);
+  assert.match(shell, /fixed inset-x-0 bottom-0/);
+
+  assert.match(publicHeader, /if \(isRefereeRoute\) return null/);
+  assert.match(footer, /if \(isRefereeRoute\) return null/);
+  assert.doesNotMatch(publicHeader, /refereeAppMode/);
+  assert.doesNotMatch(footer, /refereeAppMode/);
+});
