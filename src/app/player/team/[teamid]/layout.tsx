@@ -7,6 +7,7 @@ import { Suspense, type ReactNode } from "react";
 import { UserRole } from "@prisma/client";
 
 import { authOptions } from "@/auth";
+import MandatoryAgreementGate from "@/components/agreements/MandatoryAgreementGate";
 import GoalOfWeekDashboardPromo from "@/components/goal-of-week/GoalOfWeekDashboardPromo";
 import PlayerDashboardOnly from "@/components/player/PlayerDashboardOnly";
 import PlayerLeagueMediaPanel from "@/components/player/PlayerLeagueMediaPanel";
@@ -15,6 +16,7 @@ import PlayerPreviewReturnBanner from "@/components/player/PlayerPreviewReturnBa
 import PlayerPwaPortalHeader from "@/components/player/PlayerPwaPortalHeader";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import PlayerTeamNav from "@/components/player/PlayerTeamNav";
+import { hasAcceptedCurrentAgreement } from "@/lib/agreements";
 import { prisma } from "@/lib/prisma";
 
 export default async function PlayerTeamLayout({
@@ -40,21 +42,38 @@ export default async function PlayerTeamLayout({
     ? await prisma.user.findUnique({
         where: { email },
         select: {
+          id: true,
+          name: true,
           role: true,
           teamMembers: {
             where: {
               teamId: teamid,
-              role: "CAPTAIN",
             },
-            select: { id: true },
-            take: 1,
+            select: { id: true, role: true },
           },
         },
       })
     : null;
 
   const isAdmin = viewer?.role === UserRole.ADMIN;
-  const isCaptain = Boolean(viewer?.teamMembers.length);
+  const isCaptain = Boolean(
+    viewer?.teamMembers.some((membership) => membership.role === "CAPTAIN"),
+  );
+  const hasTeamMembership = Boolean(viewer?.teamMembers.length);
+
+  if (
+    viewer?.id &&
+    !isAdmin &&
+    hasTeamMembership &&
+    !(await hasAcceptedCurrentAgreement(viewer.id, "PLAYER"))
+  ) {
+    return (
+      <MandatoryAgreementGate
+        agreementType="PLAYER"
+        name={viewer.name}
+      />
+    );
+  }
   const returnHref = isAdmin
     ? `/admin/teams/${teamid}`
     : isCaptain
