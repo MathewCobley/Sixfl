@@ -16,7 +16,6 @@ test("team admin has a dedicated primary captain switcher", () => {
   assert.match(page, /name="membershipId"/);
   assert.match(page, /name="keepPreviousCaptain"/);
   assert.match(page, /Other existing additional captains are not changed/);
-  assert.match(page, /No message is sent automatically/);
   assert.match(action, /export async function changePrimaryCaptainAction/);
   assert.match(action, /captainUserId: selectedMember\.userId/);
   assert.match(action, /role: TeamRole\.CAPTAIN/);
@@ -26,6 +25,9 @@ test("team admin has a dedicated primary captain switcher", () => {
   assert.match(action, /contactPhone: captainPhone/);
   assert.match(action, /ADMIN_PRIMARY_CAPTAIN_CHANGE/);
   assert.match(action, /upsertTeamNotificationRecipient\(teamId\)/);
+  assert.match(action, /sendDashboardLoginEmail/);
+  assert.match(action, /callbackPath: `\\/captain\\/team\\/\\$\\{teamId\\}`/);
+  assert.match(action, /captainSignin = "failed"/);
 });
 
 test("captain role editing no longer silently replaces an existing primary captain", () => {
