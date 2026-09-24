@@ -269,18 +269,6 @@ body:has(.captain-app-header) .captain-team-main [class*="lg:grid-cols-"] {
   grid-template-columns: minmax(0,1fr) !important;
 }
 
-body:has(.captain-app-header) .captain-team-main [class*="text-4xl"],
-body:has(.captain-app-header) .captain-team-main [class*="sm:text-4xl"] {
-  font-size: 1.2rem !important;
-  line-height: 1.25 !important;
-}
-
-body:has(.captain-app-header) .captain-team-main [class*="text-3xl"],
-body:has(.captain-app-header) .captain-team-main [class*="sm:text-3xl"] {
-  font-size: 1.1rem !important;
-  line-height: 1.25 !important;
-}
-
 body:has(.captain-app-header) .captain-team-main [class*="mt-6"] {
   margin-top: 0.85rem !important;
 }
