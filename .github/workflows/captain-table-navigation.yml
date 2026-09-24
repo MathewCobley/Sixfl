@@ -1,0 +1,47 @@
+name: Captain table navigation
+on:
+  pull_request:
+    paths:
+      - "src/app/captain/team/**/table/**"
+      - "src/app/captain/team/**/layout.tsx"
+      - "src/app/captain/team/**/more/**"
+      - "src/lib/captain/app-navigation.ts"
+      - "src/lib/captain/related-teams.ts"
+      - "src/lib/standings.ts"
+      - "src/components/captain/CaptainDashboardLeagueTable.tsx"
+      - "src/components/captain/CaptainTeamScrollToTop.tsx"
+      - "tests/captain-table-navigation.test.cjs"
+      - ".github/workflows/captain-table-navigation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: captain-table-navigation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  table-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-captain-table-test
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check navigation, authorisation, current league and division selection
+        run: node --test tests/captain-table-navigation.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Repeat navigation checks against production-prepared source
+        run: node --test tests/captain-table-navigation.test.cjs
+      - name: Type check
+        run: npx tsc --noEmit

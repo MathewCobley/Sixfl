@@ -21,6 +21,7 @@ export function getCaptainAppSection(pathname: string, teamId: string): {
   if (within("messages") || within("chat")) return { title: "Inbox", tab: "Inbox" };
 
   const titles: Record<string, string> = {
+    table: "League table",
     availability: "Availability",
     "results-history": "Team results",
     results: "Match reports",

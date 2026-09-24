@@ -624,7 +624,7 @@ export default async function CaptainTeamLayout({
       label: "League & media",
       items: [
         {
-          href: `/captain/team/${teamid}#captain-league-table`,
+          href: `/captain/team/${teamid}/table#captain-table`,
           label: "Table",
         },
         { href: `/captain/team/${teamid}/results-history`, label: "Team results" },
