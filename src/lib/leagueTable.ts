@@ -36,6 +36,7 @@ type TableTeamRow = {
   id: string;
   name: string;
   logoUrl: string | null;
+  singleRoundDoublePoints: boolean;
 };
 
 type SeasonEntryPresenceRow = {
@@ -107,7 +108,7 @@ async function getLeagueTableTeams(
 ) {
   if (options.divisionId) {
     const divisionTeams = await prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl"
+      SELECT t."id", t."name", t."logoUrl", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
@@ -127,7 +128,7 @@ async function getLeagueTableTeams(
         leagueId,
       },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, logoUrl: true },
+      select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true },
     });
 
     return removeFixturePlaceholderTeams(selectedTeams);
@@ -135,7 +136,7 @@ async function getLeagueTableTeams(
 
   const [seasonTeams, seasonEntryPresence] = await Promise.all([
     prisma.$queryRaw<TableTeamRow[]>(Prisma.sql`
-      SELECT t."id", t."name", t."logoUrl"
+      SELECT t."id", t."name", t."logoUrl", COALESCE(t."singleRoundDoublePoints", false) AS "singleRoundDoublePoints"
       FROM "LeagueSeasonTeam" lst
       JOIN "Team" t ON t."id" = lst."teamId"
       WHERE lst."leagueId" = ${leagueId}
@@ -164,7 +165,7 @@ async function getLeagueTableTeams(
   const legacyTeams = await prisma.team.findMany({
     where: { leagueId },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, logoUrl: true },
+    select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true },
   });
 
   return removeFixturePlaceholderTeams(legacyTeams);
@@ -215,6 +216,11 @@ function buildTableRows(
     const away = getOrCreateRow(table, fixture.awayTeam);
     const homeScore = fixture.result.homeScore;
     const awayScore = fixture.result.awayScore;
+    const pointsMultiplier =
+      fixture.homeTeam.singleRoundDoublePoints ||
+      fixture.awayTeam.singleRoundDoublePoints
+        ? 2
+        : 1;
 
     home.played += 1;
     away.played += 1;
@@ -225,21 +231,21 @@ function buildTableRows(
 
     if (homeScore > awayScore) {
       home.won += 1;
-      home.points += 3;
+      home.points += 3 * pointsMultiplier;
       away.lost += 1;
       home.recentForm.push("W");
       away.recentForm.push("L");
     } else if (awayScore > homeScore) {
       away.won += 1;
-      away.points += 3;
+      away.points += 3 * pointsMultiplier;
       home.lost += 1;
       away.recentForm.push("W");
       home.recentForm.push("L");
     } else {
       home.drawn += 1;
       away.drawn += 1;
-      home.points += 1;
-      away.points += 1;
+      home.points += pointsMultiplier;
+      away.points += pointsMultiplier;
       home.recentForm.push("D");
       away.recentForm.push("D");
     }
@@ -268,8 +274,8 @@ export async function getLeagueTable(
       },
       orderBy: { kickoffAt: "asc" },
       include: {
-        homeTeam: { select: { id: true, name: true, logoUrl: true } },
-        awayTeam: { select: { id: true, name: true, logoUrl: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true, singleRoundDoublePoints: true } },
         result: { select: { homeScore: true, awayScore: true } },
       },
     }),
