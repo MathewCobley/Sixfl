@@ -6,7 +6,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FaFacebookF, FaInstagram } from "react-icons/fa";
 import { track } from "@vercel/analytics";
@@ -69,42 +68,11 @@ const footerGroups: Array<{ title: string; links: FooterLink[] }> = [
   },
 ];
 
-function isRefereeAppFrame() {
-  try {
-    return (
-      window.self !== window.top &&
-      window.parent.location.origin === window.location.origin &&
-      window.parent.location.pathname === "/admin/pwa"
-    );
-  } catch {
-    return false;
-  }
-}
-
 export default function SiteFooter() {
   const pathname = usePathname();
   const isRefereeRoute =
     pathname === "/referee" || pathname.startsWith("/referee/");
-  const [refereeAppMode, setRefereeAppMode] = useState(false);
-
-  useEffect(() => {
-    if (!isRefereeRoute) {
-      setRefereeAppMode(false);
-      return;
-    }
-
-    const standalone = window.matchMedia("(display-mode: standalone)").matches;
-    const iosStandalone =
-      "standalone" in navigator &&
-      Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-
-    const explicitPreview = new URLSearchParams(window.location.search).get("pwaPreview") === "1";
-    setRefereeAppMode(
-      explicitPreview || standalone || iosStandalone || isRefereeAppFrame(),
-    );
-  }, [isRefereeRoute]);
-
-  if (isRefereeRoute && refereeAppMode) return null;
+  if (isRefereeRoute) return null;
 
   return (
     <footer className="border-t border-white/10 bg-black text-white">
