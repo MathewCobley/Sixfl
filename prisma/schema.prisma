@@ -375,6 +375,7 @@ model Fixture {
   kickoffAt     DateTime
   publishedAt   DateTime?
   matchFeePence Int?
+  doublePoints  Boolean @default(false)
 
   round    Int?
   position Int?
