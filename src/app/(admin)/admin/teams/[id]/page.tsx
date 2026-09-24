@@ -804,7 +804,7 @@ export default async function AdminTeamPage({
                 ) : null}
 
                 <p className="text-xs leading-5 text-white/50">
-                  The selected captain&apos;s saved name, email and squad phone become the team&apos;s primary contact. No message is sent automatically.
+                  The selected captain&apos;s saved name, email and squad phone become the team&apos;s primary contact. A fresh Captain Portal sign-in email is sent automatically.
                 </p>
 
                 <button
