@@ -80,6 +80,38 @@ assert.ok(
   `Expected reversed common-opponent evidence to favour B, got ${JSON.stringify(reverseCommonOpponentPrediction)}`,
 );
 
+// Schedule strength must matter beyond the raw W/D/L column. C, D and E first
+// establish themselves as dominant sides by hammering X, Y and Z. A then loses
+// narrowly to those strong teams, while B only edges the weak teams. A's raw
+// record is worse, but the opponent-adjusted model should recognise the much
+// stronger level of performance.
+const scheduleStrengthHistory: WinChanceFixture[] = [
+  game("C", "X", 9, 1, 1),
+  game("D", "Y", 8, 1, 2),
+  game("E", "Z", 9, 2, 3),
+  game("C", "Y", 8, 2, 4),
+  game("D", "Z", 9, 2, 5),
+  game("E", "X", 8, 1, 6),
+  game("C", "Z", 7, 1, 7),
+  game("D", "X", 8, 2, 8),
+  game("E", "Y", 9, 1, 9),
+  game("A", "C", 4, 5, 10),
+  game("D", "A", 4, 3, 11),
+  game("A", "E", 4, 5, 12),
+  game("B", "X", 4, 3, 13),
+  game("Y", "B", 3, 4, 14),
+  game("B", "Z", 4, 3, 15),
+];
+const scheduleStrengthPrediction = calculateFixtureWinChance({
+  homeTeamId: "A",
+  awayTeamId: "B",
+  fixtures: scheduleStrengthHistory,
+});
+assert.ok(
+  scheduleStrengthPrediction.home > scheduleStrengthPrediction.away,
+  `Expected narrow losses to elite opposition to rate above narrow wins over weak opposition, got ${JSON.stringify(scheduleStrengthPrediction)}`,
+);
+
 // Direct meetings remain matchup-specific evidence, but the new result call and
 // score must come from one Poisson score matrix rather than two conflicting models.
 const headToHeadHistory: WinChanceFixture[] = [
@@ -140,17 +172,21 @@ const migrationSource = fs.readFileSync(
   "utf8",
 );
 
-assert.match(repairSource, /opponent-adjusted-poisson-v3-min-one-game/);
+assert.match(repairSource, /career-opponent-adjusted-poisson-v4/);
 assert.match(repairSource, /prediction\."modelVersion" IS DISTINCT FROM/);
 assert.match(repairSource, /"modelVersion" = \$\{PREDICTOR_MODEL_VERSION\}/);
 assert.match(repairSource, /Null is expected for a team's first fixture/);
 assert.match(storedSource, /function hasAtLeastOneCompletedMatch/);
+assert.match(storedSource, /loadCareerPredictionHistory/);
+assert.match(storedSource, /status: "COMPLETED"/);
+assert.doesNotMatch(storedSource, /where: \{ leagueId: fixture\.leagueId \}/);
 assert.match(storedSource, /!homeHasHistory \|\| !awayHasHistory/);
 assert.match(storedSource, /DELETE FROM "FixtureAiPrediction"/);
 assert.match(storedSource, /prior_home\."kickoffAt" < fixture\."kickoffAt"/);
 assert.match(storedSource, /prior_away\."kickoffAt" < fixture\."kickoffAt"/);
 assert.match(recoverySource, /function hasPriorCompletedMatch/);
 assert.match(recoverySource, /A team's first match is deliberately not predicted/);
+assert.doesNotMatch(recoverySource, /leagueId: fixture\.leagueId/);
 assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "modelVersion" TEXT/);
 
 console.log("Opponent-adjusted Poisson predictor contract passed.");

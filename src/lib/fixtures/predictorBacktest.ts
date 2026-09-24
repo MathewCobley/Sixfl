@@ -4,6 +4,7 @@ import {
   type PredictorV3Probabilities,
 } from "@/lib/fixtures/predictorV3Candidate";
 import { calculateFixtureWinChance, type WinChanceFixture } from "@/lib/fixtures/winChance";
+import { buildNameAwareWinChanceFixtures } from "@/lib/fixtures/winChanceHistory";
 
 export type PredictorBacktestRow = {
   fixtureId: string;
@@ -176,23 +177,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function normaliseTeamName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function canonicalTeamId(input: {
-  leagueId: string;
-  teamId: string;
-  teamName: string;
-}) {
-  const name = normaliseTeamName(input.teamName);
-  return `${input.leagueId}:${name || input.teamId}`;
-}
 
 function outcome(home: number, away: number): Outcome {
   if (home > away) return "HOME";
@@ -834,44 +818,31 @@ export function runPredictorBacktest(rows: PredictorBacktestRow[]): PredictorBac
 
   for (const target of sorted) {
     const targetTime = target.kickoffAt.getTime();
-    const leagueRows = sorted.filter(
+    const priorRows = sorted.filter(
       (row) =>
-        row.leagueId === target.leagueId &&
         row.fixtureId !== target.fixtureId &&
         row.kickoffAt.getTime() < targetTime &&
         row.resultEnteredAt.getTime() < targetTime,
     );
 
-    const history: WinChanceFixture[] = leagueRows.map((row) => ({
-      kickoffAt: row.kickoffAt,
-      status: "COMPLETED",
-      homeTeam: {
-        id: canonicalTeamId({
-          leagueId: row.leagueId,
-          teamId: row.homeTeamId,
-          teamName: row.homeTeamName,
-        }),
-      },
-      awayTeam: {
-        id: canonicalTeamId({
-          leagueId: row.leagueId,
-          teamId: row.awayTeamId,
-          teamName: row.awayTeamName,
-        }),
-      },
-      result: { homeScore: row.actualHomeScore, awayScore: row.actualAwayScore },
-    }));
+    const history: WinChanceFixture[] = buildNameAwareWinChanceFixtures({
+      historyFixtures: priorRows.map((row) => ({
+        kickoffAt: row.kickoffAt,
+        status: "COMPLETED",
+        homeTeam: { id: row.homeTeamId, name: row.homeTeamName },
+        awayTeam: { id: row.awayTeamId, name: row.awayTeamName },
+        result: { homeScore: row.actualHomeScore, awayScore: row.actualAwayScore },
+      })),
+      targetFixtures: [
+        {
+          homeTeam: { id: target.homeTeamId, name: target.homeTeamName },
+          awayTeam: { id: target.awayTeamId, name: target.awayTeamName },
+        },
+      ],
+    });
 
-    const homeTeamId = canonicalTeamId({
-      leagueId: target.leagueId,
-      teamId: target.homeTeamId,
-      teamName: target.homeTeamName,
-    });
-    const awayTeamId = canonicalTeamId({
-      leagueId: target.leagueId,
-      teamId: target.awayTeamId,
-      teamName: target.awayTeamName,
-    });
+    const homeTeamId = target.homeTeamId;
+    const awayTeamId = target.awayTeamId;
 
     const current = calculateFixtureWinChance({ homeTeamId, awayTeamId, fixtures: history });
     if (current.predictedResult.label === "Too early") {
