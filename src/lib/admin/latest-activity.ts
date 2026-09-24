@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getAdminPaymentActivity } from "./payment-activity";
 
 export type AdminActivityKind =
   | "APP_MESSAGE"
@@ -38,13 +39,6 @@ function preview(value: string | null | undefined, max = 110) {
   return cleaned.length <= max ? cleaned : `${cleaned.slice(0, max - 3)}...`;
 }
 
-function money(amountPence: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(amountPence / 100);
-}
-
 function personName(input: {
   name?: string | null;
   email?: string | null;
@@ -71,16 +65,15 @@ type CupActivityRow = {
   respondedByName: string | null;
 };
 
-export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityItem[]> {
-  const safeLimit = Math.max(1, Math.min(20, Math.trunc(limit) || 5));
+export async function getAdminLatestActivity(limit = 50): Promise<AdminActivityItem[]> {
+  const safeLimit = Math.max(1, Math.min(50, Math.trunc(limit) || 50));
   const sourceLimit = Math.max(5, safeLimit * 2);
 
   const [
     appMessages,
     messages,
     leads,
-    teamPayments,
-    playerPayments,
+    paymentActivity,
     confirmations,
     polls,
     cupResponses,
@@ -148,44 +141,7 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
         createdAt: true,
       },
     }),
-    prisma.paymentTransaction.findMany({
-      orderBy: [{ paidAt: "desc" }],
-      take: sourceLimit,
-      select: {
-        id: true,
-        amountPence: true,
-        paidAt: true,
-        method: true,
-        team: { select: { id: true, name: true } },
-        charge: { select: { title: true } },
-      },
-    }),
-    prisma.playerMatchFee.findMany({
-      where: {
-        status: "PAID",
-        paidAt: { not: null },
-      },
-      orderBy: [{ paidAt: "desc" }],
-      take: sourceLimit,
-      select: {
-        id: true,
-        amountPence: true,
-        paidAt: true,
-        team: { select: { id: true, name: true } },
-        teamMember: {
-          select: {
-            user: { select: { name: true, email: true } },
-          },
-        },
-        prospect: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-    }),
+    getAdminPaymentActivity(sourceLimit),
     prisma.fixtureCaptainConfirmation.findMany({
       where: {
         status: { in: ["CONFIRMED", "ISSUE_RAISED"] },
@@ -357,34 +313,7 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
     });
   }
 
-  for (const payment of teamPayments) {
-    activity.push({
-      id: `team-payment:${payment.id}`,
-      kind: "TEAM_PAYMENT",
-      title: `${money(payment.amountPence)} payment received from ${payment.team.name}`,
-      detail: payment.charge?.title || `Team payment · ${payment.method.toLowerCase().replace(/_/g, " ")}`,
-      occurredAt: payment.paidAt,
-      href: `/admin/payments?teamId=${encodeURIComponent(payment.team.id)}&view=recentPayments`,
-    });
-  }
-
-  for (const payment of playerPayments) {
-    if (!payment.paidAt) continue;
-    const prospectName = payment.prospect
-      ? [payment.prospect.firstName, payment.prospect.lastName].filter(Boolean).join(" ").trim()
-      : "";
-    const player = payment.teamMember
-      ? personName(payment.teamMember.user)
-      : compact(prospectName, compact(payment.prospect?.email, "Player"));
-    activity.push({
-      id: `player-payment:${payment.id}`,
-      kind: "PLAYER_PAYMENT",
-      title: `${player} paid ${money(payment.amountPence)}`,
-      detail: `${payment.team.name} · player match fee`,
-      occurredAt: payment.paidAt,
-      href: `/admin/payments?teamId=${encodeURIComponent(payment.team.id)}&view=playerFees`,
-    });
-  }
+  activity.push(...paymentActivity);
 
   for (const confirmation of confirmations) {
     if (confirmation.confirmedByUser?.role === "ADMIN") continue;
@@ -457,6 +386,6 @@ export async function getAdminLatestActivity(limit = 5): Promise<AdminActivityIt
   }
 
   return activity
-    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime() || a.id.localeCompare(b.id))
     .slice(0, safeLimit);
 }
