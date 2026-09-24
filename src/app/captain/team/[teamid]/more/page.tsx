@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   ClipboardDocumentCheckIcon,
   ClockIcon,
+  DocumentCheckIcon,
   GiftIcon,
   LifebuoyIcon,
   PlayCircleIcon,
@@ -48,6 +49,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
       { href: `${base}/cup-invitations`, label: "Cup invitations", icon: GiftIcon },
     ] },
     { label: "Help", rows: [
+      { href: `${base}/agreement`, label: "Captain Agreement", icon: DocumentCheckIcon },
       { href: `${base}/rules`, label: "Match rules", icon: ShieldCheckIcon },
       { href: `${base}/guide`, label: "Captain guide", icon: BookOpenIcon },
       { href: `${base}/help`, label: "Help / Contact SIXFL", icon: LifebuoyIcon },

@@ -46,7 +46,7 @@ test("route titles stay available without repeated explanatory page chrome", () 
   assert.doesNotMatch(layout, /CaptainAppPageFocus/);
   assert.match(layout, /captain-app-web-only/);
   assert.match(layout, /captain-app-secondary/);
-  for (const title of ["Fixtures", "Squad", "Squad payments", "Team payments", "Inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team kit", "Fixture planning", "WhatsApp", "Cup invitations", "Match rules", "Captain guide", "Help", "More"]) assert.ok(routes.includes(title), title);
+  for (const title of ["Fixtures", "Squad", "Squad payments", "Team payments", "Inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team kit", "Fixture planning", "WhatsApp", "Cup invitations", "Captain agreement", "Match rules", "Captain guide", "Help", "More"]) assert.ok(routes.includes(title), title);
 });
 
 test("operational home content remains above compact news", () => {
@@ -86,7 +86,21 @@ test("existing screen safeguards survive the home/navigation change", () => {
 test("More preserves its grouped destinations and removes design commentary", () => {
   const more = read("src/app/captain/team/[teamid]/more/page.tsx");
   for (const group of ["Matchday", "Team", "SIXFL TV & competitions", "Help"]) assert.ok(more.includes(group));
-  for (const label of ["Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team payments", "Team kit", "Fixture planning", "WhatsApp tools", "Cup invitations", "Match rules", "Captain guide", "Help / Contact SIXFL", "Team results", "Availability history"]) assert.ok(more.includes(label), label);
+  for (const label of ["Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team payments", "Team kit", "Fixture planning", "WhatsApp tools", "Cup invitations", "Captain Agreement", "Match rules", "Captain guide", "Help / Contact SIXFL", "Team results", "Availability history"]) assert.ok(more.includes(label), label);
   assert.doesNotMatch(more, /SIXFL inbox|Everything that does not need|permanent bottom tab/);
   assert.match(more, /requireCaptain\(teamid\)/);
+});
+
+
+test("Captain Agreement stays available inside the captain app", () => {
+  const page = read("src/app/captain/team/[teamid]/agreement/page.tsx");
+  const more = read("src/app/captain/team/[teamid]/more/page.tsx");
+  const nav = read("src/lib/captain/app-navigation.ts");
+
+  assert.match(page, /requireCaptain\(teamid\)/);
+  assert.match(page, /LEAGUE_AGREEMENT_VERSION/);
+  assert.match(page, /leagueAgreementSections/);
+  assert.match(more, /Captain Agreement/);
+  assert.match(more, /\$\{base\}\/agreement/);
+  assert.match(nav, /agreement: "Captain agreement"/);
 });

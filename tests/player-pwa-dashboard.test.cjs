@@ -273,6 +273,8 @@ test("More contains only secondary app-native destinations", () => {
   const tv = read("src/app/player/team/[teamid]/tv/page.tsx");
   const referrals = read("src/app/player/team/[teamid]/referrals/page.tsx");
   const stats = read("src/app/player/team/[teamid]/stats/page.tsx");
+  const agreement = read("src/app/player/team/[teamid]/agreement/page.tsx");
+  const playerAgreement = read("src/lib/player-agreement.ts");
   const leagueRules = read("src/app/player/team/[teamid]/league-rules/page.tsx");
   const matchRules = read("src/app/player/team/[teamid]/match-rules/page.tsx");
   const help = read("src/app/player/team/[teamid]/help/page.tsx");
@@ -286,6 +288,8 @@ test("More contains only secondary app-native destinations", () => {
   assert.match(more, /label: "Goal of the Month"/);
   assert.match(more, /withPreview\(\s*`\/player\/team\/\$\{teamid\}\/goal-of-the-month`,\s*previewMembershipId,?\s*\)/);
   assert.match(more, /Refer a team · £75/);
+  assert.match(more, /Player Agreement/);
+  assert.match(more, /\/agreement/);
   assert.match(more, /League Rules/);
   assert.match(more, /Match Rules/);
   assert.match(more, /Help \/ Contact SIXFL/);
@@ -299,6 +303,10 @@ test("More contains only secondary app-native destinations", () => {
   assert.match(tv, /PlayerPwaModeOnly mode="web"/);
   assert.match(referrals, /Player app/);
   assert.match(referrals, /\/player\/team\/\$\{teamid\}\/referrals/);
+  assert.match(agreement, /PlayerAppRulesPage/);
+  assert.match(agreement, /PLAYER_AGREEMENT_VERSION/);
+  assert.match(playerAgreement, /Repeated or unresolved unpaid match fees/);
+  assert.match(playerAgreement, /Shin pads must be worn/);
   assert.match(leagueRules, /PlayerAppRulesPage/);
   assert.match(matchRules, /PlayerAppRulesPage/);
   assert.match(help, /conversation=sixfl/);

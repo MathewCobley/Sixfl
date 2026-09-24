@@ -249,6 +249,7 @@ test("all referee work pages use the app shell and future balances are clearly n
   const files = {
     availability: fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8"),
     rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
+    agreement: fs.readFileSync("src/app/(public)/referee/agreement/page.tsx", "utf8"),
     nights: fs.readFileSync("src/app/(public)/referee/nights/page.tsx", "utf8"),
     night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
     fixture: fs.readFileSync("src/app/(public)/referee/fixture/[id]/page.tsx", "utf8"),
@@ -261,6 +262,7 @@ test("all referee work pages use the app shell and future balances are clearly n
   }
   assert.match(files.availability, /active="availability"/);
   assert.match(files.rules, /active="rules"/);
+  assert.match(files.agreement, /active="rules"/);
   assert.match(files.nights, /active="nights"/);
   assert.match(files.night, /active="nights"/);
   assert.match(files.fixture, /active="nights"/);
@@ -368,4 +370,18 @@ test("referee work routes have separate desktop and app shells", () => {
   assert.match(footer, /if \(isRefereeRoute\) return null/);
   assert.doesNotMatch(publicHeader, /refereeAppMode/);
   assert.doesNotMatch(footer, /refereeAppMode/);
+});
+
+
+test("referee agreement is available inside the referee app", () => {
+  const rules = fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8");
+  const agreement = fs.readFileSync("src/app/(public)/referee/agreement/page.tsx", "utf8");
+  const source = fs.readFileSync("src/lib/referee-agreement.ts", "utf8");
+
+  assert.match(rules, /href="\/referee\/agreement"/);
+  assert.match(rules, /Referee Agreement/);
+  assert.match(agreement, /RefereeAppShell active="rules" title="Referee agreement"/);
+  assert.match(agreement, /REFEREE_AGREEMENT_VERSION/);
+  assert.match(source, /Independent contractor status/);
+  assert.match(source, /Match administration/);
 });
