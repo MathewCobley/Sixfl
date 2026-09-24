@@ -1,0 +1,79 @@
+name: Admin activity history
+
+on:
+  pull_request:
+    paths:
+      - "src/app/(admin)/admin/page.tsx"
+      - "src/lib/admin/latest-activity.ts"
+      - "src/lib/admin/payment-activity.ts"
+      - "src/lib/payments/payment-receipt-presentation.ts"
+      - "src/lib/payments/player-ledger-markers.ts"
+      - "src/components/admin/AdminLatestActivity.tsx"
+      - "tests/admin-activity/**"
+      - ".github/workflows/admin-activity-history.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-activity-history-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: activity_test_ci
+          POSTGRES_DB: activity_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d activity_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:activity_test_ci@127.0.0.1:5432/activity_test
+      ACTIVITY_TEST_DATABASE_URL: postgresql://postgres:activity_test_ci@127.0.0.1:5432/activity_test
+      NEXTAUTH_SECRET: isolated-activity-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Test payment identity, newest 50 and read-only PostgreSQL reference matching
+        run: node --test tests/admin-activity/*.test.cjs
+      - name: Prepare exact production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Repeat activity tests after production preparation
+        run: node --test tests/admin-activity/*.test.cjs
+      - name: Verify admin activity mounting and authorised data loading
+        run: |
+          node -e 'const fs=require("node:fs"),a=require("node:assert/strict"),p=fs.readFileSync("src/app/(admin)/admin/page.tsx","utf8");a.match(p,/await requireAdmin\(\)/);a.match(p,/getAdminLatestActivity\(50\)/);a.match(p,/<AdminLatestActivity/);'
+      - run: npx tsc --noEmit
+      - name: Install browser tooling outside application dependencies
+        run: npm install --prefix "$RUNNER_TEMP/activity-browser" --no-save --package-lock=false playwright@1.55.0 esbuild@0.27.4
+      - name: Install Chromium
+        run: node "$RUNNER_TEMP/activity-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Exercise Previous 10 and Next 10 and all pagination boundaries
+        run: NODE_PATH="$RUNNER_TEMP/activity-browser/node_modules" node tests/admin-activity/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-activity-history-${{ github.sha }}
+          path: artifacts/admin-activity/
+          retention-days: 14
+          if-no-files-found: warn
