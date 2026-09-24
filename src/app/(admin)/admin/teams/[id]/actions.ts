@@ -57,6 +57,8 @@ export async function updateTeamDetailsAction(formData: FormData) {
 
   const teamMode = normaliseTeamMode(formData.get("teamMode"));
   const isRecruiting = String(formData.get("isRecruiting") ?? "") === "on";
+  const playsOnceDoublePoints =
+    String(formData.get("playsOnceDoublePoints") ?? "") === "on";
   const joinSlug = normaliseNullableString(formData.get("joinSlug"));
   const squadTargetSize = normaliseNullableInt(formData.get("squadTargetSize"));
   const matchdayTargetSize = normaliseNullableInt(
@@ -116,6 +118,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
         latestKickoffTime,
         teamMode,
         isRecruiting,
+        playsOnceDoublePoints,
         joinSlug,
         squadTargetSize,
         matchdayTargetSize,
@@ -144,6 +147,23 @@ export async function updateTeamDetailsAction(formData: FormData) {
         WHERE "id" = ${id}
       `);
     }
+
+    // Keep any unpublished draft fixtures in step with this admin setting.
+    // Published fixtures keep their snapshotted points treatment so historical
+    // standings cannot be rewritten by a later team-setting change.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Fixture" f
+      SET
+        "doublePoints" = EXISTS (
+          SELECT 1
+          FROM "Team" t
+          WHERE t."id" IN (f."homeTeamId", f."awayTeamId")
+            AND COALESCE(t."playsOnceDoublePoints", false) = true
+        ),
+        "updatedAt" = NOW()
+      WHERE f."publishedAt" IS NULL
+        AND (${id} = f."homeTeamId" OR ${id} = f."awayTeamId")
+    `);
 
     if (leagueId) {
       await tx.$executeRaw(Prisma.sql`
