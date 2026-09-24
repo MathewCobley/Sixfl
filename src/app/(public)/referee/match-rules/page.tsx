@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PLAYER_LIMIT_RULES_PUBLICATION_NOTE } from "@/lib/matchday-player-limit-rules";
 import RefereeAppShell from "@/components/referee/RefereeAppShell";
 import { requireReferee } from "@/lib/admin";
@@ -87,6 +88,12 @@ export default async function RefereeMatchRulesPage() {
           Use this during a night when you need a quick ruling or reminder.
         </p>
         <p className="mt-2 text-xs leading-5 text-white/45">{PLAYER_LIMIT_RULES_PUBLICATION_NOTE}</p>
+        <Link
+          href="/referee/agreement"
+          className="mt-3 inline-flex min-h-10 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-white/75 active:bg-white/[0.07]"
+        >
+          Referee Agreement
+        </Link>
       </section>
 
       <section>
