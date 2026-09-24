@@ -887,6 +887,22 @@ export default async function AdminTeamPage({
                   Recruiting players
                 </label>
 
+                <label className="flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    name="singleRoundDoublePoints"
+                    defaultChecked={Boolean(team.singleRoundDoublePoints)}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block font-semibold text-white">Single round / double points</span>
+                    <span className="mt-1 block text-xs leading-5 text-white/55">
+                      Use for teams that should play each opponent once while the rest of a double round-robin league play twice. Any fixture involving this team awards 6 points for a win, 2 for a draw and 0 for a loss to both teams. Goals and W/D/L remain the real match result.
+                    </span>
+                  </span>
+                </label>
+
+
                 <div className="space-y-2">
                   <label htmlFor="joinSlug" className="text-sm text-white/60">
                     Join slug
