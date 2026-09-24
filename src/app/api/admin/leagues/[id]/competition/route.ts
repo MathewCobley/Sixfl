@@ -10,12 +10,15 @@ import {
   createNextLeagueSeason,
   getCompetitionSummaryForLeague,
 } from "@/lib/league-competitions";
+import { makeLeagueSeasonCurrent, SeasonActivationError } from "@/lib/leagues/season-activation";
 import { requireAdmin } from "@/lib/requireAdmin";
 
 type RequestBody = {
   action?: unknown;
   seasonName?: unknown;
   copyTeams?: unknown;
+  confirmed?: unknown;
+  expectedCurrentLeagueId?: unknown;
 };
 
 function getString(value: unknown) {
@@ -76,11 +79,38 @@ export async function POST(
       return NextResponse.json({ ok: true, ...created });
     }
 
+    if (action === "makeCurrent") {
+      if (
+        body?.confirmed !== true ||
+        !(body.expectedCurrentLeagueId === null ||
+          (typeof body.expectedCurrentLeagueId === "string" && body.expectedCurrentLeagueId.trim()))
+      ) {
+        return NextResponse.json({ error: "Refresh the season panel and confirm which current season to replace." }, { status: 400 });
+      }
+      const switched = await makeLeagueSeasonCurrent({
+        leagueId: id,
+        expectedCurrentLeagueId: getString(body.expectedCurrentLeagueId),
+        confirmed: true,
+      });
+      revalidatePath("/");
+      revalidatePath("/leagues", "layout");
+      revalidatePath("/admin/leagues", "layout");
+      revalidatePath("/admin/teams");
+      revalidatePath(`/leagues/${switched.slug}`, "layout");
+      if (switched.previousSlug) revalidatePath(`/leagues/${switched.previousSlug}`, "layout");
+      for (const teamId of switched.teamIds) {
+        revalidatePath(`/admin/teams/${teamId}`, "layout");
+        revalidatePath(`/captain/team/${teamId}`, "layout");
+        revalidatePath(`/player/team/${teamId}`, "layout");
+      }
+      return NextResponse.json({ ok: true, leagueId: switched.leagueId });
+    }
+
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Action failed." },
-      { status: 500 },
+      { status: error instanceof SeasonActivationError ? error.status : 500 },
     );
   }
 }
