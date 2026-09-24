@@ -16,6 +16,7 @@ type TeamSeed = {
   id: string;
   name: string;
   standardMatchFeePence: number | null;
+  singleRoundDoublePoints: boolean;
 };
 
 type Pair = {
@@ -115,13 +116,16 @@ function chooseFixtures(input: {
     const first = remaining.shift();
     if (!first) break;
 
-    let bestOpponentIndex = 0;
+    let bestOpponentIndex = -1;
     let bestScore = Number.POSITIVE_INFINITY;
 
     for (let index = 0; index < remaining.length; index += 1) {
       const opponent = remaining[index];
       const key = pairKey(first.id, opponent.id);
       const count = pairCounts.get(key) ?? 0;
+      const maxMeetings =
+        first.singleRoundDoublePoints || opponent.singleRoundDoublePoints ? 1 : 2;
+      if (count >= maxMeetings) continue;
       const latestRound = pairLatestRound.get(key) ?? 0;
       const recentPenalty =
         latestRound >= maxRound
@@ -144,8 +148,15 @@ function chooseFixtures(input: {
       }
     }
 
+    if (bestOpponentIndex < 0) {
+      // This team has already reached its permitted number of meetings with
+      // every remaining opponent, so it takes a bye rather than creating an
+      // unfair extra fixture.
+      continue;
+    }
+
     const opponent = remaining.splice(bestOpponentIndex, 1)[0];
-    if (!opponent) break;
+    if (!opponent) continue;
 
     // SIXFL is venue-neutral; these are only technical storage slots.
     pairs.push({ team1Id: first.id, team2Id: opponent.id });
@@ -209,7 +220,7 @@ export async function POST(request: Request) {
       prisma.team.findMany({
         where: { leagueId },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, standardMatchFeePence: true },
+        select: { id: true, name: true, standardMatchFeePence: true, singleRoundDoublePoints: true },
       }),
       prisma.fixture.findMany({
         where: { leagueId },
@@ -269,12 +280,12 @@ export async function POST(request: Request) {
     const slotMinutes = 40;
 
     const pairs = chooseFixtures({ teams, existingFixtures });
-    const expectedPairCount = Math.floor(teams.length / 2);
 
-    if (pairs.length !== expectedPairCount) {
+    if (pairs.length === 0) {
       return NextResponse.json(
         {
-          error: `Only ${pairs.length} of ${expectedPairCount} required pairings could be prepared. No fixtures were created.`,
+          error:
+            "No eligible pairings remain for the next week. Teams marked single-round/double-points can only face each opponent once; all other pairings are capped at two meetings.",
           requestId,
         },
         { status: 400 },
@@ -301,6 +312,9 @@ export async function POST(request: Request) {
           position: index + 1,
           pitch: `Pitch ${pitchNumber}`,
           status: FixtureStatus.SCHEDULED,
+          doublePoints:
+            homeTeam.singleRoundDoublePoints ||
+            awayTeam.singleRoundDoublePoints,
           ...snapshotFixtureMatchFees(homeTeam, awayTeam),
         };
       }),
