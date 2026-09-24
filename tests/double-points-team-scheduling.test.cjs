@@ -18,7 +18,8 @@ test("team admin exposes the once-only double-points rule and saves it", () => {
   assert.match(page, /6 points for a win, 2 for a draw and 0 for a defeat/);
   assert.match(actions, /formData\.get\("playsOnceDoublePoints"\)/);
   assert.match(actions, /playsOnceDoublePoints,/);
-  assert.match(actions, /WHERE f\."publishedAt" IS NULL/);
+  assert.match(actions, /f\."status" IN \('SCHEDULED','POSTPONED'\)/);
+  assert.match(actions, /NOT EXISTS \(\s*SELECT 1 FROM "MatchResult"/);
   assert.match(migration, /CREATE TRIGGER "Fixture_set_double_points"/);
   assert.match(migration, /NEW\."doublePoints"/);
 });
