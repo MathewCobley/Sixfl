@@ -296,23 +296,38 @@ export async function updateAdminSquadMemberRoleAction(formData: FormData) {
       data: { role },
     });
 
-    if (role === "CAPTAIN") {
+    if (role === "CAPTAIN" && !membership.team.captainUserId) {
+      // Granting captain access should not silently replace an existing primary
+      // captain. The dedicated "Change primary captain" control owns that job.
       await tx.team.update({
         where: { id: teamId },
         data: {
           captainUserId: membership.userId,
           captainLinkedAt: new Date(),
-          captainLinkedSource: "admin-squad-page",
+          captainLinkedSource: "admin-squad-page-first-captain",
         },
       });
     } else if (
       membership.role === "CAPTAIN" &&
-      membership.team.captainUserId === membership.userId
+      membership.team.captainUserId === membership.userId &&
+      role !== "CAPTAIN"
     ) {
+      const replacement = await tx.teamMember.findFirst({
+        where: {
+          teamId,
+          id: { not: membershipId },
+          role: TeamRole.CAPTAIN,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { userId: true },
+      });
+
       await tx.team.update({
         where: { id: teamId },
         data: {
-          captainUserId: null,
+          captainUserId: replacement?.userId ?? null,
+          captainLinkedAt: replacement ? new Date() : null,
+          captainLinkedSource: replacement ? "admin-squad-page-fallback-captain" : null,
         },
       });
     }
