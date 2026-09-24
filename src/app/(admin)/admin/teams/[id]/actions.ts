@@ -7,8 +7,9 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, TeamMode } from "@prisma/client";
+import { Prisma, TeamMode, TeamRole } from "@prisma/client";
 
+import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { isValidTeamBroadcastCode, normaliseTeamBroadcastCode } from "@/lib/teams/broadcast-code";
@@ -222,6 +223,142 @@ export async function updateTeamDetailsAction(formData: FormData) {
   revalidatePath(`/captain/team/${id}/payments`);
 
   redirect(buildTeamRedirect(id, "?saved=1"));
+}
+
+export async function changePrimaryCaptainAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = String(formData.get("teamId") ?? "").trim();
+  const membershipId = String(formData.get("membershipId") ?? "").trim();
+  const keepPreviousCaptain =
+    String(formData.get("keepPreviousCaptain") ?? "") === "on";
+
+  if (!teamId) {
+    redirect("/admin/teams");
+  }
+
+  if (!membershipId) {
+    redirect(buildTeamRedirect(teamId, "?error=missing_primary_captain"));
+  }
+
+  const [team, selectedMember] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        id: true,
+        captainUserId: true,
+      },
+    }),
+    prisma.teamMember.findFirst({
+      where: {
+        id: membershipId,
+        teamId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  if (!team || !selectedMember) {
+    redirect(buildTeamRedirect(teamId, "?error=primary_captain_not_found"));
+  }
+
+  const captainEmail = selectedMember.user.email?.trim().toLowerCase() ?? "";
+  if (!captainEmail) {
+    redirect(buildTeamRedirect(teamId, "?error=primary_captain_missing_email"));
+  }
+
+  const phoneRows = await prisma.$queryRaw<Array<{ phone: string | null }>>(Prisma.sql`
+    SELECT "phone"
+    FROM "TeamMemberProfile"
+    WHERE "teamMemberId" = ${selectedMember.id}
+    LIMIT 1
+  `).catch(() => []);
+  const captainPhone = phoneRows[0]?.phone?.trim() || null;
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const previousPrimary =
+      team.captainUserId && team.captainUserId !== selectedMember.userId
+        ? await tx.teamMember.findUnique({
+            where: {
+              userId_teamId: {
+                userId: team.captainUserId,
+                teamId,
+              },
+            },
+            select: {
+              id: true,
+              role: true,
+            },
+          })
+        : null;
+
+    if (
+      previousPrimary?.role === TeamRole.CAPTAIN &&
+      !keepPreviousCaptain
+    ) {
+      await tx.teamMember.update({
+        where: { id: previousPrimary.id },
+        data: { role: TeamRole.PLAYER },
+      });
+    }
+
+    if (selectedMember.role !== TeamRole.CAPTAIN) {
+      await tx.teamMember.update({
+        where: { id: selectedMember.id },
+        data: { role: TeamRole.CAPTAIN },
+      });
+    }
+
+    await tx.team.update({
+      where: { id: teamId },
+      data: {
+        captainUserId: selectedMember.userId,
+        captainLinkedAt: now,
+        captainLinkedSource: "ADMIN_PRIMARY_CAPTAIN_CHANGE",
+        captainInviteSentAt: null,
+        captainInviteSentTo: null,
+        captainClaimedAt: null,
+        captainClaimSource: null,
+        contactName:
+          selectedMember.user.name?.trim() || captainEmail,
+        contactEmail: captainEmail,
+        contactPhone: captainPhone,
+      },
+    });
+  });
+
+  // Keep email/SMS routing aligned with the newly selected primary captain.
+  // The redirected team page also re-syncs this, so a transient messaging
+  // failure must not make an already-completed captain change look unsuccessful.
+  await upsertTeamNotificationRecipient(teamId).catch((error) => {
+    console.error("Could not immediately sync the new primary captain to team messaging", {
+      teamId,
+      error,
+    });
+  });
+
+  revalidatePath(`/admin/teams/${teamId}`);
+  revalidatePath(`/admin/teams/${teamId}/squad`);
+  revalidatePath(`/captain/team/${teamId}`);
+  revalidatePath(`/captain/team/${teamId}/fixtures`);
+  revalidatePath(`/captain/team/${teamId}/squad`);
+  revalidatePath(`/captain/team/${teamId}/payments`);
+  revalidatePath("/admin/teams");
+  revalidatePath("/admin/captains");
+  revalidatePath("/admin/messaging");
+
+  redirect(buildTeamRedirect(teamId, "?captainChanged=1"));
 }
 
 export async function regenerateClaimCodeAction(formData: FormData) {

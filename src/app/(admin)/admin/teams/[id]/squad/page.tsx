@@ -199,6 +199,7 @@ export default async function AdminTeamSquadPage({
       name: true,
       teamMode: true,
       isRecruiting: true,
+      captainUserId: true,
       contactName: true,
       contactEmail: true,
       league: {
@@ -471,6 +472,12 @@ export default async function AdminTeamSquadPage({
                           >
                             {getRoleLabel(member.role)}
                           </span>
+
+                          {member.user.id === team.captainUserId ? (
+                            <span className="rounded-full border border-amber-300/40 bg-amber-300/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100">
+                              Primary captain
+                            </span>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 text-sm text-white/65">
