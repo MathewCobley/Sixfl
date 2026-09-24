@@ -39,6 +39,7 @@ const outline = {
   ChartBarSquareIcon: Icon,
   ChatBubbleLeftRightIcon: Icon,
   CheckCircleIcon: Icon,
+  NewspaperIcon: Icon,
   ChevronRightIcon: Icon,
   EllipsisHorizontalCircleIcon: Icon,
   HomeIcon: Icon,
@@ -133,6 +134,22 @@ const navMarkup = renderToStaticMarkup(h(Nav, {
   showTeamChat: false,
 }));
 
+const Newsletter = load("src/components/player/PlayerNewsArticle.tsx", {
+  "@/components/news/NewsArticle": { newsDate: value => value },
+  "@/components/news/NewsImage": ({ alt, className }) => h("span", { className, "aria-label": alt }, "FC"),
+}).default;
+const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
+  teamId: "example-team",
+  news: {
+    article: {
+      title: "A dramatic night of football in Harrogate",
+      leagueName: "Harrogate Tuesday Men's", matchDate: "2026-09-22", cover: null,
+      introduction: "All the stories from another exciting night.", closing: "See you next week.",
+      matches: [{ fixtureId: "fixture", teamAId: "example-team", teamBId: "other", teamA: "Thirsk Town Frazzles", teamB: "Harrogate Naija Isolo FC", badgeA: null, badgeB: null, scoreA: 12, scoreB: 11, paragraph: "A close match with a late winner.", scorers: [{ name: "Alex Example", team: "Thirsk Town Frazzles", goals: 3 }], playersOfMatch: [{ name: "Sam Example", team: "Harrogate Naija Isolo FC" }] }],
+    },
+  },
+}));
+
 (async () => {
   const out = path.join(root, ".tmp/player-dashboard-order");
   fs.mkdirSync(out, { recursive: true });
@@ -157,9 +174,19 @@ const navMarkup = renderToStaticMarkup(h(Nav, {
     assert.match(text, /3 unread messages/);
     assert.match(text, /Thirsk School/);
     assert.match(text, /£5\.00 outstanding/);
+    assert.match(text, /League newsletters/);
+    assert.match(await page.getByRole("link", { name: /League newsletters/ }).getAttribute("href"), /\/player\/team\/example-team\/news\?previewMembershipId=/);
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(width <= 391, "Rendered Player PWA Home must not overflow horizontally");
     await page.screenshot({ path: path.join(out, "PLAYER-HOME-390.png"), fullPage: false });
+    for (const viewportWidth of [320, 390]) {
+      await page.setViewportSize({ width: viewportWidth, height: 852 });
+      await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white"><main class="mx-auto max-w-xl px-3 py-4">${newsletterMarkup}</main></body></html>`);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= viewportWidth + 1, "Newsletter reader must not overflow horizontally");
+      assert.match(await page.locator("body").innerText(), /A close match with a late winner/);
+      assert.equal(await page.locator("a").count(), 0, "Article content must not link out to website pages");
+      await page.screenshot({ path: path.join(out, `PLAYER-NEWSLETTER-${viewportWidth}.png`), fullPage: true });
+    }
     await page.close();
   } finally {
     await browser.close();

@@ -495,6 +495,13 @@ expectText("player payment link actor audit", captainPaymentsPagePath, captainPa
 
 expectRegex("player payment privacy", playerLedgerAppPath, playerLedgerApp, /^(?![\s\S]*(?:Actor not recorded|Created by:|Never opened|link\.paymentUrl|link\.removedReason))[\s\S]*$/, "player app must not render internal audit details");
 
+// News discovery remains available inside the closed player app.
+expectText("player newsletters", playerAppHomePath, playerAppHome, "/news`, previewMembershipId)", "home must link to the app newsletter feed");
+const playerNewsPath = "src/app/player/team/[teamid]/news/page.tsx";
+const playerNews = read(playerNewsPath);
+expectText("player newsletters", playerNewsPath, playerNews, "listPublishedNews({ teamId: teamid", "player feed must reuse published team news");
+expectText("player newsletters", playerNewsPath, playerNews, "getPublishedNews(sp.league, sp.date)", "reader must never show unpublished drafts");
+
 if (failures.length) {
   console.error("\nSIXFL CRITICAL FEATURE CONTRACTS FAILED\n");
   for (const failure of failures) console.error(` - ${failure}`);
