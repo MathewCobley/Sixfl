@@ -295,6 +295,9 @@ test("More contains only secondary app-native destinations", () => {
   assert.match(more, /Help \/ Contact SIXFL/);
   assert.match(more, /Switch team account/);
   assert.match(more, /linkedTeamAccounts\.length > 1/);
+  assert.match(more, /currentLinkedTeam\?\.role === "CAPTAIN"/);
+  assert.match(more, /label: "Switch to Captain Portal"/);
+  assert.match(more, /\/captain\/team\/\$\{teamid\}/);
   assert.doesNotMatch(more, /label: "Payments"/);
   assert.doesNotMatch(more, /label: "Recent results"/);
 

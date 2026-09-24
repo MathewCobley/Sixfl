@@ -72,6 +72,11 @@ export default async function PlayerMorePage({
   const linkedTeamAccounts = effectiveUserId
     ? (membershipMap.get(effectiveUserId) ?? [])
     : [];
+  const currentLinkedTeam = linkedTeamAccounts.find(
+    (membership) => membership.teamId === teamid,
+  );
+  const canOpenCaptainPortal =
+    !previewMembershipId && currentLinkedTeam?.role === "CAPTAIN";
 
   const rows = [
     {
@@ -143,6 +148,16 @@ export default async function PlayerMorePage({
       description: "Get help or send SIXFL a private message",
       icon: LifebuoyIcon,
     },
+    ...(canOpenCaptainPortal
+      ? [
+          {
+            href: `/captain/team/${teamid}`,
+            label: "Switch to Captain Portal",
+            description: "Open captain controls for this team",
+            icon: ArrowsRightLeftIcon,
+          },
+        ]
+      : []),
     ...(user?.role === UserRole.REFEREE && !previewMembershipId
       ? [
           {

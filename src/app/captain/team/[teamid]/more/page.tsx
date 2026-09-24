@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ArrowsRightLeftIcon,
   BanknotesIcon,
   BookOpenIcon,
   CalendarDaysIcon,
@@ -53,6 +54,9 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
       { href: `${base}/rules`, label: "Match rules", icon: ShieldCheckIcon },
       { href: `${base}/guide`, label: "Captain guide", icon: BookOpenIcon },
       { href: `${base}/help`, label: "Help / Contact SIXFL", icon: LifebuoyIcon },
+    ] },
+    { label: "Account", rows: [
+      { href: `/player/team/${teamid}`, label: "Switch to Player Portal", icon: ArrowsRightLeftIcon },
     ] },
   ];
   return (

@@ -198,6 +198,7 @@ type Props = {
     channel?: string;
     composeError?: string;
     captainChanged?: string;
+    captainSignin?: string;
   }>;
 };
 
@@ -636,6 +637,18 @@ export default async function AdminTeamPage({
             </div>
           ) : null}
 
+          {sp.captainChanged === "1" && sp.captainSignin === "sent" ? (
+            <div className="text-emerald-300">
+              Fresh Captain Portal sign-in sent to the new captain.
+            </div>
+          ) : null}
+
+          {sp.captainChanged === "1" && sp.captainSignin === "failed" ? (
+            <div className="text-amber-300">
+              Captain access was changed, but the sign-in email could not be sent. They can still use the normal SIXFL sign-in page.
+            </div>
+          ) : null}
+
           {sp.regenerated === "1" ? (
             <div className="text-emerald-300">
               New claim code generated and the team was unclaimed.
@@ -804,7 +817,7 @@ export default async function AdminTeamPage({
                 ) : null}
 
                 <p className="text-xs leading-5 text-white/50">
-                  The selected captain&apos;s saved name, email and squad phone become the team&apos;s primary contact. No message is sent automatically.
+                  The selected captain&apos;s saved name, email and squad phone become the team&apos;s primary contact. A fresh Captain Portal sign-in email is sent automatically.
                 </p>
 
                 <button

@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma, TeamMode, TeamRole } from "@prisma/client";
 
+import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -348,6 +349,21 @@ export async function changePrimaryCaptainAction(formData: FormData) {
     });
   });
 
+  let captainSignin = "sent";
+  try {
+    await sendDashboardLoginEmail({
+      email: captainEmail,
+      displayName: selectedMember.user.name,
+      callbackPath: `/captain/team/${teamId}`,
+    });
+  } catch (error) {
+    captainSignin = "failed";
+    console.error("Primary captain changed but sign-in email could not be sent", {
+      teamId,
+      error,
+    });
+  }
+
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
   revalidatePath(`/captain/team/${teamId}`);
@@ -358,7 +374,7 @@ export async function changePrimaryCaptainAction(formData: FormData) {
   revalidatePath("/admin/captains");
   revalidatePath("/admin/messaging");
 
-  redirect(buildTeamRedirect(teamId, "?captainChanged=1"));
+  redirect(buildTeamRedirect(teamId, `?captainChanged=1&captainSignin=${encodeURIComponent(captainSignin)}`));
 }
 
 export async function regenerateClaimCodeAction(formData: FormData) {
