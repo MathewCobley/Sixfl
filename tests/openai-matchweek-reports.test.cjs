@@ -200,8 +200,8 @@ test("complete report nights include pre-night leaders, post-night table and rec
   assert.equal(report.standingsBeforeNight[0].rows[0].lost, 0);
   assert.equal(report.standingsAfterNight[0].rows[0].lost, 1);
   const beta = report.recentForm.find(team => team.team === "Team Beta");
-  assert.deepEqual(beta.results.map(result => result.outcome), ["W", "W"]);
-  assert.deepEqual(beta.results.map(result => result.opponent), ["Team Alpha", "Team Gamma"]);
+  assert.deepEqual(normalise(beta.results.map(result => result.outcome)), ["W", "W"]);
+  assert.deepEqual(normalise(beta.results.map(result => result.opponent)), ["Team Alpha", "Team Gamma"]);
 });
 
 test("service read is side-effect free and every operation authorises before storage or provider", async () => {
