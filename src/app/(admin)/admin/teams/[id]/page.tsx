@@ -31,6 +31,7 @@ import TeamBadge from "@/components/admin/TeamBadge";
 import TeamEmailForm from "@/components/admin/teams/TeamEmailForm";
 import PrimaryContactMemberSelector from "@/components/admin/teams/PrimaryContactMemberSelector";
 import { defaultTeamBroadcastCode } from "@/lib/teams/broadcast-code";
+import { changePrimaryCaptainAction } from "./actions";
 
 function formatDispatchStatus(status: NotificationDispatchStatus) {
   switch (status) {
@@ -196,6 +197,7 @@ type Props = {
     paymentError?: string;
     channel?: string;
     composeError?: string;
+    captainChanged?: string;
   }>;
 };
 
@@ -217,7 +219,7 @@ export default async function AdminTeamPage({
       where: { id },
       include: {
         members: {
-          where: { role: "CAPTAIN" },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }],
           include: {
             user: {
               select: {
@@ -475,7 +477,29 @@ export default async function AdminTeamPage({
   const FIXED_TEAM_PAYMENT_URL =
     "https://buy.stripe.com/14A14n95tclzg2udgL7IY02";
 
-  const captainUser = team.members[0]?.user;
+  const primaryCaptainMember =
+    team.members.find((member) => member.userId === team.captainUserId) ??
+    team.members.find((member) => member.role === "CAPTAIN") ??
+    null;
+  const captainUser = primaryCaptainMember?.user;
+  const captainOptions = team.members
+    .filter((member) => Boolean(member.user.email))
+    .map((member) => ({
+      value: member.id,
+      label: `${member.user.name?.trim() || member.user.email || "Unnamed user"} · ${
+        member.role === "CAPTAIN"
+          ? "Captain"
+          : member.role === "VICE_CAPTAIN"
+            ? "Vice-captain"
+            : member.role === "MANAGER"
+              ? "Manager"
+              : member.role === "COACH"
+                ? "Coach"
+                : member.role === "BACKUP_PLAYER"
+                  ? "Backup player"
+                  : "Player"
+      }`,
+    }));
   const hasCaptain = Boolean(captainUser?.email);
   const isAdminCaptain = captainUser?.role === UserRole.ADMIN;
 
@@ -595,6 +619,7 @@ export default async function AdminTeamPage({
 
       {(sp.saved === "1" ||
         sp.regenerated === "1" ||
+        sp.captainChanged === "1" ||
         sp.error ||
         queuedMessage ||
         sp.paymentQueued === "1" ||
@@ -603,6 +628,12 @@ export default async function AdminTeamPage({
         <div className="space-y-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm">
           {sp.saved === "1" ? (
             <div className="text-emerald-300">Team details updated.</div>
+          ) : null}
+
+          {sp.captainChanged === "1" ? (
+            <div className="text-emerald-300">
+              Primary captain changed. Captain access and the team&apos;s primary contact have been updated.
+            </div>
           ) : null}
 
           {sp.regenerated === "1" ? (
@@ -636,6 +667,22 @@ export default async function AdminTeamPage({
           {sp.error === "invalid_broadcast_code" ? (
             <div className="text-red-300">
               Team short name must be exactly three letters, numbers or & characters.
+            </div>
+          ) : null}
+
+          {sp.error === "missing_primary_captain" ? (
+            <div className="text-red-300">Choose the new primary captain.</div>
+          ) : null}
+
+          {sp.error === "primary_captain_not_found" ? (
+            <div className="text-red-300">
+              That squad member could not be found for this team. Refresh and try again.
+            </div>
+          ) : null}
+
+          {sp.error === "primary_captain_missing_email" ? (
+            <div className="text-red-300">
+              The selected squad member needs an email address before they can be made primary captain.
             </div>
           ) : null}
 
@@ -704,6 +751,74 @@ export default async function AdminTeamPage({
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-amber-400/20 bg-amber-500/[0.07] p-6 md:p-8">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
+                  Captain access
+                </p>
+                <h2 className="mt-2 text-lg font-semibold text-white">
+                  Change primary captain
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
+                  Current primary captain: <span className="font-semibold text-white">${captainUser?.name?.trim() || captainUser?.email || "None linked"}</span>. Choose any existing squad member below. The new captain gets captain access immediately and becomes the primary team contact.
+                </p>
+              </div>
+              <Link
+                href={`/admin/teams/${team.id}/squad`}
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-black/30 hover:text-white"
+              >
+                Open squad
+              </Link>
+            </div>
+
+            {captainOptions.length > 0 ? (
+              <form action={changePrimaryCaptainAction} className="mt-5 space-y-4">
+                <input type="hidden" name="teamId" value={team.id} />
+                <FormListboxField
+                  name="membershipId"
+                  label="New primary captain"
+                  value={primaryCaptainMember?.id ?? ""}
+                  options={captainOptions}
+                  placeholder="Choose squad member"
+                />
+
+                {primaryCaptainMember ? (
+                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/75">
+                    <input
+                      type="checkbox"
+                      name="keepPreviousCaptain"
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span>
+                      <span className="block font-semibold text-white">
+                        Keep the previous primary captain as an additional captain
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-white/50">
+                        Leave this unticked to keep them in the squad as a player. Other existing additional captains are not changed.
+                      </span>
+                    </span>
+                  </label>
+                ) : null}
+
+                <p className="text-xs leading-5 text-white/50">
+                  The selected captain&apos;s saved name, email and squad phone become the team&apos;s primary contact. No message is sent automatically.
+                </p>
+
+                <button
+                  type="submit"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-300 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-200"
+                >
+                  Change primary captain
+                </button>
+              </form>
+            ) : (
+              <div className="mt-5 rounded-xl border border-dashed border-white/10 bg-black/20 px-4 py-4 text-sm text-white/55">
+                Add the new captain to the squad first, then they will appear here.
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 md:p-8">
