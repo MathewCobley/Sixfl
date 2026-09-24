@@ -36,6 +36,7 @@ test('regenerated public renders automatically supersede their older YouTube ver
   const auto = worker.slice(start, end);
 
   assert.match(auto, /published\."state"='READY'/);
+  assert.match(auto, /autoYoutubePublishRequested/);
   assert.match(auto, /AS "isReplacement"/);
   assert.match(auto, /p\."renderJobId"=r\."renderJobId"/);
   assert.match(auto, /active\."state" IN \('QUEUED','PROCESSING'\)/);
