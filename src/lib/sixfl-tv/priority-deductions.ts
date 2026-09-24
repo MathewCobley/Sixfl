@@ -15,7 +15,7 @@ type Db = Pick<typeof prisma, "$queryRaw">;
 export type PriorityDeduction = { id: string; kind: "OVERDUE" | "SHIN_PAD" | "RED_CARD"; points: number; label: string; recovery: string; expiresAt: Date | null; fixtureId: string | null };
 export type PriorityReview = { id: string; teamId: string; kind: "PAYMENT_HOLD" | "SHIN_PAD_DISMISSED" | "RED_CARD"; referenceId: string; points: number; reason: string; createdAt: Date; createdBy: string; revokedAt: Date | null; revokedBy: string | null };
 export type OverdueCharge = { id: string; teamId: string; title: string; dueDate: Date; outstandingPence: number; held: boolean };
-type Charge = { id: string; teamId: string; fixtureId: string | null; title: string; amountPence: number; status: string; dueDate: Date };
+type Charge = { id: string; teamId: string; fixtureId: string | null; title: string; description: string | null; amountPence: number; status: string; dueDate: Date };
 type Fee = { id: string; teamId: string; fixtureId: string; amountPence: number; status: string; note: string | null };
 type Incident = { id: string; teamId: string; fixtureId: string; at: Date; label: string; points: number };
 export type PriorityDeductionDetails = { deductions: PriorityDeduction[]; deductionPoints: number; overdueCharges: OverdueCharge[]; warnings: Incident[]; reviews: PriorityReview[] };
@@ -49,7 +49,7 @@ export async function getPriorityDeductionDetails(teamIds: string[], db: Db = pr
   const allIds = [...new Set([...related.values()].flat())];
   const cutoff = new Date(now.getTime() - PRIORITY_CONDUCT_DAYS * DAY);
   const [charges, warnings, reviews] = await Promise.all([
-    db.$queryRaw<Charge[]>(Prisma.sql`SELECT c.id,c."teamId",c."fixtureId",c.title,c."amountPence",c.status::text AS status,COALESCE(c."dueDate",f."kickoffAt",c."createdAt") AS "dueDate" FROM "PaymentCharge" c LEFT JOIN "Fixture" f ON f.id=c."fixtureId" WHERE c."teamId" IN (${Prisma.join(allIds)}) AND c.status::text <> 'VOID' AND COALESCE(c."dueDate",f."kickoffAt",c."createdAt") < ${new Date(now.getTime() - PRIORITY_OVERDUE_DAYS * DAY)}`),
+    db.$queryRaw<Charge[]>(Prisma.sql`SELECT c.id,c."teamId",c."fixtureId",c.title,c.description,c."amountPence",c.status::text AS status,COALESCE(c."dueDate",f."kickoffAt",c."createdAt") AS "dueDate" FROM "PaymentCharge" c LEFT JOIN "Fixture" f ON f.id=c."fixtureId" WHERE c."teamId" IN (${Prisma.join(allIds)}) AND c.status::text <> 'VOID' AND COALESCE(c."dueDate",f."kickoffAt",c."createdAt") < ${new Date(now.getTime() - PRIORITY_OVERDUE_DAYS * DAY)}`),
     db.$queryRaw<Incident[]>(Prisma.sql`SELECT w.id,w."teamId",w."fixtureId",w."createdAt" AS at, 'Shin-pad warning · ' || h.name || ' v ' || a.name AS label, ${PRIORITY_SHIN_PAD_POINTS}::integer AS points FROM "TeamShinPadWarning" w JOIN "Fixture" f ON f.id=w."fixtureId" JOIN "Team" h ON h.id=f."homeTeamId" JOIN "Team" a ON a.id=f."awayTeamId" WHERE w."teamId" IN (${Prisma.join(allIds)}) AND w."createdAt" > ${cutoff} AND w."createdAt" <= ${now}`),
     db.$queryRaw<PriorityReview[]>(Prisma.sql`SELECT * FROM "SixflTvPriorityReview" WHERE "teamId" IN (${Prisma.join(allIds)}) ORDER BY "createdAt" DESC,id`),
   ]);

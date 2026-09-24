@@ -246,6 +246,8 @@ async function main() {
   await prisma.$executeRaw`UPDATE "SixflTvPriorityReview" SET "revokedAt"=${now} WHERE id=${id("hold")}`;
   await prisma.paymentTransaction.create({ data: { teamId: id("team"), chargeId: id("old_debt"), amountPence: 1, method: "OTHER", paidAt: now, notes: "SIXFL adjustment" } });
   assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0, "Recorded adjustments must clear the deduction");
+  await prisma.paymentCharge.update({ where: { id: id("old_debt") }, data: { amountPence: 101, description: "[SIXFL_TEAM_WAIVER:100]" } });
+  assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 0, "SIXFL waivers must also clear overdue debt");
   await prisma.$executeRaw`INSERT INTO "TeamShinPadWarning" (id,"teamId","fixtureId","createdAt") VALUES (${id("warning")},${id("team")},${id("fixture_1")},${new Date("2026-09-23T20:00:00Z")})`;
   assert.equal((await getPriorityDeductionDetails([id("team")], prisma, now)).get(id("team"))!.deductionPoints, 5);
   await prisma.$executeRaw`INSERT INTO "SixflTvPriorityReview" (id,"teamId",kind,"referenceId",reason,"createdBy") VALUES (${id("warning_review")},${id("team")},'SHIN_PAD_DISMISSED',${id("warning")},'Recorded against wrong team','test-admin')`;
@@ -269,7 +271,10 @@ async function main() {
   const paid = (await getSixflTvPriorityScores([id("team")], prisma, now)).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
   assert.equal(paid.paymentStatus, "ON_TIME");
   assert.equal(paid.paymentPoints, 6, "The points are earned when the final penny clears the charge");
-  await prisma.paymentTransaction.deleteMany({ where: { id: { in: [id("partial_payment"), id("final_penny")] } } });
+  await prisma.paymentTransaction.create({ data: { id: id("reversal"), teamId: id("team"), chargeId: chargeFive.id, amountPence: -1, method: "OTHER", paidAt: new Date(now.getTime() + 1000) } });
+  const reversed = (await getSixflTvPriorityScores([id("team")], prisma, new Date(now.getTime() + 1000))).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
+  assert.equal(reversed.paymentPoints, 0, "Reversing a penny must remove payment points while the balance is open");
+  await prisma.paymentTransaction.deleteMany({ where: { id: { in: [id("partial_payment"), id("final_penny"), id("reversal")] } } });
   const late = (await getSixflTvPriorityScores([id("team")], prisma, new Date(now.getTime() + 72 * 3600000))).get(id("team"))!.matches.find(row => row.fixtureId === id("fixture_5"))!;
   assert.equal(late.paymentStatus, "UNPAID", "A stale PAID flag must not bypass actual receipts or the 72-hour deadline");
   assert.equal(late.paymentPoints, 0);

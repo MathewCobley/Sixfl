@@ -2,6 +2,7 @@ import { getPriorityDeductionDetails, type PriorityDeduction } from "@/lib/sixfl
 import { Prisma } from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
+import { getTeamChargeWaivedPence, getLegacyAdminAdjustmentWaivedPence } from "@/lib/payments/team-charge-waivers";
 import { isPlayerMatchFeeTransaction } from "@/lib/payments/charge-summary";
 import {
   getPlayerFeeCashReceivedPence,
@@ -69,6 +70,7 @@ type ChargeRow = {
   dueDate: Date | null;
   status: string;
   updatedAt: Date;
+  description: string | null;
 };
 
 type TransactionRow = {
@@ -179,10 +181,12 @@ function firstSettlementAt(input: {
 }) {
   if (input.charge.amountPence <= 0 || input.charge.status === "VOID") return input.dueDate;
 
+  const requiredPence = input.charge.amountPence - getTeamChargeWaivedPence(input.charge.description) - getLegacyAdminAdjustmentWaivedPence(input.charge.description, input.charge.amountPence);
+  if (requiredPence <= 0) return input.dueDate;
   const events: Array<{ at: Date; amount: number }> = [];
   for (const transaction of input.transactions) {
     if (isPlayerMatchFeeTransaction(transaction)) continue;
-    if (!Number.isFinite(transaction.amountPence) || transaction.amountPence <= 0) continue;
+    if (!Number.isFinite(transaction.amountPence) || transaction.amountPence === 0) continue;
     events.push({ at: transaction.paidAt, amount: transaction.amountPence });
   }
 
@@ -200,13 +204,16 @@ function firstSettlementAt(input: {
 
   events.sort((a, b) => a.at.getTime() - b.at.getTime());
   let covered = 0;
+  let settledAt: Date | null = null;
   for (const event of events) {
     covered += event.amount;
-    if (covered >= input.charge.amountPence) return event.at;
+    if (covered < requiredPence) settledAt = null;
+    else if (!settledAt) settledAt = event.at;
   }
 
+  // Current coverage is authoritative, including reversals and SIXFL waivers.
   // A stale PAID flag is not a receipt: charges can increase after settlement.
-  return null;
+  return settledAt;
 }
 
 export function priorityScoreTone(score: SixflTvPriorityScore) {
@@ -312,7 +319,7 @@ async function getSixflTvReliabilityScores(
       GROUP BY "matchResultId", "teamId"
     `),
     db.$queryRaw<ChargeRow[]>(Prisma.sql`
-      SELECT id, "fixtureId", "teamId", "amountPence", "dueDate", status::text AS status, "updatedAt"
+      SELECT id, "fixtureId", "teamId", "amountPence", "dueDate", status::text AS status, "updatedAt", description
       FROM "PaymentCharge"
       WHERE "fixtureId" IN (${Prisma.join(fixtureIds)})
         AND "teamId" IN (${Prisma.join(uniqueTeamIds)})
