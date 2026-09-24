@@ -1180,6 +1180,7 @@ type AutoPublishCandidate = {
   awayTeamName: string;
   homeScore: number;
   awayScore: number;
+  isReplacement: boolean;
 };
 type AutoThumbnailRow = {
   headline: string;
@@ -1274,7 +1275,15 @@ async function queueAutomaticYoutubePublish() {
       home."name" AS "homeTeamName",
       away."name" AS "awayTeamName",
       mr."homeScore",
-      mr."awayScore"
+      mr."awayScore",
+      EXISTS (
+        SELECT 1
+        FROM "SixflTvYoutubePublish" published
+        WHERE published."fixtureId"=r."fixtureId"
+          AND published."kind"=r."kind"
+          AND published."state"='READY'
+          AND published."youtubeVideoId" IS NOT NULL
+      ) AS "isReplacement"
     FROM latest_ready r
     JOIN "Fixture" f ON f."id"=r."fixtureId"
     JOIN "League" l ON l."id"=f."leagueId"
@@ -1285,7 +1294,14 @@ async function queueAutomaticYoutubePublish() {
       AND NOT EXISTS (
         SELECT 1
         FROM "SixflTvYoutubePublish" p
-        WHERE p."fixtureId"=r."fixtureId" AND p."kind"=r."kind"
+        WHERE p."renderJobId"=r."renderJobId"
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "SixflTvYoutubePublish" active
+        WHERE active."fixtureId"=r."fixtureId"
+          AND active."kind"=r."kind"
+          AND active."state" IN ('QUEUED','PROCESSING')
       )
     ORDER BY r."createdAt"
     LIMIT 1
@@ -1307,19 +1323,38 @@ async function queueAutomaticYoutubePublish() {
     const existing = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id"
       FROM "SixflTvYoutubePublish"
-      WHERE "fixtureId"=${candidate.fixtureId} AND "kind"=${candidate.kind}
+      WHERE "renderJobId"=${candidate.renderJobId}
+         OR (
+           "fixtureId"=${candidate.fixtureId}
+           AND "kind"=${candidate.kind}
+           AND "state" IN ('QUEUED','PROCESSING')
+         )
       LIMIT 1
       FOR UPDATE
     `;
     if (existing[0]) return;
     await tx.$executeRaw`
       INSERT INTO "SixflTvYoutubePublish"
-        ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor")
+        ("id","fixtureId","kind","renderJobId","thumbnailObjectKey","title","description","privacyStatus","requestedByActor","notifySubscribers","notificationDay")
       VALUES
-        (${randomUUID()},${candidate.fixtureId},${candidate.kind},${candidate.renderJobId},${thumbnailObjectKey},${defaults.title},${defaults.description},'public','automatic-youtube-publish')
+        (
+          ${randomUUID()},
+          ${candidate.fixtureId},
+          ${candidate.kind},
+          ${candidate.renderJobId},
+          ${thumbnailObjectKey},
+          ${defaults.title},
+          ${defaults.description},
+          'public',
+          ${candidate.isReplacement ? "automatic-youtube-replacement" : "automatic-youtube-publish"},
+          ${candidate.isReplacement ? false : null},
+          ${candidate.isReplacement ? Prisma.sql`(NOW() AT TIME ZONE 'Europe/London')::date` : null}
+        )
     `;
   });
-  console.log(`Automatically queued ${candidate.kind} for fixture ${candidate.fixtureId} to public YouTube.`);
+  console.log(
+    `${candidate.isReplacement ? "Automatically queued replacement" : "Automatically queued"} ${candidate.kind} for fixture ${candidate.fixtureId} to public YouTube.`,
+  );
   return true;
 }
 

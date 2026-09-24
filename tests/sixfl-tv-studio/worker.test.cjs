@@ -28,6 +28,30 @@ test('short-form renders preserve source resolution up to 4K and keep test highl
   assert.doesNotMatch(worker, /r\."kind" IN \('HIGHLIGHTS','HIGHLIGHTS_ALT','FULL_MATCH'\)/);
 });
 
+test('regenerated public renders automatically supersede their older YouTube version safely', async () => {
+  const worker = await fs.readFile(path.resolve('scripts/sixfl-tv-worker.ts'), 'utf8');
+  const start = worker.indexOf('async function queueAutomaticYoutubePublish');
+  const end = worker.indexOf('type RetentionAsset', start);
+  assert.ok(start >= 0 && end > start);
+  const auto = worker.slice(start, end);
+
+  assert.match(auto, /published\."state"='READY'/);
+  assert.match(auto, /AS "isReplacement"/);
+  assert.match(auto, /p\."renderJobId"=r\."renderJobId"/);
+  assert.match(auto, /active\."state" IN \('QUEUED','PROCESSING'\)/);
+  assert.match(auto, /automatic-youtube-replacement/);
+  assert.match(auto, /candidate\.isReplacement \? false : null/);
+  assert.doesNotMatch(auto, /WHERE p\."fixtureId"=r\."fixtureId" AND p\."kind"=r\."kind"\s*\n\s*\)/,
+    'An older published video must not permanently block a newer render from auto publishing');
+
+  const processStart = worker.indexOf('async function processPublish');
+  const processEnd = worker.indexOf('async function cleanupOneSupersededYoutubeVideo', processStart);
+  const processBlock = worker.slice(processStart, processEnd);
+  assert.ok(processBlock.indexOf('saveYoutubeFixtureLink(job, youtubeUrl)') < processBlock.indexOf('cleanupOlderYoutubeCopies(job, videoId, auth)'),
+    'SIXFL must switch the fixture to the new YouTube URL before deleting the old copy');
+});
+
+
 async function loadWorker(db, objects, uploadHook) {
   const file = path.resolve('scripts/sixfl-tv-worker.ts');
   const code = ts.transpileModule(await fs.readFile(file, 'utf8'), {
