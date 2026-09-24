@@ -68,6 +68,7 @@ export async function makeLeagueSeasonCurrent(input: {
       JOIN "Team" t ON t."id" = lst."teamId"
       LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
       WHERE lst."leagueId" = ${target.id} AND lst."isActive" = true
+        AND COALESCE(t."isFixturePlaceholder", false) = false
       ORDER BY t."id"
       FOR UPDATE OF t, lst
     `);
@@ -93,6 +94,7 @@ export async function makeLeagueSeasonCurrent(input: {
       FROM "LeagueSeasonTeam" lst
       WHERE lst."teamId" = t."id" AND lst."leagueId" = ${target.id}
         AND lst."isActive" = true AND t."competitionId" = ${target.competitionId}
+        AND COALESCE(t."isFixturePlaceholder", false) = false
     `);
 
     // Old season memberships, results, fixtures and all financial records remain.
