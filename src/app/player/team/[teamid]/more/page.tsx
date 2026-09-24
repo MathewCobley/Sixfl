@@ -9,6 +9,7 @@ import {
   ArrowsRightLeftIcon,
   BookOpenIcon,
   ChartBarSquareIcon,
+  DocumentCheckIcon,
   ChevronRightIcon,
   GiftIcon,
   LifebuoyIcon,
@@ -111,6 +112,15 @@ export default async function PlayerMorePage({
     },
     {
       href: withPreview(
+        `/player/team/${teamid}/agreement`,
+        previewMembershipId,
+      ),
+      label: "Player Agreement",
+      description: "The standards and responsibilities you agree to",
+      icon: DocumentCheckIcon,
+    },
+    {
+      href: withPreview(
         `/player/team/${teamid}/league-rules`,
         previewMembershipId,
       ),
@@ -163,7 +173,7 @@ export default async function PlayerMorePage({
       <div className="mx-auto w-full max-w-xl">
         <h1 className="text-2xl font-black tracking-tight">More</h1>
 
-        {[rows.slice(0, 5), rows.slice(5, 8), rows.slice(8)]
+        {[rows.slice(0, 5), rows.slice(5, 9), rows.slice(9)]
           .filter((group) => group.length)
           .map((group, groupIndex) => (
             <section
