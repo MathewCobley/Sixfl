@@ -30,6 +30,7 @@ type TeamSchedulingRule = {
   name: string;
   logoUrl: string | null;
   latestKickoffTime: string | null;
+  singleRoundDoublePoints: boolean;
 };
 
 function addDays(date: Date, days: number) {
@@ -205,12 +206,18 @@ function generateRounds(teamIds: string[]): Pair[][] {
   return rounds;
 }
 
-function mirrorRounds(rounds: Pair[][]): Pair[][] {
+function mirrorRounds(rounds: Pair[][], singleRoundTeamIds: Set<string>): Pair[][] {
   return rounds.map((pairs) =>
-    pairs.map((pair) => ({
-      homeId: pair.awayId,
-      awayId: pair.homeId,
-    })),
+    pairs
+      .filter(
+        (pair) =>
+          !singleRoundTeamIds.has(pair.homeId) &&
+          !singleRoundTeamIds.has(pair.awayId),
+      )
+      .map((pair) => ({
+        homeId: pair.awayId,
+        awayId: pair.homeId,
+      })),
   );
 }
 
@@ -480,6 +487,7 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
         name: true,
         logoUrl: true,
         latestKickoffTime: true,
+        singleRoundDoublePoints: true,
       },
     }),
     venueId
@@ -518,15 +526,18 @@ export async function generateDraftFixturesWithPitchRefereesAction(formData: For
     throw new Error("One or more selected pitch referees could not be found.");
   }
 
-  let rounds = generateRounds(teams.map((team) => team.id));
-
-  if (doubleRoundRobin) {
-    rounds = [...rounds, ...mirrorRounds(rounds)];
-  }
-
   const teamMap = new Map<string, TeamSchedulingRule>(
     teams.map((team) => [team.id, team]),
   );
+  const singleRoundTeamIds = new Set(
+    teams.filter((team) => team.singleRoundDoublePoints).map((team) => team.id),
+  );
+
+  let rounds = generateRounds(teams.map((team) => team.id));
+
+  if (doubleRoundRobin) {
+    rounds = [...rounds, ...mirrorRounds(rounds, singleRoundTeamIds)];
+  }
 
   const fixturesToCreate: {
     leagueId: string;
