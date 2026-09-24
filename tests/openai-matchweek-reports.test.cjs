@@ -9,7 +9,28 @@ const { PrismaClient } = require("@prisma/client");
 const root = path.resolve(__dirname, "..");
 const normalise = v => JSON.parse(JSON.stringify(v));
 const base = "src/lib/matchweek-reports/";
-const source = () => ({ leagueId: "test-league", leagueName: "Example League", area: "Example area", matchDate: "2026-09-09", omittedFixtures: 0, pendingFixtures: 0, warnings: [], matches: [{ fixtureId: "fixture-a", teamA: "Team Alpha", teamB: "Team Beta", scoreA: 1, scoreB: 3, scorers: [{ name: "Alex Example", team: "Team Beta", goals: 2 }], playersOfMatch: [] }] });
+const source = () => ({
+  leagueId: "test-league",
+  leagueName: "Example League",
+  area: "Example area",
+  matchDate: "2026-09-09",
+  omittedFixtures: 0,
+  pendingFixtures: 0,
+  warnings: [],
+  matches: [{ fixtureId: "fixture-a", teamA: "Team Alpha", teamB: "Team Beta", scoreA: 1, scoreB: 3, scorers: [{ name: "Alex Example", team: "Team Beta", goals: 2 }], playersOfMatch: [] }],
+  standingsBeforeNight: [{ division: null, rows: [
+    { position: 1, team: "Team Alpha", played: 4, won: 4, drawn: 0, lost: 0, goalsFor: 20, goalsAgainst: 5, goalDifference: 15, points: 12, recentForm: ["W","W","W","W"] },
+    { position: 2, team: "Team Beta", played: 4, won: 2, drawn: 0, lost: 2, goalsFor: 12, goalsAgainst: 10, goalDifference: 2, points: 6, recentForm: ["L","W","L","W"] },
+  ] }],
+  standingsAfterNight: [{ division: null, rows: [
+    { position: 1, team: "Team Alpha", played: 5, won: 4, drawn: 0, lost: 1, goalsFor: 21, goalsAgainst: 8, goalDifference: 13, points: 12, recentForm: ["W","W","W","W","L"] },
+    { position: 2, team: "Team Beta", played: 5, won: 3, drawn: 0, lost: 2, goalsFor: 15, goalsAgainst: 11, goalDifference: 4, points: 9, recentForm: ["W","L","W","L","W"] },
+  ] }],
+  recentForm: [{ team: "Team Beta", results: [
+    { date: "2026-09-09", opponent: "Team Alpha", goalsFor: 3, goalsAgainst: 1, outcome: "W" },
+    { date: "2026-09-02", opponent: "Team Gamma", goalsFor: 4, goalsAgainst: 2, outcome: "W" },
+  ] }],
+});
 const article = () => ({ title: "Beta win the four-goal meeting", introduction: "Team Beta came out on top in the recorded result from Example League.", matches: [{ fixtureId: "fixture-a", paragraph: "Team Beta beat Team Alpha 3–1, with Alex Example scoring twice." }], closing: "" });
 function loader(mocks = {}, env = {}, network = async () => { throw new Error("Network blocked in tests"); }) {
   const cache = new Map();
@@ -44,6 +65,11 @@ test("real Responses API request: one night, structured output, server key, stor
     assert.equal(body.model, "gpt-5.4-mini"); assert.ok(body.max_output_tokens <= 6000);
     assert.ok(opts.signal); assert.match(body.instructions, /untrusted DATA/);
     assert.doesNotMatch(body.input, /contactEmail|contactPhone|payment|private note|leak@example/);
+    const input = JSON.parse(body.input);
+    assert.equal(input.standingsBeforeNight[0].rows[0].team, "Team Alpha");
+    assert.equal(input.standingsBeforeNight[0].rows[0].lost, 0);
+    assert.equal(input.standingsAfterNight[0].rows[0].lost, 1);
+    assert.deepEqual(input.recentForm[0].results.map(result => result.outcome), ["W", "W"]);
     return provider();
   });
   const result = await load(`${base}openai.ts`).writeOpenAiReport({ ...source(), contactEmail: "leak@example.test", privateNotes: "private note" });
