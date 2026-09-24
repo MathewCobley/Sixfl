@@ -325,7 +325,7 @@ export default async function FixtureGeneratorPage({
               <span>
                 <span className="block text-sm font-semibold text-white">Play every opponent twice</span>
                 <span className="mt-1 block text-sm leading-6 text-white/50">
-                  Creates a second set of meetings so every pairing happens twice. SIXFL has no home/away significance. Leave unticked if each pairing should happen once.
+                  Creates a second set of meetings so every pairing happens twice. SIXFL has no home/away significance. Teams marked “Plays each team once — double-points fixtures” are automatically excluded from the return meetings, and their single fixture against each opponent is worth double league points.
                 </span>
               </span>
             </label>
