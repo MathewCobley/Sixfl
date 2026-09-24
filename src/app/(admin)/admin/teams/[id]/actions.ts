@@ -57,6 +57,8 @@ export async function updateTeamDetailsAction(formData: FormData) {
 
   const teamMode = normaliseTeamMode(formData.get("teamMode"));
   const isRecruiting = String(formData.get("isRecruiting") ?? "") === "on";
+  const singleRoundDoublePoints =
+    String(formData.get("singleRoundDoublePoints") ?? "") === "on";
   const joinSlug = normaliseNullableString(formData.get("joinSlug"));
   const squadTargetSize = normaliseNullableInt(formData.get("squadTargetSize"));
   const matchdayTargetSize = normaliseNullableInt(
@@ -116,6 +118,7 @@ export async function updateTeamDetailsAction(formData: FormData) {
         latestKickoffTime,
         teamMode,
         isRecruiting,
+        singleRoundDoublePoints,
         joinSlug,
         squadTargetSize,
         matchdayTargetSize,
