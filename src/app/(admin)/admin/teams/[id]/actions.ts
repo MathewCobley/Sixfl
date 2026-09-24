@@ -337,7 +337,14 @@ export async function changePrimaryCaptainAction(formData: FormData) {
   });
 
   // Keep email/SMS routing aligned with the newly selected primary captain.
-  await upsertTeamNotificationRecipient(teamId);
+  // The redirected team page also re-syncs this, so a transient messaging
+  // failure must not make an already-completed captain change look unsuccessful.
+  await upsertTeamNotificationRecipient(teamId).catch((error) => {
+    console.error("Could not immediately sync the new primary captain to team messaging", {
+      teamId,
+      error,
+    });
+  });
 
   revalidatePath(`/admin/teams/${teamId}`);
   revalidatePath(`/admin/teams/${teamId}/squad`);
