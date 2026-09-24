@@ -16,10 +16,12 @@ function patch(file, replacements) {
   fs.writeFileSync(absolute, source, "utf8");
 }
 
+// Only bind to the fee field; round is no longer the next property now that
+// fixtures have a native doublePoints flag. Preserve all following fields.
 patch("prisma/schema.prisma", [
   [
-    '  awayMatchFeePence   Int?\n\n  round',
-    '  awayMatchFeePence   Int?\n  sixflTvRecorded      Boolean @default(false)\n  sixflTvUrl           String?\n\n  round',
+    '  awayMatchFeePence   Int?',
+    '  awayMatchFeePence   Int?\n  sixflTvRecorded      Boolean @default(false)\n  sixflTvUrl           String?',
     "fixture SIXFL TV schema fields",
   ],
 ]);
