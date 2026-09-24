@@ -137,7 +137,7 @@ const navMarkup = renderToStaticMarkup(h(Nav, {
 const Newsletter = load("src/components/player/PlayerNewsArticle.tsx", {
   "@/components/news/NewsArticle": { newsDate: value => value },
   "@/components/news/NewsImage": ({ alt, className }) => h("span", { className, "aria-label": alt }, "FC"),
-}).default;
+});
 const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
   teamId: "example-team",
   news: {
