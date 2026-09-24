@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma, TeamMode, TeamRole } from "@prisma/client";
 
+import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
