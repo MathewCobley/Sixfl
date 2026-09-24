@@ -1,3 +1,4 @@
+import { getPriorityDeductionDetails, type PriorityDeduction } from "@/lib/sixfl-tv/priority-deductions";
 import { Prisma } from "@prisma/client";
 
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
@@ -97,7 +98,7 @@ export type SixflTvPriorityMatchScore = {
   matchCardPoints: number;
   assistsPoints: number;
   ratingsPoints: number;
-  paymentStatus: "ON_TIME" | "LATE" | "UNPAID" | "NOT_REQUIRED";
+  paymentStatus: "ON_TIME" | "LATE" | "UNPAID" | "PENDING" | "NOT_RECORDED" | "NOT_REQUIRED";
   confirmationStatus: "ON_TIME" | "LATE" | "MISSING" | "NOT_FAIR_TO_SCORE";
   matchCardStatus: "ON_TIME" | "LATE" | "INCOMPLETE";
   coreComplete: boolean;
@@ -119,6 +120,8 @@ export type SixflTvPriorityScore = {
   score: number;
   /** Internal 0-100 reliability rate used to protect the minimum standards gate. */
   reliabilityScore: number;
+  deductionPoints: number;
+  deductions: PriorityDeduction[];
   /** Reliability contribution to the one headline score. */
   reliabilityPoints: number;
   audiencePoints: number;
@@ -202,7 +205,8 @@ function firstSettlementAt(input: {
     if (covered >= input.charge.amountPence) return event.at;
   }
 
-  return input.charge.status === "PAID" ? input.charge.updatedAt : null;
+  // A stale PAID flag is not a receipt: charges can increase after settlement.
+  return null;
 }
 
 export function priorityScoreTone(score: SixflTvPriorityScore) {
@@ -412,8 +416,12 @@ async function getSixflTvReliabilityScores(
     const ratingsPoints = ratingsCompleteOnTime ? 1 : 0;
 
     const charge = chargeByKey.get(entryKey);
-    let paymentPoints = 6;
-    let paymentStatus: SixflTvPriorityMatchScore["paymentStatus"] = "NOT_REQUIRED";
+    let paymentPoints = 0;
+    let paymentStatus: SixflTvPriorityMatchScore["paymentStatus"] = "NOT_RECORDED";
+    if (charge && (charge.amountPence <= 0 || charge.status === "VOID")) {
+      paymentPoints = 6;
+      paymentStatus = "NOT_REQUIRED";
+    }
     if (charge && charge.amountPence > 0 && charge.status !== "VOID") {
       const dueDate = charge.dueDate ?? fixture.kickoffAt;
       const settledAt = firstSettlementAt({
@@ -429,8 +437,8 @@ async function getSixflTvReliabilityScores(
         paymentPoints = 2;
         paymentStatus = "LATE";
       } else if (paymentStillWithinGracePeriod(dueDate, now)) {
-        paymentPoints = 6;
-        paymentStatus = "NOT_REQUIRED";
+        paymentPoints = 0;
+        paymentStatus = "PENDING";
       } else {
         paymentPoints = 0;
         paymentStatus = "UNPAID";
@@ -512,9 +520,10 @@ export async function getSixflTvPriorityScores(
   const uniqueTeamIds = [...new Set(teamIds.filter(Boolean))];
   if (!uniqueTeamIds.length) return new Map();
 
-  const [reliabilityScores, engagementScores] = await Promise.all([
+  const [reliabilityScores, engagementScores, deductionDetails] = await Promise.all([
     getSixflTvReliabilityScores(uniqueTeamIds, db, now),
     getSixflTvEngagementScores(uniqueTeamIds, db, now),
+    getPriorityDeductionDetails(uniqueTeamIds, db, now),
   ]);
 
   return new Map(
@@ -534,7 +543,9 @@ export async function getSixflTvPriorityScores(
         (engagement?.nominationPoints ?? 0) + (engagement?.votePoints ?? 0),
       );
       const engagementPoints = audiencePoints + participationPoints;
-      const score = clampPriority(reliabilityPoints + engagementPoints);
+      const deductions = deductionDetails.get(teamId)?.deductions ?? [];
+      const deductionPoints = deductionDetails.get(teamId)?.deductionPoints ?? 0;
+      const score = clampPriority(reliabilityPoints + engagementPoints - deductionPoints);
 
       return [[
         teamId,
@@ -542,6 +553,8 @@ export async function getSixflTvPriorityScores(
           teamId,
           score,
           reliabilityScore: reliability.score,
+          deductions,
+          deductionPoints,
           reliabilityPoints,
           audiencePoints,
           participationPoints,

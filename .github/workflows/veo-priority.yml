@@ -4,6 +4,11 @@ on:
     paths:
       - 'src/lib/veo/**'
       - 'src/lib/sixfl-tv/priority-score.ts'
+      - 'src/lib/sixfl-tv/priority-deductions.ts'
+      - 'src/components/sixfl-tv/PriorityDeductions.tsx'
+      - 'src/app/(admin)/admin/teams/**/priority/**'
+      - 'src/app/(admin)/admin/teams/**/shin-pad-warnings/**'
+      - 'prisma/migrations/20260924213000_priority_deductions/**'
       - 'src/lib/sixfl-tv/priority-history.ts'
       - 'src/components/admin/sixfl-tv/PriorityLeagueChart.tsx'
       - 'src/app/(admin)/admin/sixfl-tv/priority/**'
@@ -81,11 +86,11 @@ jobs:
       - name: Pure allocation and fee tests
         run: node --experimental-strip-types --test tests/veo-priority/allocator.test.mjs
       - name: Native earned Priority contracts
-        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs tests/veo-priority/deductions.test.cjs
       - name: Prepare generated application schema
         run: npm run prebuild && npx prisma generate
       - name: Prepared earned Priority contracts
-        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs
+        run: node --test tests/veo-priority/earned-priority.test.cjs tests/veo-priority/night-board-confirmation.test.cjs tests/veo-priority/priority-history.test.cjs tests/veo-priority/deductions.test.cjs
       - name: Create isolated test schema and apply additive Veo migrations
         shell: bash
         run: |
@@ -94,6 +99,9 @@ jobs:
           ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "minutesPerGame" INTEGER;
           ALTER TABLE "League" ADD COLUMN IF NOT EXISTS "freeKitOfferEnabled" BOOLEAN NOT NULL DEFAULT true;
           ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "isFixturePlaceholder" BOOLEAN NOT NULL DEFAULT false;
+          ALTER TABLE "Team" ADD COLUMN IF NOT EXISTS "standardCreditStartedAt" TIMESTAMP(3);
+          ALTER TABLE "PlayerMatchFee" ADD COLUMN IF NOT EXISTS "captainAssignedAmountPence" INTEGER;
+          CREATE TABLE IF NOT EXISTS "RefereeNight" (id TEXT PRIMARY KEY);
           ALTER TABLE "TeamMember" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
           CREATE TABLE IF NOT EXISTS "LeagueSeasonTeam" (
             id TEXT PRIMARY KEY, "leagueId" TEXT NOT NULL, "teamId" TEXT NOT NULL,
@@ -117,6 +125,8 @@ jobs:
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260907153000_goal_of_month/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919004500_sixfl_tv_engagement_analytics/migration.sql
           npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919095500_single_sixfl_tv_priority_score/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260724170000_team_shin_pad_warnings/migration.sql
+          npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260924213000_priority_deductions/migration.sql
       - name: Real Priority score database checks
         run: npx tsx tests/veo-priority/priority-score.ts
       - name: Production build

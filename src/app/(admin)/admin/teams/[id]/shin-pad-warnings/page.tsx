@@ -114,6 +114,7 @@ export default async function TeamShinPadWarningsPage({
         <h1 className="mt-2 text-3xl font-semibold text-white">
           {team.name} shin pad warnings
         </h1>
+        <Link href={`/admin/teams/${team.id}/priority`} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-amber-200 underline">Review Priority deductions or correct a warning</Link>
         <p className="mt-2 text-sm text-white/60">
           {team.league
             ? `${team.league.name}${team.league.season ? ` · ${team.league.season}` : ""}`
