@@ -44,7 +44,7 @@ export default async function CaptainPriorityScorePage({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_right,rgba(217,70,239,0.14),transparent_35%),rgba(255,255,255,0.035)]">
+      <section className="captain-app-secondary overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_right,rgba(217,70,239,0.14),transparent_35%),rgba(255,255,255,0.035)]">
         <div className="px-5 py-6 sm:px-7 sm:py-7">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-fuchsia-200/70">
             SIXFL TV
