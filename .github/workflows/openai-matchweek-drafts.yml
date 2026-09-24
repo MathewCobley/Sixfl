@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - "src/lib/matchweek-reports/**"
+      - "src/lib/standings.ts"
+      - "src/lib/leagueTable.ts"
       - "src/components/admin/matchweek-reports/**"
       - "src/app/(admin)/admin/matchweek-reports/**"
       - "src/app/api/admin/matchweek-reports/**"

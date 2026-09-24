@@ -26,9 +26,10 @@ export type LeagueTableRow = {
   movement?: LeaguePositionMovement;
 };
 
-type LeagueTableOptions = {
+export type LeagueTableOptions = {
   divisionId?: string | null;
   teamIds?: string[];
+  beforeKickoffAt?: Date;
 };
 
 type TableTeamRow = {
@@ -261,6 +262,9 @@ export async function getLeagueTable(
       where: {
         leagueId,
         result: { isNot: null },
+        ...(options.beforeKickoffAt
+          ? { kickoffAt: { lt: options.beforeKickoffAt } }
+          : {}),
       },
       orderBy: { kickoffAt: "asc" },
       include: {

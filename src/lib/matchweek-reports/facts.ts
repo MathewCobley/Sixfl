@@ -3,10 +3,100 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseLondonDateTime, toLondonDateInputValue } from "@/lib/datetime/london";
 import { getFixturePlaceholderTeamIds } from "@/lib/teams/fixture-placeholders";
-import { ReportError, validDate, type ReportSource, type ReportMatch, type ReportSkippedFixture } from "./types";
+import { getLeagueStandings, type LeagueStandings } from "@/lib/standings";
+import {
+  ReportError,
+  validDate,
+  type ReportSource,
+  type ReportMatch,
+  type ReportSkippedFixture,
+  type ReportTableGroup,
+  type ReportTeamForm,
+} from "./types";
 
-// No standings are calculated here. Table/form claims are deliberately omitted
-// until the central standings service supports a verified historical snapshot.
+function tableGroups(standings: LeagueStandings): ReportTableGroup[] {
+  const groups =
+    standings.hasDivisions && standings.divisions.some((division) => division.rows.length)
+      ? standings.divisions
+          .filter((division) => division.rows.length)
+          .map((division) => ({ division: division.name, rows: division.rows }))
+      : [{ division: null, rows: standings.rows }];
+
+  return groups.map((group) => ({
+    division: group.division,
+    rows: group.rows.map((row, index) => ({
+      position: index + 1,
+      team: name(row.teamName),
+      played: row.played,
+      won: row.won,
+      drawn: row.drawn,
+      lost: row.lost,
+      goalsFor: row.goalsFor,
+      goalsAgainst: row.goalsAgainst,
+      goalDifference: row.goalDifference,
+      points: row.points,
+      recentForm: [...row.recentForm],
+    })),
+  }));
+}
+
+async function recentTeamForm(input: {
+  leagueId: string;
+  teamNames: Map<string, string>;
+  cutoff: Date;
+}): Promise<ReportTeamForm[]> {
+  const teamIds = [...input.teamNames.keys()];
+  if (!teamIds.length) return [];
+
+  const fixtures = await prisma.fixture.findMany({
+    where: {
+      leagueId: input.leagueId,
+      publishedAt: { not: null },
+      status: "COMPLETED",
+      kickoffAt: { lt: input.cutoff },
+      result: { isNot: null },
+      OR: [
+        { homeTeamId: { in: teamIds } },
+        { awayTeamId: { in: teamIds } },
+      ],
+    },
+    orderBy: [{ kickoffAt: "desc" }, { id: "desc" }],
+    take: Math.min(200, Math.max(20, teamIds.length * 12)),
+    select: {
+      kickoffAt: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      homeTeam: { select: { name: true } },
+      awayTeam: { select: { name: true } },
+      result: { select: { homeScore: true, awayScore: true, isDisputed: true } },
+    },
+  });
+
+  return teamIds.map((teamId) => {
+    const team = input.teamNames.get(teamId) || "Team";
+    const results: ReportTeamForm["results"] = [];
+    for (const fixture of fixtures) {
+      if (results.length >= 5) break;
+      const result = fixture.result;
+      if (!result || result.isDisputed) continue;
+      const isHome = fixture.homeTeamId === teamId;
+      const isAway = fixture.awayTeamId === teamId;
+      if (!isHome && !isAway) continue;
+      const opponent = name(isHome ? fixture.awayTeam.name : fixture.homeTeam.name);
+      if (!opponent || opponent.toUpperCase() === "TBC") continue;
+      const goalsFor = isHome ? result.homeScore : result.awayScore;
+      const goalsAgainst = isHome ? result.awayScore : result.homeScore;
+      results.push({
+        date: toLondonDateInputValue(fixture.kickoffAt),
+        opponent,
+        goalsFor,
+        goalsAgainst,
+        outcome: goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D",
+      });
+    }
+    return { team, results };
+  });
+}
 export function sourceHash(source: ReportSource) {
   // Adding admin-only explanations must not invalidate existing saved articles
   // or force another paid generation. Included facts/counts still affect the hash.
@@ -48,8 +138,10 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
   });
   const matchDate = requestedDate ? validDate(requestedDate) : latest ? toLondonDateInputValue(latest.kickoffAt) : toLondonDateInputValue(new Date());
   const nextDate = new Date(`${matchDate}T12:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  const nightStart = parseLondonDateTime(matchDate, "00:00");
+  const nightEnd = parseLondonDateTime(nextDate.toISOString().slice(0, 10), "00:00");
   const fixtures = await prisma.fixture.findMany({
-    where: { leagueId: league.id, publishedAt: { not: null }, kickoffAt: { gte: parseLondonDateTime(matchDate, "00:00"), lt: parseLondonDateTime(nextDate.toISOString().slice(0, 10), "00:00") } },
+    where: { leagueId: league.id, publishedAt: { not: null }, kickoffAt: { gte: nightStart, lt: nightEnd } },
     orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
     select: { id: true, status: true, kickoffAt: true,
       homeTeam: { select: { id: true, name: true } }, awayTeam: { select: { id: true, name: true } },
@@ -81,6 +173,7 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
   let pendingFixtures = 0, omittedFixtures = 0;
   const warnings: string[] = [];
   const matches: ReportMatch[] = [];
+  const reportTeams = new Map<string, string>();
   const skippedFixtures: ReportSkippedFixture[] = [];
   const now = new Date();
   for (const f of fixtures) {
@@ -117,11 +210,51 @@ export async function getReportSource(slug: string, requestedDate?: string): Pro
       return player ? [{ team: team as string, name: player }] : [];
     });
     matches.push({ fixtureId: f.id, teamA, teamB, scoreA: result.homeScore, scoreB: result.awayScore, scorers, playersOfMatch });
+    reportTeams.set(f.homeTeam.id, teamA);
+    reportTeams.set(f.awayTeam.id, teamB);
   }
   // Preserve legacy summary fields for saved source hashes. The editor renders
   // the structured fixture explanations, not this old catch-all warning. Its
   // historic replacement label is NOT an eligibility rule or displayed reason.
   if (pendingFixtures) warnings.push(`${pendingFixtures} published fixture(s) still await a completed result. This will be a partial round-up.`);
   if (omittedFixtures) warnings.push(`${omittedFixtures} fixture(s) omitted: postponed, cancelled, disputed, placeholder, abandonment, replacement or invalid result. Review these separately.`);
-  return { leagueId: league.id, leagueName: name(league.name), area: name(league.area) || null, matchDate, matches, pendingFixtures, omittedFixtures, warnings, skippedFixtures };
+
+  let standingsBeforeNight: ReportTableGroup[] | undefined;
+  let standingsAfterNight: ReportTableGroup[] | undefined;
+  let recentForm: ReportTeamForm[] | undefined;
+  try {
+    const before = await getLeagueStandings(league.id, { beforeKickoffAt: nightStart });
+    standingsBeforeNight = tableGroups(before);
+
+    const completeNight = pendingFixtures === 0 && omittedFixtures === 0;
+    if (completeNight) {
+      const after = await getLeagueStandings(league.id, { beforeKickoffAt: nightEnd });
+      standingsAfterNight = tableGroups(after);
+    }
+
+    recentForm = await recentTeamForm({
+      leagueId: league.id,
+      teamNames: reportTeams,
+      cutoff: completeNight ? nightEnd : nightStart,
+    });
+  } catch {
+    // Context is useful editorial colour, but a temporary standings read must
+    // never force the report writer to invent it or block an otherwise safe report.
+    warnings.push("League table/form context is temporarily unavailable; the report must use match facts only.");
+  }
+
+  return {
+    leagueId: league.id,
+    leagueName: name(league.name),
+    area: name(league.area) || null,
+    matchDate,
+    matches,
+    standingsBeforeNight,
+    standingsAfterNight,
+    recentForm,
+    pendingFixtures,
+    omittedFixtures,
+    warnings,
+    skippedFixtures,
+  };
 }

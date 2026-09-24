@@ -9,7 +9,28 @@ const { PrismaClient } = require("@prisma/client");
 const root = path.resolve(__dirname, "..");
 const normalise = v => JSON.parse(JSON.stringify(v));
 const base = "src/lib/matchweek-reports/";
-const source = () => ({ leagueId: "test-league", leagueName: "Example League", area: "Example area", matchDate: "2026-09-09", omittedFixtures: 0, pendingFixtures: 0, warnings: [], matches: [{ fixtureId: "fixture-a", teamA: "Team Alpha", teamB: "Team Beta", scoreA: 1, scoreB: 3, scorers: [{ name: "Alex Example", team: "Team Beta", goals: 2 }], playersOfMatch: [] }] });
+const source = () => ({
+  leagueId: "test-league",
+  leagueName: "Example League",
+  area: "Example area",
+  matchDate: "2026-09-09",
+  omittedFixtures: 0,
+  pendingFixtures: 0,
+  warnings: [],
+  matches: [{ fixtureId: "fixture-a", teamA: "Team Alpha", teamB: "Team Beta", scoreA: 1, scoreB: 3, scorers: [{ name: "Alex Example", team: "Team Beta", goals: 2 }], playersOfMatch: [] }],
+  standingsBeforeNight: [{ division: null, rows: [
+    { position: 1, team: "Team Alpha", played: 4, won: 4, drawn: 0, lost: 0, goalsFor: 20, goalsAgainst: 5, goalDifference: 15, points: 12, recentForm: ["W","W","W","W"] },
+    { position: 2, team: "Team Beta", played: 4, won: 2, drawn: 0, lost: 2, goalsFor: 12, goalsAgainst: 10, goalDifference: 2, points: 6, recentForm: ["L","W","L","W"] },
+  ] }],
+  standingsAfterNight: [{ division: null, rows: [
+    { position: 1, team: "Team Alpha", played: 5, won: 4, drawn: 0, lost: 1, goalsFor: 21, goalsAgainst: 8, goalDifference: 13, points: 12, recentForm: ["W","W","W","W","L"] },
+    { position: 2, team: "Team Beta", played: 5, won: 3, drawn: 0, lost: 2, goalsFor: 15, goalsAgainst: 11, goalDifference: 4, points: 9, recentForm: ["W","L","W","L","W"] },
+  ] }],
+  recentForm: [{ team: "Team Beta", results: [
+    { date: "2026-09-09", opponent: "Team Alpha", goalsFor: 3, goalsAgainst: 1, outcome: "W" },
+    { date: "2026-09-02", opponent: "Team Gamma", goalsFor: 4, goalsAgainst: 2, outcome: "W" },
+  ] }],
+});
 const article = () => ({ title: "Beta win the four-goal meeting", introduction: "Team Beta came out on top in the recorded result from Example League.", matches: [{ fixtureId: "fixture-a", paragraph: "Team Beta beat Team Alpha 3–1, with Alex Example scoring twice." }], closing: "" });
 function loader(mocks = {}, env = {}, network = async () => { throw new Error("Network blocked in tests"); }) {
   const cache = new Map();
@@ -44,6 +65,11 @@ test("real Responses API request: one night, structured output, server key, stor
     assert.equal(body.model, "gpt-5.4-mini"); assert.ok(body.max_output_tokens <= 6000);
     assert.ok(opts.signal); assert.match(body.instructions, /untrusted DATA/);
     assert.doesNotMatch(body.input, /contactEmail|contactPhone|payment|private note|leak@example/);
+    const input = JSON.parse(body.input);
+    assert.equal(input.standingsBeforeNight[0].rows[0].team, "Team Alpha");
+    assert.equal(input.standingsBeforeNight[0].rows[0].lost, 0);
+    assert.equal(input.standingsAfterNight[0].rows[0].lost, 1);
+    assert.deepEqual(input.recentForm[0].results.map(result => result.outcome), ["W", "W"]);
     return provider();
   });
   const result = await load(`${base}openai.ts`).writeOpenAiReport({ ...source(), contactEmail: "leak@example.test", privateNotes: "private note" });
@@ -71,8 +97,22 @@ test("facts use one London date, not round number; omit unsafe outcomes and mini
   let query;
   const f = (id, extra = {}) => ({ id, status: "COMPLETED", kickoffAt: new Date("2026-09-09T18:00:00Z"), homeTeam: { id: "a", name: "Team Alpha" }, awayTeam: { id: "b", name: "Team Beta" }, result: { homeScore: 1, awayScore: 3, isDisputed: false, disputes: [], teamMetadata: [{ teamId: "b", scorers: [{ name: "Alex Example", goals: 2, email: "secret@example.test" }], ownGoals: 1, playerOfMatchName: "Alex Example" }] }, ...extra });
   const list = [f("fixture-a"), f("replaced"), f("disputed", { result: { homeScore: 1, awayScore: 3, isDisputed: true, disputes: [] } }), f("pending", { status: "SCHEDULED", result: null }), f("cancelled", { status: "CANCELLED" })];
-  const db = { league: { findFirst: async () => ({ id: "test-league", name: "Example", area: "Example" }) }, fixture: { findMany: async q => { query = q; return list; } }, $queryRaw: async () => [{ fixtureId: "replaced" }] };
-  const load = loader({ "@/lib/prisma": { prisma: db }, "@/lib/teams/fixture-placeholders": { getFixturePlaceholderTeamIds: async () => new Set() } });
+  const db = { league: { findFirst: async () => ({ id: "test-league", name: "Example", area: "Example" }) }, fixture: { findMany: async q => { if (q.where.OR) return []; query = q; return list; } }, $queryRaw: async () => [{ fixtureId: "replaced" }] };
+  const standings = {
+    league: { id: "test-league", name: "Example", season: "Summer 2026", slug: "example" },
+    divisions: [],
+    hasDivisions: false,
+    membershipConflicts: [],
+    rows: [
+      { teamId: "a", teamName: "Team Alpha", teamLogoUrl: null, played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 12, goalsAgainst: 4, goalDifference: 8, points: 9, recentForm: ["W","W","W"], movement: null },
+      { teamId: "b", teamName: "Team Beta", teamLogoUrl: null, played: 3, won: 1, drawn: 0, lost: 2, goalsFor: 7, goalsAgainst: 8, goalDifference: -1, points: 3, recentForm: ["L","W","L"], movement: null },
+    ],
+  };
+  const load = loader({
+    "@/lib/prisma": { prisma: db },
+    "@/lib/teams/fixture-placeholders": { getFixturePlaceholderTeamIds: async () => new Set() },
+    "@/lib/standings": { getLeagueStandings: async () => standings },
+  });
   const facts = load(`${base}facts.ts`);
   const result = await facts.getReportSource("example", "2026-09-09");
   assert.equal(query.where.kickoffAt.gte.toISOString(), "2026-09-08T23:00:00.000Z");
@@ -89,6 +129,79 @@ test("facts use one London date, not round number; omit unsafe outcomes and mini
   assert.equal(facts.recordedTeamScorers([{ name: "A", goals: 3 }], 1, "Team", 3).length, 0);
   await facts.getReportSource("example", "2026-10-25");
   assert.equal((query.where.kickoffAt.lt - query.where.kickoffAt.gte) / 3600000, 25, "DST fall-back is one London calendar day");
+});
+
+test("complete report nights include pre-night leaders, post-night table and recent form", async () => {
+  const current = {
+    id: "fixture-current",
+    status: "COMPLETED",
+    kickoffAt: new Date("2026-09-09T18:00:00Z"),
+    homeTeam: { id: "a", name: "Team Alpha" },
+    awayTeam: { id: "b", name: "Team Beta" },
+    result: {
+      homeScore: 1,
+      awayScore: 3,
+      isDisputed: false,
+      disputes: [],
+      teamMetadata: [],
+    },
+  };
+  const recent = [
+    {
+      kickoffAt: new Date("2026-09-09T18:00:00Z"),
+      homeTeamId: "a",
+      awayTeamId: "b",
+      homeTeam: { name: "Team Alpha" },
+      awayTeam: { name: "Team Beta" },
+      result: { homeScore: 1, awayScore: 3, isDisputed: false },
+    },
+    {
+      kickoffAt: new Date("2026-09-02T18:00:00Z"),
+      homeTeamId: "c",
+      awayTeamId: "b",
+      homeTeam: { name: "Team Gamma" },
+      awayTeam: { name: "Team Beta" },
+      result: { homeScore: 2, awayScore: 4, isDisputed: false },
+    },
+  ];
+  const row = (teamId, teamName, lost, points, form) => ({
+    teamId, teamName, teamLogoUrl: null, played: 5, won: 4 - lost, drawn: 0, lost,
+    goalsFor: 20, goalsAgainst: 8, goalDifference: 12, points, recentForm: form, movement: null,
+  });
+  const snapshots = [];
+  const getLeagueStandings = async (_leagueId, options) => {
+    snapshots.push(options.beforeKickoffAt.toISOString());
+    const after = options.beforeKickoffAt.toISOString() === "2026-09-09T23:00:00.000Z";
+    return {
+      league: { id: "test-league", name: "Example", season: "Summer 2026", slug: "example" },
+      divisions: [],
+      hasDivisions: false,
+      membershipConflicts: [],
+      rows: after
+        ? [row("a", "Team Alpha", 1, 12, ["W","W","W","W","L"]), row("b", "Team Beta", 2, 9, ["L","W","L","W","W"])]
+        : [row("a", "Team Alpha", 0, 12, ["W","W","W","W"]), row("b", "Team Beta", 2, 6, ["W","L","W","L"])],
+    };
+  };
+  let findManyCalls = 0;
+  const db = {
+    league: { findFirst: async () => ({ id: "test-league", name: "Example", area: "Example" }) },
+    fixture: { findMany: async q => (++findManyCalls === 1 ? [current] : recent) },
+    $queryRaw: async () => [],
+  };
+  const load = loader({
+    "@/lib/prisma": { prisma: db },
+    "@/lib/teams/fixture-placeholders": { getFixturePlaceholderTeamIds: async () => new Set() },
+    "@/lib/standings": { getLeagueStandings },
+  });
+  const report = await load(`${base}facts.ts`).getReportSource("example", "2026-09-09");
+  assert.deepEqual(snapshots, ["2026-09-08T23:00:00.000Z", "2026-09-09T23:00:00.000Z"]);
+  assert.equal(report.standingsBeforeNight[0].rows[0].team, "Team Alpha");
+  assert.equal(report.standingsBeforeNight[0].rows[0].position, 1);
+  assert.equal(report.standingsBeforeNight[0].rows[0].lost, 0);
+  assert.equal(report.standingsAfterNight[0].rows[0].lost, 1);
+  const beta = report.recentForm.find(team => team.team === "Team Beta");
+  assert.deepEqual(normalise(beta.results.map(result => result.outcome)), ["W", "W"]);
+  assert.deepEqual(normalise(beta.results.map(result => result.opponent)), ["Team Alpha", "Team Gamma"]);
 });
 
 test("service read is side-effect free and every operation authorises before storage or provider", async () => {
