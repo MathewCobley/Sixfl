@@ -17,6 +17,7 @@ export type CompetitionSeasonRow = {
   slug: string;
   season: string | null;
   isActive: boolean;
+  publicAt?: Date | null;
   teamCount: number;
   fixtureCount: number;
   completedFixtureCount: number;
@@ -86,6 +87,7 @@ async function getSeasonsForCompetition(competitionId: string, currentLeagueId: 
       l."slug",
       l."season",
       l."isActive",
+      l."publicAt",
       COUNT(DISTINCT lst."teamId")::int AS "teamCount",
       COUNT(DISTINCT f."id")::int AS "fixtureCount",
       COUNT(DISTINCT CASE WHEN f."status" = 'COMPLETED' THEN f."id" END)::int AS "completedFixtureCount",
@@ -94,7 +96,7 @@ async function getSeasonsForCompetition(competitionId: string, currentLeagueId: 
     LEFT JOIN "LeagueSeasonTeam" lst ON lst."leagueId" = l."id" AND lst."isActive" = true
     LEFT JOIN "Fixture" f ON f."leagueId" = l."id"
     WHERE l."competitionId" = ${competitionId}
-    GROUP BY l."id", l."name", l."slug", l."season", l."isActive"
+    GROUP BY l."id", l."name", l."slug", l."season", l."isActive", l."publicAt"
     ORDER BY (l."id" = ${currentLeagueId}) DESC, COALESCE(l."season", '') DESC, l."createdAt" DESC
   `);
 
@@ -345,6 +347,7 @@ export async function createNextLeagueSeason(input: {
         "minutesPerGame",
         "costPerTeamPerMatchPence",
         "targetTeamCount",
+        "publicAt",
         "createdAt",
         "updatedAt"
       )
@@ -371,6 +374,7 @@ export async function createNextLeagueSeason(input: {
         "minutesPerGame",
         "costPerTeamPerMatchPence",
         "targetTeamCount",
+        NULL,
         NOW(),
         NOW()
       FROM "League"
@@ -449,19 +453,11 @@ export async function createNextLeagueSeason(input: {
           "isActive" = true,
           "updatedAt" = NOW()
       `);
-
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "Team"
-        SET "competitionId" = ${competitionId}, "updatedAt" = NOW()
-        WHERE "id" = ${entry.teamId}
-      `);
     }
 
-    await tx.$executeRaw(Prisma.sql`
-      UPDATE "LeagueCompetition"
-      SET "currentLeagueId" = ${newLeagueId}, "updatedAt" = NOW()
-      WHERE "id" = ${competitionId}
-    `);
+    // Preparation is not activation. Leave the competition's currentLeagueId
+    // and every team's live league/division/affiliation untouched. publicAt is
+    // explicitly NULL above; only the separate confirmed switch can activate it.
   });
 
   return { leagueId: newLeagueId, slug: newSlug };
