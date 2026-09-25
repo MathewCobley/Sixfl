@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { requireReferee } from "@/lib/admin";
 
-type RefereeTabKey = "overview" | "availability" | "match-rules";
+type RefereeTabKey = "overview" | "availability" | "more";
 
 type Props = {
   active: RefereeTabKey;
@@ -35,11 +35,11 @@ const tabs: Array<{
     description: "Mark dates you can ref",
   },
   {
-    key: "match-rules",
-    href: "/referee/match-rules",
-    label: "Match rules",
-    mobileLabel: "Rules",
-    description: "How SIXFL games run",
+    key: "more",
+    href: "/referee/more",
+    label: "More",
+    mobileLabel: "More",
+    description: "Rules, agreements and referee info",
   },
 ];
 
