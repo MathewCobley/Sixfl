@@ -5,6 +5,7 @@ import {
   ClipboardDocumentListIcon,
   BanknotesIcon,
   BookOpenIcon,
+  EllipsisHorizontalCircleIcon,
   HomeIcon,
   ArrowRightIcon,
 } from "@heroicons/react/24/outline";
@@ -22,6 +23,17 @@ type Night = {
   colleagues: string | null;
 };
 
+type SetNight = {
+  id: string;
+  name: string;
+  dayOfWeek: string;
+  venueName: string | null;
+};
+
+function dayLabel(value: string) {
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}
+
 export default function RefereeAppHome({
   name,
   nextNight,
@@ -29,6 +41,7 @@ export default function RefereeAppHome({
   submittedCount,
   dueToYou,
   dueToSixfl,
+  setNights = [],
   confirmation,
   children,
   desktopTabs,
@@ -40,6 +53,7 @@ export default function RefereeAppHome({
   submittedCount: number;
   dueToYou: string;
   dueToSixfl: string;
+  setNights?: SetNight[];
   confirmation: ReactNode;
   children: ReactNode;
   desktopTabs: ReactNode;
@@ -112,6 +126,31 @@ export default function RefereeAppHome({
               </strong>
               <span className="text-[10px] text-white/50">Due to you</span>
             </Link>
+          </div>
+          <div className="mt-2 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/45">
+                Your regular nights
+              </span>
+              <span className="text-[9px] font-semibold text-emerald-200/70">Set by SIXFL</span>
+            </div>
+            {setNights.length > 0 ? (
+              <div className="mt-1.5 divide-y divide-white/[0.06]">
+                {setNights.map((night) => (
+                  <div key={night.id} className="py-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-xs font-bold text-white/85">{night.name}</span>
+                      <span className="shrink-0 text-[10px] text-white/45">{dayLabel(night.dayOfWeek)}</span>
+                    </div>
+                    {night.venueName ? (
+                      <p className="mt-0.5 truncate text-[10px] text-white/35">{night.venueName}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[10px] text-white/40">No regular league nights set yet.</p>
+            )}
           </div>
         </section>
         <section
@@ -245,9 +284,9 @@ export default function RefereeAppHome({
               Icon: BanknotesIcon,
             },
             {
-              href: "/referee/match-rules",
-              label: "Rules",
-              Icon: BookOpenIcon,
+              href: "/referee/more",
+              label: "More",
+              Icon: EllipsisHorizontalCircleIcon,
             },
           ].map(({ href, label, Icon }, index) => (
             <Link

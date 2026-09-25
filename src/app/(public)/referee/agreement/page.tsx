@@ -14,7 +14,7 @@ export default async function RefereeAgreementPage() {
   await requireReferee();
 
   return (
-    <RefereeAppShell active="rules" title="Referee agreement">
+    <RefereeAppShell active="more" title="Referee agreement">
       <AppAgreementSections
         version={REFEREE_AGREEMENT_VERSION}
         effectiveDate={REFEREE_AGREEMENT_EFFECTIVE_DATE}

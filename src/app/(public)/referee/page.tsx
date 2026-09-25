@@ -16,6 +16,7 @@ import {
   toLondonDateInputValue,
 } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
+import { getRefereeSetLeagues } from "@/lib/referee-availability";
 import {
   formatMoney,
   formatNightDate,
@@ -491,9 +492,10 @@ export default async function RefereePage() {
   const todayLondonDate = toLondonDateInputValue(new Date());
   const refereeName = user.name || user.email || "this referee";
   const currentRefereeName = normaliseName(user.name) || normaliseName(user.email) || "You";
-  const [nights, onsiteSummaries] = await Promise.all([
+  const [nights, onsiteSummaries, setNights] = await Promise.all([
     getRefereeNightSummaries({ refereeId: user.id }),
     getOnsiteRefereeSummaries(user.id, currentRefereeName),
+    getRefereeSetLeagues(user.id),
   ]);
   const onsiteByNightId = new Map(onsiteSummaries.map((summary) => [summary.nightId, summary]));
 
@@ -574,6 +576,12 @@ export default async function RefereePage() {
           submittedCount={submittedNights.length}
           dueToYou={formatMoney(outstandingDueToReferee)}
           dueToSixfl={formatMoney(outstandingDueToSixfl)}
+          setNights={setNights.map((league) => ({
+            id: league.id,
+            name: league.name,
+            dayOfWeek: league.dayOfWeek,
+            venueName: league.venueName,
+          }))}
           confirmation={<RefereeNightConfirmation refereeId={user.id} />}
           desktopTabs={<RefereeTabs active="overview" previewRefereeId={previewRefereeId} />}
           preview={null}
