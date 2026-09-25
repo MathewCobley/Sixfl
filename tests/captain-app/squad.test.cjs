@@ -48,7 +48,11 @@ test('real screen renders players, retained details and authorised action fields
   assert.match(html, /name="membershipId" value="member-1"/);
   assert.match(html, /name="returnTo" value="captain-squad"/);
   assert.match(html, /aria-label="Add a player"/);
-  assert.match(html, /name="email" type="email" required=""/);
+  // React may reorder input attributes; the actual named input must be required.
+  const email = html.match(/<input\b[^>]*\bname="email"[^>]*>/)?.[0];
+  assert.ok(email, 'the add form contains a player email input');
+  assert.match(email, /\btype="email"/);
+  assert.match(email, /\brequired=""/);
   assert.match(html, /Defender/);
   assert.match(html, /Usually available on Tuesdays/);
   assert.match(html, /Email needed/);
@@ -87,11 +91,11 @@ test('native mode is wired at the owning server page with shared data and existi
   assert.match(web, /MetricCard/);
   assert.match(web, /form action=\{addCaptainPlayerAction\}/);
   assert.match(route, /const appMembers = team\.members\.map/);
+  const syntax = ts.createSourceFile('page.tsx', route, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   for (const name of ['addCaptainPlayerAction', 'sendCaptainPlayerDashboardLoginEmailAction', 'CaptainSquadViewPage']) {
-    const start = route.indexOf(`function ${name}(`);
-    const end = route.indexOf('\n}', start);
-    assert.ok(start >= 0);
-    assert.match(route.slice(start, end), /await requireCaptain\(teamid\)/);
+    const fn = syntax.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    assert.ok(fn?.body, `function body exists: ${name}`);
+    assert.match(fn.body.getText(syntax), /await requireCaptain\(teamid\)/);
   }
   assert.match(route, /team\.teamMode === "MANAGED"/);
   assert.match(route, /where: \{ id: membershipId, teamId: teamid \}/);
