@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "src/lib/matchweek-reports/**"
+      - "src/lib/league-news/snapshot.ts"
       - "src/lib/standings.ts"
       - "src/lib/leagueTable.ts"
       - "src/components/admin/matchweek-reports/**"
@@ -11,6 +12,8 @@ on:
       - "tests/openai-matchweek-reports.test.cjs"
       - "tests/admin-matchweek-reports.test.cjs"
       - "tests/matchweek-report-proxy.test.cjs"
+      - "tests/matchweek-table-claims.test.cjs"
+      - "tests/matchweek-report-editorial-voice.test.cjs"
       - "tests/report-omissions*.cjs"
       - "prisma/migrations/20260910224500_openai_matchweek_drafts/**"
       - ".github/workflows/openai-matchweek-drafts.yml"
@@ -57,11 +60,11 @@ jobs:
           psql "$REPORT_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE TABLE "League" (id TEXT PRIMARY KEY)'
           psql "$REPORT_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260910224500_openai_matchweek_drafts/migration.sql
       - name: Test request, auth, draft transactions and exact fixture omission reasons
-        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs tests/report-omissions.test.cjs
+        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs tests/report-omissions.test.cjs tests/matchweek-table-claims.test.cjs tests/matchweek-report-editorial-voice.test.cjs
       - run: npm run prebuild
       - run: npx prisma generate
       - name: Repeat tests against the production-prepared source
-        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs tests/report-omissions.test.cjs
+        run: node --test tests/openai-matchweek-reports.test.cjs tests/admin-matchweek-reports.test.cjs tests/matchweek-report-proxy.test.cjs tests/report-omissions.test.cjs tests/matchweek-table-claims.test.cjs tests/matchweek-report-editorial-voice.test.cjs
       - name: Check critical contracts and types
         run: |
           node scripts/check-critical-feature-contracts.mjs

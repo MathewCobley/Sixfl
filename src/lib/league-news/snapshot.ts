@@ -1,3 +1,4 @@
+import { assertVerifiedTableClaims } from '@/lib/matchweek-reports/table-claims';
 import { ReportError, validateContent, type ReportSource, type ReportContent } from '@/lib/matchweek-reports/types';
 import { blankNewsSettings, type NewsSettings, type NewsSnapshot } from './types';
 
@@ -41,6 +42,13 @@ const cleanName = (s: string) => s.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 16
 /** Explicit allowlist: never spread a ReportSource into a public response. */
 export function buildNewsSnapshot(source: ReportSource, content: ReportContent, identities: NewsFixtureIdentity[], settings: NewsSettings): NewsSnapshot {
   const copy = validateContent(content, source);
+  assertVerifiedTableClaims(copy, source);
+  return buildSnapshot(source, copy, identities, settings);
+}
+// Already-published snapshots contain no private standings context. Their read
+// path preserves existing articles; only new preview/publication is fact-gated.
+function buildSnapshot(source: ReportSource, content: ReportContent, identities: NewsFixtureIdentity[], settings: NewsSettings): NewsSnapshot {
+  const copy = validateContent(content, source);
   const identity = new Map(identities.map(f => [f.id, f]));
   if (!source.matches.length) throw new ReportError('There are no completed matches to publish.');
   return {
@@ -67,6 +75,6 @@ export function readNewsSnapshot(value: unknown): NewsSnapshot {
   if (!v || v.schemaVersion !== 1 || !Array.isArray(v.matches) || !v.matches.length) throw new Error('Invalid news snapshot');
   const source: ReportSource = { leagueId: '', leagueName: v.leagueName, area: null, matchDate: v.matchDate,
     matches: v.matches.map(m => ({ fixtureId: m.fixtureId, teamA: m.teamA, teamB: m.teamB, scoreA: m.scoreA, scoreB: m.scoreB, scorers: m.scorers, playersOfMatch: m.playersOfMatch })), omittedFixtures: 0, pendingFixtures: 0, warnings: [] };
-  return buildNewsSnapshot(source, { title: v.title, introduction: v.introduction, closing: v.closing, matches: v.matches.map(m => ({ fixtureId: m.fixtureId, paragraph: m.paragraph })) },
+  return buildSnapshot(source, { title: v.title, introduction: v.introduction, closing: v.closing, matches: v.matches.map(m => ({ fixtureId: m.fixtureId, paragraph: m.paragraph })) },
     v.matches.map(m => ({ id: m.fixtureId, homeTeam: { id: m.teamAId, name: m.teamA, logoUrl: m.badgeA }, awayTeam: { id: m.teamBId, name: m.teamB, logoUrl: m.badgeB } })), v.cover ?? blankNewsSettings());
 }

@@ -6,6 +6,11 @@ on:
       - "src/lib/matchweek-reports/auto-publish.ts"
       - "src/app/api/cron/notifications/route.ts"
       - "src/components/news/**"
+      - "src/components/captain/CaptainPwaModeOnly.tsx"
+      - "src/app/captain/team/**/template.tsx"
+      - "src/app/player/team/**/template.tsx"
+      - "src/app/(public)/leagues/**/template.tsx"
+      - "src/app/(public)/teams/**/template.tsx"
       - "src/components/admin/matchweek-reports/**"
       - "src/app/(admin)/admin/matchweek-reports/**"
       - "src/app/api/admin/matchweek-reports/**"
@@ -90,7 +95,7 @@ jobs:
         run: |
           mkdir -p .tmp/league-news
           git grep -n -E 'LeagueNewsArticle|NewsPublishingControls|LatestNews|listPublishedNews' -- src > .tmp/league-news/source-inventory.txt
-          tar -czf .tmp/league-news/prepared.tgz src/lib/league-news src/components/news src/components/admin/matchweek-reports src/app/api/admin/matchweek-reports 'src/app/(admin)/admin/matchweek-reports' 'src/app/(public)/leagues/[slug]/news' 'src/app/(public)/teams/[id]/news' tests/league-news.*
+          tar -czf .tmp/league-news/prepared.tgz src/lib/league-news src/components/news src/components/admin/matchweek-reports 'src/app/captain/team/[teamid]/template.tsx' src/components/captain/CaptainPwaModeOnly.tsx src/app/api/admin/matchweek-reports 'src/app/(admin)/admin/matchweek-reports' 'src/app/(public)/leagues/[slug]/news' 'src/app/(public)/teams/[id]/news' tests/league-news*.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

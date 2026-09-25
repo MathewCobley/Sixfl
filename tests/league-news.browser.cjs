@@ -37,20 +37,68 @@ for(const width of [1440,390])test(`publication controls and shared article at $
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.getByRole('button',{name:'Copy link',exact:true}).click();await page.getByText('Article link copied.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'https://www.sixfl.co.uk/leagues/example/news/2026-09-08');
   await page.screenshot({path:`.tmp/league-news/article-${width}.png`,fullPage:true});
-  // Root discovery slots on each route render only published articles. Nested
-  // fixture/payment pages are not discovered with DOM selectors or decorated.
-  for(const scope of ['league','team','captain','player']){
-   await page.evaluate(s=>{window.live=null;window.showDiscovery(s);},scope);
-   const teaser=page.getByRole('region',{name:'Latest League News'});await teaser.getByText(/once published by SIXFL/).waitFor();assert.equal(await teaser.getByRole('article').count(),0);
-   assert.equal(await teaser.getByRole('link',{name:'All news →',exact:true}).getAttribute('href'),scope==='league'?'/leagues/example/news':'/teams/stand-in/news');
-   await page.evaluate(s=>{window.live=structuredClone(window.sample);window.showDiscovery(s);},scope);
-   await teaser.getByRole('heading',{name:'Stand-ins sign off a six-match night in style'}).waitFor();
-   assert.equal(await teaser.getByRole('link',{name:/Example [56] FC.*Example Stand-ins/}).count(),scope==='league'?0:2);
-   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-   const requests=await page.evaluate(()=>window.discoveryCalls.length);
-   await page.evaluate(s=>window.showDiscovery(s,'/payments'),scope);await teaser.waitFor({state:'detached'});
-   assert.equal(await page.evaluate(()=>window.discoveryCalls.length),requests,'nested pages must not query a teaser');
-  }
   assert.equal(await page.evaluate(()=>window.posts.length),4);assert.deepEqual(errors,[]);
+ }finally{await context.close();}
+});
+
+// Public discovery and compact dashboard cards deliberately have different
+// headings, copy and actions. Exercise each scope independently so a stale
+// website selector cannot hide which captain/player contract actually failed.
+for(const width of [1440,390])for(const scope of ['league','team','captain','player'])test(`published-only ${scope} news and report links at ${width}px`,async()=>{
+ const compact=scope==='captain'||scope==='player';
+ const articlePath='/leagues/example/news/2026-09-08';
+ const context=await browser.newContext({viewport:{width,height:1000}});
+ const page=await context.newPage(),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.abort());
+ try{
+  await page.goto(origin);await page.getByText('Not published',{exact:true}).waitFor();
+  await page.evaluate(s=>{window.live=null;window.showDiscovery(s);},scope);
+  const teaser=page.getByRole('region',{name:compact?'Latest SIXFL news':'Latest League News',exact:true});
+  const emptyCopy=compact?'Match-night reports will appear here once published.':'Match-night reports will appear here once published by SIXFL.';
+  await teaser.getByText(emptyCopy,{exact:true}).waitFor();
+  assert.equal(await teaser.getByRole('status').textContent(),emptyCopy);
+  assert.equal(await teaser.count(),1);
+  assert.equal(await teaser.getByRole('article').count(),0);
+  const allNews=teaser.getByRole('link',{name:'All news →',exact:true});
+  if(compact){
+   assert.equal(await allNews.count(),0,'compact cards use Read report, not the website All news action');
+  }else{
+   assert.equal(await allNews.getAttribute('href'),scope==='league'?'/leagues/example/news':'/teams/stand-in/news');
+  }
+  const endpoint=`/api/public/league-news/${scope==='league'?'league/example':'team/stand-in'}?limit=${compact?1:2}`;
+  assert.deepEqual(await page.evaluate(()=>window.discoveryCalls),[endpoint]);
+
+  await page.evaluate(s=>{window.live=structuredClone(window.sample);window.showDiscovery(s);},scope);
+  const headline=teaser.getByRole('heading',{name:'Stand-ins sign off a six-match night in style',exact:true});
+  await headline.waitFor();
+  assert.equal(await teaser.getByRole('article').count(),1,'only the latest published article is shown');
+  assert.equal(await headline.getByRole('link').getAttribute('href'),articlePath);
+  const readLabel=compact?'Read report →':'Read Matchweek 4 report →';
+  assert.equal(await teaser.getByRole('link',{name:readLabel,exact:true}).getAttribute('href'),articlePath);
+  const matches=teaser.getByRole('link',{name:/Example [56] FC.*Example Stand-ins/});
+  const matchLinks=await matches.evaluateAll(links=>links.map(link=>link.getAttribute('href')));
+  assert.deepEqual(matchLinks,scope==='league'?[]:[`${articlePath}#match-f-4`,`${articlePath}#match-f-5`]);
+  assert.deepEqual(await page.evaluate(()=>window.discoveryCalls),[endpoint,endpoint]);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  await page.screenshot({path:`.tmp/league-news/discovery-${scope}-${width}.png`,fullPage:true});
+
+  // Nested operational routes must neither render nor request a news teaser.
+  const requests=await page.evaluate(()=>window.discoveryCalls.length);
+  await page.evaluate(s=>window.showDiscovery(s,'/payments'),scope);
+  await teaser.waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>window.discoveryCalls.length),requests,'nested pages must not query a teaser');
+
+  // Both replacement-match links must target real sections in the shared article.
+  await page.evaluate(()=>window.showArticle());
+  await page.getByRole('heading',{level:1}).waitFor();
+  for(const href of matchLinks){
+   const target=new URL(href,origin).hash;
+   assert.equal(await page.locator(target).count(),1,'match link must resolve to exactly one article section');
+   const articleLinks=await page.getByRole('navigation',{name:'Jump to match'}).getByRole('link').evaluateAll(links=>links.map(link=>link.getAttribute('href')));
+   assert.ok(articleLinks.includes(target),'match link must match the article jump navigation');
+  }
+  assert.equal(await page.evaluate(()=>window.posts.length),0,'reading news must never publish or change a draft');
+  assert.deepEqual(errors,[]);
  }finally{await context.close();}
 });
