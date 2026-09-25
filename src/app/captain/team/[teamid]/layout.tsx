@@ -293,6 +293,75 @@ body:has(.captain-app-header) .captain-team-main table {
   white-space: nowrap;
 }
 
+/* Fixtures is an app screen, not a desktop control panel squeezed into a phone. */
+body:has(.captain-app-header) .captain-fixtures-page {
+  margin: 0 !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-primary {
+  overflow: visible !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  background: rgba(255,255,255,0.025) !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-primary > div {
+  gap: 0.7rem !important;
+  padding: 0.8rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-primary h2 {
+  margin-top: 0 !important;
+  font-size: 1.05rem !important;
+  line-height: 1.35 !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-guidance {
+  margin-top: 0.6rem !important;
+  padding: 0.7rem 0.8rem !important;
+  font-size: 0.78rem !important;
+  line-height: 1.25rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-guidance-detail,
+body:has(.captain-app-header) .captain-fixtures-response-help {
+  display: none !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-status-helper {
+  margin-top: 0.55rem !important;
+  font-size: 0.76rem !important;
+  line-height: 1.2rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-response-card {
+  padding: 0.75rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-response-card > div {
+  margin-top: 0.65rem !important;
+  gap: 0.5rem !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-response-card button {
+  min-height: 2.75rem !important;
+  padding: 0.6rem 0.7rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-issue summary {
+  min-height: 2.5rem !important;
+  padding: 0.65rem 0.8rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-upcoming > div:first-child {
+  padding: 0.75rem 0.85rem !important;
+}
+
+body:has(.captain-app-header) .captain-fixtures-upcoming > div:last-child > div {
+  gap: 0.55rem !important;
+  padding: 0.8rem 0.85rem !important;
+}
+
 @media (min-width: 1280px) {
   .captain-team-shell .captain-team-main div:has(> form input[name="membershipId"]) {
     flex: 0 1 39rem;
