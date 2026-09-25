@@ -29,9 +29,9 @@ async function state(id) {
 
 test('disposable campaign and signed player-choice lifecycle', async t => {
   try {
-    // This legacy table is intentionally outside the Prisma model. Use the
-    // existing migration's DDL, not a weakened mock of its unique constraints.
-    const [table] = await db.$queryRawUnsafe(`SELECT to_regclass('"LeadTeamConfirmation"') AS name`);
+    // Read the regclass as text because Prisma does not decode the regclass type.
+    // Use the existing migration's DDL and real unique constraints for this table.
+    const [table] = await db.$queryRawUnsafe(`SELECT to_regclass('"LeadTeamConfirmation"')::text AS name`);
     if (!table.name) {
       const ddl = fs.readFileSync('prisma/migrations/20260627093000_team_lead_confirmation/migration.sql', 'utf8').split('INSERT INTO "EmailTemplate"')[0];
       for (const statement of ddl.split(';').map(s => s.trim()).filter(Boolean)) await db.$executeRawUnsafe(statement);
