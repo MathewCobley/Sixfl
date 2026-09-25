@@ -13,7 +13,7 @@ const entry = `import React from 'react';import {createRoot} from 'react-dom/cli
 import Home from './src/components/referee/RefereeAppHome';
 import Confirmation from './src/components/referee/RefereeNightConfirmation';
 window.submissions=[];
-(async()=>{const confirmation=await Confirmation({refereeId:'ref'});createRoot(document.getElementById('root')).render(<Home name="Charlie Cobley" openCount={2} submittedCount={1} dueToYou="£30.00" dueToSixfl="£10.00" confirmation={confirmation} preview={null} desktopTabs={null}
+(async()=>{const confirmation=await Confirmation({refereeId:'ref'});createRoot(document.getElementById('root')).render(<Home name="Charlie Cobley" openCount={2} submittedCount={1} dueToYou="£30.00" dueToSixfl="£10.00" setNights={[{id:'league-1',name:'Northallerton Wednesday',dayOfWeek:'WEDNESDAY',venueName:'Northallerton Sports Village'}]} confirmation={confirmation} preview={null} desktopTabs={null}
 nextNight={{id:'n1',leagueName:'Northallerton Monday',venueName:'Northallerton Sports Village',dateLabel:'Mon 28 September',fixtureCount:4,feeLabel:'£40.00',isPast:false,isToday:false,firstKickoff:'19:30',colleagues:'Refereeing with: Mathew.'}}>
 <section id="referee-night-picker" className="rounded-2xl border border-white/10 p-4"><h2>Your nights</h2></section><section id="referee-ledger">Money owed and paid</section></Home>);})();`;
 const mocks = {
@@ -100,6 +100,7 @@ try {
     await page.getByRole("heading", { name: "Hi, Charlie" }).waitFor();
     assert.equal(await page.getByText("Referee Portal", { exact: true }).count(), 0);
     assert.equal(await page.getByText("Earns £40.00 after night", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("Northallerton Wednesday", { exact: true }).count(), 1);
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -109,6 +110,7 @@ try {
     const open = page.getByRole("link", { name: "View match night" });
     assert.equal(await open.getAttribute("href"), "/referee/night/n1");
     assert.equal(await page.getByRole("link", { name: "Nights", exact: true }).getAttribute("href"), "/referee/nights");
+    assert.equal(await page.getByRole("link", { name: "More", exact: true }).getAttribute("href"), "/referee/more");
     const box = await open.boundingBox();
     assert.ok(box.height >= 44);
     if (width < 640)
