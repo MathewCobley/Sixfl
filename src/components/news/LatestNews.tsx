@@ -8,7 +8,13 @@ import NewsCard from './NewsCard';
 
 /** Root-page discovery slot. Published-only data is read separately so news never
  * blocks fixtures, payments or other operational dashboard data. */
-export default function LatestNews({ scope }: { scope: 'league' | 'team' | 'captain' | 'player' }) {
+export default function LatestNews({
+  scope,
+  presentation = "default",
+}: {
+  scope: 'league' | 'team' | 'captain' | 'player';
+  presentation?: "default" | "integrated";
+}) {
   const params = useParams();
   const pathname = usePathname();
   const value = params[scope === 'league' ? 'slug' : scope === 'team' ? 'id' : 'teamid'];
@@ -45,17 +51,27 @@ export default function LatestNews({ scope }: { scope: 'league' | 'team' | 'capt
   if (!visible) return null;
 
   if (compact) {
+    const integrated = scope === "captain" && presentation === "integrated";
+
     return (
       <section
         aria-label="Latest SIXFL news"
-        className="captain-app-news mx-auto w-full max-w-xl px-3 pb-2 pt-2 text-white"
+        className={
+          integrated
+            ? "captain-app-news w-full text-white"
+            : "captain-app-news mx-auto w-full max-w-xl px-3 pb-2 pt-2 text-white"
+        }
       >
         {items?.length ? (
-          <NewsCard news={items[0]} teamId={id} compact />
+          <NewsCard news={items[0]} teamId={id} compact integrated={integrated} />
         ) : (
           <p
             role="status"
-            className="rounded-[1.05rem] border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/50"
+            className={
+              integrated
+                ? "rounded-[1.05rem] border border-[#24372f] bg-[#0d1a14] px-3.5 py-3 text-xs leading-5 text-white/50"
+                : "rounded-[1.05rem] border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/50"
+            }
           >
             {error
               ? "Latest SIXFL news is temporarily unavailable."
