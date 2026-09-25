@@ -19,17 +19,6 @@ type Body = {
   divisionId?: unknown;
 };
 
-type CommunicationsOnlyTeam = {
-  id: string;
-  teamId: string;
-  teamName: string;
-  logoUrl: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  divisionId: string | null;
-  divisionName: string | null;
-};
-
 function getString(value: unknown) {
   const parsed = String(value ?? "").trim();
   return parsed || null;
@@ -38,7 +27,7 @@ function getString(value: unknown) {
 async function getLeague(id: string) {
   return prisma.league.findUnique({
     where: { id },
-    select: { id: true, name: true, season: true, slug: true },
+    select: { id: true, name: true, season: true, slug: true, competitionId: true },
   });
 }
 
@@ -49,32 +38,6 @@ async function getDivisions(id: string) {
     WHERE "leagueId" = ${id}
       AND "isActive" = true
     ORDER BY "sortOrder" ASC, "name" ASC
-  `);
-}
-
-async function getCommunicationsOnlyAffiliates(leagueId: string) {
-  return prisma.$queryRaw<CommunicationsOnlyTeam[]>(Prisma.sql`
-    SELECT
-      COALESCE(lst."id", ${"communications_"} || md5(t."id" || ':' || target."id")) AS "id",
-      t."id" AS "teamId",
-      t."name" AS "teamName",
-      t."logoUrl",
-      t."contactEmail",
-      t."contactPhone",
-      NULL::text AS "divisionId",
-      NULL::text AS "divisionName"
-    FROM "League" target
-    JOIN "Team" t
-      ON target."competitionId" IS NOT NULL
-     AND t."competitionId" = target."competitionId"
-    LEFT JOIN "LeagueSeasonTeam" lst
-      ON lst."leagueId" = target."id"
-     AND lst."teamId" = t."id"
-    WHERE target."id" = ${leagueId}
-      AND t."leagueId" IS NULL
-      AND COALESCE(lst."isActive", false) = false
-      AND COALESCE(t."isFixturePlaceholder", false) = false
-    ORDER BY t."name" ASC
   `);
 }
 
@@ -92,27 +55,21 @@ export async function GET(
   await requireAdmin();
 
   const { id } = await params;
-  const [league, divisions, teams, standardAffiliatedTeams, communicationsOnlyTeams] =
-    await Promise.all([
-      getLeague(id),
-      getDivisions(id),
-      getLeagueSeasonTeams({ leagueId: id }),
-      getAffiliatedTeamsOutsideSeason(id),
-      getCommunicationsOnlyAffiliates(id),
-    ]);
+  const [league, divisions, teams, affiliatedRows] = await Promise.all([
+    getLeague(id),
+    getDivisions(id),
+    getLeagueSeasonTeams({ leagueId: id }),
+    getAffiliatedTeamsOutsideSeason(id),
+  ]);
 
   if (!league) {
     return NextResponse.json({ error: "League not found." }, { status: 404 });
   }
 
-  const affiliatedTeams = [
-    ...standardAffiliatedTeams.map((team) => ({ ...team, canEnterSeason: true })),
-    ...communicationsOnlyTeams.map((team) => ({
-      ...team,
-      canEnterSeason: false,
-      affiliationLabel: "Communications only",
-    })),
-  ].sort((left, right) => left.teamName.localeCompare(right.teamName));
+  const affiliatedTeams = affiliatedRows.map((team) => ({
+    ...team,
+    canEnterSeason: true,
+  }));
 
   return NextResponse.json({ league, divisions, teams, affiliatedTeams });
 }
@@ -137,20 +94,29 @@ export async function POST(
     return NextResponse.json({ error: "Team is required." }, { status: 400 });
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { leagueId: true },
-  });
+  const teamRows = await prisma.$queryRaw<Array<{
+    id: string;
+    competitionId: string | null;
+  }>>(Prisma.sql`
+    SELECT "id", "competitionId"
+    FROM "Team"
+    WHERE "id" = ${teamId}
+    LIMIT 1
+  `);
+  const team = teamRows[0];
 
   if (!team) {
     return NextResponse.json({ error: "Team not found." }, { status: 404 });
   }
 
-  if (!team.leagueId) {
+  if (
+    league.competitionId &&
+    team.competitionId !== league.competitionId
+  ) {
     return NextResponse.json(
       {
         error:
-          "This team is set to No league and is affiliated for communications only. Assign it to a league from the team page before entering a season or division.",
+          "Assign this team to the season's parent competition from the team page first.",
       },
       { status: 409 },
     );
