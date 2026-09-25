@@ -1,0 +1,86 @@
+name: Catterick interest campaign
+
+on:
+  pull_request:
+    paths:
+      - 'prisma/migrations/20260926001000_catterick_team_interest_campaign/**'
+      - 'src/lib/leads/**'
+      - 'src/app/(public)/team-confirmation/**'
+      - 'src/app/(admin)/admin/leads/**'
+      - 'src/lib/email/**'
+      - 'tests/catterick-interest/**'
+      - '.github/workflows/catterick-interest-campaign.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catterick-interest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: sixfl_catterick_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d sixfl_catterick_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/sixfl_catterick_test
+      NEXTAUTH_SECRET: isolated-catterick-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_catterick_test_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Test native campaign, renderer and decision routes
+        run: node --test tests/catterick-interest/contract.test.cjs
+      - name: Prepare the exact production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Retain campaign and critical feature contracts after preparation
+        run: |
+          node --test tests/catterick-interest/contract.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npx tsc --noEmit
+      - name: Create disposable test schema only
+        run: |
+          node -e 'const u=new URL(process.env.DATABASE_URL); if(u.hostname!=="127.0.0.1" || u.pathname!=="/sixfl_catterick_test") throw Error("Not the disposable database")'
+          npx prisma db push --skip-generate
+      - name: Real database migration, cancellation, rollback and race checks
+        run: node --test tests/catterick-interest/postgres.test.cjs
+      - name: Production build
+        run: npx next build
+      - name: Preserve source and rendered email evidence
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          mkdir -p artifacts/catterick-interest
+          git diff -- src > artifacts/catterick-interest/preparation.diff
+          git grep -n -E 'teamConfirmationUrl|IndividualPlayerChoice|individual-player|catterick-team-interest' -- src scripts prisma/migrations tests > artifacts/catterick-interest/source-inventory.txt
+          tar -czf artifacts/catterick-interest/prepared-source.tgz 'src/app/(public)/team-confirmation' src/lib/leads src/lib/email 'src/app/(admin)/admin/leads' tests/catterick-interest prisma/migrations/20260926001000_catterick_team_interest_campaign
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.checkout.outcome == 'success'
+        with:
+          name: catterick-interest-${{ github.sha }}
+          path: artifacts/catterick-interest/
+          retention-days: 7
+          if-no-files-found: error

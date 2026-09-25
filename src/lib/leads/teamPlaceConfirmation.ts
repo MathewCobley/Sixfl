@@ -107,6 +107,21 @@ export async function confirmTeamPlaceFromLead(leadId: string) {
   const token = createTeamPlaceConfirmationToken(cleanLeadId);
 
   await prisma.$transaction(async (tx) => {
+    // Match the lock used by decline and individual-player decisions. A stale
+    // team form must not turn a corrected player enquiry back into a team.
+    const [lead] = await tx.$queryRaw<Array<{ interestType: string; status: string; convertedTeamId: string | null }>>(Prisma.sql`
+      SELECT "interestType"::text AS "interestType", "status"::text AS status, "convertedTeamId"
+      FROM "InterestLead" WHERE "id" = ${cleanLeadId} FOR UPDATE
+    `);
+    if (!lead || lead.interestType !== "TEAM") throw new Error("This enquiry is no longer a team enquiry.");
+    if (lead.convertedTeamId) return;
+    const [confirmation] = await tx.$queryRaw<Array<{ status: string }>>(Prisma.sql`
+      SELECT "status"::text AS status FROM "LeadTeamConfirmation" WHERE "leadId" = ${cleanLeadId}
+    `);
+    if (lead.status === "CLOSED" || confirmation?.status === "DECLINED") {
+      throw new Error("This team enquiry is closed. Contact SIXFL to reopen it.");
+    }
+
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LeadTeamConfirmation" (
         "id", "leadId", "token", "status", "confirmedAt", "createdAt", "updatedAt"
