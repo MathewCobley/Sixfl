@@ -277,7 +277,7 @@ export async function getAdminLatestActivity(limit = 50): Promise<AdminActivityI
       title: `${sender} sent an app message · ${teamName}`,
       detail: `${conversationLabel} · ${preview(item.body, 100)}`,
       occurredAt: item.createdAt,
-      href: "/admin/messaging#app-messaging",
+      href: "/admin/chat",
     });
   }
 
