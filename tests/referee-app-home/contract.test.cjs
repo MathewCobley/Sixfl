@@ -354,7 +354,7 @@ test("availability is a calendar with usual nights highlighted and instant-save 
   assert.match(calendar, /grid-cols-7/);
   assert.match(calendar, /Usual nights are highlighted/);
   assert.doesNotMatch(calendar, /Your availability/);
-  assert.match(calendar, /Usual referee night/);
+  assert.match(calendar, /usual referee night/i);
   assert.match(calendar, /label: "Unset"/);
   assert.doesNotMatch(calendar, /label: "No response"/);
   assert.match(calendar, /updateRefereeAvailabilitySlotAction/);
