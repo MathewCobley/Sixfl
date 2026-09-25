@@ -31,11 +31,23 @@ export type AdminPushAuditItem = {
   deviceLabel: string | null;
 };
 
+export type AdminSixflSupportConversation = {
+  id: string;
+  teamName: string;
+  participantName: string;
+  latestMessageAt: Date | null;
+  lastMessagePreview: string | null;
+  needsReply: boolean;
+  href: string;
+};
+
 export type AdminAppMessagingDashboard = {
   totalConversations: number;
   messagesLast24Hours: number;
   activePushDevices: number;
   notificationUsers: number;
+  sixflSupportNeedsReplyCount: number;
+  sixflSupportMessages: AdminSixflSupportConversation[];
   recentMessages: AdminAppMessageActivity[];
   pushAudit: AdminPushAuditItem[];
 };
@@ -43,11 +55,13 @@ export type AdminAppMessagingDashboard = {
 export type AdminInternalChatConversation = {
   id: string;
   teamName: string;
+  conversationType: PortalConversationType;
   conversationLabel: string;
   participantName: string | null;
   lastMessagePreview: string | null;
   latestMessageAt: Date | null;
   messageCount: number;
+  needsReply: boolean;
   href: string;
 };
 
@@ -98,12 +112,22 @@ export async function getAdminInternalChatConversations(
       _count: {
         select: { messages: true },
       },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          senderRole: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
   return conversations.map((conversation) => ({
     id: conversation.id,
     teamName: conversation.team.name,
+    conversationType: conversation.type,
     conversationLabel: internalConversationLabel(conversation),
     participantName:
       conversation.type === PortalConversationType.CAPTAIN_PLAYER ||
@@ -113,6 +137,13 @@ export async function getAdminInternalChatConversations(
     lastMessagePreview: conversation.lastMessagePreview,
     latestMessageAt: conversation.latestMessageAt,
     messageCount: conversation._count.messages,
+    needsReply:
+      conversation.type === PortalConversationType.SIXFL &&
+      Boolean(
+        conversation.messages[0] &&
+          (conversation.messages[0].senderRole === PortalMessageSenderRole.PLAYER ||
+            conversation.messages[0].senderRole === PortalMessageSenderRole.CAPTAIN),
+      ),
     href: adminPortalChatHref({
       teamId: conversation.teamId,
       conversationId: conversation.id,
@@ -166,10 +197,109 @@ export function adminPortalChatHref(input: {
   }
 
   if (input.type === PortalConversationType.SIXFL) {
-    return `/captain/team/${input.teamId}/chat?conversation=sixfl`;
+    return `/admin/messaging/chat/support/${input.conversationId}`;
   }
 
   return `/captain/team/${input.teamId}/chat?conversation=team`;
+}
+
+export async function getAdminSixflSupportConversations(
+  limit = 50,
+): Promise<AdminSixflSupportConversation[]> {
+  const conversations = await prisma.portalConversation.findMany({
+    where: { type: PortalConversationType.SIXFL },
+    orderBy: [{ latestMessageAt: "desc" }, { updatedAt: "desc" }],
+    take: Math.max(5, Math.min(200, limit)),
+    select: {
+      id: true,
+      teamId: true,
+      lastMessagePreview: true,
+      latestMessageAt: true,
+      participantUser: {
+        select: { name: true, email: true },
+      },
+      team: {
+        select: { name: true },
+      },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          senderRole: true,
+        },
+      },
+    },
+  });
+
+  return conversations.map((conversation) => {
+    const latest = conversation.messages[0] ?? null;
+    const needsReply =
+      latest?.senderRole === PortalMessageSenderRole.PLAYER ||
+      latest?.senderRole === PortalMessageSenderRole.CAPTAIN;
+
+    return {
+      id: conversation.id,
+      teamName: conversation.team.name,
+      participantName: displayName(conversation.participantUser),
+      latestMessageAt: conversation.latestMessageAt,
+      lastMessagePreview: conversation.lastMessagePreview,
+      needsReply,
+      href: `/admin/messaging/chat/support/${conversation.id}`,
+    };
+  });
+}
+
+export async function getAdminSixflSupportNeedsReplyCount() {
+  const conversations = await getAdminSixflSupportConversations(200);
+  return conversations.filter((conversation) => conversation.needsReply).length;
+}
+
+export async function getAdminSixflSupportConversation(conversationId: string) {
+  const conversation = await prisma.portalConversation.findFirst({
+    where: {
+      id: conversationId,
+      type: PortalConversationType.SIXFL,
+    },
+    select: {
+      id: true,
+      teamId: true,
+      title: true,
+      participantUserId: true,
+      participantUser: {
+        select: { id: true, name: true, email: true },
+      },
+      team: {
+        select: { id: true, name: true },
+      },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          body: true,
+          senderRole: true,
+          senderUserId: true,
+          senderUser: {
+            select: { name: true, email: true },
+          },
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  if (!conversation) return null;
+
+  const latest =
+    conversation.messages[conversation.messages.length - 1] ?? null;
+  return {
+    ...conversation,
+    participantName: displayName(conversation.participantUser),
+    needsReply:
+      latest?.senderRole === PortalMessageSenderRole.PLAYER ||
+      latest?.senderRole === PortalMessageSenderRole.CAPTAIN,
+  };
 }
 
 function pushStatus(input: {
@@ -209,6 +339,7 @@ export async function getAdminAppMessagingDashboard(
     activeSubscriptions,
     notificationUsers,
     messages,
+    supportConversations,
     pushAuditRows,
   ] = await Promise.all([
     prisma.portalConversation.count(),
@@ -236,6 +367,9 @@ export async function getAdminAppMessagingDashboard(
     prisma.portalMessage.findMany({
       where: {
         deletedAt: null,
+        conversation: {
+          type: { not: PortalConversationType.SIXFL },
+        },
         senderRole: {
           in: [
             PortalMessageSenderRole.ADMIN,
@@ -290,6 +424,7 @@ export async function getAdminAppMessagingDashboard(
         },
       },
     }),
+    getAdminSixflSupportConversations(40),
     prisma.pushNotification.findMany({
       orderBy: [{ createdAt: "desc" }],
       take: Math.max(5, Math.min(40, pushLimit)),
@@ -460,6 +595,10 @@ export async function getAdminAppMessagingDashboard(
     messagesLast24Hours,
     activePushDevices: activeSubscriptions,
     notificationUsers: notificationUsers.length,
+    sixflSupportNeedsReplyCount: supportConversations.filter(
+      (conversation) => conversation.needsReply,
+    ).length,
+    sixflSupportMessages: supportConversations.slice(0, 8),
     recentMessages,
     pushAudit,
   };

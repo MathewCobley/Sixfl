@@ -74,3 +74,53 @@ test("admin latest activity includes app chat events", () => {
   assert.match(activity, /sent an app message/);
   assert.match(activity, /\/admin\/messaging#app-messaging/);
 });
+
+
+test("messages sent to SIXFL have a separate admin inbox and alert", () => {
+  const admin = read("src/lib/admin/app-messaging.ts");
+  const panel = read("src/components/admin/messaging/AdminAppMessagingPanel.tsx");
+  const consolePage = read("src/app/(admin)/admin/messaging/chat/page.tsx");
+  const layout = read("src/app/(admin)/admin/layout.tsx");
+  const sidebar = read("src/components/admin/AdminSidebar.tsx");
+
+  assert.match(admin, /getAdminSixflSupportConversations/);
+  assert.match(admin, /getAdminSixflSupportNeedsReplyCount/);
+  assert.match(admin, /sixflSupportNeedsReplyCount/);
+  assert.match(admin, /type: \{ not: PortalConversationType\.SIXFL \}/);
+  assert.match(admin, /latest\?\.senderRole === PortalMessageSenderRole\.PLAYER/);
+  assert.match(admin, /latest\?\.senderRole === PortalMessageSenderRole\.CAPTAIN/);
+  assert.match(admin, /\/admin\/messaging\/chat\/support\/\$\{input\.conversationId\}/);
+
+  assert.match(panel, /Messages to SIXFL/);
+  assert.match(panel, /Direct messages to SIXFL are kept separate from squad chat/);
+  assert.match(panel, /New · needs reply/);
+  assert.match(panel, /Squad chat activity/);
+
+  assert.match(consolePage, /id="sixfl-inbox"/);
+  assert.match(consolePage, /Messages to SIXFL/);
+  assert.match(consolePage, /Squad conversations/);
+  assert.match(consolePage, /conversation\.needsReply/);
+
+  assert.match(layout, /getAdminSixflSupportNeedsReplyCount/);
+  assert.match(layout, /totalMessagingAlertCount/);
+  assert.match(layout, /sixflSupportNeedsReplyCount > 0/);
+  assert.match(sidebar, /sixflSupportNeedsReplyCount/);
+  assert.match(sidebar, /app message\$\{sixflSupportNeedsReplyCount === 1 \? "" : "s"\} to SIXFL need reply/);
+});
+
+test("admin can reply to a Message SIXFL thread from a dedicated support screen", () => {
+  const page = read("src/app/(admin)/admin/messaging/chat/support/[conversationId]/page.tsx");
+  const action = read("src/app/(admin)/admin/messaging/chat/support/[conversationId]/actions.ts");
+
+  assert.match(page, /Message to SIXFL/);
+  assert.match(page, /Reply as SIXFL/);
+  assert.match(page, /Needs reply/);
+  assert.match(page, /sendAdminSixflChatReplyAction/);
+
+  assert.match(action, /type: PortalConversationType\.SIXFL/);
+  assert.match(action, /senderRole: PortalMessageSenderRole\.ADMIN/);
+  assert.match(action, /portalConversation\.update/);
+  assert.match(action, /queuePushNotifications/);
+  assert.match(action, /PORTAL_SIXFL_REPLY/);
+  assert.match(action, /conversation=sixfl/);
+});

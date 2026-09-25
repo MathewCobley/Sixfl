@@ -135,15 +135,83 @@ export default function AdminAppMessagingPanel({
         </div>
       </div>
 
+      <div
+        className={`mt-6 overflow-hidden rounded-2xl border ${
+          data.sixflSupportNeedsReplyCount > 0
+            ? "border-amber-400/25 bg-amber-500/[0.05]"
+            : "border-emerald-400/15 bg-emerald-500/[0.035]"
+        }`}
+      >
+        <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300/75">
+              SIXFL inbox
+            </div>
+            <h3 className="mt-1 text-base font-semibold text-white">Messages to SIXFL</h3>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              Direct messages to SIXFL are kept separate from squad chat.
+            </p>
+          </div>
+          <Link
+            href="/admin/messaging/chat#sixfl-inbox"
+            className={`inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-xs font-bold ${
+              data.sixflSupportNeedsReplyCount > 0
+                ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
+            }`}
+          >
+            {data.sixflSupportNeedsReplyCount > 0
+              ? `${data.sixflSupportNeedsReplyCount} need reply`
+              : "Open SIXFL inbox"}
+          </Link>
+        </div>
+
+        {data.sixflSupportMessages.length > 0 ? (
+          <div className="divide-y divide-white/10">
+            {data.sixflSupportMessages.slice(0, 5).map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="flex items-start justify-between gap-4 px-4 py-3 transition hover:bg-white/[0.04]"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-semibold text-white">
+                      {item.participantName}
+                    </span>
+                    <span className="text-xs text-white/35">{item.teamName}</span>
+                    {item.needsReply ? (
+                      <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-amber-100">
+                        New · needs reply
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 truncate text-xs text-white/50">
+                    {item.lastMessagePreview || "No message preview"}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[10px] text-white/30">
+                  {item.latestMessageAt ? relativeTime(item.latestMessageAt) : ""}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="px-4 py-5 text-sm text-white/40">
+            No direct messages to SIXFL yet.
+          </div>
+        )}
+      </div>
+
       <div className="mt-6 grid gap-6 2xl:grid-cols-2">
         <div className="min-w-0">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-semibold text-white">
-                Recent app messages
+                Squad chat activity
               </h3>
               <p className="mt-1 text-xs text-white/40">
-                Shows who sent it, unread recipients and whether a phone alert was used.
+                Whole Squad, Regulars, selected groups and private squad conversations. Messages to SIXFL are listed separately above.
               </p>
             </div>
           </div>

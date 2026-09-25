@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ResultDisputeStatus } from "@prisma/client";
 
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getAdminSixflSupportNeedsReplyCount } from "@/lib/admin/app-messaging";
 import { getAdminInboxSummary } from "@/lib/messaging/service";
 import { getNextNightBoardIssueSummary } from "@/lib/night-board/next-night-issues";
 import { prisma } from "@/lib/prisma";
@@ -68,11 +69,13 @@ export default async function AdminLayout({
   const [
     { session, user },
     inboxSummary,
+    sixflSupportNeedsReplyCount,
     openDisputeCount,
     nextNightBoardIssues,
   ] = await Promise.all([
     requireAdmin(),
     getAdminInboxSummary(),
+    getAdminSixflSupportNeedsReplyCount(),
     prisma.resultDispute.count({
       where: {
         status: {
@@ -85,6 +88,8 @@ export default async function AdminLayout({
 
   const email = user?.email ?? session?.user?.email ?? "Admin";
   const name = user?.name ?? session?.user?.name ?? "Admin";
+  const totalMessagingAlertCount =
+    inboxSummary.unreadThreads + sixflSupportNeedsReplyCount;
   const appNavItems: PwaAppNavItem[] = [
     { href: "/admin", label: "Home", icon: "home", exact: true },
     { href: "/admin/teams", label: "Teams", icon: "teams" },
@@ -93,7 +98,7 @@ export default async function AdminLayout({
       href: "/admin/messages",
       label: "Inbox",
       icon: "inbox",
-      badgeCount: inboxSummary.unreadThreads,
+      badgeCount: totalMessagingAlertCount,
     },
     { href: "/admin/more", label: "More", icon: "more", fallback: true },
   ];
@@ -145,8 +150,12 @@ export default async function AdminLayout({
         dateLabel={formatAdminAppDate(new Date())}
         profileInitials={getAdminInitials(name, email)}
         profileHref="/admin/more"
-        notificationHref="/admin/messages?filter=unread"
-        notificationCount={inboxSummary.unreadThreads}
+        notificationHref={
+          sixflSupportNeedsReplyCount > 0
+            ? "/admin/messaging/chat#sixfl-inbox"
+            : "/admin/messages?filter=unread"
+        }
+        notificationCount={totalMessagingAlertCount}
         navItems={appNavItems}
       />
 
@@ -169,6 +178,7 @@ export default async function AdminLayout({
             name={name}
             email={email}
             unreadMessagingCount={inboxSummary.unreadThreads}
+            sixflSupportNeedsReplyCount={sixflSupportNeedsReplyCount}
             openDisputeCount={openDisputeCount}
             nightBoardIssueCount={nextNightBoardIssues.count}
             nightBoardIssueLevel={nextNightBoardIssues.level}
