@@ -14,6 +14,8 @@ const baseData = {
     label: 'Timmy Time FC vs Dynamo Kebab', dateLabel: 'Tue, 29 Sept, 20:00',
     venueLabel: 'Rossett Sports Centre', statusLabel: 'Fixture confirmed',
     statusTone: 'emerald', countdownLabel: '5 days to go',
+    homeTeam: { name: 'Timmy Time FC', logoUrl: null },
+    awayTeam: { name: 'Dynamo Kebab', logoUrl: null },
   },
 };
 
@@ -45,8 +47,11 @@ function harness(options = {}) {
       } };
       if (id === '@/lib/prisma') return { prisma: { team: { findUnique: async input => {
         calls.identityReads.push(input);
-        assert.deepEqual(input, { where: { id: options.teamId || 'demo' }, select: { name: true } });
-        return options.missingTeam ? null : { name: options.teamName || 'Dynamo Kebab' };
+        assert.deepEqual(input, { where: { id: options.teamId || 'demo' }, select: { name: true, logoUrl: true } });
+        return options.missingTeam ? null : {
+          name: options.teamName || 'Dynamo Kebab',
+          logoUrl: options.teamLogoUrl || null,
+        };
       } } } };
       if (['react', 'react/jsx-runtime', '@heroicons/react/24/outline'].includes(id)) return require(id);
       if (id.startsWith('@/') || id.startsWith('.')) {

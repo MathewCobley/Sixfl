@@ -173,8 +173,8 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
       orderBy: [{ kickoffAt: "asc" }],
       take: 5,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         venue: { select: { name: true } },
         captainConfirmations: {
           where: { teamId: { in: relatedTeamIds } },
@@ -193,8 +193,8 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
       orderBy: [{ kickoffAt: "desc" }],
       take: 5,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: {
           select: {
             id: true,
@@ -286,6 +286,14 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
           statusLabel: nextFixtureStatus.label,
           statusTone: nextFixtureStatus.tone,
           countdownLabel: getFixtureCountdownLabel(nextFixture.kickoffAt),
+          homeTeam: {
+            name: nextFixture.homeTeam.name,
+            logoUrl: nextFixture.homeTeam.logoUrl,
+          },
+          awayTeam: {
+            name: nextFixture.awayTeam.name,
+            logoUrl: nextFixture.awayTeam.logoUrl,
+          },
         }
       : null;
 
