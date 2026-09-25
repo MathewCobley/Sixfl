@@ -9,8 +9,8 @@ export default async function CaptainAppHome(props: CaptainAppHomeData) {
   await requireCaptain(props.teamId);
   const team = await prisma.team.findUnique({
     where: { id: props.teamId },
-    select: { name: true },
+    select: { name: true, logoUrl: true },
   });
   if (!team) notFound();
-  return <CaptainAppHomeView {...props} teamName={team.name} />;
+  return <CaptainAppHomeView {...props} teamName={team.name} teamLogoUrl={team.logoUrl} />;
 }
