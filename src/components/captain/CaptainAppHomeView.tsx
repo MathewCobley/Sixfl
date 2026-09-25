@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   CalendarDaysIcon,
@@ -69,7 +70,12 @@ export default function CaptainAppHomeView({
   openIssues,
   paymentDueNowLabel,
   overdueConfirmations,
-}: CaptainAppHomeData & { teamName: string; teamLogoUrl: string | null }) {
+  news,
+}: CaptainAppHomeData & {
+  teamName: string;
+  teamLogoUrl: string | null;
+  news?: ReactNode;
+}) {
   const base = `/captain/team/${teamId}`;
   const paymentOutstanding = paymentDueNowLabel !== "£0.00";
   const actions = [
@@ -218,6 +224,8 @@ export default function CaptainAppHomeView({
           ) : null}
         </section>
       ) : null}
+
+      {news ? <div className={styles.newsSlot}>{news}</div> : null}
 
       <nav className={styles.actionGrid} aria-label="Team tools">
         {actions.map(({ href, label, description, tone, Icon }) => (

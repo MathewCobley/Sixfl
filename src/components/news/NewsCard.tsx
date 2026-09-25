@@ -8,16 +8,59 @@ export default function NewsCard({
   teamId,
   featured = false,
   compact = false,
+  integrated = false,
 }: {
   news: PublishedNews;
   teamId?: string;
   featured?: boolean;
   compact?: boolean;
+  integrated?: boolean;
 }) {
   const a = news.article;
   const url = newsPath(news.leagueSlug, a.matchDate);
   const teamMatches = a.matches.filter((m) => teamId && [m.teamAId, m.teamBId].includes(teamId));
   const goals = a.matches.reduce((sum, match) => sum + match.scoreA + match.scoreB, 0);
+
+  if (compact && integrated) {
+    return (
+      <article className="overflow-hidden rounded-[1.05rem] border border-[#24372f] bg-[#0d1a14] text-white">
+        <Link href={url} className="block px-3.5 py-3 text-inherit no-underline active:bg-white/[0.025]">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-300">
+              Latest from SIXFL
+            </p>
+            <span className="shrink-0 rounded-md border border-white/[0.07] bg-black/20 px-2 py-0.5 text-[9px] font-bold text-white/45">
+              {news.matchweekNumber ? `MW ${news.matchweekNumber}` : "News"}
+            </span>
+          </div>
+
+          <h3 className="mt-1.5 line-clamp-2 text-[13px] font-extrabold leading-[1.35] tracking-[-0.01em] text-white">
+            {a.title}
+          </h3>
+
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <p className="min-w-0 truncate text-[10px] leading-4 text-white/42">
+              {a.leagueName} · {newsDate(a.matchDate)}
+            </p>
+            <span className="shrink-0 text-[10px] font-bold text-emerald-200">
+              Read report →
+            </span>
+          </div>
+
+          {teamMatches.length ? (
+            <div className="mt-2 border-t border-white/[0.06] pt-2">
+              {teamMatches.slice(0, 1).map((m) => (
+                <div key={m.fixtureId} className="flex items-center justify-between gap-3 text-[11px] text-white/60">
+                  <span className="min-w-0 truncate">{m.teamA} · {m.teamB}</span>
+                  <strong className="shrink-0 text-emerald-200">{m.scoreA}–{m.scoreB}</strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </Link>
+      </article>
+    );
+  }
 
   if (compact) {
     return (
