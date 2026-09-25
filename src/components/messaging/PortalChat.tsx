@@ -954,7 +954,9 @@ export default function PortalChat({
                       ? "Start Whole Squad Chat. Everyone currently registered in your squad will be able to see it."
                       : "Start Whole Squad Chat. Everyone currently registered in the squad will be able to see it."
                     : selectedRef.startsWith("group:")
-                      ? `Start the ${selectedItem?.title ?? "group"} conversation. Only the people included in this group can see it.`
+                      ? selectedItem?.kind === "PRIVATE"
+                        ? `Start a private conversation with ${selectedItem?.title ?? "this teammate"}.`
+                        : `Start the ${selectedItem?.title ?? "group"} conversation. Only the people included in this group can see it.`
                       : selectedRef === "sixfl"
                         ? "Send a private message to SIXFL."
                         : data?.viewRole === "CAPTAIN"
@@ -1018,7 +1020,9 @@ export default function PortalChat({
                         : selectedRef === "team"
                           ? "Message the whole squad…"
                           : selectedRef.startsWith("group:")
-                            ? "Message this group…"
+                            ? selectedItem?.kind === "PRIVATE"
+                              ? `Message ${selectedItem?.title ?? "this teammate"}…`
+                              : "Message this group…"
                             : selectedRef === "sixfl"
                               ? "Message SIXFL…"
                               : "Private message…"
