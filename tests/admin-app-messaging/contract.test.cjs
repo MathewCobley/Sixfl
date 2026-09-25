@@ -4,31 +4,38 @@ const fs = require("node:fs");
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("admin communications includes the dark-launch app messaging centre", () => {
-  const page = read("src/app/(admin)/admin/messaging/page.tsx");
-  const panel = read("src/components/admin/messaging/AdminAppMessagingPanel.tsx");
+test("admin keeps Comms and Chat as separate top-level areas", () => {
+  const comms = read("src/app/(admin)/admin/messaging/page.tsx");
+  const chat = read("src/app/(admin)/admin/chat/page.tsx");
+  const sidebar = read("src/components/admin/AdminSidebar.tsx");
 
-  assert.match(page, /getAdminAppMessagingDashboard/);
-  assert.match(page, /<AdminAppMessagingPanel data=\{appMessaging\} \/>/);
-  assert.match(panel, /Whole Squad Chat control centre/);
-  assert.match(panel, /Dark launch/);
-  assert.match(panel, /SMS and email remain unchanged during the pilot/);
-  assert.match(panel, /Recent app messages/);
-  assert.match(panel, /Push notification audit/);
-  assert.match(panel, /Unread by/);
-  assert.match(panel, /Internal Chat Console/);
-  assert.match(panel, /\/admin\/messaging\/chat/);
+  assert.match(comms, /Email and SMS only/);
+  assert.doesNotMatch(comms, /AdminAppMessagingPanel/);
+  assert.doesNotMatch(comms, /getAdminAppMessagingDashboard/);
+
+  assert.match(chat, /title: "Chat \| SIXFL Admin"/);
+  assert.match(chat, />\s*Chat\s*</);
+  assert.match(chat, /Messages to SIXFL/);
+  assert.match(chat, /Squad chat monitor/);
+  assert.match(chat, /<details className="group/);
+  assert.match(chat, /Push notification audit/);
+
+  assert.match(sidebar, /name: "Comms"[\s\S]*href: "\/admin\/messaging"/);
+  assert.match(sidebar, /name: "Chat"[\s\S]*href: "\/admin\/chat"/);
+  assert.match(sidebar, /description: "Email\/SMS"/);
+  assert.match(sidebar, /description: "App messages"/);
 });
 
-test("admin has a dedicated internal app chat console", () => {
-  const page = read("src/app/(admin)/admin/messaging/chat/page.tsx");
+test("admin Chat tab has the internal app conversation console", () => {
+  const page = read("src/app/(admin)/admin/chat/page.tsx");
+  const legacy = read("src/app/(admin)/admin/messaging/chat/page.tsx");
   const admin = read("src/lib/admin/app-messaging.ts");
 
-  assert.match(page, /Internal Chat Console/);
-  assert.match(page, /Internal app chat only/);
-  assert.match(page, /No SMS · No email/);
   assert.match(page, /getAdminInternalChatConversations/);
-  assert.match(page, /Admin Test Mode/);
+  assert.match(page, /Messages sent directly to SIXFL stay separate from normal squad chat/);
+  assert.match(page, /Squad chat monitor/);
+  assert.match(legacy, /redirect\("\/admin\/chat"\)/);
+
   assert.match(admin, /getAdminInternalChatConversations/);
   assert.match(admin, /PortalConversationType\.REGULARS/);
   assert.match(admin, /PortalConversationType\.SELECTED_GROUP/);
@@ -79,7 +86,7 @@ test("admin latest activity includes app chat events", () => {
 test("messages sent to SIXFL have a separate admin inbox and alert", () => {
   const admin = read("src/lib/admin/app-messaging.ts");
   const panel = read("src/components/admin/messaging/AdminAppMessagingPanel.tsx");
-  const consolePage = read("src/app/(admin)/admin/messaging/chat/page.tsx");
+  const consolePage = read("src/app/(admin)/admin/chat/page.tsx");
   const layout = read("src/app/(admin)/admin/layout.tsx");
   const sidebar = read("src/components/admin/AdminSidebar.tsx");
 
@@ -89,7 +96,7 @@ test("messages sent to SIXFL have a separate admin inbox and alert", () => {
   assert.match(admin, /type: \{ not: PortalConversationType\.SIXFL \}/);
   assert.match(admin, /latest\?\.senderRole === PortalMessageSenderRole\.PLAYER/);
   assert.match(admin, /latest\?\.senderRole === PortalMessageSenderRole\.CAPTAIN/);
-  assert.match(admin, /\/admin\/messaging\/chat\/support\/\$\{input\.conversationId\}/);
+  assert.match(admin, /\/admin\/chat\/support\/\$\{input\.conversationId\}/);
 
   assert.match(panel, /Messages to SIXFL/);
   assert.match(panel, /Direct messages to SIXFL are kept separate from squad chat/);
@@ -109,8 +116,9 @@ test("messages sent to SIXFL have a separate admin inbox and alert", () => {
 });
 
 test("admin can reply to a Message SIXFL thread from a dedicated support screen", () => {
-  const page = read("src/app/(admin)/admin/messaging/chat/support/[conversationId]/page.tsx");
-  const action = read("src/app/(admin)/admin/messaging/chat/support/[conversationId]/actions.ts");
+  const page = read("src/app/(admin)/admin/chat/support/[conversationId]/page.tsx");
+  const action = read("src/app/(admin)/admin/chat/support/[conversationId]/actions.ts");
+  const legacy = read("src/app/(admin)/admin/messaging/chat/support/[conversationId]/page.tsx");
 
   assert.match(page, /Message to SIXFL/);
   assert.match(page, /Reply as SIXFL/);
@@ -123,4 +131,17 @@ test("admin can reply to a Message SIXFL thread from a dedicated support screen"
   assert.match(action, /queuePushNotifications/);
   assert.match(action, /PORTAL_SIXFL_REPLY/);
   assert.match(action, /conversation=sixfl/);
+  assert.match(legacy, /redirect\(\`\/admin\/chat\/support\/\$\{conversationId\}\`\)/);
+});
+
+
+test("Comms and Chat keep independent sidebar alert badges", () => {
+  const sidebar = read("src/components/admin/AdminSidebar.tsx");
+  const layout = read("src/app/(admin)/admin/layout.tsx");
+
+  assert.match(sidebar, /const showCommsBadge =[\s\S]*item\.href === "\/admin\/messaging"/);
+  assert.match(sidebar, /const showChatBadge =[\s\S]*item\.href === "\/admin\/chat"/);
+  assert.match(sidebar, /unreadMessagingCount > 0/);
+  assert.match(sidebar, /sixflSupportNeedsReplyCount > 0/);
+  assert.match(layout, /"\/admin\/chat#sixfl-inbox"/);
 });

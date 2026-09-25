@@ -152,7 +152,7 @@ export default async function AdminLayout({
         profileHref="/admin/more"
         notificationHref={
           sixflSupportNeedsReplyCount > 0
-            ? "/admin/messaging/chat#sixfl-inbox"
+            ? "/admin/chat#sixfl-inbox"
             : "/admin/messages?filter=unread"
         }
         notificationCount={totalMessagingAlertCount}
