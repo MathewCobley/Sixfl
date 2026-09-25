@@ -48,6 +48,19 @@ export function filterSquadMembers(members: CaptainAppSquadMember[], query: stri
   });
 }
 
+export function sortSquadMembersRegularsFirst(members: CaptainAppSquadMember[]) {
+  return members
+    .map((member, index) => ({ member, index }))
+    .sort((left, right) => {
+      if (left.member.isRegular !== right.member.isRegular) {
+        return left.member.isRegular ? -1 : 1;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ member }) => member);
+}
+
 function SubmitButton({ children, busy = "Saving…", disabled = false }: {
   children: React.ReactNode; busy?: string; disabled?: boolean;
 }) {
@@ -65,7 +78,9 @@ export default function CaptainAppSquad({ teamId, members, canAddPlayers, savedM
   const [adding, setAdding] = useState(false);
   const id = useId();
   const base = `/captain/team/${encodeURIComponent(teamId)}`;
-  const visible = filterSquadMembers(members, query, filter);
+  const visible = sortSquadMembersRegularsFirst(
+    filterSquadMembers(members, query, filter),
+  );
   const filters: { value: Filter; label: string; count: number }[] = [
     { value: "all", label: "All", count: members.length },
     { value: "regulars", label: "Regulars", count: members.filter((m) => m.isRegular).length },

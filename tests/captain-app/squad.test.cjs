@@ -18,7 +18,7 @@ new Function('require', 'module', 'exports', compiled.outputText)((id) => {
   if (['react', 'react/jsx-runtime', 'react-dom'].includes(id)) return require(id);
   throw Error(`Unmocked dependency: ${id}`);
 }, mod, mod.exports);
-const { default: Squad, filterSquadMembers } = mod.exports;
+const { default: Squad, filterSquadMembers, sortSquadMembersRegularsFirst } = mod.exports;
 let writes = 0;
 const inertAction = async () => { writes++; };
 const props = { teamId: 'demo', members, canAddPlayers: true, savedMessage: null, errorMessage: null,
@@ -35,6 +35,29 @@ test('all squad roles remain present; filters use membership flags, not invented
   assert.equal(filterSquadMembers(members, '#7', 'all')[0].id, 'member-7');
   assert.equal(filterSquadMembers(members, 'PLAYER2@EXAMPLE.INVALID', 'all')[0].id, 'member-2');
   assert.equal(filterSquadMembers(members, 'not-a-player', 'all').length, 0);
+});
+
+test('regulars are grouped at the top without disturbing order inside each group', () => {
+  const mixed = [
+    { ...members[3], isRegular: false },
+    { ...members[0], isRegular: true },
+    { ...members[4], isRegular: false },
+    { ...members[1], isRegular: true },
+    { ...members[5], isRegular: false },
+  ];
+  const sorted = sortSquadMembersRegularsFirst(mixed);
+
+  assert.deepEqual(
+    sorted.map((member) => member.id),
+    [members[0].id, members[1].id, members[3].id, members[4].id, members[5].id],
+  );
+  assert.deepEqual(mixed.map((member) => member.id), [
+    members[3].id,
+    members[0].id,
+    members[4].id,
+    members[1].id,
+    members[5].id,
+  ]);
 });
 
 test('real screen renders players, retained details and authorised action fields without writes', () => {
