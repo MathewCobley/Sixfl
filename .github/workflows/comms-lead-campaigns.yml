@@ -1,0 +1,77 @@
+name: Comms lead campaigns
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/admin/communications/CommunicationsLead*.tsx'
+      - 'src/app/(admin)/admin/communications/lead-campaign-actions.ts'
+      - 'src/app/(admin)/admin/messaging/page.tsx'
+      - 'src/app/(admin)/admin/leads/**'
+      - 'src/lib/leads/**'
+      - 'src/lib/current-leagues.ts'
+      - 'src/components/ui/FormListboxField.tsx'
+      - 'tests/comms-leads/**'
+      - 'tests/catterick-interest/**'
+      - '.github/workflows/comms-lead-campaigns.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comms-leads-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/sixfl_comms_test
+      NEXTAUTH_SECRET: isolated-comms-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_comms_test_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Native filters and existing personalised decision wiring
+        run: node --test tests/comms-leads/contract.test.cjs tests/catterick-interest/contract.test.cjs
+      - name: Prepare production source
+        run: npm run prebuild
+      - run: npx prisma generate
+      - name: Exact prepared-source Leads parity and critical contracts
+        run: |
+          COMMS_PREPARED=1 node --test tests/comms-leads/contract.test.cjs tests/catterick-interest/contract.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npx tsc --noEmit
+      - name: Production build
+        run: npx next build
+      - name: Isolated browser tooling
+        run: |
+          npm install --no-save --package-lock=false esbuild playwright
+          npx playwright install --with-deps chromium
+      - name: Native Comms filter and recipient interactions
+        run: node tests/comms-leads/browser.cjs
+      - name: Retain prepared sources and verification inventory
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          mkdir -p artifacts/comms-leads
+          git diff -- src > artifacts/comms-leads/preparation.diff
+          git grep -n -E 'CommunicationsLeadLauncher|CommunicationsLeadCampaigns|previewLeadCampaignAction|sendLeadCampaignAction|teamConfirmationUrl|selectedLeague|excludedStatus' -- src scripts tests > artifacts/comms-leads/source-inventory.txt
+          tar -czf artifacts/comms-leads/prepared-source.tgz src/components/admin/communications 'src/app/(admin)/admin/communications' 'src/app/(admin)/admin/messaging' 'src/app/(admin)/admin/leads' src/lib/leads tests/comms-leads tests/catterick-interest
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.checkout.outcome == 'success'
+        with:
+          name: comms-leads-${{ github.sha }}
+          path: artifacts/comms-leads/
+          retention-days: 7
+          if-no-files-found: error
