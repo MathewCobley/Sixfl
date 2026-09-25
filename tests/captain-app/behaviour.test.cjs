@@ -38,6 +38,24 @@ test('Home has one matchup text node instead of a legacy badge-injection heading
   assert.doesNotMatch(html, /<h2[^>]*>[^<]* vs /);
   assert.equal((html.match(/Timmy Time FC vs Dynamo Kebab<\/p>/g) || []).length, 1);
 });
+
+test('Home uses the same visual hierarchy as the player app without losing captain tools', async () => {
+  const { html } = await renderScreen();
+  for (const text of [
+    'Captain',
+    'League position',
+    'Team balance',
+    'Reports to finish',
+    'Result issues',
+    'See who can play',
+    'Find extra players',
+    'Results &amp; form',
+    'Clips &amp; highlights',
+  ]) assert.ok(html.includes(text), text);
+  assert.match(html, /class="actionGrid"/);
+  assert.match(html, /class="matchTeams"/);
+  assert.match(html, /class="identityBadge"/);
+});
 const cases = [
   ['', 'Home'], ['/', 'Home'], ['/fixtures', 'Fixtures'], ['/fixtures/f/selection', 'Fixtures'],
   ['/squad/member/edit', 'Squad'], ['/captain-squad', 'Squad'], ['/payments', 'Payments'],
