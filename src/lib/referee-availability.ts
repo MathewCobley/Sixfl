@@ -255,6 +255,10 @@ async function getManualRefereeCoverageLeagues(refereeId: string) {
   `).catch(() => []);
 }
 
+export async function getRefereeSetLeagues(refereeId: string) {
+  return getManualRefereeCoverageLeagues(refereeId);
+}
+
 async function getFixtureRefereeCoverageLeagues(refereeId: string) {
   return queryAvailabilityLeagues(Prisma.sql`
     SELECT DISTINCT l.id, l.name, l.season, l."dayOfWeek", l."venueName", COALESCE(l."requiredRefereesPerNight", 1)::int AS "requiredRefereesPerNight"
