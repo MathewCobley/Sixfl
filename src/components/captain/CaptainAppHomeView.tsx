@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   CalendarDaysIcon,
+  ChartBarSquareIcon,
   ChevronRightIcon,
   ExclamationCircleIcon,
   PlayCircleIcon,
@@ -185,6 +186,19 @@ export default function CaptainAppHomeView({
           <div><h2>No match scheduled</h2><p>Your next published fixture will appear here.</p></div>
         </section>
       )}
+
+      <Link href={`${base}/table`} className={styles.tableShortcut}>
+        <span className={styles.tableShortcutIcon}>
+          <ChartBarSquareIcon aria-hidden="true" />
+        </span>
+        <span className={styles.tableShortcutText}>
+          <strong>League table</strong>
+          <small>
+            {leaguePosition !== "—" ? `You're ${leaguePosition} · view full standings` : "View full standings"}
+          </small>
+        </span>
+        <ChevronRightIcon aria-hidden="true" className={styles.tableShortcutArrow} />
+      </Link>
 
       {overdueConfirmations > 0 || openIssues > 0 ? (
         <section className={styles.attention} aria-label="Needs attention">
