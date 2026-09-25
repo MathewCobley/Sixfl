@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import {
@@ -52,6 +53,7 @@ type ConfirmationSummary = {
 type FixtureTeam = {
   id: string;
   name: string;
+  logoUrl?: string | null;
 };
 
 function TeamNameWithShirt({
@@ -90,6 +92,65 @@ function FixtureTeamPair({
         colour={colours.get(awayTeam.id) ?? null}
       />
     </span>
+  );
+}
+
+function getTeamInitials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "T"
+  );
+}
+
+function AppTeamBadge({ team }: { team: FixtureTeam }) {
+  return (
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25">
+      {team.logoUrl ? (
+        <img
+          src={team.logoUrl}
+          alt=""
+          className="max-h-11 max-w-11 object-contain"
+        />
+      ) : (
+        <span className="text-xs font-black text-white/45">
+          {getTeamInitials(team.name)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function AppFixtureTeams({
+  homeTeam,
+  awayTeam,
+}: {
+  homeTeam: FixtureTeam;
+  awayTeam: FixtureTeam;
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+      {[homeTeam, awayTeam].map((fixtureTeam, index) => (
+        <div
+          key={fixtureTeam.id}
+          className={`min-w-0 text-center ${index === 1 ? "col-start-3" : ""}`}
+        >
+          <div className="flex justify-center">
+            <AppTeamBadge team={fixtureTeam} />
+          </div>
+          <div className="mt-1.5 truncate text-[11px] font-black text-white">
+            {fixtureTeam.name}
+          </div>
+        </div>
+      ))}
+      <span className="col-start-2 row-start-1 text-xs font-black text-white/35">
+        VS
+      </span>
+    </div>
   );
 }
 
@@ -476,8 +537,8 @@ export default async function CaptainFixturesPage({
       orderBy: [{ kickoffAt: "asc" }],
       take: 20,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         venue: { select: { name: true } },
         captainConfirmations: {
           where: { teamId: teamid },
@@ -501,8 +562,8 @@ export default async function CaptainFixturesPage({
       orderBy: [{ kickoffAt: "desc" }],
       take: 6,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true, overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT } } },
       },
     }),
