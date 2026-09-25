@@ -23,6 +23,11 @@ model User {
   emailVerified DateTime?
   image         String?
 
+  accessBlockedAt       DateTime?
+  accessBlockedReason   String?
+  accessBlockedByUserId String?
+  accessBlockedByName   String?
+
   role UserRole @default(USER)
 
   createdFromLeadId String?
@@ -46,6 +51,8 @@ model User {
   pushSubscriptions           PushSubscription[]
   pushNotifications           PushNotification[]
   agreementAcceptances        AgreementAcceptance[]
+
+  @@index([accessBlockedAt])
 }
 
 model AgreementAcceptance {

@@ -7,7 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { TeamRole } from "@prisma/client";
+import { TeamRole, UserRole } from "@prisma/client";
 
 import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { moveTeamMemberToProspect } from "@/lib/managed-squad/movePlayerToProspect";
@@ -100,6 +100,7 @@ export async function addAdminSquadMemberAction(formData: FormData) {
       id: true,
       name: true,
       email: true,
+      accessBlockedAt: true,
     },
   });
 
@@ -108,6 +109,15 @@ export async function addAdminSquadMemberAction(formData: FormData) {
       buildRedirect(
         teamId,
         "?error=No%20existing%20SIXFL%20user%20was%20found%20for%20that%20email.",
+      ),
+    );
+  }
+
+  if (user.accessBlockedAt) {
+    redirect(
+      buildRedirect(
+        teamId,
+        "?error=This%20SIXFL%20account%20is%20blocked.%20Restore%20access%20before%20adding%20it%20to%20a%20squad.",
       ),
     );
   }
@@ -256,6 +266,133 @@ export async function grantAdminCaptainAccessAction(formData: FormData) {
   revalidatePath("/admin/captains");
 
   redirect(buildRedirect(teamId, "?saved=captain-access-granted"));
+}
+
+export async function blockAdminPlayerAccessAction(formData: FormData) {
+  const { user: adminUser } = await requireAdmin();
+
+  const teamId = cleanText(formData.get("teamId"));
+  const membershipId = cleanText(formData.get("membershipId"));
+  const reason = cleanText(formData.get("reason")).slice(0, 500) || null;
+
+  if (!teamId || !membershipId) {
+    redirect("/admin/teams");
+  }
+
+  const membership = await prisma.teamMember.findFirst({
+    where: {
+      id: membershipId,
+      teamId,
+    },
+    select: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          accessBlockedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!membership) {
+    redirect(buildRedirect(teamId, "?error=Squad%20member%20not%20found."));
+  }
+
+  if (membership.user.role === UserRole.ADMIN) {
+    redirect(
+      buildRedirect(
+        teamId,
+        "?error=Administrator%20accounts%20cannot%20be%20blocked%20from%20a%20team%20squad%20page.",
+      ),
+    );
+  }
+
+  if (adminUser?.id && membership.user.id === adminUser.id) {
+    redirect(
+      buildRedirect(
+        teamId,
+        "?error=You%20cannot%20block%20your%20own%20SIXFL%20account.",
+      ),
+    );
+  }
+
+  const blockedAt = new Date();
+  const blockedByName =
+    adminUser?.name?.trim() ||
+    adminUser?.email?.trim() ||
+    "SIXFL admin";
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: membership.user.id },
+      data: {
+        accessBlockedAt: blockedAt,
+        accessBlockedReason: reason,
+        accessBlockedByUserId: adminUser?.id ?? null,
+        accessBlockedByName: blockedByName,
+      },
+    });
+
+    // Database sessions are the live sign-in authority. Removing them signs the
+    // player out immediately on every device without deleting any football,
+    // payment or account history.
+    await tx.session.deleteMany({
+      where: { userId: membership.user.id },
+    });
+
+    // Invalidate any unused magic links that were issued before the block.
+    const email = membership.user.email?.trim().toLowerCase();
+    if (email) {
+      await tx.verificationToken.deleteMany({
+        where: { identifier: email },
+      });
+    }
+  });
+
+  revalidateSquadAndProspectPaths(teamId);
+  revalidatePath(`/admin/teams/${teamId}/players/${membershipId}/preview`);
+  redirect(buildRedirect(teamId, "?saved=player-access-blocked"));
+}
+
+export async function restoreAdminPlayerAccessAction(formData: FormData) {
+  await requireAdmin();
+
+  const teamId = cleanText(formData.get("teamId"));
+  const membershipId = cleanText(formData.get("membershipId"));
+
+  if (!teamId || !membershipId) {
+    redirect("/admin/teams");
+  }
+
+  const membership = await prisma.teamMember.findFirst({
+    where: {
+      id: membershipId,
+      teamId,
+    },
+    select: {
+      userId: true,
+    },
+  });
+
+  if (!membership) {
+    redirect(buildRedirect(teamId, "?error=Squad%20member%20not%20found."));
+  }
+
+  await prisma.user.update({
+    where: { id: membership.userId },
+    data: {
+      accessBlockedAt: null,
+      accessBlockedReason: null,
+      accessBlockedByUserId: null,
+      accessBlockedByName: null,
+    },
+  });
+
+  revalidateSquadAndProspectPaths(teamId);
+  revalidatePath(`/admin/teams/${teamId}/players/${membershipId}/preview`);
+  redirect(buildRedirect(teamId, "?saved=player-access-restored"));
 }
 
 export async function updateAdminSquadMemberRoleAction(formData: FormData) {

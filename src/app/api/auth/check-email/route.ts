@@ -68,6 +68,7 @@ export async function POST(req: Request) {
       select: {
         id: true,
         role: true,
+        accessBlockedAt: true,
         _count: {
           select: {
             teamMembers: true,
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
   const hasTeamAccess = (user?._count.teamMembers ?? 0) > 0;
   const hasPlayerOrCaptainAccess = hasTeamAccess || Boolean(captainLoginContext || pendingCaptain || pendingSquadActivation);
   const isReferee = user?.role === "REFEREE";
+  const isAccessBlocked = Boolean(user?.accessBlockedAt);
 
   return NextResponse.json({
     exists: !!user,
@@ -90,8 +92,10 @@ export async function POST(req: Request) {
     pendingSquadActivation: !!pendingSquadActivation,
     hasTeamAccess,
     hasPlayerOrCaptainAccess,
-    canChooseLoginArea: isReferee && hasPlayerOrCaptainAccess,
-    canLogin: !!user || !!pendingCaptain || !!captainLoginContext || !!pendingSquadActivation,
+    canChooseLoginArea: !isAccessBlocked && isReferee && hasPlayerOrCaptainAccess,
+    canLogin:
+      !isAccessBlocked &&
+      (!!user || !!pendingCaptain || !!captainLoginContext || !!pendingSquadActivation),
     claimCode: pendingCaptain?.claimCode ?? null,
     teamName:
       pendingCaptain?.teamName ??

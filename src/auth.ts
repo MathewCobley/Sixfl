@@ -126,6 +126,7 @@ function buildSignInLinkActivityContext(input: {
     id: string;
     name: string | null;
     role: string;
+    accessBlockedAt: Date | null;
     teamMembers: Array<{
       role: string;
       team: { id: string; name: string };
@@ -257,6 +258,7 @@ export const authOptions: NextAuthOptions = {
               id: true,
               name: true,
               role: true,
+              accessBlockedAt: true,
               teamMembers: {
                 orderBy: { createdAt: "asc" },
                 take: 1,
@@ -271,6 +273,10 @@ export const authOptions: NextAuthOptions = {
           getCaptainLoginContext(email),
           getPendingSquadActivationContext(email),
         ]);
+
+        if (existingUser?.accessBlockedAt) {
+          throw new Error("Sign-in access is no longer available. Contact SIXFL.");
+        }
 
         if (!existingUser && !pendingCaptain && !captainLoginContext && !pendingSquadActivation) {
           throw new Error("Sign-in access is no longer available. Contact SIXFL.");
@@ -379,6 +385,10 @@ export const authOptions: NextAuthOptions = {
           getCaptainLoginContext(email),
           getPendingSquadActivationContext(email),
         ]);
+
+        if (existingUser?.accessBlockedAt) {
+          return false;
+        }
 
         if (!existingUser && !pendingCaptain && !captainLoginContext && !pendingSquadActivation) {
           return false;

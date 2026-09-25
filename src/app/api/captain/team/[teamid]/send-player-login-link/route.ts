@@ -45,6 +45,7 @@ export async function POST(
           id: true,
           name: true,
           email: true,
+          accessBlockedAt: true,
         },
       },
       team: {
@@ -60,6 +61,13 @@ export async function POST(
     return NextResponse.json(
       { error: "Player not found in this squad." },
       { status: 404 },
+    );
+  }
+
+  if (membership.user.accessBlockedAt) {
+    return NextResponse.json(
+      { error: "This player's SIXFL access is blocked by an administrator." },
+      { status: 409 },
     );
   }
 
