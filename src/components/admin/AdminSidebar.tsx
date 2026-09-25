@@ -26,6 +26,7 @@ type AdminSidebarProps = {
   name?: string | null;
   email?: string | null;
   unreadMessagingCount?: number;
+  sixflSupportNeedsReplyCount?: number;
   openDisputeCount?: number;
   nightBoardIssueCount?: number;
   nightBoardIssueLevel?: "amber" | "red" | null;
@@ -471,6 +472,7 @@ export default function AdminSidebar({
   name,
   email,
   unreadMessagingCount = 0,
+  sixflSupportNeedsReplyCount = 0,
   openDisputeCount = 0,
   nightBoardIssueCount = 0,
   nightBoardIssueLevel = null,
@@ -525,9 +527,15 @@ export default function AdminSidebar({
                       {group.items.map((item) => {
                         const active = activeHref === item.href;
                         const Icon = item.icon;
+                        const totalMessageAlertCount =
+                          unreadMessagingCount + sixflSupportNeedsReplyCount;
                         const showMessageBadge =
                           item.href === "/admin/messaging" &&
-                          unreadMessagingCount > 0;
+                          totalMessageAlertCount > 0;
+                        const supportAlertLabel =
+                          sixflSupportNeedsReplyCount > 0
+                            ? `${sixflSupportNeedsReplyCount} app message${sixflSupportNeedsReplyCount === 1 ? "" : "s"} to SIXFL need reply`
+                            : "";
                         const showNightBoardAlert =
                           item.href === "/admin/night-board" &&
                           nightBoardIssueCount > 0;
@@ -560,10 +568,23 @@ export default function AdminSidebar({
                               </span>
                             </span>
                             {showMessageBadge ? (
-                              <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[7px] font-black text-black">
-                                {unreadMessagingCount > 99
+                              <span
+                                role="status"
+                                aria-label={
+                                  supportAlertLabel ||
+                                  `${unreadMessagingCount} unread email or SMS thread${unreadMessagingCount === 1 ? "" : "s"}`
+                                }
+                                title={supportAlertLabel || undefined}
+                                className={[
+                                  "ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[7px] font-black text-black",
+                                  sixflSupportNeedsReplyCount > 0
+                                    ? "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.75)]"
+                                    : "bg-emerald-400",
+                                ].join(" ")}
+                              >
+                                {totalMessageAlertCount > 99
                                   ? "99+"
-                                  : unreadMessagingCount}
+                                  : totalMessageAlertCount}
                               </span>
                             ) : null}
                             {showNightBoardAlert ? (
