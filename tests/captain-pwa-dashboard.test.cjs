@@ -25,8 +25,9 @@ test("captain PWA has a native header and six permanent tabs including More", ()
   assert.match(layout, /<CaptainPwaModeOnly mode="app">[\s\S]*CaptainAppHeader/);
   assert.match(header, /SIXFL captain home/);
   assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*captain-team-header/);
-  assert.match(layout, /unreadMessageCount=\{unreadMessageCount\}/);
-  for (const label of ["Home", "Fixtures", "Squad", "Payments", "Inbox", "More"]) assert.ok(nav.includes(`label: "${label}"`));
+  assert.match(nav, /unreadCount: unreadChatCount/);
+  assert.match(nav, /\/chat-unread/);
+  for (const label of ["Home", "Fixtures", "Squad", "Payments", "Chat", "More"]) assert.ok(nav.includes(`label: "${label}"`));
   assert.match(css, /grid-template-columns: repeat\(6,minmax\(0,1fr\)\)/);
   assert.doesNotMatch(nav, /sm:hidden/);
   assert.match(nav, /getCaptainAppSection/);
@@ -46,7 +47,7 @@ test("route titles stay available without repeated explanatory page chrome", () 
   assert.doesNotMatch(layout, /CaptainAppPageFocus/);
   assert.match(layout, /captain-app-web-only/);
   assert.match(layout, /captain-app-secondary/);
-  for (const title of ["Fixtures", "Squad", "Squad payments", "Team payments", "Inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team kit", "Fixture planning", "WhatsApp", "Cup invitations", "Captain agreement", "Match rules", "Captain guide", "Help", "More"]) assert.ok(routes.includes(title), title);
+  for (const title of ["Fixtures", "Squad", "Squad payments", "Team payments", "Chat", "SIXFL inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team kit", "Fixture planning", "WhatsApp", "Cup invitations", "Captain agreement", "Match rules", "Captain guide", "Help", "More"]) assert.ok(routes.includes(title), title);
 });
 
 test("operational home content remains above compact news", () => {
@@ -86,8 +87,8 @@ test("existing screen safeguards survive the home/navigation change", () => {
 test("More preserves its grouped destinations and removes design commentary", () => {
   const more = read("src/app/captain/team/[teamid]/more/page.tsx");
   for (const group of ["Matchday", "Team", "SIXFL TV & competitions", "Help"]) assert.ok(more.includes(group));
-  for (const label of ["Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team payments", "Team kit", "Fixture planning", "WhatsApp tools", "Cup invitations", "Captain Agreement", "Match rules", "Captain guide", "Help / Contact SIXFL", "Team results", "Availability history"]) assert.ok(more.includes(label), label);
-  assert.doesNotMatch(more, /SIXFL inbox|Everything that does not need|permanent bottom tab/);
+  for (const label of ["SIXFL inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team payments", "Team kit", "Fixture planning", "WhatsApp tools", "Cup invitations", "Captain Agreement", "Match rules", "Captain guide", "Help / Contact SIXFL", "Team results", "Availability history"]) assert.ok(more.includes(label), label);
+  assert.doesNotMatch(more, /Everything that does not need|permanent bottom tab/);
   assert.match(more, /requireCaptain\(teamid\)/);
 });
 
