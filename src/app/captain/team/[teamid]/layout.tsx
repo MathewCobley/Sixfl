@@ -348,6 +348,10 @@ body:has(.captain-app-header) .captain-fixtures-response-card button {
   padding: 0.6rem 0.7rem !important;
 }
 
+body:has(.captain-app-header) .captain-fixtures-page [data-fixture-full-ai-for] {
+  display: none !important;
+}
+
 body:has(.captain-app-header) .captain-fixtures-issue summary {
   min-height: 2.5rem !important;
   padding: 0.65rem 0.8rem !important;
