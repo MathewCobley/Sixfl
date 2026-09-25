@@ -37,13 +37,19 @@ test("captain fixtures page uses compact mobile hierarchy", () => {
   assert.match(shell, /captain-fixtures-response-help[\s\S]*display: none !important/);
 });
 
-test("installed fixtures screen keeps AI prediction compact", () => {
+test("installed fixtures screen hides expanded AI panels while retaining compact badges", () => {
+  const shell = fs.readFileSync(
+    "src/app/captain/team/[teamid]/layout.tsx",
+    "utf8",
+  );
   const bridge = fs.readFileSync(
     "src/components/captain/CaptainFixtureBadgesBridge.tsx",
     "utf8",
   );
 
-  assert.match(bridge, /function isCaptainFixturesAppScreen/);
-  assert.match(bridge, /!isCaptainFixturesAppScreen\(\)/);
+  assert.match(
+    shell,
+    /captain-fixtures-page \[data-fixture-full-ai-for\][\s\S]*display: none !important/,
+  );
   assert.match(bridge, /createCompactWinChanceBadge/);
 });
