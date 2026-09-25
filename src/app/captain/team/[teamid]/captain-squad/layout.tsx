@@ -4,6 +4,7 @@
 
 import type { ReactNode } from "react";
 
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import PlayerDashboardLoginEmailButtons from "@/components/captain/PlayerDashboardLoginEmailButtons";
 import { requireCaptain } from "@/lib/requireCaptain";
 
@@ -19,7 +20,11 @@ export default async function CaptainSquadLayout({
 
   return (
     <>
-      {!access.isAdmin ? <PlayerDashboardLoginEmailButtons /> : null}
+      {/* The app owns its forms and pending states. Legacy website injection
+          must not add a second login action or checkbox to those forms. */}
+      <CaptainPwaModeOnly mode="web">
+        {!access.isAdmin ? <PlayerDashboardLoginEmailButtons /> : null}
+      </CaptainPwaModeOnly>
       {children}
     </>
   );
