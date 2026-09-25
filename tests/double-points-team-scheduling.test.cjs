@@ -80,3 +80,22 @@ test("next-week generator never repeats a once-only pairing", () => {
   assert.match(route, /No permitted pairings remain/);
   assert.match(route, /doublePoints:\s*\n?\s*homeTeam\.playsOnceDoublePoints \|\| awayTeam\.playsOnceDoublePoints/);
 });
+
+
+test("toggling double points does not remove season membership", () => {
+  const actions = fs.readFileSync("src/app/(admin)/admin/teams/[id]/actions.ts", "utf8");
+
+  assert.match(actions, /existingTeam\.leagueId !== leagueId/);
+  assert.match(actions, /A normal details save \(including toggling double points\) must never/);
+  assert.match(actions, /season\."competitionId" IS DISTINCT FROM target\."competitionId"/);
+
+  const membershipBlock = actions.slice(
+    actions.indexOf("A normal details save (including toggling double points)"),
+    actions.indexOf("return updated;"),
+  );
+
+  assert.doesNotMatch(
+    membershipBlock,
+    /WHERE "teamId" = \$\{id\}\s+AND "leagueId" <> \$\{leagueId\}/,
+  );
+});
