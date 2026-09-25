@@ -203,3 +203,21 @@ test("two-person selected chats display the other teammate as a private chat", (
   assert.match(chat, /selectedItem\?\.kind === "PRIVATE"/);
   assert.match(chat, /Private between \$\{selectedItem\?\.title \?\? "this teammate"\} and you/);
 });
+
+
+test("direct squad chat empty state names the selected teammate", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+
+  assert.match(
+    chat,
+    /selectedItem\?\.kind === "PRIVATE"[\s\S]*Start a private conversation with \$\{selectedItem\?\.title \?\? "this teammate"\}/,
+  );
+  assert.match(
+    chat,
+    /selectedItem\?\.kind === "PRIVATE"[\s\S]*Message \$\{selectedItem\?\.title \?\? "this teammate"\}…/,
+  );
+  assert.doesNotMatch(
+    chat,
+    /selectedRef\.startsWith\("group:"\)[\s\S]{0,160}"Start a private conversation with your captain\."/,
+  );
+});
