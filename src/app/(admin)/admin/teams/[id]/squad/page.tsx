@@ -19,9 +19,11 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
   addAdminSquadMemberAction,
+  blockAdminPlayerAccessAction,
   grantAdminCaptainAccessAction,
   moveAdminSquadMemberToProspectsAction,
   removeAdminSquadMemberAction,
+  restoreAdminPlayerAccessAction,
   updateAdminSquadMemberRoleAction,
 } from "./actions";
 
@@ -171,6 +173,10 @@ function getSavedMessage(saved?: string) {
       return "Squad role updated.";
     case "member-removed":
       return "Squad member removed.";
+    case "player-access-blocked":
+      return "Player SIXFL access blocked. Existing sessions and unused login links were cancelled.";
+    case "player-access-restored":
+      return "Player SIXFL access restored. They can request a new sign-in link.";
     case "moved-to-prospects":
       return "Player moved back to prospects and unlinked from the active squad.";
     case "player-merged":
@@ -220,6 +226,9 @@ export default async function AdminTeamSquadPage({
               id: true,
               name: true,
               email: true,
+              accessBlockedAt: true,
+              accessBlockedReason: true,
+              accessBlockedByName: true,
             },
           },
         },
@@ -429,6 +438,7 @@ export default async function AdminTeamSquadPage({
                 const profile = profileByMembershipId.get(member.id);
                 const dashboardStatus = loginStatusByMembershipId.get(member.id);
                 const dashboardCopy = getDashboardStatusCopy(dashboardStatus);
+                const accessBlocked = Boolean(member.user.accessBlockedAt);
 
                 return (
                   <div
@@ -478,6 +488,12 @@ export default async function AdminTeamSquadPage({
                               Primary captain
                             </span>
                           ) : null}
+
+                          {accessBlocked ? (
+                            <span className="rounded-full border border-red-400/40 bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold text-red-100">
+                              SIXFL access blocked
+                            </span>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 text-sm text-white/65">
@@ -488,14 +504,33 @@ export default async function AdminTeamSquadPage({
                           Added {formatUkDateTime(member.createdAt)}
                         </div>
 
-                        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${dashboardCopy.className}`}>
-                          <div className="font-semibold text-white/90">
-                            {dashboardCopy.badge}
+                        {accessBlocked ? (
+                          <div className="mt-3 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">
+                            <div className="font-semibold">
+                              Account access blocked
+                            </div>
+                            <div className="mt-0.5 text-red-100/75">
+                              {member.user.accessBlockedAt
+                                ? `Blocked ${formatUkDateTime(member.user.accessBlockedAt)}`
+                                : "Blocked"}
+                              {member.user.accessBlockedByName
+                                ? ` by ${member.user.accessBlockedByName}`
+                                : ""}
+                              {member.user.accessBlockedReason
+                                ? ` · ${member.user.accessBlockedReason}`
+                                : ""}
+                            </div>
                           </div>
-                          <div className="mt-0.5 text-white/65">
-                            {dashboardCopy.detail}
+                        ) : (
+                          <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${dashboardCopy.className}`}>
+                            <div className="font-semibold text-white/90">
+                              {dashboardCopy.badge}
+                            </div>
+                            <div className="mt-0.5 text-white/65">
+                              {dashboardCopy.detail}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
 
@@ -514,10 +549,16 @@ export default async function AdminTeamSquadPage({
                         Player comms
                       </Link>
 
-                      <AdminSendPlayerLoginButton
-                        teamId={team.id}
-                        membershipId={member.id}
-                      />
+                      {accessBlocked ? (
+                        <div className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-red-400/20 bg-red-500/[0.07] px-4 py-2.5 text-center text-sm font-medium text-red-100/70 sm:w-auto">
+                          Login email disabled
+                        </div>
+                      ) : (
+                        <AdminSendPlayerLoginButton
+                          teamId={team.id}
+                          membershipId={member.id}
+                        />
+                      )}
 
                       <form action={moveAdminSquadMemberToProspectsAction}>
                         <input type="hidden" name="teamId" value={team.id} />
@@ -561,6 +602,66 @@ export default async function AdminTeamSquadPage({
                           Update role
                         </button>
                       </form>
+
+                      {accessBlocked ? (
+                        <form
+                          action={restoreAdminPlayerAccessAction}
+                          className="space-y-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-4 sm:col-span-2"
+                        >
+                          <input type="hidden" name="teamId" value={team.id} />
+                          <input
+                            type="hidden"
+                            name="membershipId"
+                            value={member.id}
+                          />
+                          <div>
+                            <div className="text-sm font-semibold text-emerald-100">
+                              Restore SIXFL access
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-white/55">
+                              This keeps all historical team, match, payment and player records intact. The player will need a fresh sign-in link.
+                            </p>
+                          </div>
+                          <button
+                            type="submit"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
+                          >
+                            Restore SIXFL access
+                          </button>
+                        </form>
+                      ) : (
+                        <form
+                          action={blockAdminPlayerAccessAction}
+                          className="space-y-3 rounded-2xl border border-red-400/20 bg-red-500/[0.05] p-4 sm:col-span-2"
+                        >
+                          <input type="hidden" name="teamId" value={team.id} />
+                          <input
+                            type="hidden"
+                            name="membershipId"
+                            value={member.id}
+                          />
+                          <div>
+                            <div className="text-sm font-semibold text-red-100">
+                              Block SIXFL access
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-white/55">
+                              Immediately signs this account out on every device and prevents new login links. It does not remove the player or delete any history.
+                            </p>
+                          </div>
+                          <input
+                            name="reason"
+                            maxLength={500}
+                            placeholder="Reason / admin note (optional)"
+                            className="w-full rounded-xl border border-red-400/20 bg-black/20 px-3 py-2.5 text-sm text-white placeholder:text-white/35 outline-none transition focus:border-red-300/60"
+                          />
+                          <button
+                            type="submit"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-red-400/35 bg-red-500/15 px-4 py-2.5 text-sm font-semibold text-red-100 transition hover:bg-red-500/20"
+                          >
+                            Block SIXFL access
+                          </button>
+                        </form>
+                      )}
 
                       <form action={removeAdminSquadMemberAction} className="sm:col-span-2">
                         <input type="hidden" name="teamId" value={team.id} />
