@@ -125,12 +125,9 @@ export async function getLeagueSeasonTeams(input: {
 
 /**
  * Teams affiliated with the parent competition but not entered in this season.
- * These teams retain captain access, PlayerPool visibility and league comms,
- * while staying out of tables, fixtures and season counts.
- *
- * Team.leagueId = NULL is the explicit "No league" state. Such a team must not
- * appear as affiliated to any competition even if stale competitionId data is
- * still present from an older migration or admin flow.
+ * Parent affiliation is independent from season participation: a team can be
+ * affiliated here with no Team.leagueId/current-season link yet and must still
+ * be available to enter this season explicitly.
  */
 export async function getAffiliatedTeamsOutsideSeason(leagueId: string) {
   await ensureSeasonTeamRowsForLeague(leagueId);
@@ -166,7 +163,6 @@ export async function getAffiliatedTeamsOutsideSeason(leagueId: string) {
      AND lst."teamId" = t."id"
     LEFT JOIN "LeagueDivision" d ON d."id" = lst."divisionId"
     WHERE target."id" = ${leagueId}
-      AND t."leagueId" IS NOT NULL
       AND COALESCE(lst."isActive", false) = false
       AND COALESCE(t."isFixturePlaceholder", false) = false
     ORDER BY t."name" ASC
@@ -292,6 +288,7 @@ export async function getCompetitionOptions() {
       FROM "LeagueCompetition" c
       LEFT JOIN "League" l ON l."id" = c."currentLeagueId"
       WHERE c."isActive" = true
+        AND COALESCE(c."competitionType", 'LEAGUE') = 'LEAGUE'
       ORDER BY c."name" ASC
     `);
   } catch {
@@ -339,103 +336,40 @@ export async function getTeamCompetitionData(teamId: string) {
 }
 
 /**
- * Change long-term competition affiliation without automatically entering a
- * season. Existing active entries within the same competition are preserved;
- * entries from other competitions are deactivated.
+ * Change long-term parent competition affiliation only.
+ *
+ * This must never enter or remove the team from a season. LeagueSeasonTeam is
+ * the sole season-participation authority; Team.leagueId remains a legacy
+ * current-season cache and is changed only when a season is explicitly entered
+ * or made current.
  */
 export async function updateTeamCompetition(input: {
   teamId: string;
   competitionId: string | null;
 }) {
   if (!input.competitionId) {
-    await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "Team"
-        SET
-          "competitionId" = NULL,
-          "leagueId" = NULL,
-          "divisionId" = NULL,
-          "updatedAt" = NOW()
-        WHERE "id" = ${input.teamId}
-      `);
-
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "LeagueSeasonTeam"
-        SET
-          "isActive" = false,
-          "divisionId" = NULL,
-          "updatedAt" = NOW()
-        WHERE "teamId" = ${input.teamId}
-      `);
-    });
-    return;
+    throw new Error(
+      "Choose a parent competition. Removing all league affiliation must be done through the dedicated team/season controls.",
+    );
   }
 
-  const rows = await prisma.$queryRaw<Array<{
-    competitionId: string;
-    currentLeagueId: string | null;
-  }>>(Prisma.sql`
-    SELECT "id" AS "competitionId", "currentLeagueId"
+  const rows = await prisma.$queryRaw<Array<{ competitionId: string }>>(Prisma.sql`
+    SELECT "id" AS "competitionId"
     FROM "LeagueCompetition"
     WHERE "id" = ${input.competitionId}
+      AND "isActive" = true
+      AND COALESCE("competitionType", 'LEAGUE') = 'LEAGUE'
     LIMIT 1
   `);
 
   const competition = rows[0];
-  if (!competition) throw new Error("Competition not found.");
+  if (!competition) throw new Error("Parent competition not found.");
 
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`
-      UPDATE "LeagueSeasonTeam" lst
-      SET
-        "isActive" = false,
-        "divisionId" = NULL,
-        "updatedAt" = NOW()
-      FROM "League" l
-      WHERE lst."leagueId" = l."id"
-        AND lst."teamId" = ${input.teamId}
-        AND l."competitionId" IS DISTINCT FROM ${competition.competitionId}
-    `);
-
-    if (competition.currentLeagueId) {
-      await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "LeagueSeasonTeam" (
-          "id",
-          "leagueId",
-          "teamId",
-          "divisionId",
-          "isActive",
-          "createdAt",
-          "updatedAt"
-        )
-        VALUES (
-          ${randomUUID()},
-          ${competition.currentLeagueId},
-          ${input.teamId},
-          NULL,
-          false,
-          NOW(),
-          NOW()
-        )
-        ON CONFLICT ("leagueId", "teamId") DO NOTHING
-      `);
-    }
-
-    await tx.$executeRaw(Prisma.sql`
-      UPDATE "Team" t
-      SET
-        "competitionId" = ${competition.competitionId},
-        "leagueId" = ${competition.currentLeagueId},
-        "divisionId" = (
-          SELECT lst."divisionId"
-          FROM "LeagueSeasonTeam" lst
-          WHERE lst."teamId" = t."id"
-            AND lst."leagueId" = ${competition.currentLeagueId}
-            AND lst."isActive" = true
-          LIMIT 1
-        ),
-        "updatedAt" = NOW()
-      WHERE t."id" = ${input.teamId}
-    `);
-  });
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "Team"
+    SET
+      "competitionId" = ${competition.competitionId},
+      "updatedAt" = NOW()
+    WHERE "id" = ${input.teamId}
+  `);
 }
