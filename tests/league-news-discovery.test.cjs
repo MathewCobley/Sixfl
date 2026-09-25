@@ -107,11 +107,13 @@ function assertDiscovery(mode, options = {}, replacements = {}) {
   const harness = discoveryHarness(options, replacements);
   assert.deepEqual(harness.render().map(node => node.type), ['page'], 'no duplicate news before mode resolution');
   harness.flushEffects();
-  const expected = mode === 'app' ? ['page', 'news'] : ['news', 'page'];
+  const expected = mode === 'app' ? ['page'] : ['news', 'page'];
   for (let render = 0; render < 2; render++) {
     const nodes = harness.render();
-    assert.deepEqual(nodes.map(node => node.type), expected, 'exactly one news panel in the correct position');
-    assert.equal(nodes.find(node => node.type === 'news').props.scope, 'captain');
+    assert.deepEqual(nodes.map(node => node.type), expected, 'template news is in the correct mode and position');
+    if (mode === 'web') {
+      assert.equal(nodes.find(node => node.type === 'news').props.scope, 'captain');
+    }
     harness.flushEffects();
   }
 }
@@ -134,16 +136,27 @@ test('discovery regression detects a genuinely duplicated visible panel', () => 
   const original = read(modeFile);
   const broken = original.replace('return resolvedMode === mode ? <>{children}</> : null;', 'return <>{children}</>;');
   assert.notEqual(broken, original, 'negative control must alter the real mode guard');
-  for (const [mode, options] of [['web', {}], ['app', { standalone: true }]]) {
-    assert.throws(() => assertDiscovery(mode, options, { [modeFile]: broken }), assert.AssertionError);
-  }
+  assert.throws(
+    () => assertDiscovery('app', { standalone: true }, { [modeFile]: broken }),
+    assert.AssertionError,
+  );
 });
 
-test('discovery regression detects loss of the app news panel', () => {
-  const original = read(templateFile);
-  const broken = original.replace(/<CaptainPwaModeOnly mode="app">[\s\S]*?<\/CaptainPwaModeOnly>/, '');
-  assert.notEqual(broken, original, 'negative control must remove the app branch');
-  assert.throws(() => assertDiscovery('app', { standalone: true }, { [templateFile]: broken }), assert.AssertionError);
+test('installed app news is owned by the captain Home screen, not appended by the template', () => {
+  const template = read(templateFile);
+  const overview = read('src/app/captain/team/[teamid]/page.tsx');
+  const home = read('src/components/captain/CaptainAppHomeView.tsx');
+
+  assert.doesNotMatch(template, /<CaptainPwaModeOnly mode="app">[\s\S]*?<LatestNews/);
+  assert.match(
+    overview,
+    /news=\{<LatestNews scope="captain" presentation="integrated" \/>\}/,
+  );
+  assert.match(home, /\{news \? <div className=\{styles\.newsSlot\}>\{news\}<\/div> : null\}/);
+  assert.ok(
+    home.indexOf('styles.newsSlot') < home.indexOf('aria-label="Team tools"'),
+    'news belongs in the Home flow before the tool grid rather than after the page',
+  );
 });
 
 test('discovery regression detects a news panel using the wrong audience', () => {
@@ -151,4 +164,7 @@ test('discovery regression detects a news panel using the wrong audience', () =>
   const broken = original.replaceAll('scope="captain"', 'scope="player"');
   assert.notEqual(broken, original, 'negative control must change the audience');
   assert.throws(() => assertDiscovery('web', {}, { [templateFile]: broken }), assert.AssertionError);
+
+  const overview = read('src/app/captain/team/[teamid]/page.tsx');
+  assert.match(overview, /<LatestNews scope="captain" presentation="integrated" \/>/);
 });
