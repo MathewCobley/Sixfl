@@ -89,13 +89,13 @@ export default function CaptainAppSquad({ teamId, members, canAddPlayers, savedM
       {canAddPlayers ? (
         <section id={`${id}-add`} hidden={!adding} className={styles.addPanel} aria-label="Add a player">
           <h2>Add a player</h2>
-          <p>Use the player’s own email address. They will need to verify it before match selection.</p>
+          <p>Enter the player’s own email and mobile number. They will need to verify their email before match selection.</p>
           <form action={addPlayerAction} className={styles.addForm}>
             <input type="hidden" name="teamid" value={teamId} />
             <label>Player name<input name="displayName" required autoComplete="name" placeholder="Full name" /></label>
             <label>Player email<input name="email" type="email" required autoComplete="email" placeholder="player@example.com" /></label>
             <div className={styles.formPair}>
-              <label>Phone <span>(optional)</span><input name="phone" type="tel" autoComplete="tel" /></label>
+              <label>Mobile / SMS number<input name="phone" type="tel" required autoComplete="tel" /></label>
               <label>Shirt no. <span>(optional)</span><input name="squadNumber" type="number" min="1" max="99" inputMode="numeric" /></label>
             </div>
             <label className={styles.checkbox}><input name="usesWhatsapp" type="checkbox" />Player uses WhatsApp</label>
@@ -179,6 +179,10 @@ export default function CaptainAppSquad({ teamId, members, canAddPlayers, savedM
           {members.length ? <button type="button" onClick={() => { setQuery(""); setFilter("all"); }}>Show everyone</button> : null}
         </div>
       )}
+      <section className={styles.actions} aria-label="Squad tools">
+        <Link href={`${base}/player-pool`}>PlayerPool &amp; approvals</Link>
+        <Link href={`${base}/help`}>Help with your squad</Link>
+      </section>
     </section>
   );
 }
