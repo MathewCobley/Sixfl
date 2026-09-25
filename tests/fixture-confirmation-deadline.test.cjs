@@ -47,6 +47,7 @@ function loadPage({ hours = 48, status = null, note = null, provisional = false,
       dates.push(date.toISOString());
       return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'Europe/London' }).format(date);
     } },
+    '@/components/captain/CaptainPwaModeOnly': ({ children }) => h(React.Fragment, null, children),
     '@/components/fixtures/OverturnedResultNotice': () => null,
     '@/components/fixtures/TeamShirt': () => null,
     '@/components/sixfl-tv/SixflTvFixtureBadge': () => null,
