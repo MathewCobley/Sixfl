@@ -64,6 +64,7 @@ function harness(role = null, email = "example@example.test") {
     "@prisma/client": { UserRole: { ADMIN: "ADMIN" }, ResultDisputeStatus: { OPEN: "OPEN", REVIEW: "REVIEW" } },
     "@vercel/analytics": { track() {} },
     "@/lib/messaging/service": { getAdminInboxSummary: async () => ({ unreadThreads: 0 }) },
+    "@/lib/admin/app-messaging": { getAdminSixflSupportNeedsReplyCount: async () => 0 },
     "@/lib/night-board/next-night-issues": { getNextNightBoardIssueSummary: async () => ({ count: 0, level: null, dateLabel: null }) },
     "@/lib/datetime/london": { formatDateTimeInLondon: (value, options) => new Date(value).toLocaleString("en-GB", { ...options, timeZone: "Europe/London" }) },
     "@/lib/prisma": { prisma: {
