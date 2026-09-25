@@ -88,10 +88,10 @@ export default function AdminAppMessagingPanel({
             SMS and email remain unchanged during the pilot.
           </div>
           <Link
-            href="/admin/messaging/chat"
+            href="/admin/chat"
             className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
           >
-            Internal Chat Console
+            Open Chat
           </Link>
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function AdminAppMessagingPanel({
             </p>
           </div>
           <Link
-            href="/admin/messaging/chat#sixfl-inbox"
+            href="/admin/chat#sixfl-inbox"
             className={`inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-xs font-bold ${
               data.sixflSupportNeedsReplyCount > 0
                 ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
