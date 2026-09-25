@@ -130,11 +130,11 @@ function assertCoreFirst(html) {
   const core = html.indexOf('data-dashboard-core');
   const coreEnd = html.indexOf('</main>');
   assert.ok(core >= 0 && coreEnd > core);
-  for (const marker of ['aria-label="Latest League News"', 'data-order-panel="goals"', 'data-order-panel="media"', 'data-order-panel="messages"']) {
+  for (const marker of ['aria-label="Latest SIXFL news"', 'data-order-panel="goals"', 'data-order-panel="media"', 'data-order-panel="messages"']) {
     assert.ok(html.indexOf(marker) > coreEnd, `${marker} must follow the player's core dashboard`);
   }
   assert.equal((html.match(/data-dashboard-core/g) || []).length, 1);
-  assert.equal((html.match(/aria-label="Latest League News"/g) || []).length, 1);
+  assert.equal((html.match(/aria-label="Latest SIXFL news"/g) || []).length, 1);
   assert.equal((html.match(/data-order-panel="goals"/g) || []).length, 1);
 }
 
@@ -154,7 +154,7 @@ for (const route of ['/stats', '/availability', '/league-results', '/tv', '/ledg
   test(`${route}: overview-only content stays absent and the subpage is rendered once`, async () => {
     const { html, seen } = await renderDashboard({ role: 'ADMIN', route, preview: true });
     assert.equal((html.match(/data-dashboard-core/g) || []).length, 1);
-    assert.doesNotMatch(html, /aria-label="Latest League News"|data-order-panel/);
+    assert.doesNotMatch(html, /aria-label="Latest SIXFL news"|data-order-panel/);
     assert.equal(seen.length, 0);
     assert.match(html, /Return to admin team/);
   });
@@ -173,7 +173,7 @@ test('regression catches each original before-children insertion independently',
   );
   assert.notEqual(brokenTemplate, read(TEMPLATE));
   const second = await renderDashboard({ templateSource: brokenTemplate });
-  assert.throws(() => assertCoreFirst(second.html), /Latest League News.*must follow/);
+  assert.throws(() => assertCoreFirst(second.html), /Latest SIXFL news.*must follow/);
 });
 
 module.exports = { renderDashboard, assertCoreFirst };
