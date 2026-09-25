@@ -137,12 +137,14 @@ export default function RefereeAppHome({
             {setNights.length > 0 ? (
               <div className="mt-1.5 divide-y divide-white/[0.06]">
                 {setNights.map((night) => (
-                  <div key={night.id} className="flex items-center justify-between gap-3 py-1.5">
-                    <span className="min-w-0 truncate text-xs font-bold text-white/85">{night.name}</span>
-                    <span className="shrink-0 text-[10px] text-white/45">
-                      {dayLabel(night.dayOfWeek)}
-                      {night.venueName ? ` · ${night.venueName}` : ""}
-                    </span>
+                  <div key={night.id} className="py-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-xs font-bold text-white/85">{night.name}</span>
+                      <span className="shrink-0 text-[10px] text-white/45">{dayLabel(night.dayOfWeek)}</span>
+                    </div>
+                    {night.venueName ? (
+                      <p className="mt-0.5 truncate text-[10px] text-white/35">{night.venueName}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
