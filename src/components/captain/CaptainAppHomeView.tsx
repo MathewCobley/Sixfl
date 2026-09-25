@@ -74,7 +74,7 @@ export default function CaptainAppHomeView({
   const actions = [
     {
       href: `${base}/availability`,
-      label: "Player availability",
+      label: "Availability",
       description: "See who can play",
       tone: "emerald",
       Icon: CalendarDaysIcon,
