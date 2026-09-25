@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-
 import FormListboxField from "@/components/ui/FormListboxField";
 
 type CompetitionOption = {
@@ -36,7 +34,6 @@ export default function TeamParentCompetitionPicker({
 }: {
   teamId: string;
 }) {
-  const router = useRouter();
   const [payload, setPayload] = useState<Payload | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [savedId, setSavedId] = useState("");
@@ -127,7 +124,6 @@ export default function TeamParentCompetitionPicker({
       setSelectedId(data.team.competitionId ?? "");
       setSavedId(data.team.competitionId ?? "");
       setSaved(true);
-      router.refresh();
     } catch (caught) {
       setError(
         caught instanceof Error
