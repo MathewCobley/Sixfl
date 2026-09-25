@@ -5,6 +5,7 @@ import { REFERRAL_PAGE_CTA_KEY, REFERRAL_PAGE_URL } from "@/lib/email/template-c
 
 import EmailHtmlPreview from "@/components/admin/email/EmailHtmlPreview";
 import TeamMoveConfirmationSelect from "@/components/admin/teams/TeamMoveConfirmationSelect";
+import TeamParentCompetitionPicker from "@/components/admin/teams/TeamParentCompetitionPicker";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -215,7 +216,7 @@ export default async function AdminTeamPage({
     notFound();
   }
 
-  const [team, leagues, emailTemplates] = await Promise.all([
+  const [team, emailTemplates] = await Promise.all([
     prisma.team.findUnique({
       where: { id },
       include: {
@@ -268,15 +269,6 @@ export default async function AdminTeamPage({
             email: true,
           },
         },
-      },
-    }),
-    prisma.league.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }, { season: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        season: true,
-        isActive: true,
       },
     }),
     prisma.emailTemplate.findMany({
@@ -898,34 +890,9 @@ export default async function AdminTeamPage({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="leagueId" className="text-sm text-white/60">
-                  League
-                </label>
+              <input type="hidden" name="leagueId" value={team.leagueId ?? ""} />
 
-                <select
-                  id="leagueId"
-                  name="leagueId"
-                  defaultValue={team.leagueId ?? ""}
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white outline-none transition focus:border-emerald-500/60"
-                >
-                  <option value="">No league</option>
-                  {leagues.map((league) => (
-                    <option key={league.id} value={league.id}>
-                      {league.name}
-                      {league.season ? ` — ${league.season}` : ""}
-                      {league.isActive ? "" : " (inactive)"}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="text-xs text-white/50">
-                  Current:{" "}
-                  {team.league
-                    ? `${team.league.name}${team.league.season ? ` — ${team.league.season}` : ""}`
-                    : "No league assigned"}
-                </div>
-              </div>
+              <TeamParentCompetitionPicker teamId={team.id} />
 
               <div className="space-y-2">
                 <label htmlFor="logoUrl" className="text-sm text-white/60">
