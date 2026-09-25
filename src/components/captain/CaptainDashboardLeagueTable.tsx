@@ -27,6 +27,17 @@ function formatGoalDifference(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function getCompactMobileTitle(value: string) {
+  const compact = value
+    .replace(/^Current\s+/i, "")
+    .replace(/\s+6 a side table$/i, "")
+    .replace(/\s+league table$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return compact || "Current league";
+}
+
 function getFormBadgeClasses(result: LeagueFormResult) {
   switch (result) {
     case "W": return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
@@ -152,7 +163,7 @@ export default function CaptainDashboardLeagueTable({
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300/75">
                 League table
               </p>
-              <h2 className="mt-1 truncate text-lg font-black text-white">{displayTitle}</h2>
+              <h2 className="mt-1 truncate text-lg font-black text-white">{getCompactMobileTitle(displayTitle)}</h2>
             </div>
             <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-white/45">
               {displayRows.length} teams
@@ -208,16 +219,11 @@ export default function CaptainDashboardLeagueTable({
                           <span className="block truncate text-[12px] font-black leading-4 text-white">
                             {row.teamName}
                           </span>
-                          <span className="mt-0.5 flex min-w-0 items-center gap-1">
-                            {isCurrentTeam ? (
-                              <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.1em] text-emerald-300">
-                                Your team
-                              </span>
-                            ) : null}
-                            <span className="block truncate text-[9px] text-white/35">
-                              {row.recentForm.length > 0 ? row.recentForm.slice(0, 5).join(" ") : "No form yet"}
+                          {isCurrentTeam ? (
+                            <span className="mt-0.5 block text-[8px] font-black uppercase tracking-[0.1em] text-emerald-300">
+                              Your team
                             </span>
-                          </span>
+                          ) : null}
                         </span>
                       </span>
 
