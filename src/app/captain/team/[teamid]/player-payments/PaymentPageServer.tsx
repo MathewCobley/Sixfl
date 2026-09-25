@@ -1,3 +1,4 @@
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { mayViewPaymentAdjustments } from "@/lib/payments/payment-visibility";
 import SquadPaymentCollectionForm from "@/components/payments/SquadPaymentCollectionForm";
 import { getInitialCollectionDefaultPence } from "@/lib/payments/squad-collection-form";
@@ -496,7 +497,330 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
   const ledgerStates=await ledgerPrisma.playerFeeLedgerState.findMany({where:{teamId:{in:relatedTeamIds}}});
   const ledgerByFee=new Map(ledgerStates.map(state=>[state.feeId,state]));
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <div className="captain-app-payments-native space-y-3" data-captain-app-payments-native>
+          {savedMessage ? (
+            <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-[11px] leading-4 text-emerald-100">
+              {savedMessage}
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2.5 text-[11px] leading-4 text-red-100">
+              {errorMessage}
+            </div>
+          ) : null}
+          {sp.saved === "collection_paused" ? (
+            <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-[11px] leading-4 text-amber-100">
+              Payment links paused. Player debts remain recorded.
+            </div>
+          ) : null}
+
+          <section className="overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.13),transparent_42%),linear-gradient(145deg,#0b1d17,#09140f)] shadow-[0_14px_42px_rgba(0,0,0,0.22)]">
+            <div className="p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/70">
+                    Squad payments
+                  </p>
+                  <h1 className="mt-1 truncate text-[15px] font-black text-white">
+                    {selectedFixture ? fixtureTitle(selectedFixture) : "Choose a fixture"}
+                  </h1>
+                  {selectedFixture ? (
+                    <p className="mt-1 truncate text-[10px] text-white/40">
+                      {formatDateTime(selectedFixture.kickoffAt)}
+                      {selectedFixture.venue?.name ? ` · ${selectedFixture.venue.name}` : ""}
+                    </p>
+                  ) : null}
+                </div>
+                {selectedFixture ? (
+                  <details className="relative shrink-0">
+                    <summary className="cursor-pointer list-none rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-bold text-white/55 [&::-webkit-details-marker]:hidden">
+                      Change
+                    </summary>
+                    <div className="absolute right-0 z-20 mt-2 w-72 overflow-hidden rounded-2xl border border-white/10 bg-[#0a1712] shadow-2xl">
+                      {(ledger?.entries ?? []).slice(0, 12).map((entry) => (
+                        <Link
+                          key={entry.chargeId}
+                          href={entry.fixtureId
+                            ? `/captain/team/${team.id}/player-payments?fixtureId=${entry.fixtureId}`
+                            : `/captain/team/${team.id}/player-payments`}
+                          className="block border-b border-white/[0.06] px-3 py-2.5 last:border-b-0"
+                        >
+                          <span className="block truncate text-xs font-black text-white">{entry.fixtureLabel}</span>
+                          <span className="mt-0.5 block text-[9px] text-white/35">
+                            {formatDateTime(entry.kickoffAt ?? entry.dueDate)}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
+                {[
+                  ["Fee", formatMoney(selectedTeamFeePence)],
+                  ["Assigned", formatMoney(playerAllocationPence)],
+                  ["Awaiting", formatMoney(playerOutstandingPence)],
+                  ["Balance", formatMoney(stillToCoverPence)],
+                ].map(([label, value], index) => (
+                  <div key={label} className={`min-w-0 px-1.5 py-2.5 text-center ${index > 0 ? "border-l border-white/[0.07]" : ""}`}>
+                    <strong className={`block truncate text-[13px] font-black tabular-nums ${label === "Balance" && stillToCoverPence > 0 ? "text-amber-200" : "text-white"}`}>
+                      {value}
+                    </strong>
+                    <span className="mt-1 block truncate text-[8px] uppercase tracking-[0.08em] text-white/30">
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className={`mt-3 rounded-xl border px-3 py-2.5 ${toneClasses(summaryTone)}`}>
+                <div className="text-xs font-black text-white">{summaryTitle}</div>
+                {summaryNextStep ? (
+                  <div className="mt-1 text-[10px] leading-4 text-white/55">{summaryNextStep}</div>
+                ) : (
+                  <div className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/45">{summaryText}</div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <nav className="grid grid-cols-2 gap-2" aria-label="Payment shortcuts">
+            {[
+              [`/captain/team/${teamid}/player-payments/accounts`, "Player balances", "Amounts & history"],
+              [`/captain/team/${teamid}/payments`, "Team payments", "Team balance & credit"],
+              [`/captain/team/${teamid}/captain-squad`, "Squad details", "Emails & player records"],
+              [`/captain/team/${teamid}/payments/credit-ledger`, "Credit ledger", "Credits & adjustments"],
+            ].map(([href, label, description]) => (
+              <Link
+                key={href}
+                href={href}
+                className="min-w-0 rounded-[1rem] border border-white/10 bg-white/[0.035] px-3 py-3"
+              >
+                <span className="block truncate text-xs font-black text-white">{label}</span>
+                <span className="mt-1 block truncate text-[9px] text-white/35">{description}</span>
+              </Link>
+            ))}
+          </nav>
+
+          {selectedFees.length > 0 ? (
+            <section className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.025]">
+              <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-2.5">
+                <div>
+                  <h2 className="text-xs font-black text-white">Player payments</h2>
+                  <p className="mt-0.5 text-[9px] text-white/35">
+                    {selectedOpenPlayerCount} awaiting · {selectedSettledPlayerCount} settled
+                  </p>
+                </div>
+                <Link
+                  href={`/captain/team/${teamid}/player-payments/accounts`}
+                  className="text-[10px] font-bold text-emerald-300"
+                >
+                  All balances →
+                </Link>
+              </div>
+
+              <div className="divide-y divide-white/[0.07]">
+                {selectedFees.map((fee) => {
+                  const captainStatus = isZeroFeeCaptainSettled(fee.status, fee.note)
+                    ? "SETTLED"
+                    : fee.status;
+                  const canResend = fee.status === "OPEN" && fee.teamId === teamid;
+                  const state = ledgerByFee.get(fee.id);
+                  const display = getPlayerPaymentDisplay(
+                    fee,
+                    state,
+                    showAdjustmentDetails ? "admin" : "captain",
+                  );
+
+                  return (
+                    <div key={fee.id} className="px-3.5 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-black text-white">{playerName(fee)}</div>
+                          <div className="mt-0.5 text-[10px] text-white/40">
+                            {formatMoney(fee.amountPence)}
+                          </div>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold ${statusClasses(captainStatus)}`}>
+                          {display.statusLabel}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-2">
+                        <Link
+                          href={`/captain/team/${teamid}/player-payments/account/${fee.id}`}
+                          className="inline-flex min-h-9 items-center rounded-lg border border-white/10 bg-black/20 px-2.5 text-[10px] font-bold text-white/55"
+                        >
+                          History
+                        </Link>
+                        {canResend && !state?.controlled && !state?.collectionPaused ? (
+                          <form action={resendCaptainPlayerPaymentLinkAction}>
+                            <input type="hidden" name="teamId" value={teamid} />
+                            <input type="hidden" name="fixtureId" value={fee.fixtureId} />
+                            <input type="hidden" name="feeId" value={fee.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-9 items-center rounded-lg border border-sky-400/20 bg-sky-500/10 px-2.5 text-[10px] font-black text-sky-100"
+                            >
+                              Send link again
+                            </button>
+                          </form>
+                        ) : null}
+                        {state?.collectionPaused ? (
+                          <span className="text-[9px] text-amber-200/70">Collection paused</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-[1.2rem] border border-white/10 bg-white/[0.025] p-3.5">
+              <h2 className="text-xs font-black text-white">No player payment requests yet</h2>
+              <p className="mt-1 text-[10px] leading-4 text-white/40">
+                Set up the collection below to assign player shares for this fixture.
+              </p>
+            </section>
+          )}
+
+          <details className="overflow-hidden rounded-[1.25rem] border border-emerald-400/20 bg-emerald-500/[0.045]">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-xs font-black text-white [&::-webkit-details-marker]:hidden">
+              <span>{hasPlayerCollection ? "Update player collection" : "Set up player collection"}</span>
+              <span aria-hidden="true" className="text-lg font-normal text-emerald-200/45">›</span>
+            </summary>
+            <div className="border-t border-white/[0.07] p-3">
+              {selectedFixture && selectedFixtureEditable ? (
+                <SquadPaymentCollectionForm
+                  key={`app-${selectedFixture.id}`}
+                  action={createCaptainSquadPaymentCollectionAction}
+                  saveAction={saveCaptainSquadPaymentCollectionWithFeedback}
+                  reviewHref={`/captain/team/${team.id}/player-payments?fixtureId=${selectedFixture.id}`}
+                  className="space-y-3"
+                >
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+
+                  <div>
+                    <label className="text-[10px] font-bold text-white/50" htmlFor="app-payment-amount">
+                      Default amount per player
+                    </label>
+                    <div className="relative mt-1.5">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-white/35">£</span>
+                      <input
+                        id="app-payment-amount"
+                        type="text"
+                        inputMode="decimal"
+                        name="amount"
+                        defaultValue={(defaultAmount / 100).toFixed(2)}
+                        className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 pl-7 text-sm text-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {playersForForm.map((player) => {
+                      const ledgerControlled = Boolean(
+                        player.fee &&
+                        ledgerByFee.get(player.fee.id)?.controlled &&
+                        (ledgerByFee.get(player.fee.id)?.balancePence ?? 0) > 0,
+                      );
+                      const amountName = `amount_${player.kind}_${player.id}`;
+                      const collectionName = `collection_${player.kind}_${player.id}`;
+                      const method = collectionMethod(
+                        player.fee?.status,
+                        player.fee?.amountPence,
+                        player.fee?.note,
+                      );
+
+                      return (
+                        <div key={`app-${player.kind}-${player.id}`} className="rounded-xl border border-white/[0.08] bg-black/20 p-2.5">
+                          <label className="flex min-w-0 items-start gap-2">
+                            <input
+                              type="checkbox"
+                              name="player"
+                              disabled={ledgerControlled || (player.emailRequired && !player.fee)}
+                              value={player.value}
+                              defaultChecked={player.checked}
+                              className="mt-0.5"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-black text-white">{player.label}</span>
+                              <span className={`mt-0.5 block truncate text-[9px] ${player.emailRequired ? "text-amber-200/70" : "text-white/30"}`}>
+                                {player.emailRequired ? "Email required" : player.contact || "No contact saved"}
+                              </span>
+                            </span>
+                          </label>
+
+                          <div className="mt-2 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/30">£</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                name={amountName}
+                                aria-label={`Amount for ${player.label}`}
+                                disabled={ledgerControlled}
+                                defaultValue={player.fee ? (player.fee.amountPence / 100).toFixed(2) : ""}
+                                placeholder="Default"
+                                className="w-full rounded-lg border border-white/10 bg-black/25 py-2 pl-6 pr-2 text-[11px] text-white outline-none"
+                              />
+                            </div>
+                            <div className="grid gap-1">
+                              {[
+                                ["link", "Send payment link"],
+                                ["captain_paid", "Paid captain direct"],
+                                ["waived", "No charge"],
+                              ].map(([value, label]) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-black/15 px-2 py-1.5 text-[9px] text-white/55"
+                                >
+                                  <input
+                                    type="radio"
+                                    name={collectionName}
+                                    disabled={ledgerControlled}
+                                    value={value}
+                                    defaultChecked={method === value}
+                                  />
+                                  <span className="truncate">{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {player.fee && ledgerControlled ? (
+                            <Link
+                              className="mt-2 inline-block text-[9px] font-bold text-emerald-200 underline"
+                              href={`/captain/team/${teamid}/player-payments/account/${player.fee.id}`}
+                            >
+                              Protected balance · open history
+                            </Link>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </SquadPaymentCollectionForm>
+              ) : selectedEntry ? (
+                <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-[10px] leading-4 text-amber-100/75">
+                  This historical fixture cannot be edited here. Remaining team balance: {formatMoney(selectedEntry.outstandingPence)}.
+                </div>
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-[10px] text-white/40">
+                  Choose a current fixture first.
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       {sp.saved==="collection_paused" ? <p role="status" className="rounded-xl border border-emerald-300/25 p-4">Payment links paused. Player debts remain recorded; use Payment history to resume collection or record a genuine reduction.</p>:null}
       <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6 lg:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -904,6 +1228,8 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
           marked as no payment needed.
         </p>
       ) : null}
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
