@@ -48,11 +48,14 @@ test('real screen renders players, retained details and authorised action fields
   assert.match(html, /name="membershipId" value="member-1"/);
   assert.match(html, /name="returnTo" value="captain-squad"/);
   assert.match(html, /aria-label="Add a player"/);
-  // React may reorder input attributes; the actual named input must be required.
-  const email = html.match(/<input\b[^>]*\bname="email"[^>]*>/)?.[0];
-  assert.ok(email, 'the add form contains a player email input');
-  assert.match(email, /\btype="email"/);
-  assert.match(email, /\brequired=""/);
+  // React may reorder input attributes; both actual contact inputs are required.
+  for (const [name, type] of [['email', 'email'], ['phone', 'tel']]) {
+    const input = html.match(new RegExp(`<input\\b[^>]*\\bname="${name}"[^>]*>`))?.[0];
+    assert.ok(input, `the add form contains ${name}`);
+    assert.ok(input.includes(`type="${type}"`));
+    assert.match(input, /\brequired=""/);
+  }
+  assert.match(html, /href="\/captain\/team\/demo\/player-pool"/);
   assert.match(html, /Defender/);
   assert.match(html, /Usually available on Tuesdays/);
   assert.match(html, /Email needed/);
@@ -99,6 +102,15 @@ test('native mode is wired at the owning server page with shared data and existi
   }
   assert.match(route, /team\.teamMode === "MANAGED"/);
   assert.match(route, /where: \{ id: membershipId, teamId: teamid \}/);
+});
+
+test('legacy website login injection cannot mount in app mode', () => {
+  const layout = fs.readFileSync('src/app/captain/team/[teamid]/captain-squad/layout.tsx', 'utf8');
+  const web = layout.match(/<CaptainPwaModeOnly mode="web">([\s\S]*?)<\/CaptainPwaModeOnly>/)?.[0];
+  assert.ok(web);
+  assert.match(web, /<PlayerDashboardLoginEmailButtons/);
+  assert.doesNotMatch(layout.replace(web, ''), /<PlayerDashboardLoginEmailButtons/);
+  assert.match(layout, /await requireCaptain\(teamid\)/);
 });
 
 test('native screen does not query data, scrape pages or introduce private admin actions', () => {
