@@ -101,6 +101,6 @@
 .tabIcon { position: relative; display: block; width: 21px; height: 21px; }
 .tabIcon > svg { width: 21px; height: 21px; }
 .unread { position: absolute; top: -7px; right: -10px; display: grid; place-items: center; min-width: 18px; height: 17px; padding: 0 4px; border: 1px solid #07130f; border-radius: 9px; color: #04110a; background: #6ae6a7; font-size: 10px; line-height: 1; font-weight: 750; }
-.matchCard:focus-visible, .metric:focus-visible, .toolRow:focus-visible, .alertRow:focus-visible, .menuRow:focus-visible, .tab:focus-visible, .logoLink:focus-visible, .badgeLink:focus-visible { outline: 2px solid #85e5b0; outline-offset: -3px; }
-.matchCard:active, .metric:active, .toolRow:active, .menuRow:active, .tab:active { background: #143626; }
+.matchCard:focus-visible, .metric:focus-visible, .actionCard:focus-visible, .toolRow:focus-visible, .alertRow:focus-visible, .menuRow:focus-visible, .tab:focus-visible, .logoLink:focus-visible, .badgeLink:focus-visible { outline: 2px solid #85e5b0; outline-offset: -3px; }
+.matchCard:active, .metric:active, .actionCard:active, .toolRow:active, .menuRow:active, .tab:active { filter: brightness(1.08); }
 @media (min-width: 640px) { .home { gap: 16px; } .matchCard { padding: 20px; } }
