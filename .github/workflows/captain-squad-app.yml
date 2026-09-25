@@ -1,0 +1,75 @@
+name: Captain Squad app
+
+on:
+  pull_request:
+    paths:
+      - "src/app/captain/team/**/captain-squad/**"
+      - "src/app/captain/team/**/regulars/**"
+      - "src/app/captain/team/**/layout.tsx"
+      - "src/components/captain/CaptainAppSquad*"
+      - "src/components/captain/CaptainPwaModeOnly.tsx"
+      - "src/components/captain/CaptainAppHeader.tsx"
+      - "src/components/captain/CaptainAppScreens.module.css"
+      - "src/components/captain/CaptainPwaBottomNav.tsx"
+      - "src/lib/captain/app-navigation.ts"
+      - "tests/captain-app/squad*.cjs"
+      - ".github/workflows/captain-squad-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: captain-squad-app-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  squad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://invalid:invalid@127.0.0.1:65432/unused
+      NEXTAUTH_SECRET: isolated-squad-ui-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_squad_ui_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Native Squad contracts before preparation
+        run: node --test tests/captain-app/squad.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Prepared Squad and critical feature contracts
+        run: |
+          node --test tests/captain-app/squad.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npm run audit:dom
+          npx tsc --noEmit
+      - run: npx next build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/squad-browser" --no-save --package-lock=false playwright@1.55.0
+          node "$RUNNER_TEMP/squad-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real Squad components and actions at phone and tablet sizes
+        run: NODE_PATH="$RUNNER_TEMP/squad-browser/node_modules" node tests/captain-app/squad-browser.cjs
+      - name: Record prepared source and route inventory
+        if: always()
+        run: |
+          mkdir -p artifacts/captain-app
+          cp 'src/app/captain/team/[teamid]/captain-squad/page.tsx' artifacts/captain-app/squad-page.prepared.tsx
+          git grep -n -E 'CaptainAppSquad|captain-squad|CaptainPwaModeOnly' -- src scripts > artifacts/captain-app/squad-source-inventory.txt
+          tar -czf artifacts/captain-app/squad-source.tgz src/components/captain/CaptainAppSquad* tests/captain-app/squad*.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captain-squad-app-${{ github.sha }}
+          path: artifacts/captain-app/
+          retention-days: 7
+          if-no-files-found: error

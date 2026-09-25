@@ -8,6 +8,8 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { TeamRole } from "@prisma/client";
 
+import CaptainAppSquad from "@/components/captain/CaptainAppSquad";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { sendDashboardLoginEmail } from "@/lib/auth/sendDashboardLoginEmail";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -553,7 +555,49 @@ export default async function CaptainSquadViewPage({
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
+  // Both presentations use the same authorised query, profile reader, statistics
+  // and server actions. Only the installed/preview app receives the compact UI.
+  const appMembers = team.members.map((member) => {
+    const profile = profileByMemberId.get(member.id);
+    const profileDetails = [
+      { label: "Age", value: profile?.ageBand },
+      { label: "Position", value: profile?.preferredPositions },
+      { label: "Level", value: profile?.experienceSummary },
+      { label: "Availability", value: profile?.availabilityLevel },
+      { label: "Nights", value: formatPreferredNights(profile?.preferredNights) },
+    ].filter((detail): detail is { label: string; value: string } => Boolean(detail.value?.trim()));
+    return {
+      id: member.id,
+      name: member.user.name || "Unnamed player",
+      email: member.user.email,
+      phone: profile?.phone ?? null,
+      squadNumber: profile?.squadNumber ?? null,
+      role: member.role,
+      roleLabel: getRoleLabel(member.role),
+      isRegular: member.isRegular,
+      whatsAppUrl: usesWhatsappByUserId.get(member.user.id) === true ? getWhatsAppUrl(profile?.phone) : null,
+      addedLabel: formatUkDate(member.createdAt),
+      ...(statsByMemberId.get(member.id) ?? emptyPlayerStats()),
+      profile: profileDetails,
+      availabilityNotes: formatAvailabilitySummary(profile?.availabilitySummary),
+    };
+  });
+
   return (
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <CaptainAppSquad
+          teamId={teamid}
+          members={appMembers}
+          canAddPlayers={canCaptainAddPlayers}
+          savedMessage={savedMessage}
+          errorMessage={errorMessage}
+          addPlayerAction={addCaptainPlayerAction}
+          sendLoginAction={sendCaptainPlayerDashboardLoginEmailAction}
+          setRegularAction={setSquadMemberRegularAction}
+        />
+      </CaptainPwaModeOnly>
+      <CaptainPwaModeOnly mode="web">
     <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
@@ -832,5 +876,7 @@ export default async function CaptainSquadViewPage({
         </div>
       </section>
     </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
