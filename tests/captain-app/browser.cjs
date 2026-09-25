@@ -44,6 +44,9 @@ async function main() {
       );
       const overview = page.locator('[aria-label="Team overview"]');
       assert.equal(await overview.locator('a').count(), 4);
+      const tableShortcut = page.getByRole('link', { name: /League table/i });
+      assert.equal(await tableShortcut.getAttribute('href'), '/captain/team/demo/table');
+      assert.ok(await tableShortcut.isVisible());
       assert.ok((await page.locator('.matchTeams').boundingBox()).height < 100);
       await page.screenshot({ path: `artifacts/captain-app/home-${width}.png`, fullPage: true });
     }

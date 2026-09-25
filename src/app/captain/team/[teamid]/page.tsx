@@ -547,7 +547,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
       </section>
 
       <div id="captain-league-table">
-        <CaptainDashboardLeagueTable rows={leagueTable} title={leagueTableTitle} description={leagueTableDescription} emptyMessage={currentLeagueId ? "The league table will appear here once teams have been added." : "Your team is not assigned to a league yet, so there is no table to show here."} />
+        <CaptainDashboardLeagueTable rows={leagueTable} title={leagueTableTitle} description={leagueTableDescription} emptyMessage={currentLeagueId ? "The league table will appear here once teams have been added." : "Your team is not assigned to a league yet, so there is no table to show here."} currentTeamIds={relatedTeamIds} />
       </div>
         </div>
       </CaptainPwaModeOnly>

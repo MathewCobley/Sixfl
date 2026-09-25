@@ -121,3 +121,24 @@ test("captain portal requires the current Captain Agreement but admin previews n
   assert.match(action, /role: TeamRole\.CAPTAIN/);
   assert.match(action, /Only registered captains can accept the Captain Agreement/);
 });
+
+
+test("captain league table is compact and app-native on mobile", () => {
+  const table = read("src/components/captain/CaptainDashboardLeagueTable.tsx");
+  const page = read("src/app/captain/team/[teamid]/table/page.tsx");
+  const home = read("src/components/captain/CaptainAppHomeView.tsx");
+
+  assert.match(table, /Tap a team to see its full record and recent form/);
+  assert.match(table, /grid-cols-\[2\.15rem_minmax\(0,1fr\)_2\.25rem_2\.7rem_2\.7rem\]/);
+  assert.match(table, /<details[\s\S]*<summary/);
+  assert.match(table, />Pos<\/span>[\s\S]*>Team<\/span>[\s\S]*>P<\/span>[\s\S]*>GD<\/span>[\s\S]*>Pts<\/span>/);
+  assert.match(table, /currentTeamIds: initialCurrentTeamIds = \[\]/);
+  assert.match(page, /currentTeamIds=\{relatedTeamIds\}/);
+  assert.match(home, /className=\{styles\.tableShortcut\}/);
+  assert.match(home, />League table<\/strong>/);
+
+  const mobileStart = table.indexOf('<div className="lg:hidden">');
+  const desktopStart = table.indexOf('<div className="hidden w-full overflow-hidden lg:block">');
+  assert.ok(mobileStart >= 0 && desktopStart > mobileStart);
+  assert.doesNotMatch(table.slice(mobileStart, desktopStart), /href=\{\`\/teams\//);
+});
