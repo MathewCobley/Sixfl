@@ -12,6 +12,7 @@ import CaptainDashboardLeagueTable from "@/components/captain/CaptainDashboardLe
 import CaptainOnboardingChecklist from "@/components/captain/CaptainOnboardingChecklist";
 import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import CaptainVeoPriorityCard from "@/components/captain/CaptainVeoPriorityCard";
+import LatestNews from "@/components/news/LatestNews";
 import { getCaptainOnboardingStatus } from "@/lib/captain/onboarding";
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -310,6 +311,7 @@ export default async function CaptainOverviewPage({ params }: { params: Promise<
           openIssues={activeDisputeCount}
           paymentDueNowLabel={formatMoney(paymentDueNowPence)}
           overdueConfirmations={overdueConfirmationFixtures.length}
+          news={<LatestNews scope="captain" presentation="integrated" />}
         />
       </CaptainPwaModeOnly>
 
