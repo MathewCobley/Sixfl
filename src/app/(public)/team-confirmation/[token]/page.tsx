@@ -324,6 +324,10 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
     getTeamPlaceConfirmationStatus(leadId),
   ]);
 
+  // The original email link remains useful after an explicit player choice.
+  if (lead?.interestType === "PLAYER" && !lead.convertedTeamId) {
+    redirect(`/team-confirmation/${encodeURIComponent(token)}/player`);
+  }
   if (!lead || lead.interestType !== "TEAM") return <InvalidLinkCard />;
 
   const effectiveLeague = lead.league?.competition?.currentLeague ?? lead.league;
@@ -404,6 +408,16 @@ export default async function TeamConfirmationPage({ params, searchParams }: Pag
             </div>
           ) : null}
         </section>
+
+        {!isConfirmed && !isDeclined && !lead.convertedTeamId ? (
+          <section aria-label="Individual-player option" className="rounded-2xl border border-sky-400/25 bg-sky-500/[0.07] p-5">
+            <h2 className="text-lg font-semibold text-white">Just looking to play yourself?</h2>
+            <p className="mt-2 text-sm leading-6 text-white/70">You do not need a whole team. Choose the individual-player option and we’ll update your enquiry so we can help you find a team.</p>
+            <Link href={`/team-confirmation/${encodeURIComponent(token)}/player`} className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-sky-300/30 bg-sky-500/15 px-4 py-3 text-sm font-semibold text-sky-100 hover:bg-sky-500/25">
+              I’d like to join as an individual player
+            </Link>
+          </section>
+        ) : null}
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
           {isConfirmed ? (
