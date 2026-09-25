@@ -287,10 +287,7 @@ async function resolveGroupCreatorUserId(
   teamId: string,
   context: AccessContext,
 ) {
-  if (
-    context.membershipRole === TeamRole.CAPTAIN &&
-    context.effectiveUserId
-  ) {
+  if (context.membershipId && context.effectiveUserId) {
     return context.effectiveUserId;
   }
 
@@ -570,7 +567,10 @@ async function buildConversationList(teamId: string, context: AccessContext) {
         latestMessageAt: true,
         lastMessagePreview: true,
         members: {
-          select: { userId: true },
+          select: {
+            userId: true,
+            user: { select: { name: true, email: true } },
+          },
         },
         reads: {
           where: { userId: context.effectiveUserId },
@@ -637,25 +637,43 @@ async function buildConversationList(teamId: string, context: AccessContext) {
   });
 
   const groupItems = await Promise.all(
-    visibleGroupConversations.map(async (conversation) => ({
-      ref: `group:${conversation.id}`,
-      title:
-        conversation.type === PortalConversationType.REGULARS
-          ? "Regulars Chat"
-          : conversation.title || "Selected Players",
-      subtitle:
-        conversation.type === PortalConversationType.REGULARS
-          ? `${currentRegularAudience.regularUserIds.size} player${currentRegularAudience.regularUserIds.size === 1 ? "" : "s"} marked as Regulars`
-          : `Private group chat · ${conversation.members.length} people`,
-      unreadCount: await unreadCountFor({
-        conversationId: conversation.id,
-        userId: context.effectiveUserId,
-        isPreview: context.isPreview,
-      }),
-      latestMessageAt: conversation.latestMessageAt?.toISOString() ?? null,
-      preview: conversation.lastMessagePreview,
-      kind: "GROUP" as const,
-    })),
+    visibleGroupConversations.map(async (conversation) => {
+      const isDirectSquadChat =
+        conversation.type === PortalConversationType.SELECTED_GROUP &&
+        conversation.members.length === 2;
+      const otherMember = isDirectSquadChat
+        ? conversation.members.find(
+            (member) => member.userId !== context.effectiveUserId,
+          ) ?? null
+        : null;
+      const otherName = otherMember
+        ? getDisplayName(otherMember.user)
+        : null;
+
+      return {
+        ref: `group:${conversation.id}`,
+        title:
+          conversation.type === PortalConversationType.REGULARS
+            ? "Regulars Chat"
+            : isDirectSquadChat && otherName
+              ? otherName
+              : conversation.title || "Selected Players",
+        subtitle:
+          conversation.type === PortalConversationType.REGULARS
+            ? `${currentRegularAudience.regularUserIds.size} player${currentRegularAudience.regularUserIds.size === 1 ? "" : "s"} marked as Regulars`
+            : isDirectSquadChat
+              ? `Private · only you and ${otherName ?? "this teammate"}`
+              : `Private group chat · ${conversation.members.length} people`,
+        unreadCount: await unreadCountFor({
+          conversationId: conversation.id,
+          userId: context.effectiveUserId,
+          isPreview: context.isPreview,
+        }),
+        latestMessageAt: conversation.latestMessageAt?.toISOString() ?? null,
+        preview: conversation.lastMessagePreview,
+        kind: isDirectSquadChat ? ("PRIVATE" as const) : ("GROUP" as const),
+      };
+    }),
   );
 
   if (context.viewRole === "PLAYER") {
@@ -893,33 +911,31 @@ export async function GET(
 
   if ("error" in selected) return jsonError(selected.error, selected.status);
 
-  const groupCreatorUserId =
-    context.viewRole === "CAPTAIN"
-      ? await resolveGroupCreatorUserId(teamid, context)
-      : null;
+  const groupCreatorUserId = await resolveGroupCreatorUserId(
+    teamid,
+    context,
+  );
 
   const [team, audienceOptions] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamid },
       select: { id: true, name: true, logoUrl: true },
     }),
-    context.viewRole === "CAPTAIN"
-      ? prisma.teamMember.findMany({
-          where: {
-            teamId: teamid,
-            ...(groupCreatorUserId
-              ? { userId: { not: groupCreatorUserId } }
-              : {}),
-          },
-          orderBy: [{ isRegular: "desc" }, { createdAt: "asc" }],
-          select: {
-            userId: true,
-            role: true,
-            isRegular: true,
-            user: { select: { name: true, email: true } },
-          },
-        })
-      : Promise.resolve([]),
+    prisma.teamMember.findMany({
+      where: {
+        teamId: teamid,
+        ...(groupCreatorUserId
+          ? { userId: { not: groupCreatorUserId } }
+          : {}),
+      },
+      orderBy: [{ isRegular: "desc" }, { createdAt: "asc" }],
+      select: {
+        userId: true,
+        role: true,
+        isRegular: true,
+        user: { select: { name: true, email: true } },
+      },
+    }),
   ]);
   if (!team) return jsonError("Team not found.", 404);
 
@@ -1070,22 +1086,23 @@ export async function POST(
   }
 
   if (payload?.action === "create-group") {
-    if (context.viewRole !== "CAPTAIN") {
-      return jsonError("Only captains can start group conversations.", 403);
-    }
-
     const audience = String(payload?.audience ?? "").trim().toUpperCase();
     if (audience !== "REGULARS" && audience !== "SELECTED") {
       return jsonError("Choose Regulars or Selected Players.", 400);
     }
 
+    if (audience === "REGULARS" && context.viewRole !== "CAPTAIN") {
+      return jsonError("Only captains can start the Regulars Chat.", 403);
+    }
+
     const creatorUserId = await resolveGroupCreatorUserId(teamid, context);
     if (!creatorUserId) {
-      return jsonError("A captain must be linked before starting a group chat.", 409);
+      return jsonError("A current squad member must be linked before starting a chat.", 409);
     }
 
     let recipientMembers: Array<{
       userId: string;
+      role: TeamRole;
       user: { name: string | null; email: string | null };
     }> = [];
 
@@ -1099,6 +1116,7 @@ export async function POST(
         orderBy: { createdAt: "asc" },
         select: {
           userId: true,
+          role: true,
           user: { select: { name: true, email: true } },
         },
       });
@@ -1116,9 +1134,15 @@ export async function POST(
             ),
           )
         : [];
+      const minimumRecipients = context.viewRole === "PLAYER" ? 1 : 2;
 
-      if (requestedIds.length < 2) {
-        return jsonError("Select at least two people for a group chat.", 400);
+      if (requestedIds.length < minimumRecipients) {
+        return jsonError(
+          minimumRecipients === 1
+            ? "Choose at least one current squad member."
+            : "Select at least two people for a group chat.",
+          400,
+        );
       }
 
       recipientMembers = await prisma.teamMember.findMany({
@@ -1129,12 +1153,30 @@ export async function POST(
         orderBy: { createdAt: "asc" },
         select: {
           userId: true,
+          role: true,
           user: { select: { name: true, email: true } },
         },
       });
 
-      if (recipientMembers.length < 2) {
-        return jsonError("Select at least two current squad members.", 400);
+      if (recipientMembers.length !== requestedIds.length) {
+        return jsonError("One or more selected people are no longer in this squad.", 409);
+      }
+
+      // A player choosing a single captain should open the existing captain
+      // conversation instead of creating a second 1-to-1 thread.
+      if (
+        context.viewRole === "PLAYER" &&
+        recipientMembers.length === 1 &&
+        recipientMembers[0]?.role === TeamRole.CAPTAIN
+      ) {
+        return NextResponse.json(
+          {
+            ok: true,
+            conversationRef: privateChatRef(context.effectiveUserId),
+            title: "Message your captain",
+          },
+          { status: 201 },
+        );
       }
     }
 
