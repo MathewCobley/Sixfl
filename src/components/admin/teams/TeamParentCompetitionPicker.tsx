@@ -86,13 +86,11 @@ export default function TeamParentCompetitionPicker({
   }, [teamId]);
 
   const options = useMemo(
-    () => [
-      { value: "", label: "No parent competition" },
-      ...(payload?.competitions ?? []).map((competition) => ({
+    () =>
+      (payload?.competitions ?? []).map((competition) => ({
         value: competition.id,
         label: competition.name,
       })),
-    ],
     [payload?.competitions],
   );
 
@@ -111,7 +109,7 @@ export default function TeamParentCompetitionPicker({
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            competitionId: selectedId || null,
+            competitionId: selectedId,
           }),
         },
       );
@@ -142,7 +140,7 @@ export default function TeamParentCompetitionPicker({
   }
 
   const currentCompetitionName =
-    payload?.team?.competitionName || "No parent competition";
+    payload?.team?.competitionName || "No parent competition assigned";
 
   return (
     <div className="space-y-3">
@@ -152,7 +150,11 @@ export default function TeamParentCompetitionPicker({
           label="Parent competition"
           value={selectedId}
           options={options}
-          placeholder={loading ? "Loading parent competitions…" : "Choose parent competition"}
+          placeholder={
+            loading
+              ? "Loading parent competitions…"
+              : "Choose parent competition"
+          }
           disabled={loading || saving}
           onValueChange={(value) => {
             setSelectedId(value);
