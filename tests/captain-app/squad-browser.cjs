@@ -90,6 +90,7 @@ ${cssParts.join('\n')}\n${shellCss}</style></head><body><div id='root' class='ca
       for (const button of await screen.getByRole('button').all()) {
         const box = await button.boundingBox(); assert.ok(box.width >= 44 && box.height >= 44, 'touch target');
       }
+      assert.equal(await screen.getByRole('link', { name: 'PlayerPool & approvals', exact: true }).getAttribute('href'), '/captain/team/demo/player-pool');
       await page.screenshot({ path: `${output}/squad-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 375, height: 812 }); await show();
@@ -126,13 +127,17 @@ ${cssParts.join('\n')}\n${shellCss}</style></head><body><div id='root' class='ca
     await add.getByRole('button', { name: 'Add player', exact: true }).click();
     assert.equal(await page.evaluate(() => window.actionCalls.length), 2, 'missing email cannot submit');
     await add.getByLabel('Player email', { exact: true }).fill('new.player@example.invalid');
+    await add.getByRole('button', { name: 'Add player', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.actionCalls.length), 2, 'missing mobile number cannot submit');
+    await add.getByLabel('Mobile / SMS number', { exact: true }).fill('07700 900456');
     await add.getByLabel(/Shirt no/).fill('20');
     await add.getByLabel('Player uses WhatsApp', { exact: true }).check();
     await add.getByRole('button', { name: 'Add player', exact: true }).click();
     await page.waitForFunction(() => window.actionCalls.length === 3);
     const added = await page.evaluate(() => window.actionCalls[2]);
     assert.equal(added.kind, 'add'); assert.equal(added.data.teamid, 'demo'); assert.equal(added.data.displayName, 'Test New Player');
-    assert.equal(added.data.email, 'new.player@example.invalid'); assert.equal(added.data.squadNumber, '20'); assert.equal(added.data.usesWhatsapp, 'on');
+    assert.equal(added.data.email, 'new.player@example.invalid'); assert.equal(added.data.phone, '07700 900456');
+    assert.equal(added.data.squadNumber, '20'); assert.equal(added.data.usesWhatsapp, 'on');
     await show({ managed: true });
     assert.equal(await screen.getByRole('button', { name: '+ Add player', exact: true }).count(), 0);
     assert.equal(await screen.getByRole('link', { name: 'Contact SIXFL', exact: true }).getAttribute('href'), '/captain/team/demo/help');
@@ -146,7 +151,7 @@ ${cssParts.join('\n')}\n${shellCss}</style></head><body><div id='root' class='ca
     await page.screenshot({ path: `${output}/squad-long-name-320.png`, fullPage: true });
     await show({ web: true }); assert.equal(await screen.count(), 0, 'native app UI is not rendered in normal website mode');
     assert.deepEqual(errors, []);
-    console.log('Squad browser checks passed: 320/375/430/768px, four players above fold, search, filters, details, exact action payloads, pending states, email guard, managed and web modes, empty/error states and long names. No production data or actions used.');
+    console.log('Squad browser checks passed: 320/375/430/768px, four players above fold, search, filters, details, exact action payloads, pending states, email/mobile guards, managed and web modes, empty/error states and long names. No production data or actions used.');
   } catch (error) {
     await page.screenshot({ path: `${output}/squad-failure.png`, fullPage: true }); throw error;
   } finally {
