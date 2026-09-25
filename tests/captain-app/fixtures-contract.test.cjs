@@ -53,3 +53,45 @@ test("installed fixtures screen hides expanded AI panels while retaining compact
   );
   assert.match(bridge, /createCompactWinChanceBadge/);
 });
+
+
+test("captain fixtures has a dedicated native app screen instead of shrinking the website layout", () => {
+  const page = fs.readFileSync(
+    "src/app/captain/team/[teamid]/fixtures/page.tsx",
+    "utf8",
+  );
+
+  assert.match(page, /<CaptainPwaModeOnly mode="app">[\s\S]*captain-app-fixtures-native/);
+  assert.match(page, /<CaptainPwaModeOnly mode="web">[\s\S]*captain-fixtures-page/);
+
+  const appStart = page.indexOf('<CaptainPwaModeOnly mode="app">');
+  const webStart = page.indexOf('<CaptainPwaModeOnly mode="web">');
+  assert.ok(appStart >= 0 && webStart > appStart);
+  const native = page.slice(appStart, webStart);
+
+  for (const copy of [
+    "Next fixture",
+    "Confirm 72h before",
+    "Team cannot play",
+    "Report a fixture issue",
+    "Upcoming",
+    "Results →",
+  ]) assert.ok(native.includes(copy), copy);
+
+  assert.match(native, /<AppFixtureTeams/);
+  assert.match(native, /name="unavailableReason"/);
+  assert.match(native, /href=\{\`\/captain\/team\/\$\{teamid\}\/fixtures\?fixtureId=/);
+  assert.doesNotMatch(native, /captain-fixtures-guidance|captain-fixtures-response-card|Whole team cannot play\?/);
+});
+
+test("native captain fixture data includes real team badges", () => {
+  const page = fs.readFileSync(
+    "src/app/captain/team/[teamid]/fixtures/page.tsx",
+    "utf8",
+  );
+
+  assert.match(page, /type FixtureTeam = \{[\s\S]*logoUrl\?: string \| null/);
+  assert.match(page, /homeTeam: \{ select: \{ id: true, name: true, logoUrl: true \} \}/);
+  assert.match(page, /awayTeam: \{ select: \{ id: true, name: true, logoUrl: true \} \}/);
+  assert.match(page, /function AppTeamBadge/);
+});

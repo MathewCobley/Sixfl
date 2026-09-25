@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FixtureCaptainConfirmationStatus } from "@prisma/client";
 
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import OverturnedResultNotice from "@/components/fixtures/OverturnedResultNotice";
 import { RESULT_OVERTURN_SUMMARY_SELECT } from "@/lib/fixtures/result-score";
 import {
@@ -52,6 +53,7 @@ type ConfirmationSummary = {
 type FixtureTeam = {
   id: string;
   name: string;
+  logoUrl?: string | null;
 };
 
 function TeamNameWithShirt({
@@ -90,6 +92,65 @@ function FixtureTeamPair({
         colour={colours.get(awayTeam.id) ?? null}
       />
     </span>
+  );
+}
+
+function getTeamInitials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "T"
+  );
+}
+
+function AppTeamBadge({ team }: { team: FixtureTeam }) {
+  return (
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/25">
+      {team.logoUrl ? (
+        <img
+          src={team.logoUrl}
+          alt=""
+          className="max-h-11 max-w-11 object-contain"
+        />
+      ) : (
+        <span className="text-xs font-black text-white/45">
+          {getTeamInitials(team.name)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function AppFixtureTeams({
+  homeTeam,
+  awayTeam,
+}: {
+  homeTeam: FixtureTeam;
+  awayTeam: FixtureTeam;
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+      {[homeTeam, awayTeam].map((fixtureTeam, index) => (
+        <div
+          key={fixtureTeam.id}
+          className={`min-w-0 text-center ${index === 1 ? "col-start-3" : ""}`}
+        >
+          <div className="flex justify-center">
+            <AppTeamBadge team={fixtureTeam} />
+          </div>
+          <div className="mt-1.5 truncate text-[11px] font-black text-white">
+            {fixtureTeam.name}
+          </div>
+        </div>
+      ))}
+      <span className="col-start-2 row-start-1 text-xs font-black text-white/35">
+        VS
+      </span>
+    </div>
   );
 }
 
@@ -476,8 +537,8 @@ export default async function CaptainFixturesPage({
       orderBy: [{ kickoffAt: "asc" }],
       take: 20,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         venue: { select: { name: true } },
         captainConfirmations: {
           where: { teamId: teamid },
@@ -501,8 +562,8 @@ export default async function CaptainFixturesPage({
       orderBy: [{ kickoffAt: "desc" }],
       take: 6,
       include: {
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        homeTeam: { select: { id: true, name: true, logoUrl: true } },
+        awayTeam: { select: { id: true, name: true, logoUrl: true } },
         result: { select: { homeScore: true, awayScore: true, overturn: { select: RESULT_OVERTURN_SUMMARY_SELECT } } },
       },
     }),
@@ -582,7 +643,316 @@ export default async function CaptainFixturesPage({
     : `mailto:${SIXFL_FIXTURE_EMAIL}`;
 
   return (
-    <div className="captain-fixtures-page space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <div className="captain-app-fixtures-native space-y-3">
+          {selectedFixture ? (
+            <>
+              <section className="overflow-hidden rounded-[1.35rem] border border-sky-400/25 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.13),transparent_42%),linear-gradient(145deg,#0b1e2a,#091611)] shadow-[0_14px_42px_rgba(0,0,0,0.24)]">
+                <div className="p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-200">
+                      Next fixture
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-white/55">
+                      {getCountdownLabel(selectedFixture.kickoffAt)}
+                    </span>
+                  </div>
+
+                  <div className="mt-3">
+                    <AppFixtureTeams
+                      homeTeam={selectedFixture.homeTeam}
+                      awayTeam={selectedFixture.awayTeam}
+                    />
+                  </div>
+
+                  <div className="mt-3 border-t border-white/[0.08] pt-2.5 text-center">
+                    <div className="text-[11px] font-bold text-white/75">
+                      {formatDateTime(selectedFixture.kickoffAt)}
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] text-white/45">
+                      {selectedFixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
+                    </div>
+                  </div>
+
+                  {selectedFixture.sixflTvRecorded || selectedFixture.sixflTvUrl ? (
+                    <div className="mt-2 flex justify-center">
+                      <SixflTvFixtureBadge
+                        recorded={selectedFixture.sixflTvRecorded}
+                        url={selectedFixture.sixflTvUrl}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="border-t border-white/[0.08] bg-black/15 p-3">
+                  {selectedStatus ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${getToneClasses(selectedStatus.tone)}`}>
+                        {selectedStatus.label}
+                      </span>
+                      {!selectedFixtureIsProvisional &&
+                      !selectedReplacementReason &&
+                      !selectedResponseLocked ? (
+                        <span className="text-[9px] font-semibold text-white/35">
+                          Confirm 72h before
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {selectedStatus?.helper &&
+                  (isSelectedFixtureConfirmed ||
+                    isSelectedFixtureUnavailable ||
+                    selectedFixtureIsProvisional ||
+                    selectedReplacementReason) ? (
+                    <p className="mt-2 text-[10px] leading-4 text-white/45">
+                      {selectedStatus.helper}
+                    </p>
+                  ) : null}
+
+                  {filters.saved === "confirmed" ? (
+                    <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+                      Team confirmation saved.
+                    </div>
+                  ) : null}
+                  {filters.saved === "unavailable" ? (
+                    <div className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-100">
+                      SIXFL has been alerted that your team cannot play.
+                    </div>
+                  ) : null}
+                  {filters.saved === "issue" ? (
+                    <div className="mt-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+                      Fixture issue sent to SIXFL.
+                    </div>
+                  ) : null}
+                  {filters.error ? (
+                    <div className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[11px] leading-4 text-red-100">
+                      {filters.error}
+                    </div>
+                  ) : null}
+
+                  {selectedFixtureIsProvisional ? (
+                    <div className="mt-3 rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2.5">
+                      <div className="text-xs font-black text-sky-50">No action needed yet</div>
+                      <div className="mt-1 text-[10px] leading-4 text-sky-100/60">
+                        SIXFL is still confirming the opponent.
+                      </div>
+                    </div>
+                  ) : selectedReplacementReason ? (
+                    <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5">
+                      <div className="text-xs font-black text-emerald-50">Already agreed</div>
+                      <div className="mt-1 text-[10px] leading-4 text-emerald-100/60">
+                        This replacement fixture is already confirmed.
+                      </div>
+                    </div>
+                  ) : selectedResponseLocked ? (
+                    <div className="mt-3 space-y-2">
+                      {!isSelectedFixtureConfirmed &&
+                      selectedConfirmation?.status !== "ISSUE_RAISED" ? (
+                        <form action={confirmFixtureAction}>
+                          <input type="hidden" name="teamid" value={team.id} />
+                          <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                          <button
+                            type="submit"
+                            data-attendance-team={team.id}
+                            data-attendance-fixture={selectedFixture.id}
+                            className="min-h-12 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 text-sm font-black text-emerald-50"
+                          >
+                            ✓ Confirm team can play
+                          </button>
+                        </form>
+                      ) : isSelectedFixtureConfirmed ? (
+                        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-center text-xs font-black text-emerald-100">
+                          ✓ Team confirmed
+                        </div>
+                      ) : null}
+
+                      <a
+                        href={selectedFixtureEmailHref}
+                        className="flex min-h-11 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 text-xs font-bold text-amber-100"
+                      >
+                        Need to change something? Contact SIXFL
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {!isSelectedFixtureConfirmed && !isSelectedFixtureUnavailable ? (
+                        <form action={confirmFixtureAction}>
+                          <input type="hidden" name="teamid" value={team.id} />
+                          <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                          <button
+                            type="submit"
+                            data-attendance-team={team.id}
+                            data-attendance-fixture={selectedFixture.id}
+                            className="min-h-12 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 text-sm font-black text-emerald-50"
+                          >
+                            ✓ Team can play
+                          </button>
+                        </form>
+                      ) : isSelectedFixtureConfirmed ? (
+                        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2.5 text-center text-xs font-black text-emerald-100">
+                          ✓ Team can play
+                        </div>
+                      ) : null}
+
+                      {!isSelectedFixtureUnavailable ? (
+                        <details className="overflow-hidden rounded-xl border border-red-400/15 bg-red-500/[0.05]">
+                          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-xs font-bold text-red-100 [&::-webkit-details-marker]:hidden">
+                            <span>Team cannot play</span>
+                            <span aria-hidden="true" className="text-red-100/40">›</span>
+                          </summary>
+                          <form action={markFixtureUnavailableAction} className="border-t border-red-400/10 p-3">
+                            <input type="hidden" name="teamid" value={team.id} />
+                            <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                            <p className="text-[10px] leading-4 text-red-100/55">
+                              Only use this if the whole team cannot fulfil the fixture.
+                            </p>
+                            <textarea
+                              name="unavailableReason"
+                              required
+                              minLength={5}
+                              maxLength={500}
+                              rows={2}
+                              placeholder="Brief reason"
+                              className="mt-2 w-full rounded-xl border border-red-400/15 bg-black/25 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30"
+                            />
+                            <button
+                              type="submit"
+                              className="mt-2 min-h-11 w-full rounded-xl border border-red-400/25 bg-red-500/10 px-3 text-xs font-black text-red-100"
+                            >
+                              Send to SIXFL
+                            </button>
+                          </form>
+                        </details>
+                      ) : (
+                        <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2.5 text-center text-xs font-black text-red-100">
+                          Team marked unavailable
+                        </div>
+                      )}
+
+                      <details className="overflow-hidden rounded-xl border border-white/10 bg-black/15">
+                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-xs font-bold text-white/60 [&::-webkit-details-marker]:hidden">
+                          <span>Report a fixture issue</span>
+                          <span aria-hidden="true" className="text-white/30">›</span>
+                        </summary>
+                        <form action={raiseFixtureIssueAction} className="border-t border-white/[0.07] p-3">
+                          <input type="hidden" name="teamid" value={team.id} />
+                          <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                          <textarea
+                            name="note"
+                            rows={2}
+                            placeholder="Time, venue or another issue"
+                            defaultValue={
+                              selectedConfirmation?.status === "ISSUE_RAISED" &&
+                              !isTeamUnavailableNote(selectedConfirmation.note)
+                                ? selectedConfirmation.note ?? ""
+                                : ""
+                            }
+                            className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-white outline-none placeholder:text-white/30"
+                          />
+                          <button
+                            type="submit"
+                            className="mt-2 min-h-11 w-full rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 text-xs font-black text-amber-100"
+                          >
+                            Send issue to SIXFL
+                          </button>
+                        </form>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.025]">
+                <div className="flex items-center justify-between border-b border-white/[0.07] px-3 py-2.5">
+                  <div>
+                    <div className="text-xs font-black text-white">Upcoming</div>
+                    <div className="mt-0.5 text-[9px] text-white/35">
+                      {otherUpcomingFixtures.length} more fixture{otherUpcomingFixtures.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/captain/team/${teamid}/results-history`}
+                    className="text-[10px] font-bold text-emerald-300"
+                  >
+                    Results →
+                  </Link>
+                </div>
+
+                {otherUpcomingFixtures.length === 0 ? (
+                  <div className="px-3 py-4 text-xs text-white/40">
+                    No other published fixtures yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/[0.07]">
+                    {otherUpcomingFixtures.map((fixture) => {
+                      const confirmation = fixture.captainConfirmations[0] ?? null;
+                      const provisional = fixtureIsProvisional(fixture);
+                      const status: ConfirmationSummary = provisional
+                        ? {
+                            label: "Opponent TBC",
+                            tone: "neutral",
+                            helper: "No response needed yet",
+                          }
+                        : getFixtureConfirmationSummary({
+                            confirmation,
+                            kickoffAt: fixture.kickoffAt,
+                            replacementReason:
+                              replacementConfirmationBlocks.get(
+                                replacementConfirmationReferenceKey({
+                                  fixtureId: fixture.id,
+                                  teamId: teamid,
+                                }),
+                              ) ?? null,
+                          });
+
+                      return (
+                        <Link
+                          key={fixture.id}
+                          href={`/captain/team/${teamid}/fixtures?fixtureId=${fixture.id}`}
+                          className="grid min-h-[4.1rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-black text-white">
+                              {fixture.homeTeam.name} <span className="text-white/30">vs</span> {fixture.awayTeam.name}
+                            </div>
+                            <div className="mt-1 truncate text-[10px] text-white/40">
+                              {formatDateTime(fixture.kickoffAt)} · {fixture.venue?.name ?? team.league?.venueName ?? "Venue TBC"}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-[9px] font-bold ${status.tone === "red" ? "text-red-200" : status.tone === "amber" ? "text-amber-200" : status.tone === "emerald" ? "text-emerald-200" : "text-white/40"}`}>
+                              {status.label}
+                            </div>
+                            <div className="mt-1 text-[9px] text-white/25">Open ›</div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </>
+          ) : (
+            <section className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
+              <div className="text-sm font-black text-white">No upcoming fixtures</div>
+              <div className="mt-1 text-xs leading-5 text-white/45">
+                Your next published fixture will appear here.
+              </div>
+              <Link
+                href={`/captain/team/${teamid}/results-history`}
+                className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-white/70"
+              >
+                View recent results
+              </Link>
+            </section>
+          )}
+        </div>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="captain-fixtures-page space-y-8">
       <section className="captain-fixtures-primary overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
@@ -936,6 +1306,8 @@ export default async function CaptainFixturesPage({
           </div>
         </div>
       </section>
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
