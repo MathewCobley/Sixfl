@@ -42,7 +42,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Native captain UI and rendered behaviour
-        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs
+        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs tests/captain-app/fixtures-contract.test.cjs
       - name: Prepare production source
         run: npm run prebuild
       - name: Prepared captain UI and rendered behaviour
