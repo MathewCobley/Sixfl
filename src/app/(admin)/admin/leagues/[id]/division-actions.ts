@@ -99,18 +99,18 @@ export async function removeLeagueDivisionAction(formData: FormData) {
     redirect(`/admin/leagues/${league.id}?divisionError=missing_division`);
   }
 
+  let removed: Awaited<ReturnType<typeof removeLeagueDivision>>;
   try {
-    const removed = await removeLeagueDivision({
+    removed = await removeLeagueDivision({
       leagueId: league.id,
       divisionId,
     });
-
-    revalidateLeagueDivisionPaths({ leagueId: league.id, slug: league.slug });
-    redirect(
-      `/admin/leagues/${league.id}?divisions=removed&history=${removed.historicalFixtures}`,
-    );
-  } catch (error) {
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
+  } catch {
     redirect(`/admin/leagues/${league.id}?divisionError=remove_failed`);
   }
+
+  revalidateLeagueDivisionPaths({ leagueId: league.id, slug: league.slug });
+  redirect(
+    `/admin/leagues/${league.id}?divisions=removed&history=${removed.historicalFixtures}`,
+  );
 }
