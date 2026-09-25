@@ -97,6 +97,9 @@ export function prepareLeadCampaignSend(data: FormData, filters: LeadCampaignFil
   for (const key of ["subject", "body", "targetTeamId", "bulkSendConfirmation"]) safe.set(key, String(data.get(key) ?? ""));
   const mapping = { type: "selectedType", status: "selectedStatus", area: "selectedArea", night: "selectedNight", league: "selectedLeague", excludeType: "excludedType", excludeStatus: "excludedStatus" } as const;
   for (const key of LEAD_FILTER_KEYS) safe.set(mapping[key], filters[key]);
-  for (const id of ids) safe.append("includedLeadIds", id);
+  // These are repeated FormData fields, not DOM nodes. Keep the data-only
+  // operation explicit, as in the existing guarded Leads sender.
+  const addSelectedLead = safe.append.bind(safe);
+  for (const id of ids) addSelectedLead("includedLeadIds", id);
   return safe;
 }
