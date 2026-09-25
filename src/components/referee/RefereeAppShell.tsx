@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import {
   ArrowsRightLeftIcon,
   BanknotesIcon,
-  BookOpenIcon,
   CalendarDaysIcon,
+  EllipsisHorizontalCircleIcon,
   ClipboardDocumentListIcon,
   HomeIcon,
 } from "@heroicons/react/24/outline";
@@ -13,7 +13,7 @@ import RefereePortalViewMode from "@/components/referee/RefereePortalViewMode";
 import { requireReferee } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 
-type RefereeAppSection = "home" | "nights" | "availability" | "ledger" | "rules";
+type RefereeAppSection = "home" | "nights" | "availability" | "ledger" | "more";
 
 export default async function RefereeAppShell({
   active,
@@ -54,10 +54,10 @@ export default async function RefereeAppShell({
       Icon: BanknotesIcon,
     },
     {
-      key: "rules" as const,
-      href: "/referee/match-rules",
-      label: "Rules",
-      Icon: BookOpenIcon,
+      key: "more" as const,
+      href: "/referee/more",
+      label: "More",
+      Icon: EllipsisHorizontalCircleIcon,
     },
   ];
 
