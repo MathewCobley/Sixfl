@@ -397,7 +397,10 @@ async function getGroupConversationForRef(input: {
     },
     include: {
       members: {
-        select: { userId: true },
+        select: {
+          userId: true,
+          user: { select: { name: true, email: true } },
+        },
       },
     },
   });
@@ -424,12 +427,22 @@ async function getGroupConversationForRef(input: {
     }
   }
 
+  const directOtherMember =
+    conversation.type === PortalConversationType.SELECTED_GROUP &&
+    conversation.members.length === 2
+      ? conversation.members.find(
+          (member) => member.userId !== input.context.effectiveUserId,
+        ) ?? null
+      : null;
+
   return {
     conversation,
     title:
       conversation.type === PortalConversationType.REGULARS
         ? "Regulars Chat"
-        : conversation.title || "Group chat",
+        : directOtherMember
+          ? getDisplayName(directOtherMember.user)
+          : conversation.title || "Group chat",
     memberUserIds,
   };
 }
