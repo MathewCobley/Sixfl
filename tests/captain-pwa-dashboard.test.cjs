@@ -53,14 +53,20 @@ test("route titles stay available without repeated explanatory page chrome", () 
   for (const title of ["Fixtures", "Squad", "Squad payments", "Team payments", "Chat", "SIXFL inbox", "Availability", "Match reports", "Matchday squad", "PlayerPool", "Player stats", "SIXFL TV", "Priority score", "Team kit", "Fixture planning", "WhatsApp", "Cup invitations", "Captain agreement", "Match rules", "Captain guide", "Help", "More"]) assert.ok(routes.includes(title), title);
 });
 
-test("operational home content remains above compact news", () => {
+test("latest news is part of the native Home flow rather than appended after it", () => {
   const template = read("src/app/captain/team/[teamid]/template.tsx");
+  const page = read("src/app/captain/team/[teamid]/page.tsx");
+  const home = read("src/components/captain/CaptainAppHomeView.tsx");
   const latest = read("src/components/news/LatestNews.tsx");
   const card = read("src/components/news/NewsCard.tsx");
-  assert.match(template, /mode="web"[\s\S]*LatestNews scope="captain"[\s\S]*\{children\}[\s\S]*mode="app"[\s\S]*LatestNews scope="captain"/);
-  assert.match(latest, /<NewsCard news=\{items\[0\]\} teamId=\{id\} compact \/>/);
-  for (const text of ["Latest from SIXFL", "Read report →", "Your match"]) assert.ok(card.includes(text));
-  assert.doesNotMatch(card.match(/if \(compact\)[\s\S]*?return \([\s\S]*?\n  \}/)?.[0] ?? "", /matches[\s\S]*goals/);
+
+  assert.match(template, /mode="web"[\s\S]*LatestNews scope="captain"[\s\S]*\{children\}/);
+  assert.doesNotMatch(template, /mode="app"[\s\S]*LatestNews scope="captain"/);
+  assert.match(page, /news=\{<LatestNews scope="captain" presentation="integrated" \/>\}/);
+  assert.ok(home.indexOf("styles.newsSlot") < home.indexOf('aria-label="Team tools"'));
+  assert.match(latest, /integrated=\{integrated\}/);
+  for (const text of ["Latest from SIXFL", "Read report →"]) assert.ok(card.includes(text));
+  assert.doesNotMatch(card.match(/if \(compact && integrated\)[\s\S]*?return \([\s\S]*?\n  \}/)?.[0] ?? "", /a\.introduction|bg-emerald-400 px-3\.5/);
 });
 
 test("Inbox and Priority retain app-specific presentation", () => {
