@@ -39,6 +39,10 @@ function loadPage({ hours = 48, status = null, note = null, provisional = false,
     '@/lib/teams/kit-colours': { getTeamKitColours: async () => new Map() },
     '@/lib/teams/fixture-placeholders': { fixtureHasPlaceholderTeam: async () => provisional, getFixturePlaceholderTeamIds: async () => new Set(provisional ? ['example-opponent'] : []) },
     '@/lib/fixtures/result-score': { RESULT_OVERTURN_SUMMARY_SELECT: {} },
+    '@/lib/fixtures/replacement-confirmation-policy': {
+      getAllocatedReplacementConfirmationBlocks: async () => new Map(),
+      replacementConfirmationReferenceKey: ({ fixtureId, teamId }) => `${fixtureId}:${teamId}`,
+    },
     '@/lib/datetime/london': { formatDateTimeInLondon: (date, options) => {
       dates.push(date.toISOString());
       return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'Europe/London' }).format(date);
