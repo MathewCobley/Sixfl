@@ -86,6 +86,16 @@ export async function createDashboardLoginLink(input: {
     ? input.callbackPath.trim()
     : "/dashboard";
   const callbackUrl = `${getSiteUrl()}${callbackPath}`;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { accessBlockedAt: true },
+  });
+
+  if (user?.accessBlockedAt) {
+    throw new Error("This SIXFL account is blocked. Contact SIXFL before sending another login link.");
+  }
+
   const token = randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + LOGIN_LINK_TTL_HOURS * 60 * 60 * 1000);
 
