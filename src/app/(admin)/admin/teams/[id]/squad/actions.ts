@@ -100,6 +100,7 @@ export async function addAdminSquadMemberAction(formData: FormData) {
       id: true,
       name: true,
       email: true,
+      accessBlockedAt: true,
     },
   });
 
@@ -108,6 +109,15 @@ export async function addAdminSquadMemberAction(formData: FormData) {
       buildRedirect(
         teamId,
         "?error=No%20existing%20SIXFL%20user%20was%20found%20for%20that%20email.",
+      ),
+    );
+  }
+
+  if (user.accessBlockedAt) {
+    redirect(
+      buildRedirect(
+        teamId,
+        "?error=This%20SIXFL%20account%20is%20blocked.%20Restore%20access%20before%20adding%20it%20to%20a%20squad.",
       ),
     );
   }
