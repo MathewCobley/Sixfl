@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   CreditCardIcon,
   DocumentTextIcon,
@@ -107,6 +108,12 @@ const navigationGroups = [
         href: "/admin/messaging",
         icon: DocumentTextIcon,
         description: "Email/SMS",
+      },
+      {
+        name: "Chat",
+        href: "/admin/chat",
+        icon: ChatBubbleLeftRightIcon,
+        description: "App messages",
       },
       {
         name: "Templates",
@@ -527,11 +534,12 @@ export default function AdminSidebar({
                       {group.items.map((item) => {
                         const active = activeHref === item.href;
                         const Icon = item.icon;
-                        const totalMessageAlertCount =
-                          unreadMessagingCount + sixflSupportNeedsReplyCount;
-                        const showMessageBadge =
+                        const showCommsBadge =
                           item.href === "/admin/messaging" &&
-                          totalMessageAlertCount > 0;
+                          unreadMessagingCount > 0;
+                        const showChatBadge =
+                          item.href === "/admin/chat" &&
+                          sixflSupportNeedsReplyCount > 0;
                         const supportAlertLabel =
                           sixflSupportNeedsReplyCount > 0
                             ? `${sixflSupportNeedsReplyCount} app message${sixflSupportNeedsReplyCount === 1 ? "" : "s"} to SIXFL need reply`
@@ -567,24 +575,25 @@ export default function AdminSidebar({
                                 {item.description}
                               </span>
                             </span>
-                            {showMessageBadge ? (
+                            {showCommsBadge ? (
                               <span
                                 role="status"
-                                aria-label={
-                                  supportAlertLabel ||
-                                  `${unreadMessagingCount} unread email or SMS thread${unreadMessagingCount === 1 ? "" : "s"}`
-                                }
-                                title={supportAlertLabel || undefined}
-                                className={[
-                                  "ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[7px] font-black text-black",
-                                  sixflSupportNeedsReplyCount > 0
-                                    ? "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.75)]"
-                                    : "bg-emerald-400",
-                                ].join(" ")}
+                                aria-label={`${unreadMessagingCount} unread email or SMS thread${unreadMessagingCount === 1 ? "" : "s"}`}
+                                className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[7px] font-black text-black"
                               >
-                                {totalMessageAlertCount > 99
+                                {unreadMessagingCount > 99 ? "99+" : unreadMessagingCount}
+                              </span>
+                            ) : null}
+                            {showChatBadge ? (
+                              <span
+                                role="status"
+                                aria-label={supportAlertLabel}
+                                title={supportAlertLabel}
+                                className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-300 px-1 text-[7px] font-black text-black shadow-[0_0_12px_rgba(252,211,77,0.75)]"
+                              >
+                                {sixflSupportNeedsReplyCount > 99
                                   ? "99+"
-                                  : totalMessageAlertCount}
+                                  : sixflSupportNeedsReplyCount}
                               </span>
                             ) : null}
                             {showNightBoardAlert ? (
