@@ -33,7 +33,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd 'pg_isready -U test -d sixfl_catterick_test'
+          --health-cmd "pg_isready -U test -d sixfl_catterick_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       DATABASE_URL: postgresql://test:test@127.0.0.1:5432/sixfl_catterick_test
@@ -45,6 +45,7 @@ jobs:
       EMAIL_REPLY_DOMAIN: example.invalid
     steps:
       - uses: actions/checkout@v4
+        id: checkout
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -70,14 +71,14 @@ jobs:
       - name: Production build
         run: npx next build
       - name: Preserve source and rendered email evidence
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         run: |
           mkdir -p artifacts/catterick-interest
           git diff -- src > artifacts/catterick-interest/preparation.diff
           git grep -n -E 'teamConfirmationUrl|IndividualPlayerChoice|individual-player|catterick-team-interest' -- src scripts prisma/migrations tests > artifacts/catterick-interest/source-inventory.txt
           tar -czf artifacts/catterick-interest/prepared-source.tgz 'src/app/(public)/team-confirmation' src/lib/leads src/lib/email 'src/app/(admin)/admin/leads' tests/catterick-interest prisma/migrations/20260926001000_catterick_team_interest_campaign
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         with:
           name: catterick-interest-${{ github.sha }}
           path: artifacts/catterick-interest/
