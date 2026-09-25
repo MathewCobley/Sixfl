@@ -324,9 +324,15 @@ expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Needs
 expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Team tools"', "captain app home must retain compact operational shortcuts");
 expectText("captain pwa", captainAppViewPath, captainAppView, "Reports to finish", "historic incomplete reports must stay accessible without claiming every report is currently overdue");
 expectText("captain pwa", captainAppViewPath, captainAppView, "Team balance", "the actual team payment balance must remain visible");
-for (const label of ["Home", "Fixtures", "Squad", "Payments", "Inbox", "More"]) {
+// Approved product change: Chat replaces the permanent Inbox tab; the original
+// SIXFL inbox and its history remain accessible through More.
+for (const label of ["Home", "Fixtures", "Squad", "Payments", "Chat", "More"]) {
   expectText("captain pwa", captainAppNavPath, captainAppNav, `label: "${label}"`, `captain app bottom navigation must keep ${label}`);
 }
+expectText("captain pwa", captainAppNavPath, captainAppNav, 'href: `${base}/chat`, label: "Chat"', "Chat must open the new conversation screen, not the old inbox");
+expectText("captain pwa", captainAppNavPath, captainAppNav, "unreadCount: unreadChatCount", "Chat must use chat unread totals rather than legacy inbox totals");
+expectText("captain pwa", captainAppMorePath, captainAppMore, 'href: `${base}/messages`, label: "SIXFL inbox"', "the original SIXFL inbox must remain reachable through More");
+expectText("captain pwa", captainAppRoutesPath, captainAppRoutes, 'title: "Chat", tab: "Chat"', "Chat header and active tab must use the shared route map");
 expectText("captain pwa", captainAppCssPath, captainAppCss, "grid-template-columns: repeat(6,minmax(0,1fr))", "all six permanent captain tabs must have their own column");
 expectText("captain pwa", captainAppHeaderPath, captainAppHeader, "captain-app-header", "captain app must have a native sticky app header");
 expectText("captain pwa", captainAppModePath, captainAppMode, 'window.parent.location.pathname === "/admin/pwa"', "captain app must render exactly inside the admin phone preview");
