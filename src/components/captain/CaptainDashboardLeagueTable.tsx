@@ -96,11 +96,13 @@ export default function CaptainDashboardLeagueTable({
   title,
   description,
   emptyMessage,
+  currentTeamIds: initialCurrentTeamIds = [],
 }: {
   rows: LeagueTableRow[];
   title: string;
   description: string;
   emptyMessage: string;
+  currentTeamIds?: string[];
 }) {
   const [apiTable, setApiTable] = useState<CaptainLeagueTableApiResponse | null>(null);
 
@@ -132,65 +134,119 @@ export default function CaptainDashboardLeagueTable({
   const displayTitle = apiTable?.title ?? title;
   const displayDescription = apiTable?.description ?? description;
   const currentTeamIds = useMemo(() => {
-    return new Set([apiTable?.currentTeamId, ...(apiTable?.relatedTeamIds ?? [])].filter((value): value is string => Boolean(value)));
-  }, [apiTable?.currentTeamId, apiTable?.relatedTeamIds]);
+    return new Set(
+      [
+        ...initialCurrentTeamIds,
+        apiTable?.currentTeamId,
+        ...(apiTable?.relatedTeamIds ?? []),
+      ].filter((value): value is string => Boolean(value)),
+    );
+  }, [initialCurrentTeamIds, apiTable?.currentTeamId, apiTable?.relatedTeamIds]);
 
   return (
     <section id="team-league-table" className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-      <div className="border-b border-white/10 px-4 py-5 sm:px-8 sm:py-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400 sm:text-sm">Standings</p>
-        <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">{displayTitle}</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">{displayDescription}</p>
+      <div className="border-b border-white/10 px-3 py-3 sm:px-8 sm:py-6">
+        <div className="lg:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300/75">
+                League table
+              </p>
+              <h2 className="mt-1 truncate text-lg font-black text-white">{displayTitle}</h2>
+            </div>
+            <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold text-white/45">
+              {displayRows.length} teams
+            </span>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-5 text-white/45">
+            Tap a team to see its full record and recent form.
+          </p>
+        </div>
+
+        <div className="hidden lg:block">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400 sm:text-sm">Standings</p>
+          <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">{displayTitle}</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">{displayDescription}</p>
+        </div>
       </div>
 
       {displayRows.length > 0 ? (
         <>
-          <div className="space-y-3 p-3 sm:p-4 lg:hidden">
-            {displayRows.map((row, index) => {
-              const isTop = index === 0;
-              const isCurrentTeam = currentTeamIds.has(row.teamId);
+          <div className="lg:hidden">
+            <div className="grid grid-cols-[2.15rem_minmax(0,1fr)_2.25rem_2.7rem_2.7rem] items-center gap-2 border-b border-white/[0.07] bg-black/15 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-white/30">
+              <span className="text-center">Pos</span>
+              <span>Team</span>
+              <span className="text-center">P</span>
+              <span className="text-center">GD</span>
+              <span className="text-center">Pts</span>
+            </div>
 
-              return (
-                <article
-                  key={`${row.teamId}-mobile`}
-                  className={`rounded-3xl border p-4 ${isCurrentTeam ? "border-emerald-400/35 bg-emerald-500/[0.10]" : "border-white/10 bg-black/25"}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-sm font-black ${isTop || isCurrentTeam ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/[0.04] text-white/70"}`}>{index + 1}</div>
-                      <TeamBadge row={row} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <Link href={`/teams/${row.teamId}`} className="block truncate text-base font-black leading-5 text-white hover:text-emerald-300">{row.teamName}</Link>
-                        {isCurrentTeam ? <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Your team</div> : null}
+            <div className="divide-y divide-white/[0.07]">
+              {displayRows.map((row, index) => {
+                const isTop = index === 0;
+                const isCurrentTeam = currentTeamIds.has(row.teamId);
+
+                return (
+                  <details
+                    key={`${row.teamId}-mobile`}
+                    className={`group ${isCurrentTeam ? "bg-emerald-500/[0.08]" : "bg-black/15"}`}
+                  >
+                    <summary className="grid min-h-[3.85rem] cursor-pointer list-none grid-cols-[2.15rem_minmax(0,1fr)_2.25rem_2.7rem_2.7rem] items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-xl border text-xs font-black ${
+                          isTop || isCurrentTeam
+                            ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                            : "border-white/10 bg-white/[0.035] text-white/65"
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+
+                      <span className="flex min-w-0 items-center gap-2">
+                        <TeamBadge row={row} size={40} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-black leading-4 text-white">
+                            {row.teamName}
+                          </span>
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1">
+                            {isCurrentTeam ? (
+                              <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.1em] text-emerald-300">
+                                Your team
+                              </span>
+                            ) : null}
+                            <span className="block truncate text-[9px] text-white/35">
+                              {row.recentForm.length > 0 ? row.recentForm.slice(0, 5).join(" ") : "No form yet"}
+                            </span>
+                          </span>
+                        </span>
+                      </span>
+
+                      <span className="text-center text-xs font-bold tabular-nums text-white/65">{row.played}</span>
+                      <span className="text-center text-xs font-bold tabular-nums text-white/70">
+                        {formatGoalDifference(row.goalDifference)}
+                      </span>
+                      <span className="text-center text-sm font-black tabular-nums text-emerald-100">{row.points}</span>
+                    </summary>
+
+                    <div className="border-t border-white/[0.06] bg-black/20 px-3 pb-3 pt-2.5">
+                      <div className="grid grid-cols-5 gap-1.5">
+                        <MobileStat label="W" value={row.won} />
+                        <MobileStat label="D" value={row.drawn} />
+                        <MobileStat label="L" value={row.lost} />
+                        <MobileStat label="GF" value={row.goalsFor} />
+                        <MobileStat label="GA" value={row.goalsAgainst} />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-2.5 py-2">
+                        <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/35">
+                          Recent form
+                        </span>
+                        <FormBadges row={row} compact />
                       </div>
                     </div>
-
-                    <div className="shrink-0 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-center">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200/70">Pts</div>
-                      <div className="text-xl font-black leading-none text-white">{row.points}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    <MobileStat label="P" value={row.played} />
-                    <MobileStat label="W" value={row.won} />
-                    <MobileStat label="D" value={row.drawn} />
-                    <MobileStat label="L" value={row.lost} />
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <MobileStat label="GF" value={row.goalsFor} />
-                    <MobileStat label="GA" value={row.goalsAgainst} />
-                    <MobileStat label="GD" value={formatGoalDifference(row.goalDifference)} />
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Recent form</span>
-                    <FormBadges row={row} compact />
-                  </div>
-                </article>
-              );
-            })}
+                  </details>
+                );
+              })}
+            </div>
           </div>
 
           <div className="hidden w-full overflow-hidden lg:block">
