@@ -160,7 +160,7 @@ export async function createLeagueDivision(input: {
     throw new Error("Division name is required.");
   }
 
-  await prisma.$executeRaw(Prisma.sql`
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     INSERT INTO "LeagueDivision" (
       "id",
       "leagueId",
@@ -181,9 +181,16 @@ export async function createLeagueDivision(input: {
       NOW(),
       NOW()
     )
+    ON CONFLICT ("leagueId", "slug") DO UPDATE
+    SET
+      "name" = EXCLUDED."name",
+      "sortOrder" = EXCLUDED."sortOrder",
+      "isActive" = EXCLUDED."isActive",
+      "updatedAt" = NOW()
+    RETURNING "id"
   `);
 
-  return { id, name, slug };
+  return { id: rows[0]?.id ?? id, name, slug };
 }
 
 export async function ensureDefaultLeagueDivisions(leagueId: string) {
@@ -250,4 +257,93 @@ export async function updateTeamDivision(input: {
     SET "divisionId" = ${input.divisionId}, "updatedAt" = NOW()
     WHERE "id" = ${input.teamId}
   `);
+}
+
+
+export async function removeLeagueDivision(input: {
+  leagueId: string;
+  divisionId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{
+      id: string;
+      name: string;
+    }>>(Prisma.sql`
+      SELECT d."id", d."name"
+      FROM "LeagueDivision" d
+      WHERE d."id" = ${input.divisionId}
+        AND d."leagueId" = ${input.leagueId}
+      FOR UPDATE
+    `);
+
+    const division = rows[0];
+    if (!division) {
+      throw new Error("Division not found in this season.");
+    }
+
+    const historyRows = await tx.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS "count"
+      FROM "Fixture" f
+      WHERE f."divisionId" = ${division.id}
+        AND (
+          f."status" = 'COMPLETED'
+          OR EXISTS (
+            SELECT 1
+            FROM "MatchResult" mr
+            WHERE mr."fixtureId" = f."id"
+          )
+        )
+    `);
+    const historicalFixtures = Number(historyRows[0]?.count ?? 0);
+
+    // Teams stay in the season, but become unassigned so they can be placed
+    // into another division immediately.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "LeagueSeasonTeam"
+      SET "divisionId" = NULL, "updatedAt" = NOW()
+      WHERE "leagueId" = ${input.leagueId}
+        AND "divisionId" = ${division.id}
+    `);
+
+    // The live Team.divisionId is only a current-season convenience pointer.
+    // Clear any stale pointer to a division that is being removed.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Team"
+      SET "divisionId" = NULL, "updatedAt" = NOW()
+      WHERE "divisionId" = ${division.id}
+    `);
+
+    // Future/cancelled fixtures can safely become unassigned. Completed/resulted
+    // fixtures retain their old division tag for historical tables and audits.
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "Fixture" f
+      SET "divisionId" = NULL, "updatedAt" = NOW()
+      WHERE f."divisionId" = ${division.id}
+        AND f."status" <> 'COMPLETED'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "MatchResult" mr
+          WHERE mr."fixtureId" = f."id"
+        )
+    `);
+
+    if (historicalFixtures > 0) {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "LeagueDivision"
+        SET "isActive" = false, "updatedAt" = NOW()
+        WHERE "id" = ${division.id}
+      `);
+    } else {
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM "LeagueDivision"
+        WHERE "id" = ${division.id}
+      `);
+    }
+
+    return {
+      name: division.name,
+      historicalFixtures,
+      archived: historicalFixtures > 0,
+    };
+  });
 }
