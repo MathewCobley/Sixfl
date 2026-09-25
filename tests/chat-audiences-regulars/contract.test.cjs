@@ -174,6 +174,8 @@ test("players can start a private or group chat with current squad members", () 
   assert.match(chat, /selectedGroupUserIds\.length <\s*\(data\.viewRole === "PLAYER" \? 1 : 2\)/);
   assert.match(chat, /Start private chat/);
   assert.match(chat, /Only current members of your squad are available/);
+  assert.match(chat, /if \(!data\?\.canSend \|\| creatingGroup\) return/);
+  assert.match(chat, /audience === "REGULARS" && data\.viewRole !== "CAPTAIN"/);
 
   assert.match(route, /const minimumRecipients = context\.viewRole === "PLAYER" \? 1 : 2/);
   assert.match(route, /One or more selected people are no longer in this squad/);
