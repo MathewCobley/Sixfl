@@ -197,7 +197,7 @@ export function adminPortalChatHref(input: {
   }
 
   if (input.type === PortalConversationType.SIXFL) {
-    return `/admin/messaging/chat/support/${input.conversationId}`;
+    return `/admin/chat/support/${input.conversationId}`;
   }
 
   return `/captain/team/${input.teamId}/chat?conversation=team`;
@@ -245,7 +245,7 @@ export async function getAdminSixflSupportConversations(
       latestMessageAt: conversation.latestMessageAt,
       lastMessagePreview: conversation.lastMessagePreview,
       needsReply,
-      href: `/admin/messaging/chat/support/${conversation.id}`,
+      href: `/admin/chat/support/${conversation.id}`,
     };
   });
 }
