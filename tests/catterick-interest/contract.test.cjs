@@ -19,10 +19,16 @@ const campaignForm = () => {
     templateId: 'catterick-team-interest-october-2026', templateKey: 'catterick-team-interest-october-2026',
     subject: 'Catterick starts 5 October — is your team joining us?', body: campaignBody,
     ctaLabel: 'Choose team or individual player', ctaUrlKey: 'teamConfirmationUrl',
-    selectedType: 'TEAM', selectedStatus: 'CONTACTED', selectedArea: 'Richmond', selectedLeagueId: 'catterick-test',
+    selectedType: 'TEAM', selectedStatus: 'CONTACTED', selectedArea: 'Richmond', selectedLeague: 'catterick-test',
   })) form.set(k, v);
   return form;
 };
+
+// AND wrapping preserves a restriction; an optional OR branch does not. The
+// production preparation adds an AND wrapper around prospective-league filters.
+function requiredClauses(where) {
+  return [where, ...[where.AND ?? []].flat().flatMap(requiredClauses)];
+}
 
 test('campaign is in normal EmailTemplate only, manual and replay-safe', () => {
   assert.match(migration, /INSERT INTO "EmailTemplate"/);
@@ -82,11 +88,24 @@ test('campaign dispatch uses team decision wiring, the exact matched IDs and the
   const h = bulkHarness(25); const form = campaignForm(); form.set('bulkSendConfirmation', 'SEND 25 EMAILS');
   assert.equal((await h.send({}, form)).ok, true);
   const query = h.calls.find(c => c[0] === 'query')[1];
-  assert.equal(query.where.interestType, 'TEAM'); assert.equal(query.where.area, 'Richmond');
+  const clauses = requiredClauses(query.where);
+  for (const [key, value] of [['interestType', 'TEAM'], ['status', 'CONTACTED'], ['area', 'Richmond']]) {
+    assert.ok(clauses.some(clause => clause[key] === value), `${key} remains mandatory, even inside AND`);
+  }
+  // The existing prospective-league patch is exercised after the full prebuild.
+  const wrapper = fs.readFileSync('src/app/(admin)/admin/leads/guarded-bulk-actions.ts', 'utf8');
+  if (wrapper.includes('const selectedLeague =')) {
+    assert.ok(clauses.some(clause => clause.leagueId === 'catterick-test'), 'prepared sender stays in the selected Catterick league');
+  }
   const sent = h.calls.find(c => c[0] === 'send')[1];
   assert.equal(sent.get('body'), campaignBody);
   assert.equal(sent.get('ctaLabel'), 'Choose team or individual player');
+  assert.equal(sent.get('selectedLeague'), 'catterick-test');
   assert.deepEqual(sent.getAll('includedLeadIds'), Array.from({ length: 25 }, (_, i) => `lead-${i}`));
+});
+test('recipient assertions do not mistake optional OR restrictions for mandatory filters', () => {
+  assert.equal(requiredClauses({ OR: [{ interestType: 'TEAM' }, {}] }).some(c => c.interestType === 'TEAM'), false);
+  assert.equal(requiredClauses({ AND: [{ interestType: 'TEAM' }, { area: 'Richmond' }] }).some(c => c.interestType === 'TEAM'), true);
 });
 test('no matched leads cannot fall through to a send-to-everyone operation', async () => {
   const h = bulkHarness(0); assert.equal((await h.send({}, campaignForm())).ok, false);
