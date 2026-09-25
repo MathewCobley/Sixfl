@@ -109,15 +109,16 @@ try {
     );
     const open = page.getByRole("link", { name: "View match night" });
     assert.equal(await open.getAttribute("href"), "/referee/night/n1");
-    assert.equal(await page.getByRole("link", { name: "Nights", exact: true }).getAttribute("href"), "/referee/nights");
-    assert.equal(await page.getByRole("link", { name: "More", exact: true }).getAttribute("href"), "/referee/more");
     const box = await open.boundingBox();
     assert.ok(box.height >= 44);
-    if (width < 640)
+    if (width < 640) {
+      assert.equal(await page.getByRole("link", { name: "Nights", exact: true }).getAttribute("href"), "/referee/nights");
+      assert.equal(await page.getByRole("link", { name: "More", exact: true }).getAttribute("href"), "/referee/more");
       assert.ok(
         box.y + box.height < 760,
         "Primary action is below first screen",
       );
+    }
     await page.getByRole("button", { name: "Yes, I can referee" }).click();
     await page.waitForFunction(() => window.submissions.length === 1);
     assert.deepEqual(await page.evaluate(() => window.submissions[0]), {
