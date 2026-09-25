@@ -32,6 +32,14 @@ const base = {
   submittedCount: 1,
   dueToYou: "£30.00",
   dueToSixfl: "£10.00",
+  setNights: [
+    {
+      id: "league-1",
+      name: "Northallerton Wednesday",
+      dayOfWeek: "WEDNESDAY",
+      venueName: "Northallerton Sports Village",
+    },
+  ],
   confirmation: null,
   children: null,
   preview: null,
@@ -59,6 +67,9 @@ test("home exposes real night details and operational routes without website esc
     "£30.00",
     "£10.00",
     "Refereeing with: Mathew.",
+    "Your regular nights",
+    "Northallerton Wednesday",
+    "Northallerton Sports Village",
     "View match night",
   ])
     assert.ok(html.includes(text), text);
@@ -248,7 +259,9 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
 test("all referee work pages use the app shell and future balances are clearly not due", () => {
   const files = {
     availability: fs.readFileSync("src/app/(public)/referee/availability/page.tsx", "utf8"),
+    more: fs.readFileSync("src/app/(public)/referee/more/page.tsx", "utf8"),
     rules: fs.readFileSync("src/app/(public)/referee/match-rules/page.tsx", "utf8"),
+    leagueRules: fs.readFileSync("src/app/(public)/referee/league-rules/page.tsx", "utf8"),
     agreement: fs.readFileSync("src/app/(public)/referee/agreement/page.tsx", "utf8"),
     nights: fs.readFileSync("src/app/(public)/referee/nights/page.tsx", "utf8"),
     night: fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8"),
@@ -261,8 +274,10 @@ test("all referee work pages use the app shell and future balances are clearly n
     assert.match(source, /RefereeAppShell/, name);
   }
   assert.match(files.availability, /active="availability"/);
-  assert.match(files.rules, /active="rules"/);
-  assert.match(files.agreement, /active="rules"/);
+  assert.match(files.more, /active="more"/);
+  assert.match(files.rules, /active="more"/);
+  assert.match(files.leagueRules, /active="more"/);
+  assert.match(files.agreement, /active="more"/);
   assert.match(files.nights, /active="nights"/);
   assert.match(files.night, /active="nights"/);
   assert.match(files.fixture, /active="nights"/);
@@ -297,12 +312,16 @@ test("Nights is a dedicated app screen with plain-English match-night actions", 
   assert.match(nights, /Previous nights/);
 });
 
-test("referee app navigation exposes a dedicated ledger tab", () => {
+test("referee app navigation exposes dedicated Ledger and More tabs", () => {
   const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
   const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
   assert.match(shell, /href: "\/referee\/ledger"/);
   assert.match(shell, /label: "Ledger"/);
+  assert.match(shell, /href: "\/referee\/more"/);
+  assert.match(shell, /label: "More"/);
   assert.match(home, /href="\/referee\/ledger"/);
+  assert.match(home, /href: "\/referee\/more"/);
+  assert.doesNotMatch(shell, /label: "Rules"/);
   assert.match(home, /grid-cols-5/);
 });
 
@@ -380,7 +399,7 @@ test("referee agreement is available inside the referee app", () => {
 
   assert.match(rules, /href="\/referee\/agreement"/);
   assert.match(rules, /Referee Agreement/);
-  assert.match(agreement, /RefereeAppShell active="rules" title="Referee agreement"/);
+  assert.match(agreement, /RefereeAppShell active="more" title="Referee agreement"/);
   assert.match(agreement, /REFEREE_AGREEMENT_VERSION/);
   assert.match(source, /Independent contractor status/);
   assert.match(source, /Match administration/);
@@ -397,4 +416,21 @@ test("referee portal requires the current Referee Agreement and bypasses admin p
   assert.match(layout, /authenticatedUser\.role === UserRole\.REFEREE/);
   assert.match(action, /user\.role !== UserRole\.REFEREE/);
   assert.match(action, /Only referee accounts can accept the Referee Agreement/);
+});
+
+
+test("More keeps referee rules and agreement inside the referee app", () => {
+  const more = fs.readFileSync("src/app/(public)/referee/more/page.tsx", "utf8");
+  const leagueRules = fs.readFileSync("src/app/(public)/referee/league-rules/page.tsx", "utf8");
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  const availability = fs.readFileSync("src/lib/referee-availability.ts", "utf8");
+
+  assert.match(more, /href: "\/referee\/match-rules"/);
+  assert.match(more, /href: "\/referee\/league-rules"/);
+  assert.match(more, /href: "\/referee\/agreement"/);
+  assert.match(leagueRules, /leagueRuleSections/);
+  assert.match(home, /Your regular nights/);
+  assert.match(home, /Set by SIXFL/);
+  assert.match(availability, /getRefereeSetLeagues/);
+  assert.match(availability, /RefereeLeagueCoverage/);
 });
