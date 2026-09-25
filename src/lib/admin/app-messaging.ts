@@ -291,7 +291,8 @@ export async function getAdminSixflSupportConversation(conversationId: string) {
 
   if (!conversation) return null;
 
-  const latest = conversation.messages.at(-1) ?? null;
+  const latest =
+    conversation.messages[conversation.messages.length - 1] ?? null;
   return {
     ...conversation,
     participantName: displayName(conversation.participantUser),
