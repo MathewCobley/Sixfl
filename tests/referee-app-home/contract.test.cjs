@@ -193,6 +193,18 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
       }),
     },
     "@/lib/prisma": { prisma: { $queryRaw: async () => [] } },
+    "@/lib/referee-availability": {
+      getRefereeSetLeagues: async () => [
+        {
+          id: "league-1",
+          name: "Northallerton Wednesday",
+          season: "2026",
+          dayOfWeek: "WEDNESDAY",
+          venueName: "Northallerton Sports Village",
+          requiredRefereesPerNight: 1,
+        },
+      ],
+    },
     "@/lib/datetime/london": {
       toLondonDateInputValue: () => "2026-09-23",
       formatDateTimeInLondon: () => "19:30",
@@ -243,6 +255,14 @@ test("prepared page prioritises upcoming work, retains overdue sheets, and exclu
   assert.equal(props.nextNight.id, "next");
   assert.equal(props.openCount, 2);
   assert.equal(props.dueToYou, "£30.00", "only past unpaid referee nights count as owed");
+  assert.deepEqual(props.setNights, [
+    {
+      id: "league-1",
+      name: "Northallerton Wednesday",
+      dayOfWeek: "WEDNESDAY",
+      venueName: "Northallerton Sports Village",
+    },
+  ]);
   const page = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
   assert.match(page, /RefereePortalViewMode mode="app"/);
   assert.match(page, /RefereePortalViewMode mode="web"/);
