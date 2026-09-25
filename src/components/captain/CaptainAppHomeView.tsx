@@ -141,9 +141,9 @@ export default function CaptainAppHomeView({
             <span>Reports to finish</span>
           </Link>
           <Link href={`${base}/results`} className={styles.metric}
-            aria-label={`${openIssues} result ${openIssues === 1 ? "issue" : "issues"} to review`}>
+            aria-label={`Open issues: ${openIssues}`}>
             <strong data-attention={openIssues > 0 || undefined}>{openIssues}</strong>
-            <span>Result issues</span>
+            <span>Issues</span>
           </Link>
         </div>
       </section>
