@@ -28,13 +28,13 @@ const { renderDashboard, assertCoreFirst } = require('./contract.test.cjs');
         await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white">${html}</body></html>`);
         const bounds = await page.evaluate(() => {
           const y = selector => document.querySelector(selector).getBoundingClientRect().top;
-          return { width: innerWidth, scrollWidth: document.documentElement.scrollWidth, header: y('h1'), coreBottom: document.querySelector('main').getBoundingClientRect().bottom, news: y('[aria-label="Latest League News"]'), goals: y('[data-order-panel="goals"]'), media: y('[data-order-panel="media"]') };
+          return { width: innerWidth, scrollWidth: document.documentElement.scrollWidth, header: y('h1'), coreBottom: document.querySelector('main').getBoundingClientRect().bottom, news: y('[aria-label="Latest SIXFL news"]'), goals: y('[data-order-panel="goals"]'), media: y('[data-order-panel="media"]') };
         });
         assert.ok(bounds.header >= 0 && bounds.header < 500, 'Team heading must be near the top at every viewport');
         assert.ok(bounds.news >= bounds.coreBottom - 1 && bounds.goals >= bounds.coreBottom - 1);
         assert.ok(bounds.scrollWidth <= width + 1, 'No full-page horizontal overflow');
         // Late-loading long stories or nominees cannot shift preceding core content.
-        await page.locator('[aria-label="Latest League News"]').evaluate(element => { element.style.minHeight = '1400px'; });
+        await page.locator('[aria-label="Latest SIXFL news"]').evaluate(element => { element.style.minHeight = '1400px'; });
         const afterGrowth = await page.locator('h1').boundingBox();
         assert.equal(afterGrowth.y, bounds.header);
         fs.writeFileSync(`${out}/${role}-${width}.json`, JSON.stringify(bounds, null, 2));
