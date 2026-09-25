@@ -582,8 +582,8 @@ export default async function CaptainFixturesPage({
     : `mailto:${SIXFL_FIXTURE_EMAIL}`;
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+    <div className="captain-fixtures-page space-y-8">
+      <section className="captain-fixtures-primary overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Team fixture response</p>
@@ -615,9 +615,9 @@ export default async function CaptainFixturesPage({
             {selectedFixture &&
             !selectedFixtureIsProvisional &&
             !selectedReplacementReason ? (
-              <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
-                <strong className="text-sky-50">Confirm your team at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.</strong>{" "}
-                This is the whole-team response; individual player availability is handled separately in the Availability tab. If your team cannot play, needs to change a response or has a fixture issue, notify SIXFL as soon as possible. Within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off, contact SIXFL directly about any cancellation, change or issue.
+              <div className="captain-fixtures-guidance mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/85">
+                <strong className="text-sky-50">Confirm your team at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off.</strong>
+                <span className="captain-fixtures-guidance-detail">{" "}This is the whole-team response; individual player availability is handled separately in the Availability tab. If your team cannot play, needs to change a response or has a fixture issue, notify SIXFL as soon as possible. Within {FIXTURE_RESPONSE_LOCK_HOURS} hours of kick-off, contact SIXFL directly about any cancellation, change or issue.</span>
               </div>
             ) : null}
 
@@ -637,7 +637,7 @@ export default async function CaptainFixturesPage({
                     {getCountdownLabel(selectedFixture.kickoffAt)}
                   </span>
                 </div>
-                <p className="mt-4 text-sm text-white/55">{selectedStatus.helper}</p>
+                <p className="captain-fixtures-status-helper mt-4 text-sm text-white/55">{selectedStatus.helper}</p>
               </>
             ) : null}
 
@@ -736,9 +736,9 @@ export default async function CaptainFixturesPage({
                 </div>
               ) : (
                 <>
-                  <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-base font-semibold text-white">Can your team play this fixture?</p>
-                    <p className="mt-1 text-sm leading-6 text-white/55">
+                  <div className="captain-fixtures-response-card rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-base font-semibold text-white">Can your team play?</p>
+                    <p className="captain-fixtures-response-help mt-1 text-sm leading-6 text-white/55">
                       Please confirm at least {FIXTURE_RESPONSE_LOCK_HOURS} hours before kick-off. Choose Yes when the whole team can play. If the whole team cannot play, choose No and give a brief reason so SIXFL can review it.
                     </p>
 
@@ -779,27 +779,31 @@ export default async function CaptainFixturesPage({
                     </div>
                   </div>
 
-                  <form action={raiseFixtureIssueAction} className="rounded-3xl border border-white/10 bg-black/20 p-4">
-                    <input type="hidden" name="teamid" value={team.id} />
-                    <input type="hidden" name="fixtureId" value={selectedFixture.id} />
-                    <label className="block text-sm font-medium text-white">Different problem with the fixture?</label>
-                    <p className="mt-1 text-sm text-white/50">Use this for something other than simply being unavailable, so SIXFL knows what needs reviewing.</p>
-                    <textarea
-                      name="note"
-                      rows={4}
-                      placeholder="Example: We may have a venue/time issue or need SIXFL to review another fixture detail."
-                      defaultValue={
-                        selectedConfirmation?.status === "ISSUE_RAISED" &&
-                        !isTeamUnavailableNote(selectedConfirmation.note)
-                          ? selectedConfirmation.note ?? ""
-                          : ""
-                      }
-                      className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
-                    />
-                    <button type="submit" className="mt-3 inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15">
-                      Send issue to SIXFL
-                    </button>
-                  </form>
+                  <details className="captain-fixtures-issue rounded-2xl border border-white/10 bg-black/20">
+                    <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white/75">
+                      Need to report a different fixture problem?
+                    </summary>
+                    <form action={raiseFixtureIssueAction} className="border-t border-white/10 p-4">
+                      <input type="hidden" name="teamid" value={team.id} />
+                      <input type="hidden" name="fixtureId" value={selectedFixture.id} />
+                      <p className="text-sm text-white/50">Use this for a time, venue or other fixture issue that SIXFL needs to review.</p>
+                      <textarea
+                        name="note"
+                        rows={3}
+                        placeholder="Tell SIXFL what needs reviewing."
+                        defaultValue={
+                          selectedConfirmation?.status === "ISSUE_RAISED" &&
+                          !isTeamUnavailableNote(selectedConfirmation.note)
+                            ? selectedConfirmation.note ?? ""
+                            : ""
+                        }
+                        className="mt-3 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none"
+                      />
+                      <button type="submit" className="mt-3 inline-flex items-center rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15">
+                        Send issue to SIXFL
+                      </button>
+                    </form>
+                  </details>
                 </>
               )
             ) : (
@@ -812,7 +816,7 @@ export default async function CaptainFixturesPage({
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04]">
+        <div className="captain-fixtures-upcoming rounded-3xl border border-white/10 bg-white/[0.04]">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Upcoming fixtures</p>
