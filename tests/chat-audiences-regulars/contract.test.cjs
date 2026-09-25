@@ -179,7 +179,7 @@ test("players can start a private or group chat with current squad members", () 
 
   assert.match(route, /const minimumRecipients = context\.viewRole === "PLAYER" \? 1 : 2/);
   assert.match(route, /One or more selected people are no longer in this squad/);
-  assert.match(route, /context\.viewRole === "PLAYER"[\s\S]*recipientMembers\.length === 1[\s\S]*TeamRole\.CAPTAIN/);
+  assert.doesNotMatch(route, /recipientMembers\[0\]\?\.role === TeamRole\.CAPTAIN/);
   assert.match(route, /conversation\.members\.length === 2/);
   assert.match(route, /kind: isDirectSquadChat \? \("PRIVATE" as const\) : \("GROUP" as const\)/);
   assert.match(route, /Private · only you and/);
@@ -202,4 +202,21 @@ test("two-person selected chats display the other teammate as a private chat", (
   assert.match(route, /getDisplayName\(directOtherMember\.user\)/);
   assert.match(chat, /selectedItem\?\.kind === "PRIVATE"/);
   assert.match(chat, /Private between \$\{selectedItem\?\.title \?\? "this teammate"\} and you/);
+});
+
+
+test("player choosing one named captain keeps that captain-specific direct chat", () => {
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.doesNotMatch(route, /recipientMembers\[0\]\?\.role === TeamRole\.CAPTAIN/);
+  assert.match(route, /SELECTED_GROUP:\$\{teamid\}:\$\{conversationUserIds\.join\(":"\)\}/);
+  assert.match(route, /conversation\.members\.length === 2/);
+  assert.match(route, /getDisplayName\(directOtherMember\.user\)/);
+});
+
+test("shared captain conversation uses plural copy when a team has two captains", () => {
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /captainCount > 1 \? "Message your captains" : "Message your captain"/);
+  assert.match(route, /Private — only you and your captain\$\{captainCount === 1 \? "" : "s"\}/);
 });
