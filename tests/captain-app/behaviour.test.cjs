@@ -56,6 +56,14 @@ test('Home uses the same visual hierarchy as the player app without losing capta
   assert.match(html, /class="matchTeams"/);
   assert.match(html, /class="identityBadge"/);
 });
+
+test('Home has an obvious in-app league table shortcut', async () => {
+  const { html } = await renderScreen();
+  assert.match(html, /href="\/captain\/team\/demo\/table"[^>]*class="tableShortcut"/);
+  assert.match(html, />League table<\/strong>/);
+  assert.match(html, /10th · view full standings/);
+});
+
 const cases = [
   ['', 'Home'], ['/', 'Home'], ['/fixtures', 'Fixtures'], ['/fixtures/f/selection', 'Fixtures'],
   ['/squad/member/edit', 'Squad'], ['/captain-squad', 'Squad'], ['/payments', 'Payments'],
