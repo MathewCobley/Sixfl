@@ -8,6 +8,9 @@ on:
       - "src/components/captain/CaptainApp*.module.css"
       - "src/components/captain/CaptainPwa*.tsx"
       - "src/lib/captain/app-navigation.ts"
+      - "src/components/messaging/PortalChat.tsx"
+      - "src/lib/portal-messaging.ts"
+      - "src/app/api/player/team/**/chat-unread/**"
       - "src/components/news/LatestNews.tsx"
       - "src/components/news/NewsCard.tsx"
       - "tests/captain-pwa-dashboard.test.cjs"
@@ -42,19 +45,29 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Native captain UI and rendered behaviour
-        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs tests/captain-app/fixtures-contract.test.cjs
+        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs tests/captain-app/fixtures-contract.test.cjs tests/captain-app/chat.test.cjs
       - name: Prepare production source
         run: npm run prebuild
       - name: Prepared captain UI and rendered behaviour
-        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs
+        run: node --test tests/captain-pwa-dashboard.test.cjs tests/captain-app/behaviour.test.cjs tests/captain-app/chat.test.cjs
       - run: npx prisma generate
+      - run: node scripts/check-critical-feature-contracts.mjs
       - run: npx tsc --noEmit
+      - run: npx next build
       - name: Install browser tooling without changing application dependencies
         run: npm install --prefix "$RUNNER_TEMP/captain-browser" --no-save --package-lock=false playwright@1.55.0
       - name: Install Chromium
         run: node "$RUNNER_TEMP/captain-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Check phone and tablet component layouts
         run: NODE_PATH="$RUNNER_TEMP/captain-browser/node_modules" node tests/captain-app/browser.cjs
+      - name: Chat tab and live unread badge without production requests
+        run: NODE_PATH="$RUNNER_TEMP/captain-browser/node_modules" node tests/captain-app/chat-browser.cjs
+      - name: Capture prepared Chat navigation and source inventory
+        if: always()
+        run: |
+          mkdir -p artifacts/captain-app
+          git grep -n -E 'CaptainPwaBottomNav|getCaptainAppSection|getPortalChatUnreadCount|label: "Inbox"|SIXFL inbox' -- src scripts tests > artifacts/captain-app/chat-source-inventory.txt
+          tar -czf artifacts/captain-app/chat-source.tgz src/lib/captain/app-navigation.ts src/components/captain/CaptainPwaBottomNav.tsx 'src/app/captain/team/[teamid]/chat/page.tsx' 'src/app/captain/team/[teamid]/more/page.tsx' 'src/app/api/player/team/[teamid]/chat-unread/route.ts' tests/captain-app/chat*.cjs tests/captain-app/behaviour.test.cjs tests/captain-pwa-dashboard.test.cjs
       - name: Upload captain app layout evidence
         if: always()
         uses: actions/upload-artifact@v4

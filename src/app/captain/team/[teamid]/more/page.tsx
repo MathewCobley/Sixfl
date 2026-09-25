@@ -43,6 +43,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
       { href: `${base}/kit`, label: "Team kit", icon: ShoppingBagIcon },
       { href: `${base}/weeks-unavailable`, label: "Fixture planning", icon: ClockIcon },
       { href: `${base}/availability/history`, label: "Availability history", icon: CalendarDaysIcon },
+      { href: `${base}/messages`, label: "SIXFL inbox", icon: ChatBubbleLeftRightIcon },
       { href: `${base}/whatsapp`, label: "WhatsApp tools", icon: ChatBubbleLeftRightIcon },
     ] },
     { label: "SIXFL TV & competitions", rows: [

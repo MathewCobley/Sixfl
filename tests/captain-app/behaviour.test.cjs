@@ -42,7 +42,7 @@ const cases = [
   ['', 'Home'], ['/', 'Home'], ['/fixtures', 'Fixtures'], ['/fixtures/f/selection', 'Fixtures'],
   ['/squad/member/edit', 'Squad'], ['/captain-squad', 'Squad'], ['/payments', 'Payments'],
   ['/payments/credit-ledger', 'Payments'], ['/player-payments/account/fee', 'Payments'],
-  ['/messages', 'Inbox'], ['/chat', 'Inbox'], ['/more', 'More'], ['/availability', 'More'],
+  ['/messages', 'More'], ['/chat', 'Chat'], ['/chat?conversation=team', 'Chat'], ['/more', 'More'], ['/availability', 'More'],
   ['/results-history', 'More'], ['/veo-priority', 'More'], ['/rules', 'More'],
 ];
 for (const [route, expected] of cases) test(`exactly one correct active tab for ${route || 'Home'}`, async () => {
@@ -51,17 +51,26 @@ for (const [route, expected] of cases) test(`exactly one correct active tab for 
   assert.equal((html.match(/aria-current="page"/g) || []).length, 1);
   const nav = html.slice(html.indexOf('<nav aria-label="Captain quick navigation"'));
   assert.match(nav, new RegExp(`aria-current="page" aria-label="${expected}(?:, [^"]*)?"`));
-  for (const label of ['Home', 'Fixtures', 'Squad', 'Payments', 'Inbox', 'More']) assert.ok(nav.includes(`>${label}</span>`), label);
+  for (const label of ['Home', 'Fixtures', 'Squad', 'Payments', 'Chat', 'More']) assert.ok(nav.includes(`>${label}</span>`), label);
+});
+test('Chat uses its own destination and never renders the supplied legacy inbox count', async () => {
+  const { html } = await renderScreen({ pathname: '/captain/team/demo/chat', unread: 36 });
+  const nav = html.slice(html.indexOf('<nav aria-label="Captain quick navigation"'));
+  assert.match(nav, /href="\/captain\/team\/demo\/chat"/);
+  assert.doesNotMatch(nav, /href="[^\"]*\/messages"|Inbox|36 unread/);
 });
 test('routing never treats another team id as this team or confuses account with accounts', () => {
   const { getCaptainAppSection } = harness().load('src/lib/captain/app-navigation.ts');
   assert.equal(getCaptainAppSection('/captain/team/demo-two/payments', 'demo').tab, null);
   assert.equal(getCaptainAppSection('/captain/team/demo/player-payments/accounts', 'demo').title, 'Player balances');
   assert.equal(getCaptainAppSection('/captain/team/demo/player-payments/account/x', 'demo').title, 'Player account');
+  assert.equal(getCaptainAppSection('/captain/team/demo/chat', 'demo').title, 'Chat');
+  assert.equal(getCaptainAppSection('/captain/team/demo/messages', 'demo').title, 'SIXFL inbox');
 });
 test('More retains secondary destinations, restores history access and has no design commentary', async () => {
   const { html } = await renderScreen({ more: true, pathname: '/captain/team/demo/more' });
-  for (const route of ['availability', 'availability/history', 'results', 'results-history', 'match-fees', 'payments', 'player-pool', 'player-stats', 'kit', 'weeks-unavailable', 'whatsapp', 'tv', 'veo-priority', 'cup-invitations', 'rules', 'guide', 'help']) assert.ok(html.includes(`href="/captain/team/demo/${route}"`), route);
+  for (const route of ['messages', 'availability', 'availability/history', 'results', 'results-history', 'match-fees', 'payments', 'player-pool', 'player-stats', 'kit', 'weeks-unavailable', 'whatsapp', 'tv', 'veo-priority', 'cup-invitations', 'rules', 'guide', 'help']) assert.ok(html.includes(`href="/captain/team/demo/${route}"`), route);
+  assert.match(html, /SIXFL inbox/);
   assert.doesNotMatch(html, /Everything that does not need|permanent bottom tab/);
   assert.match(html, /href="\/player\/team\/demo"/);
   assert.match(html, /Switch to Player Portal/);

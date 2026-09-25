@@ -1,5 +1,5 @@
 /** Presentation only. Never use a selected tab to make an access decision. */
-export type CaptainAppTab = "Home" | "Fixtures" | "Squad" | "Payments" | "Inbox" | "More";
+export type CaptainAppTab = "Home" | "Fixtures" | "Squad" | "Payments" | "Chat" | "More";
 
 export function getCaptainAppSection(pathname: string, teamId: string): {
   title: string;
@@ -18,7 +18,8 @@ export function getCaptainAppSection(pathname: string, teamId: string): {
   if (within("player-payments/accounts")) return { title: "Player balances", tab: "Payments" };
   if (within("player-payments")) return { title: "Squad payments", tab: "Payments" };
   if (within("payments")) return { title: "Team payments", tab: "Payments" };
-  if (within("messages") || within("chat")) return { title: "Inbox", tab: "Inbox" };
+  if (within("chat")) return { title: "Chat", tab: "Chat" };
+  if (within("messages")) return { title: "SIXFL inbox", tab: "More" };
 
   const titles: Record<string, string> = {
     table: "League table",
