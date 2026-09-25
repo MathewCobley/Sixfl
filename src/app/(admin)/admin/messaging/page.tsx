@@ -19,8 +19,6 @@ import CommunicationsLeagueLauncher from "@/components/admin/communications/Comm
 import CommunicationsProspectLauncher from "@/components/admin/communications/CommunicationsProspectLauncher";
 import CommunicationsTeamLauncher from "@/components/admin/communications/CommunicationsTeamLauncher";
 import AdminMessagesInbox from "@/components/admin/messages/AdminMessagesInbox";
-import AdminAppMessagingPanel from "@/components/admin/messaging/AdminAppMessagingPanel";
-import { getAdminAppMessagingDashboard } from "@/lib/admin/app-messaging";
 
 type LeagueLauncherOption = {
   id: string;
@@ -161,7 +159,6 @@ export default async function AdminMessagesPage({
     leagueLauncherOptions,
     teams,
     prospects,
-    appMessaging,
   ] = await Promise.all([
     getAdminInboxSummary(),
     getAdminInboxThreads({
@@ -210,7 +207,6 @@ export default async function AdminMessagesPage({
         },
       },
     }),
-    getAdminAppMessagingDashboard(),
   ]);
 
   const fallbackThread =
@@ -256,9 +252,9 @@ export default async function AdminMessagesPage({
                 </h1>
 
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-                  View inbound SMS and email replies, track unread conversations,
-                  and use Communications as the central launch point for teams,
-                  prospects, leads, and whole-league outreach.
+                  Email and SMS only. View inbound replies, track unread conversations,
+                  and launch team, prospect, lead and whole-league communications here.
+                  App chat now has its own Chat tab.
                 </p>
               </div>
             </div>
@@ -354,7 +350,6 @@ export default async function AdminMessagesPage({
           </section>
         ) : null}
 
-        <AdminAppMessagingPanel data={appMessaging} />
 
         <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-5">
           <CommunicationsTeamLauncher
