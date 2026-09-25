@@ -35,6 +35,16 @@ async function main() {
         assert.ok(await tabs.nth(i).evaluate(el => el.scrollWidth <= el.clientWidth), `${width}: tab text not clipped`);
       }
       assert.ok((await page.locator('[data-captain-native-match]').boundingBox()).height < 80);
+      const actionGrid = page.locator('nav[aria-label="Team tools"]');
+      assert.equal(await actionGrid.locator('a').count(), 4);
+      assert.equal(
+        await actionGrid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+        2,
+        `${width}: home tools stay in a two-column app grid`,
+      );
+      const overview = page.locator('[aria-label="Team overview"]');
+      assert.equal(await overview.locator('a').count(), 4);
+      assert.ok((await page.locator('.matchTeams').boundingBox()).height < 100);
       await page.screenshot({ path: `artifacts/captain-app/home-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 320, height: 812 });
