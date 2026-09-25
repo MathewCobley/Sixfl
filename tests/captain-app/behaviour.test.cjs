@@ -46,7 +46,7 @@ test('Home uses the same visual hierarchy as the player app without losing capta
     'League position',
     'Team balance',
     'Reports to finish',
-    'Result issues',
+    'Issues',
     'See who can play',
     'Find extra players',
     'Results &amp; form',
