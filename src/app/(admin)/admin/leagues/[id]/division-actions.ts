@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import {
   createLeagueDivision,
   ensureDefaultLeagueDivisions,
+  removeLeagueDivision,
 } from "@/lib/league-divisions";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -84,4 +85,32 @@ export async function createLeagueDivisionAction(formData: FormData) {
 
   revalidateLeagueDivisionPaths({ leagueId: league.id, slug: league.slug });
   redirect(`/admin/leagues/${league.id}?divisions=created`);
+}
+
+
+export async function removeLeagueDivisionAction(formData: FormData) {
+  await requireAdmin();
+
+  const leagueId = getTrimmedValue(formData.get("leagueId"));
+  const divisionId = getTrimmedValue(formData.get("divisionId"));
+  const league = await getLeagueOrRedirect(leagueId);
+
+  if (!divisionId) {
+    redirect(`/admin/leagues/${league.id}?divisionError=missing_division`);
+  }
+
+  let removed: Awaited<ReturnType<typeof removeLeagueDivision>>;
+  try {
+    removed = await removeLeagueDivision({
+      leagueId: league.id,
+      divisionId,
+    });
+  } catch {
+    redirect(`/admin/leagues/${league.id}?divisionError=remove_failed`);
+  }
+
+  revalidateLeagueDivisionPaths({ leagueId: league.id, slug: league.slug });
+  redirect(
+    `/admin/leagues/${league.id}?divisions=removed&history=${removed.historicalFixtures}`,
+  );
 }

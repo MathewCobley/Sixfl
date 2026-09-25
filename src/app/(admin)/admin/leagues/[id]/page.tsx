@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 
 import TeamBadge from "@/components/admin/TeamBadge";
 import LeagueForm from "@/components/admin/leagues/LeagueForm";
+import RemoveLeagueDivisionButton from "@/components/admin/leagues/RemoveLeagueDivisionButton";
 import { toLondonDateTimeLocalInputValue } from "@/lib/datetime/london";
 import {
   getLeagueDivisions,
@@ -153,6 +154,14 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
   const created = resolvedSearchParams?.created === "1";
   const entryStatusUpdated = resolvedSearchParams?.entryStatus === "updated";
   const divisionsUpdated = typeof resolvedSearchParams?.divisions === "string";
+  const divisionUpdateKind =
+    typeof resolvedSearchParams?.divisions === "string"
+      ? resolvedSearchParams.divisions
+      : null;
+  const divisionHistoryCount =
+    typeof resolvedSearchParams?.history === "string"
+      ? Number(resolvedSearchParams.history)
+      : 0;
   const divisionError = typeof resolvedSearchParams?.divisionError === "string" ? resolvedSearchParams.divisionError : null;
 
   return (
@@ -167,7 +176,7 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
       </div>
       {created ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">League created successfully.</div> : null}
       {entryStatusUpdated ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">League entry status updated.</div> : null}
-      {divisionsUpdated ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">League divisions updated.</div> : null}
+      {divisionsUpdated ? <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{divisionUpdateKind === "removed" ? `Division removed. Teams are still in this season but now have no division.${divisionHistoryCount > 0 ? " Completed fixture history was retained." : ""}` : "League divisions updated."}</div> : null}
       {divisionError ? <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">Division update failed. Check the division name and selected team assignment.</div> : null}
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="space-y-6">
@@ -208,7 +217,7 @@ export default async function EditLeaguePage({ params, searchParams }: Props) {
           </div>
           <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/[0.06] p-6 md:p-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"><div><h2 className="text-lg font-semibold text-white">Divisions</h2><p className="mt-1 text-sm text-white/60">Use divisions when one league has separate tables and fixture pools, such as Premiership and Championship.</p></div><form action={createDefaultDivisionsAction}><input type="hidden" name="leagueId" value={league.id} /><button type="submit" className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/20">Add Premiership + Championship</button></form></div>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">{divisions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/60 md:col-span-2">No divisions yet. Add Premiership and Championship to split this league into two divisions.</div> : divisions.map((division) => <div key={division.id} className="rounded-2xl border border-white/10 bg-black/25 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold text-white">{division.name}</h3><p className="mt-1 text-xs text-white/45">/{division.slug}</p></div><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">{division.teamCount} team{division.teamCount === 1 ? "" : "s"}</span></div></div>)}</div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">{divisions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/60 md:col-span-2">No divisions yet. Add Premiership and Championship to split this league into two divisions.</div> : divisions.map((division) => <div key={division.id} className="rounded-2xl border border-white/10 bg-black/25 p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-semibold text-white">{division.name}</h3><p className="mt-1 text-xs text-white/45">/{division.slug}</p></div><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70">{division.teamCount} team{division.teamCount === 1 ? "" : "s"}</span></div><div className="mt-4 flex justify-end"><RemoveLeagueDivisionButton leagueId={league.id} divisionId={division.id} divisionName={division.name} teamCount={division.teamCount} /></div></div>)}</div>
             <form action={createLeagueDivisionAction} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_1fr_120px_auto] md:items-end"><input type="hidden" name="leagueId" value={league.id} /><label className="space-y-2 text-sm text-white/60"><span>Division name</span><input name="name" placeholder="Premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><label className="space-y-2 text-sm text-white/60"><span>Slug</span><input name="slug" placeholder="premiership" className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><label className="space-y-2 text-sm text-white/60"><span>Order</span><input name="sortOrder" type="number" defaultValue={divisions.length + 1} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-white outline-none focus:border-emerald-400/50" /></label><button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400">Add division</button></form>
           </div>
         </div>
