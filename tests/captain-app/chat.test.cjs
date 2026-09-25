@@ -14,7 +14,7 @@ function load(file, mocks) {
   assert.equal((compiled.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error).length, 0);
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', 'fetch', compiled.outputText)(id => {
-    if (Object.hasOwn(mocks, id)) return mocks[id];
+    if (Object.hasOwn(mocks, id)) return { __esModule: true, ...mocks[id] };
     if (id === 'react' || id === 'react/jsx-runtime') return require(id);
     throw Error(`Unmocked chat dependency: ${id}`);
   }, mod, mod.exports, () => { throw Error('Network disabled'); });
