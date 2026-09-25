@@ -331,7 +331,8 @@ export default function PortalChat({
   async function startGroupConversation(
     audience: "REGULARS" | "SELECTED",
   ) {
-    if (!data?.canSend || data.viewRole !== "CAPTAIN" || creatingGroup) return;
+    if (!data?.canSend || creatingGroup) return;
+    if (audience === "REGULARS" && data.viewRole !== "CAPTAIN") return;
 
     setCreatingGroup(true);
     setFeedback(null);
@@ -618,99 +619,134 @@ export default function PortalChat({
 
       <div className="grid min-h-[620px] lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-black/15 p-3 lg:border-b-0 lg:border-r">
-          {data?.viewRole === "CAPTAIN" && data.canSend ? (
+          {data?.canSend ? (
             <div className="mb-4">
               <button
                 type="button"
-                onClick={() => setShowNewMessage((value) => !value)}
+                onClick={() => {
+                  setShowNewMessage((value) => !value);
+                  if (data.viewRole === "PLAYER") {
+                    setShowSelectedPlayers(true);
+                  }
+                }}
                 className="flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-300"
               >
-                {showNewMessage ? "Close new message" : "New message"}
+                {showNewMessage
+                  ? data.viewRole === "PLAYER"
+                    ? "Close new chat"
+                    : "Close new message"
+                  : data.viewRole === "PLAYER"
+                    ? "New chat"
+                    : "New message"}
               </button>
 
               {showNewMessage ? (
                 <div className="mt-3 space-y-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-3">
                   <div>
                     <div className="text-sm font-semibold text-white">
-                      Start a new conversation
+                      {data.viewRole === "PLAYER"
+                        ? "Choose squad members"
+                        : "Start a new conversation"}
                     </div>
                     <div className="mt-1 text-xs leading-5 text-white/45">
-                      Choose exactly who should be included.
+                      {data.viewRole === "PLAYER"
+                        ? "Pick one teammate for a private chat, or two or more for a group chat. Only current members of your squad are available."
+                        : "Choose exactly who should be included."}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedRef("team");
-                      setShowNewMessage(false);
-                      setShowSelectedPlayers(false);
-                    }}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
-                  >
-                    Whole Squad Chat
-                    <span className="mt-1 block text-xs font-normal text-white/40">
-                      Everyone in the squad can read and reply
-                    </span>
-                  </button>
+                  {data.viewRole === "CAPTAIN" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedRef("team");
+                          setShowNewMessage(false);
+                          setShowSelectedPlayers(false);
+                        }}
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
+                      >
+                        Whole Squad Chat
+                        <span className="mt-1 block text-xs font-normal text-white/40">
+                          Everyone in the squad can read and reply
+                        </span>
+                      </button>
 
-                  <button
-                    type="button"
-                    disabled={creatingGroup || regularCount === 0}
-                    onClick={() => startGroupConversation("REGULARS")}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Regulars Chat
-                    <span className="mt-1 block text-xs font-normal text-white/40">
-                      {regularCount} player{regularCount === 1 ? "" : "s"} marked as Regulars
-                    </span>
-                  </button>
+                      <button
+                        type="button"
+                        disabled={creatingGroup || regularCount === 0}
+                        onClick={() => startGroupConversation("REGULARS")}
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        Regulars Chat
+                        <span className="mt-1 block text-xs font-normal text-white/40">
+                          {regularCount} player{regularCount === 1 ? "" : "s"} marked as Regulars
+                        </span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowSelectedPlayers((value) => !value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
-                  >
-                    Selected Players
-                    <span className="mt-1 block text-xs font-normal text-white/40">
-                      Choose exactly which players can see this chat
-                    </span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSelectedPlayers((value) => !value)}
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-left text-sm font-semibold text-white/80 transition hover:bg-white/[0.06]"
+                      >
+                        Selected Players
+                        <span className="mt-1 block text-xs font-normal text-white/40">
+                          Choose exactly which players can see this chat
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
 
                   {showSelectedPlayers ? (
                     <div className="rounded-xl border border-white/10 bg-black/20 p-2">
                       <div className="max-h-64 space-y-1 overflow-y-auto">
-                        {sortedAudienceOptions.map((person) => (
-                          <label
-                            key={person.userId}
-                            className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-white/75 hover:bg-white/[0.05]"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedGroupUserIds.includes(person.userId)}
-                              onChange={() => toggleSelectedPlayer(person.userId)}
-                              className="h-4 w-4 accent-emerald-400"
-                            />
-                            <span className="min-w-0 flex-1 truncate">
-                              {person.name}
-                            </span>
-                            {person.isRegular ? (
-                              <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-300/70">
-                                Regular
+                        {sortedAudienceOptions.length === 0 ? (
+                          <div className="px-2 py-3 text-xs leading-5 text-white/45">
+                            No other current squad members are available.
+                          </div>
+                        ) : (
+                          sortedAudienceOptions.map((person) => (
+                            <label
+                              key={person.userId}
+                              className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-white/75 hover:bg-white/[0.05]"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedGroupUserIds.includes(person.userId)}
+                                onChange={() => toggleSelectedPlayer(person.userId)}
+                                className="h-4 w-4 accent-emerald-400"
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                {person.name}
                               </span>
-                            ) : null}
-                          </label>
-                        ))}
+                              {person.role === "CAPTAIN" ? (
+                                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-sky-200/75">
+                                  Captain
+                                </span>
+                              ) : person.isRegular ? (
+                                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-300/70">
+                                  Regular
+                                </span>
+                              ) : null}
+                            </label>
+                          ))
+                        )}
                       </div>
                       <button
                         type="button"
                         disabled={
-                          creatingGroup || selectedGroupUserIds.length < 2
+                          creatingGroup ||
+                          selectedGroupUserIds.length <
+                            (data.viewRole === "PLAYER" ? 1 : 2)
                         }
                         onClick={() => startGroupConversation("SELECTED")}
                         className="mt-2 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-sm font-bold text-black disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Start group · {selectedGroupUserIds.length} selected
+                        {data.viewRole === "PLAYER"
+                          ? selectedGroupUserIds.length === 1
+                            ? "Start private chat"
+                            : `Start group · ${selectedGroupUserIds.length} selected`
+                          : `Start group · ${selectedGroupUserIds.length} selected`}
                       </button>
                     </div>
                   ) : null}
@@ -797,10 +833,12 @@ export default function PortalChat({
                 {selectedRef === "team"
                   ? "Everyone in the squad can read and reply"
                   : selectedRef.startsWith("group:")
-                    ? data?.viewRole === "CAPTAIN" &&
-                      highlightedGroupRecipientIds.size > 0
-                      ? `${selectedItem?.subtitle || "Private group chat"} · recipients highlighted on the left`
-                      : selectedItem?.subtitle || "Private group chat"
+                    ? selectedItem?.kind === "PRIVATE"
+                      ? `Private between ${selectedItem?.title ?? "this teammate"} and you`
+                      : data?.viewRole === "CAPTAIN" &&
+                          highlightedGroupRecipientIds.size > 0
+                        ? `${selectedItem?.subtitle || "Private group chat"} · recipients highlighted on the left`
+                        : selectedItem?.subtitle || "Private group chat"
                     : selectedRef === "sixfl"
                       ? "Private between you and SIXFL"
                       : data?.viewRole === "CAPTAIN"
