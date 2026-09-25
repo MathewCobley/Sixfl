@@ -142,3 +142,39 @@ test("captain league table is compact and app-native on mobile", () => {
   assert.ok(mobileStart >= 0 && desktopStart > mobileStart);
   assert.doesNotMatch(table.slice(mobileStart, desktopStart), /href=\{\`\/teams\//);
 });
+
+
+test("captain squad payments has a native app hub instead of the website dashboard", () => {
+  const page = read("src/app/captain/team/[teamid]/player-payments/PaymentPageServer.tsx");
+  const gate = read("src/app/captain/team/[teamid]/player-payments/page.tsx");
+  const layout = read("src/app/captain/team/[teamid]/player-payments/layout.tsx");
+
+  assert.match(page, /<CaptainPwaModeOnly mode="app">[\s\S]*data-captain-app-payments-native/);
+  assert.match(page, /aria-label="Payment shortcuts"/);
+  for (const copy of [
+    "Player balances",
+    "Team payments",
+    "Squad details",
+    "Credit ledger",
+    "Player payments",
+    "Send link again",
+    "Update player collection",
+    "Set up player collection",
+  ]) assert.ok(page.includes(copy), copy);
+  assert.match(page, /stillToCoverPence > 0[\s\S]*SquadPaymentCollectionForm/);
+  assert.match(page, /This fixture is fully covered\. No new player payment links can be created/);
+
+  const appStart = page.indexOf('<CaptainPwaModeOnly mode="app">');
+  const webStart = page.indexOf('<CaptainPwaModeOnly mode="web">');
+  assert.ok(appStart >= 0 && webStart > appStart);
+  const native = page.slice(appStart, webStart);
+  assert.doesNotMatch(native, /Collect money from your players|What is happening with this fixture\?/);
+
+  assert.match(gate, /<CaptainPwaModeOnly mode="app">[\s\S]*Payment links need player emails/);
+  assert.match(gate, /Fix squad details/);
+  assert.match(gate, /<CaptainPwaModeOnly mode="web">[\s\S]*Squad payments not ready/);
+
+  assert.match(layout, /<CaptainPwaModeOnly mode="app">[\s\S]*Guest approvals[\s\S]*Fixture-specific/);
+  assert.match(layout, /<details[\s\S]*FixtureGuestApprovals/);
+  assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*FixtureGuestApprovals[\s\S]*\{children\}/);
+});
