@@ -331,7 +331,8 @@ export default function PortalChat({
   async function startGroupConversation(
     audience: "REGULARS" | "SELECTED",
   ) {
-    if (!data?.canSend || data.viewRole !== "CAPTAIN" || creatingGroup) return;
+    if (!data?.canSend || creatingGroup) return;
+    if (audience === "REGULARS" && data.viewRole !== "CAPTAIN") return;
 
     setCreatingGroup(true);
     setFeedback(null);
