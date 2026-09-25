@@ -170,19 +170,33 @@ export async function updateTeamDetailsAction(formData: FormData) {
         AND (${id} = f."homeTeamId" OR ${id} = f."awayTeamId")
     `);
 
-    if (leagueId) {
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "LeagueSeasonTeam"
-        SET "isActive" = false, "updatedAt" = NOW()
-        WHERE "teamId" = ${id}
-          AND "leagueId" <> ${leagueId}
-      `);
-    } else {
-      await tx.$executeRaw(Prisma.sql`
-        UPDATE "LeagueSeasonTeam"
-        SET "isActive" = false, "updatedAt" = NOW()
-        WHERE "teamId" = ${id}
-      `);
+    // A normal details save (including toggling double points) must never
+    // rewrite season participation. Only an actual league change is allowed to
+    // touch LeagueSeasonTeam rows. When moving between seasons of the same
+    // competition, preserve those season memberships; they are independent
+    // historical/private-season records.
+    if (existingTeam.leagueId !== leagueId) {
+      if (leagueId) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE "LeagueSeasonTeam" membership
+          SET "isActive" = false, "updatedAt" = NOW()
+          FROM "League" season, "League" target
+          WHERE membership."teamId" = ${id}
+            AND membership."leagueId" = season."id"
+            AND target."id" = ${leagueId}
+            AND membership."leagueId" <> ${leagueId}
+            AND (
+              target."competitionId" IS NULL
+              OR season."competitionId" IS DISTINCT FROM target."competitionId"
+            )
+        `);
+      } else {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE "LeagueSeasonTeam"
+          SET "isActive" = false, "updatedAt" = NOW()
+          WHERE "teamId" = ${id}
+        `);
+      }
     }
 
     return updated;
