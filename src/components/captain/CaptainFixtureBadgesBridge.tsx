@@ -302,21 +302,6 @@ function findMatchingFixture(text: string, fixtures: FixtureBadge[]) {
   );
 }
 
-function isCaptainFixturesAppScreen() {
-  const standalone = window.matchMedia("(display-mode: standalone)").matches;
-  const iosStandalone =
-    "standalone" in navigator &&
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-  const explicitPreview =
-    new URLSearchParams(window.location.search).get("pwaPreview") === "1";
-  const inAdminPreview = window.self !== window.top;
-
-  return (
-    /\/captain\/team\/[^/]+\/fixtures\/?$/.test(window.location.pathname) &&
-    (standalone || iosStandalone || explicitPreview || inAdminPreview)
-  );
-}
-
 function injectWinChance(element: HTMLElement, fixture: FixtureBadge) {
   if (!fixture.winChance) return;
 
@@ -328,13 +313,7 @@ function injectWinChance(element: HTMLElement, fixture: FixtureBadge) {
   const badge = createCompactWinChanceBadge(fixture);
   if (badge) target.appendChild(badge);
 
-  // On the installed Fixtures screen the full predictor panel turns every
-  // fixture into a long web card. Keep the compact score/chance badge there;
-  // the detailed predictor remains available on the full web portal.
-  if (
-    !isCaptainFixturesAppScreen() &&
-    !target.querySelector(`[data-fixture-full-ai-for="${fixture.id}"]`)
-  ) {
+  if (!target.querySelector(`[data-fixture-full-ai-for="${fixture.id}"]`)) {
     const fullPanel = createFullWinChancePanel(fixture);
     if (fullPanel) target.appendChild(fullPanel);
   }
