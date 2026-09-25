@@ -53,6 +53,7 @@ export default async function CaptainTablePage({
           title={division ? `${currentLeague?.name ?? "League"} · ${division.name}` : currentLeague?.name ?? "League table"}
           description="Points, goal difference and recent form in your current league."
           emptyMessage="The league table will appear here once teams have been added."
+          currentTeamIds={relatedTeamIds}
         />
       )}
     </div>
