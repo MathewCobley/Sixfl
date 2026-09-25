@@ -34,7 +34,7 @@ CREATE TYPE "LeagueType" AS ENUM ('MENS');
 CREATE TYPE "TeamMode" AS ENUM ('STANDARD', 'MANAGED');
 CREATE TABLE "LeagueCompetition" (
  id text PRIMARY KEY, name text, slug text UNIQUE, "currentLeagueId" text,
- "isActive" boolean NOT NULL DEFAULT true, area text, "dayOfWeek" "PreferredNight",
+ "isActive" boolean NOT NULL DEFAULT true, "competitionType" text NOT NULL DEFAULT 'LEAGUE', area text, "dayOfWeek" "PreferredNight",
  "leagueType" "LeagueType", "venueName" text,
  "createdAt" timestamp(3) DEFAULT NOW(), "updatedAt" timestamp(3) DEFAULT NOW()
 );
@@ -90,6 +90,19 @@ test('private preparation and explicit switch preserve live seasons with real da
     runSql(read('prisma/migrations/20260822161600_auto_create_tbc_on_league/migration.sql'));
     runSql(read('prisma/migrations/20260924233000_preserve_private_and_historical_seasons/migration.sql'));
     for (const [name, check] of [
+      ['changing parent affiliation alone never changes season participation', async () => {
+        const beforePointers = await pointers();
+        const beforeMemberships = await raw('SELECT "leagueId", "teamId", "divisionId", "isActive" FROM "LeagueSeasonTeam" ORDER BY "leagueId", "teamId"');
+        await membership.updateTeamCompetition({ teamId: 't1', competitionId: 'other' });
+        const after = (await raw('SELECT "leagueId", "competitionId", "divisionId" FROM "Team" WHERE id=\'t1\''))[0];
+        assert.equal(after.competitionId, 'other');
+        assert.equal(after.leagueId, beforePointers.find(team => team.id === 't1').leagueId);
+        assert.equal(after.divisionId, beforePointers.find(team => team.id === 't1').divisionId);
+        assert.deepEqual(
+          await raw('SELECT "leagueId", "teamId", "divisionId", "isActive" FROM "LeagueSeasonTeam" ORDER BY "leagueId", "teamId"'),
+          beforeMemberships,
+        );
+      }],
       ['copying teams creates a private non-current season and preserves the live pointers and results', async () => {
         const before = await pointers(); const oldHistory = await history();
         const next = await create('Winter 2026');
