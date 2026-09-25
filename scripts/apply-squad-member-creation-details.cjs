@@ -55,8 +55,6 @@ replaceOnce(
     '                        <div className="mt-1 text-xs text-white/45">',
     "                          Added {formatUkDateTime(member.createdAt)}",
     "                        </div>",
-    "",
-    '                        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${dashboardCopy.className}`}>',
   ].join("\n"),
   [
     '                        <div className="mt-1 text-xs text-white/45">',
@@ -91,8 +89,6 @@ replaceOnce(
     "                            ) : null}",
     "                          </div>",
     "                        ) : null}",
-    "",
-    '                        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-5 ${dashboardCopy.className}`}>',
   ].join("\n"),
   "member creation-details panel",
 );
