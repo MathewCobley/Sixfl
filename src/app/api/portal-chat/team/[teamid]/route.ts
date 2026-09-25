@@ -713,7 +713,8 @@ async function buildConversationList(teamId: string, context: AccessContext) {
 
     items.push({
       ref: privateChatRef(context.effectiveUserId),
-      title: "Message your captain",
+      title:
+        captainCount > 1 ? "Message your captains" : "Message your captain",
       subtitle:
         captainCount > 0
           ? `Private — only you and your captain${captainCount === 1 ? "" : "s"}`
@@ -1175,22 +1176,6 @@ export async function POST(
         return jsonError("One or more selected people are no longer in this squad.", 409);
       }
 
-      // A player choosing a single captain should open the existing captain
-      // conversation instead of creating a second 1-to-1 thread.
-      if (
-        context.viewRole === "PLAYER" &&
-        recipientMembers.length === 1 &&
-        recipientMembers[0]?.role === TeamRole.CAPTAIN
-      ) {
-        return NextResponse.json(
-          {
-            ok: true,
-            conversationRef: privateChatRef(context.effectiveUserId),
-            title: "Message your captain",
-          },
-          { status: 201 },
-        );
-      }
     }
 
     const recipientUserIds = recipientMembers.map((member) => member.userId);
