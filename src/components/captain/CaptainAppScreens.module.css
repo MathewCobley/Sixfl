@@ -55,6 +55,8 @@
 .tableShortcutArrow { width: 17px; height: 17px; flex: 0 0 17px; color: rgba(255,255,255,.4); }
 
 .attention { display: grid; overflow: hidden; border: 1px solid #634a2b; border-radius: 16px; background: #221d12; }
+.newsSlot { min-width: 0; }
+.newsSlot > * { width: 100%; margin: 0; padding-left: 0 !important; padding-right: 0 !important; }
 .alertRow { display: flex; align-items: center; gap: 10px; padding: 12px; min-height: 48px; color: #f5cf80; text-decoration: none; font-size: 13px; line-height: 1.4; }
 .alertRow + .alertRow { border-top: 1px solid #453922; }
 .alertRow span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
