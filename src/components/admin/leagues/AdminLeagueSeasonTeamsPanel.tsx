@@ -299,11 +299,13 @@ export default function AdminLeagueSeasonTeamsPanel() {
                       void updateMembership({
                         teamId: team.teamId,
                         method: "POST",
-                        divisionId: null,
+                        divisionId: team.divisionId ?? null,
                       })
                     }
                   >
-                    {busyKey === `${team.teamId}:POST:none` ? "Adding…" : "Enter current season"}
+                    {busyKey === `${team.teamId}:POST:${team.divisionId ?? "none"}`
+                      ? "Adding…"
+                      : "Enter this season"}
                   </button>
                 )}
               </div>
