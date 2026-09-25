@@ -12,7 +12,10 @@ test("captain PWA keeps the real overview calculations and a separate website vi
   assert.match(page, /CaptainVeoPriorityCard/);
   assert.match(server, /requireCaptain\(props.teamId\)/);
   assert.match(server, /teamName=\{team.name\}/);
+  assert.match(server, /teamLogoUrl=\{team.logoUrl\}/);
   assert.match(view, /<h1>\{teamName\}<\/h1>/);
+  assert.match(view, /className=\{styles\.matchTeams\}/);
+  assert.match(view, /className=\{styles\.actionGrid\}/);
   assert.doesNotMatch(view, />Your team<|The things that need your attention/);
   for (const text of ["Next match", "Team balance", "Reports to finish", "PlayerPool", "SIXFL TV"]) assert.ok(view.includes(text), text);
 });
