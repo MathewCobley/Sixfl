@@ -11,9 +11,6 @@ export default function NewsDiscoveryTemplate({ children }: { children: ReactNod
         <LatestNews scope="captain" />
       </CaptainPwaModeOnly>
       {children}
-      <CaptainPwaModeOnly mode="app">
-        <LatestNews scope="captain" />
-      </CaptainPwaModeOnly>
     </>
   );
 }
