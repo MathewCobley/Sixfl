@@ -693,7 +693,7 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
               <span aria-hidden="true" className="text-lg font-normal text-emerald-200/45">›</span>
             </summary>
             <div className="border-t border-white/[0.07] p-3">
-              {selectedFixture && selectedFixtureEditable ? (
+              {selectedFixture && selectedFixtureEditable && stillToCoverPence > 0 ? (
                 <SquadPaymentCollectionForm
                   key={`app-${selectedFixture.id}`}
                   action={createCaptainSquadPaymentCollectionAction}
@@ -805,6 +805,10 @@ export default async function PaymentPageServer({ params, searchParams }: Props)
                     })}
                   </div>
                 </SquadPaymentCollectionForm>
+              ) : selectedFixture && selectedFixtureEditable && stillToCoverPence <= 0 ? (
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-[10px] leading-4 text-emerald-100/75">
+                  This fixture is fully covered. No new player payment links can be created.
+                </div>
               ) : selectedEntry ? (
                 <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-[10px] leading-4 text-amber-100/75">
                   This historical fixture cannot be edited here. Remaining team balance: {formatMoney(selectedEntry.outstandingPence)}.
