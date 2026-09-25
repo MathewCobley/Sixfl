@@ -67,7 +67,7 @@ test("Regulars are listed before other private chat players", () => {
   assert.match(route, /if \(aRegular !== bRegular\) return bRegular - aRegular/);
 });
 
-test("group chat UI supports Regulars and multi-select selected players", () => {
+test("group chat UI supports captain Regulars and selected-player groups", () => {
   const chat = read("src/components/messaging/PortalChat.tsx");
 
   assert.match(chat, /New message/);
@@ -75,8 +75,7 @@ test("group chat UI supports Regulars and multi-select selected players", () => 
   assert.match(chat, /player\{regularCount === 1 \? "" : "s"\} marked as Regulars/);
   assert.match(chat, /Selected Players/);
   assert.match(chat, /selectedGroupUserIds/);
-  assert.match(chat, /Start group · \{selectedGroupUserIds\.length\} selected/);
-  assert.match(chat, /selectedGroupUserIds\.length < 2/);
+  assert.match(chat, /Start group ·/);
   assert.match(chat, /startGroupConversation\("REGULARS"\)/);
   assert.match(chat, /startGroupConversation\("SELECTED"\)/);
 });
@@ -163,4 +162,42 @@ test("group chat remains quiet by default", () => {
 
   assert.doesNotMatch(pushSection, /PortalConversationType\.REGULARS/);
   assert.doesNotMatch(pushSection, /PortalConversationType\.SELECTED_GROUP/);
+});
+
+
+test("players can start a private or group chat with current squad members", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(chat, /data\.viewRole === "PLAYER"\s*\? "New chat"/);
+  assert.match(chat, /Pick one teammate for a private chat, or two or more for a group chat/);
+  assert.match(chat, /selectedGroupUserIds\.length <\s*\(data\.viewRole === "PLAYER" \? 1 : 2\)/);
+  assert.match(chat, /Start private chat/);
+  assert.match(chat, /Only current members of your squad are available/);
+
+  assert.match(route, /const minimumRecipients = context\.viewRole === "PLAYER" \? 1 : 2/);
+  assert.match(route, /One or more selected people are no longer in this squad/);
+  assert.match(route, /context\.viewRole === "PLAYER"[\s\S]*recipientMembers\.length === 1[\s\S]*TeamRole\.CAPTAIN/);
+  assert.match(route, /conversation\.members\.length === 2/);
+  assert.match(route, /kind: isDirectSquadChat \? \("PRIVATE" as const\) : \("GROUP" as const\)/);
+  assert.match(route, /Private · only you and/);
+});
+
+test("player recipient picker is populated from the current team and excludes the sender", () => {
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /const groupCreatorUserId = await resolveGroupCreatorUserId/);
+  assert.match(route, /prisma\.teamMember\.findMany\(\{[\s\S]*teamId: teamid[\s\S]*userId: \{ not: groupCreatorUserId \}/);
+  assert.match(route, /orderBy: \[\{ isRegular: "desc" \}, \{ createdAt: "asc" \}\]/);
+  assert.match(route, /audienceOptions: audienceOptions\.map/);
+});
+
+test("two-person selected chats display the other teammate as a private chat", () => {
+  const chat = read("src/components/messaging/PortalChat.tsx");
+  const route = read("src/app/api/portal-chat/team/[teamid]/route.ts");
+
+  assert.match(route, /const directOtherMember/);
+  assert.match(route, /getDisplayName\(directOtherMember\.user\)/);
+  assert.match(chat, /selectedItem\?\.kind === "PRIVATE"/);
+  assert.match(chat, /Private between \$\{selectedItem\?\.title \?\? "this teammate"\} and you/);
 });
