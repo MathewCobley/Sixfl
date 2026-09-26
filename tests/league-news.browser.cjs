@@ -46,7 +46,9 @@ for(const width of [1440,390])test(`publication controls and shared article at $
 // website selector cannot hide which captain/player contract actually failed.
 for(const width of [1440,390])for(const scope of ['league','team','captain','player'])test(`published-only ${scope} news and report links at ${width}px`,async()=>{
  const compact=scope==='captain'||scope==='player';
- const articlePath='/leagues/example/news/2026-09-08';
+ const articlePath=compact
+  ? `/${scope}/team/stand-in/news?league=example&date=2026-09-08`
+  : '/leagues/example/news/2026-09-08';
  const context=await browser.newContext({viewport:{width,height:1000}});
  const page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
