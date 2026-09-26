@@ -48,6 +48,14 @@ test('public snapshot is an explicit allowlist, correctly links both replacement
  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>not executable/);assert.match(html,/Matchweek 4/);assert.match(html,/In Matchweek 4/);assert.doesNotMatch(html,/this week/i);assert.match(html,/id="match-f-5"/);assert.match(html,/Jump to match/);assert.match(html,/list-disc/);assert.match(html,/Alex Striker/);assert.match(html,/×2/);assert.match(html,/Sam Forward/);assert.doesNotMatch(html,/Recorded scorers:/);
  const dir=path.join(root,'.tmp/league-news');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'sample.json'),JSON.stringify({...news,article:a}));
 });
+test('mobile matchweek hero keeps its headline on one line and uses a compact fallback panel',()=>{
+ const article=fs.readFileSync(path.join(root,'src/components/news/NewsArticle.tsx'),'utf8');
+ assert.match(article,/whitespace-nowrap text-\[clamp\(2rem,9\.5vw,3rem\)\]/);
+ assert.match(article,/min-h-\[250px\]/);
+ assert.match(article,/min-h-\[190px\]/);
+ assert.match(article,/max-w-\[15rem\]/);
+ assert.doesNotMatch(article,/text-5xl font-black uppercase tracking-\[-0\.06em\][^\n]*Matchweek/);
+});
 test('photo settings reject private paths, traversal, unsafe URLs and missing alternative text',()=>{
  for(const u of ['javascript:alert(1)','data:image/png,abc','http://example.com/a.jpg','https://127.0.0.1/a.jpg','https://user:secret@example.com/a.jpg','/admin/secret','/images/../api/private','//example.com/a.jpg','/api/private']) assert.equal(pure.newsImageUrl(u),null,u);
  assert.equal(pure.newsImageUrl('/api/team-badges/badge-a'),'/api/team-badges/badge-a');
