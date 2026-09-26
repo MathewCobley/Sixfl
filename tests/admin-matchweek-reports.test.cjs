@@ -13,6 +13,8 @@ const root = path.resolve(__dirname, "..");
 const indexPath = "src/app/(admin)/admin/matchweek-reports/page.tsx";
 const detailPath = "src/app/(admin)/admin/matchweek-reports/[slug]/page.tsx";
 const legacyPath = "src/app/(public)/leagues/[slug]/weekly-report/page.tsx";
+const captainAppNewsPath = "src/app/captain/team/[teamid]/news/page.tsx";
+const playerAppNewsPath = "src/app/player/team/[teamid]/news/page.tsx";
 const layoutPath = "src/app/(admin)/admin/layout.tsx";
 const pages = [indexPath, detailPath, legacyPath];
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -171,8 +173,14 @@ test("negative control detects removal of the page-level admin guard", async () 
   assert.throws(() => assert.equal(state.queries.length, 0), assert.AssertionError);
 });
 
-test("repository-wide scan finds no alternate public report links or implementation", () => {
+test("repository-wide scan limits report pages to the public legacy route and authenticated portal copies", () => {
   const matches = [];
+  const allowedReachableReportPages = new Set([
+    legacyPath,
+    captainAppNewsPath,
+    playerAppNewsPath,
+  ]);
+
   function visit(directory) {
     for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
       const file = `${directory}/${entry.name}`;
@@ -181,14 +189,29 @@ test("repository-wide scan finds no alternate public report links or implementat
         const source = read(file);
         if (!/weekly-report|matchweek.?report/i.test(source)) continue;
         matches.push(file);
-        const publiclyReachable = file.startsWith("src/app/(public)/") || file.startsWith("src/app/captain/") || file.startsWith("src/app/player/") || file.startsWith("src/components/leagues/");
-        if (publiclyReachable) assert.equal(file, legacyPath, `Unexpected private-report exposure in ${file}`);
+        const reachable =
+          file.startsWith("src/app/(public)/") ||
+          file.startsWith("src/app/captain/") ||
+          file.startsWith("src/app/player/") ||
+          file.startsWith("src/components/leagues/");
+        if (reachable) {
+          assert.ok(
+            allowedReachableReportPages.has(file),
+            `Unexpected report exposure in ${file}`,
+          );
+        }
       }
     }
   }
+
   visit("src");
   console.log("Report reference audit:", matches.join(", "));
+
   assert.doesNotMatch(read(legacyPath), /prisma|teamMetadata|homeScore|awayScore/);
+  assert.match(read(captainAppNewsPath), /requireCaptain\(teamid\)/);
+  assert.match(read(captainAppNewsPath), /getPublishedNews|listPublishedNews/);
+  assert.match(read(playerAppNewsPath), /UserRole\.ADMIN|teamMembers/);
+  assert.match(read(playerAppNewsPath), /getPublishedNews|listPublishedNews/);
   assert.ok(matches.includes(indexPath));
   assert.ok(matches.includes(detailPath));
 });
