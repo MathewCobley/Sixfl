@@ -28,6 +28,7 @@ test("captain app rules, Goal of the Month and recruitment stay in the portal", 
   const priority = read("src/app/captain/team/[teamid]/veo-priority/page.tsx");
   const more = read("src/app/captain/team/[teamid]/more/page.tsx");
   const prospects = read("src/app/captain/team/[teamid]/prospects/page.tsx");
+  const priorityCard = read("src/components/captain/CaptainVeoPriorityCard.tsx");
   const leagueRules = read("src/app/captain/team/[teamid]/league-rules/page.tsx");
   const goalOfMonth = read(
     "src/app/captain/team/[teamid]/goal-of-the-month/page.tsx",
@@ -38,6 +39,8 @@ test("captain app rules, Goal of the Month and recruitment stay in the portal", 
 
   assert.ok(priority.includes("/captain/team/${teamid}/goal-of-the-month"));
   assert.equal(priority.includes("/goal-of-the-month?from=captain"), false);
+  assert.ok(priorityCard.includes("/captain/team/${teamId}/goal-of-the-month"));
+  assert.equal(priorityCard.includes('href="/goal-of-the-month"'), false);
 
   for (const route of ["news", "goal-of-the-month", "league-rules"]) {
     assert.ok(more.includes("${base}/" + route), route);
@@ -69,10 +72,14 @@ test("player installed-app routes stay inside the player portal", () => {
   assert.ok(more.includes("/player/team/${teamid}/league-rules"));
   assert.ok(more.includes("/player/team/${teamid}/match-rules"));
 
+  const webTabs = nav.slice(nav.indexOf("const tabs"), nav.indexOf("const appTabs"));
   const appTabs = nav.slice(
     nav.indexOf("const appTabs"),
     nav.indexOf("export default"),
   );
+  assert.equal(webTabs.includes("/goal-of-the-month?from=player"), false);
+  assert.ok(webTabs.includes("/player/team/${teamId}/goal-of-the-month"));
+  assert.ok(webTabs.includes("/player/team/${teamId}/referrals"));
   assert.equal(appTabs.includes("/leagues/"), false);
   assert.equal(appTabs.includes('href: "/goal-of-the-month'), false);
   assert.equal(appTabs.includes('href: "/league-rules"'), false);
