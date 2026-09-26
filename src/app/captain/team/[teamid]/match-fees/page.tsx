@@ -6,6 +6,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma, type PlayerMatchFeeStatus } from "@prisma/client";
 
+import CaptainAppMatchdaySquad from "@/components/captain/CaptainAppMatchdaySquad";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import MatchdaySquadSelectionForm from "@/components/captain/MatchdaySquadSelectionForm";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
@@ -520,8 +522,103 @@ export default async function CaptainManagedPlayerMatchFeesPage({
       : null,
   ].filter(Boolean) as string[];
 
+
+  const appFixtureOptions = visibleFixtures.map((fixture) => ({
+    id: fixture.id,
+    label: getFixtureLabel({
+      homeTeamName: fixture.homeTeam.name,
+      awayTeamName: fixture.awayTeam.name,
+    }),
+    dateLabel: formatUkDateTime(fixture.kickoffAt),
+    venueName: fixture.venue?.name ?? null,
+    selected: selectedFixture?.id === fixture.id,
+    isPast: fixture.kickoffAt < now,
+    selectedCount: selectedFixture?.id === fixture.id ? activeFees.length : 0,
+  }));
+
+  const appMemberOptions = members.map((member) => {
+    const existingFee = feeByMemberId.get(member.id);
+    const availability = availabilityByMemberId.get(member.id);
+    const playerName = member.user.name || member.user.email || "Unnamed member";
+    const warning =
+      availability?.response === "UNAVAILABLE" && existingFee
+        ? getUnavailableFeeWarning({
+            status: existingFee.status,
+            amountPence: existingFee.amountPence,
+          })
+        : null;
+
+    return {
+      id: member.id,
+      value: "member:" + member.id,
+      name: playerName,
+      secondary: "Squad player",
+      availability: availability?.response ?? null,
+      availabilityNote: availability?.note ?? null,
+      selected: Boolean(existingFee),
+      paidSelected: existingFee?.status === "PAID",
+      feeStatus: existingFee ? getFeeStatusLabel(existingFee.status) : null,
+      warning,
+    };
+  });
+
+  const appProspectOptions = selectableProspects.map((prospect) => {
+    const fullName = [prospect.firstName, prospect.lastName].filter(Boolean).join(" ").trim();
+    const existingFee = feeByProspectId.get(prospect.id);
+    const playerName = fullName || prospect.email || prospect.phone || "Unnamed prospect";
+
+    return {
+      id: prospect.id,
+      value: "prospect:" + prospect.id,
+      name: playerName,
+      secondary: "Not yet linked to the squad",
+      availability: "EXTRA",
+      availabilityNote: null,
+      selected: Boolean(existingFee),
+      paidSelected: existingFee?.status === "PAID",
+      feeStatus: existingFee ? getFeeStatusLabel(existingFee.status) : null,
+      warning: null,
+    };
+  });
+
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <CaptainAppMatchdaySquad
+          teamId={team.id}
+          teamName={team.name}
+          managedTeam={team.teamMode === "MANAGED"}
+          selectedFixture={
+            selectedFixture
+              ? {
+                  id: selectedFixture.id,
+                  label: getFixtureLabel({
+                    homeTeamName: selectedFixture.homeTeam.name,
+                    awayTeamName: selectedFixture.awayTeam.name,
+                  }),
+                  dateLabel: formatUkDateTime(selectedFixture.kickoffAt),
+                  venueName: selectedFixture.venue?.name ?? null,
+                }
+              : null
+          }
+          fixtures={appFixtureOptions}
+          members={appMemberOptions}
+          prospects={appProspectOptions}
+          selectedCount={selectedCount}
+          availabilityCounts={{
+            available: availabilityCounts.available,
+            maybe: availabilityCounts.maybe,
+            unavailable: availabilityCounts.unavailable,
+            noResponse: noResponseCount,
+          }}
+          savedMessage={savedMessage}
+          errorMessage={errorMessage}
+          action={createCaptainPlayerMatchFeesAction}
+        />
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -1136,6 +1233,8 @@ export default async function CaptainManagedPlayerMatchFeesPage({
           </div>
         </section>
       ) : null}
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
