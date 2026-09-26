@@ -25,6 +25,7 @@ import { processNotificationQueue } from "@/lib/notifications/processor";
 import { queueDirectNotification } from "@/lib/notifications/service";
 import { upsertTeamNotificationRecipient } from "@/lib/notifications/team-contacts";
 import { prisma } from "@/lib/prisma";
+import { savePlayerWeeklyAvailability, syncWeeklyAvailabilityToPublishedFixtures } from "@/lib/player-weekly-availability";
 
 const VALID_RESPONSES = new Set(["AVAILABLE", "MAYBE", "UNAVAILABLE"]);
 
@@ -262,6 +263,58 @@ function getSelectionState(input: {
     playerAlreadySelected: selectedMemberIds.has(input.teamMemberId),
     squadIsFull: targetSize > 0 && selectedMemberIds.size >= targetSize,
   };
+}
+
+
+export async function updatePlayerWeeklyAvailabilityAction(formData: FormData) {
+  const teamId = getString(formData, "teamId");
+  const date = getString(formData, "date");
+  const response = getString(formData, "response");
+  const note = getString(formData, "note") || null;
+  const requestedPreviewMembershipId =
+    getString(formData, "previewMembershipId") || null;
+
+  const redirectPath = (saved?: string) =>
+    getAvailabilityPath({
+      teamId,
+      saved,
+      previewMembershipId: requestedPreviewMembershipId,
+    });
+
+  if (
+    !teamId ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !VALID_RESPONSES.has(response)
+  ) {
+    redirect(redirectPath("invalid"));
+  }
+
+  const { teamMember } = await getPlayerActionContext({
+    teamId,
+    requestedPreviewMembershipId,
+    redirectPath,
+  });
+
+  await savePlayerWeeklyAvailability({
+    teamMemberId: teamMember.id,
+    date,
+    response: response as "AVAILABLE" | "MAYBE" | "UNAVAILABLE",
+    note,
+  });
+
+  await syncWeeklyAvailabilityToPublishedFixtures({
+    teamId,
+    teamMemberId: teamMember.id,
+    date,
+    response: response as "AVAILABLE" | "MAYBE" | "UNAVAILABLE",
+    note,
+  });
+
+  revalidatePath(`/player/team/${teamId}`);
+  revalidatePath(`/player/team/${teamId}/availability`);
+  revalidatePath(`/captain/team/${teamId}/availability`);
+
+  redirect(redirectPath("availability-updated"));
 }
 
 export async function updatePlayerFixtureAvailabilityAction(formData: FormData) {

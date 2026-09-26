@@ -332,8 +332,9 @@ model TeamMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  fixtureAvailabilities FixtureAvailability[]
-  fixtureSelections     FixtureSelection[]
+  fixtureAvailabilities  FixtureAvailability[]
+  weeklyAvailabilities   PlayerWeeklyAvailability[]
+  fixtureSelections      FixtureSelection[]
   playerMatchFees       PlayerMatchFee[]
 
   createdAt DateTime @default(now())
@@ -503,6 +504,25 @@ model FixtureCaptainConfirmation {
   @@index([teamId, status])
   @@index([confirmedByUserId])
   @@index([lastChasedAt])
+}
+
+model PlayerWeeklyAvailability {
+  id String @id @default(cuid())
+
+  teamMemberId     String
+  availabilityDate DateTime @db.Date
+  response         String   @default("NO_RESPONSE")
+  note             String?
+  respondedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([teamMemberId, availabilityDate])
+  @@index([availabilityDate, response])
+  @@index([teamMemberId, response])
 }
 
 model FixtureAvailability {

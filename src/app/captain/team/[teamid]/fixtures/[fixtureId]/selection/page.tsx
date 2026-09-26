@@ -13,6 +13,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { getTeamMemberSquadStatusMap } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
+import { backfillFixtureAvailabilityFromWeekly } from "@/lib/player-weekly-availability";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { updateFixtureSelectionAction } from "./actions";
 
@@ -152,9 +153,20 @@ export default async function CaptainFixtureSelectionPage({
     notFound();
   }
 
+  await backfillFixtureAvailabilityFromWeekly({
+    fixtureId,
+    teamId: teamid,
+    kickoffAt: fixture.kickoffAt,
+    teamMemberIds: team.members.map((member) => member.id),
+  });
+  const refreshedAvailability = await prisma.fixtureAvailability.findMany({
+    where: { fixtureId, teamMember: { teamId: teamid } },
+    select: { teamMemberId: true, response: true, note: true },
+  });
+
   const squadStatusByMemberId = await getTeamMemberSquadStatusMap(teamid);
   const availabilityByMemberId = new Map(
-    fixture.availabilities.map((item) => [item.teamMemberId, item]),
+    refreshedAvailability.map((item) => [item.teamMemberId, item]),
   );
   const selectionByMemberId = new Map(
     fixture.selections.map((item) => [item.teamMemberId, item]),
