@@ -60,6 +60,7 @@ export default function BulkLeadEmailForm({
   selectedArea,
   selectedNight,
   recipientCount,
+  selectedQuery,
   recipientPreview,
   managedTeamOptions,
   action,
@@ -78,6 +79,7 @@ export default function BulkLeadEmailForm({
     | "SUNDAY"
     | "ANY";
   recipientCount: number;
+  selectedQuery?: string;
   recipientPreview: RecipientPreviewItem[];
   managedTeamOptions: ManagedTeamOption[];
   action: (
@@ -183,6 +185,7 @@ export default function BulkLeadEmailForm({
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
       <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
       <input type="hidden" name="selectedNight" value={selectedNight ?? ""} />
+      <input type="hidden" name="selectedQuery" value={selectedQuery ?? ""} />
 
       {includedLeadIds.map((id) => (
         <input key={id} type="hidden" name="includedLeadIds" value={id} />
