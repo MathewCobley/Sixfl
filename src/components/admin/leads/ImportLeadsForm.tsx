@@ -49,8 +49,9 @@ export default function ImportLeadsForm() {
         <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
           <div className="font-semibold">Meta / Facebook lead exports are recognised automatically.</div>
           <div className="mt-1 text-sky-100/75">
-            SIXFL will read the Meta name, blank-headed email column, phone number, Facebook/Instagram source,
-            team-vs-player answer and start timing. Existing leads are skipped automatically by email or phone.
+            SIXFL will read the Meta name, email when supplied, phone number, Facebook/Instagram source,
+            team-vs-player answer and start timing. A valid email or UK mobile number is enough to import a lead,
+            and existing leads are skipped automatically by email or phone.
           </div>
         </div>
 
