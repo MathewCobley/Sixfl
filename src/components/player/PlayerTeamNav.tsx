@@ -178,12 +178,30 @@ export default function PlayerTeamNav({
       }
     }
 
+    function handleUnreadCountEvent(event: Event) {
+      const detail = (
+        event as CustomEvent<{ teamId?: string; count?: number }>
+      ).detail;
+      if (
+        detail?.teamId === teamId &&
+        Number.isSafeInteger(detail.count) &&
+        Number(detail.count) >= 0
+      ) {
+        setLiveUnreadChatCount(Number(detail.count));
+      }
+    }
+
     setLiveUnreadChatCount(unreadChatCount);
     void refreshUnreadCount();
     const timer = window.setInterval(refreshUnreadCount, 30000);
+    window.addEventListener("sixfl:chat-unread-count", handleUnreadCountEvent);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.removeEventListener(
+        "sixfl:chat-unread-count",
+        handleUnreadCountEvent,
+      );
     };
   }, [teamId, previewMembershipId, unreadChatCount]);
 
