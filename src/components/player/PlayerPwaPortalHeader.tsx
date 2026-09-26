@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
@@ -90,14 +91,16 @@ export default function PlayerPwaPortalHeader({
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.72rem)" }}
       >
         <div className="mx-auto grid w-full max-w-xl grid-cols-[6.2rem_minmax(0,1fr)_2.6rem] items-center gap-2">
-          <Image
-            src="/logo2.png"
-            alt="SIXFL"
-            width={180}
-            height={48}
-            priority
-            className="h-6 w-auto max-w-[6.2rem] object-contain object-left"
-          />
+          <Link href={`/player/team/${teamId}`} aria-label="SIXFL player home" className="flex min-h-9 items-center">
+            <Image
+              src="/logo2.png"
+              alt="SIXFL"
+              width={180}
+              height={48}
+              priority
+              className="h-6 w-auto max-w-[6.2rem] object-contain object-left"
+            />
+          </Link>
 
           <div className="min-w-0 text-center">
             <div className="truncate text-[13px] font-black tracking-tight text-white">
@@ -120,7 +123,6 @@ export default function PlayerPwaPortalHeader({
             )}
           </div>
         </div>
-        <span className="sr-only" data-player-header-team-id={teamId}>{teamId}</span>
       </header>
     </>
   );
