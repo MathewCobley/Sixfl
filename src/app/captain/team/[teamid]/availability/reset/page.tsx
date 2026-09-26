@@ -166,7 +166,21 @@ export default async function ResetFixtureAvailabilityPage({
   const errorMessage = sp.error ? decodeURIComponent(sp.error) : null;
 
   return (
-    <div className="space-y-6">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-availability-reset-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-availability-reset-page > section:first-child { border-radius:1.05rem !important; padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.1rem !important; line-height:1.25 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page > section:last-child { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page > section:last-child > div:first-child { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page article { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page article > div { display:grid !important; gap:.65rem !important; grid-template-columns:minmax(0,1fr) !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page article h3 { font-size:.82rem !important; line-height:1.1rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page article form { padding:.65rem !important; border-radius:.8rem !important; }
+        body:has(.captain-app-header) .captain-availability-reset-page article button { min-height:2.65rem !important; width:100% !important; font-size:.72rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-availability-reset-page space-y-6">
       <section className="overflow-hidden rounded-3xl border border-amber-400/20 bg-amber-500/10 p-6">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100/70">Fixture reset</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Reset availability for a rearranged fixture</h1>
@@ -245,5 +259,6 @@ export default async function ResetFixtureAvailabilityPage({
         </div>
       </section>
     </div>
+    </>
   );
 }
