@@ -2,8 +2,8 @@
 .home { display: grid; gap: 12px; min-width: 0; padding: 4px 2px 8px; }
 .home *, .menu *, .appHeader *, .bottomNav * { box-sizing: border-box; }
 
-.identity { overflow: hidden; border: 1px solid #24463a; border-radius: 22px; background: radial-gradient(circle at top right, rgba(14,165,233,.12), transparent 38%), linear-gradient(145deg,#0b1a22,#09140f); box-shadow: 0 14px 42px rgba(0,0,0,.28); }
-.identityTop { display: flex; align-items: center; gap: 12px; padding: 13px 13px 11px; }
+.identity { overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.identityTop { display: flex; align-items: center; gap: 12px; padding: 8px 7px 9px; }
 .identityBadge { display: grid; width: 58px; height: 58px; flex: 0 0 58px; place-items: center; overflow: hidden; border: 2px solid rgba(125,211,252,.25); border-radius: 50%; background: rgba(0,0,0,.3); color: #d7f8e8; font-size: 15px; font-weight: 800; }
 .identityBadge img { display: block; max-width: 52px; max-height: 52px; object-fit: contain; }
 .identityText { min-width: 0; flex: 1; }
@@ -13,14 +13,14 @@
 .rolePill { border: 1px solid rgba(52,211,153,.3); background: rgba(16,185,129,.12); color: #b7f7d4; }
 .positionPill { border: 1px solid rgba(125,211,252,.25); background: rgba(14,165,233,.1); color: #c6ecff; }
 
-.summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0 12px 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: rgba(0,0,0,.25); }
+.summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.055); border-radius: 13px; background: rgba(0,0,0,.18); }
 .metric { display: grid; min-width: 0; min-height: 58px; place-content: center; gap: 3px; padding: 7px 4px; color: #eef5f1; text-align: center; text-decoration: none; }
 .metric + .metric { border-left: 1px solid rgba(255,255,255,.08); }
 .metric strong { overflow: hidden; color: #f5f8f7; font-size: clamp(14px,4.2vw,18px); line-height: 1.15; font-weight: 800; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .metric strong[data-attention] { color: #f7d58c; }
 .metric > span { color: rgba(255,255,255,.46); font-size: 9px; line-height: 1.25; }
 
-.matchCard { display: block; min-width: 0; padding: 13px; color: #f5f8f7; text-decoration: none; border: 1px solid rgba(56,189,248,.35); border-radius: 22px; background: radial-gradient(circle at top left,rgba(14,165,233,.18),transparent 42%), linear-gradient(145deg,#0b1e2a,#091611); box-shadow: 0 14px 42px rgba(0,0,0,.24); }
+.matchCard { display: block; min-width: 0; padding: 13px; color: #f5f8f7; text-decoration: none; border: 1px solid rgba(56,189,248,.2); border-radius: 20px; background: radial-gradient(circle at top left,rgba(14,165,233,.12),transparent 42%), rgba(8,24,20,.72); box-shadow: none; }
 .matchHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .matchHeadingLabel { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .matchHeadingLabel svg { width: 16px; height: 16px; flex-shrink: 0; color: #7dd3fc; }
@@ -45,8 +45,8 @@
 .matchAction { display: inline-flex; align-items: center; gap: 2px; color: #7dd3fc; font-size: 10px; font-weight: 750; }
 .matchAction svg { width: 14px; height: 14px; }
 
-.tableShortcut { display: flex; min-width: 0; min-height: 62px; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid rgba(52,211,153,.28); border-radius: 18px; color: #f5f8f7; text-decoration: none; background: linear-gradient(135deg,rgba(16,185,129,.11),rgba(14,165,233,.07)); }
-.tableShortcutIcon { display: grid; width: 38px; height: 38px; flex: 0 0 38px; place-items: center; border: 1px solid rgba(52,211,153,.26); border-radius: 12px; background: rgba(16,185,129,.1); }
+.tableShortcut { display: flex; min-width: 0; min-height: 58px; align-items: center; gap: 11px; padding: 9px 10px; border: 1px solid rgba(52,211,153,.12); border-radius: 15px; color: #f5f8f7; text-decoration: none; background: rgba(255,255,255,.022); }
+.tableShortcutIcon { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; border: 1px solid rgba(52,211,153,.2); border-radius: 11px; background: rgba(16,185,129,.07); }
 .tableShortcutIcon svg { width: 21px; height: 21px; color: #6ee7b7; }
 .tableShortcutText { min-width: 0; flex: 1; }
 .tableShortcutText strong, .tableShortcutText small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

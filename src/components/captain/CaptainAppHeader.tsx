@@ -16,6 +16,7 @@ export default function CaptainAppHeader({ teamId, teamName, teamLogoUrl }: {
   teamLogoUrl: string | null;
 }) {
   const { title } = getCaptainAppSection(usePathname(), teamId);
+  const headerTitle = title === "Home" ? "Captain Portal" : title;
   return (
     <header className={`captain-app-header ${styles.appHeader}`}>
       <div className={styles.headerInner}>
@@ -23,7 +24,7 @@ export default function CaptainAppHeader({ teamId, teamName, teamLogoUrl }: {
           <img src="/logo2.png" alt="SIXFL" width={88} height={26} />
         </Link>
         <div className={styles.headerTitle}>
-          <strong>{title}</strong>
+          <strong>{headerTitle}</strong>
           {title !== "Home" ? <span>{teamName}</span> : null}
         </div>
         <Link href={`/captain/team/${teamId}/more`} aria-label={`More options for ${teamName}`} className={styles.badgeLink}>
