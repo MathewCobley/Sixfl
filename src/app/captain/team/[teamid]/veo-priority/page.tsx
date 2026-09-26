@@ -43,7 +43,21 @@ export default async function CaptainPriorityScorePage({
     null;
 
   return (
-    <div className="space-y-6">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-priority-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child { border-radius:1.05rem !important; box-shadow:none !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child > div { padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child div[class*="sm:grid-cols-3"] { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.4rem !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child div[class*="sm:grid-cols-3"] > div { padding:.6rem !important; border-radius:.8rem !important; }
+        body:has(.captain-app-header) .captain-priority-page > section:first-child div[class*="sm:grid-cols-3"] p { display:none !important; }
+        body:has(.captain-app-header) .captain-priority-page [aria-label="SIXFL TV Priority"] { border-radius:1.05rem !important; padding:.8rem !important; display:grid !important; gap:.65rem !important; }
+        body:has(.captain-app-header) .captain-priority-page [aria-label="SIXFL TV Priority"] div[class*="sm:grid-cols-4"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:.45rem !important; }
+        body:has(.captain-app-header) .captain-priority-page [aria-label="SIXFL TV Priority"] div[class*="sm:grid-cols-5"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:.45rem !important; }
+      `}</style>
+      <div className="captain-priority-page space-y-6">
       <section className="captain-app-secondary overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_right,rgba(217,70,239,0.14),transparent_35%),rgba(255,255,255,0.035)]">
         <div className="px-5 py-6 sm:px-7 sm:py-7">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-fuchsia-200/70">
@@ -107,5 +121,6 @@ export default async function CaptainPriorityScorePage({
         </section>
       )}
     </div>
+    </>
   );
 }
