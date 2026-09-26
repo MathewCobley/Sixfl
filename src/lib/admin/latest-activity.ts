@@ -6,6 +6,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { getAdminPaymentActivity } from "./payment-activity";
+import { getAdminLeadDecisionActivity } from "./lead-decision-activity";
 
 export type AdminActivityKind =
   | "APP_MESSAGE"
@@ -79,6 +80,7 @@ export async function getAdminLatestActivity(limit = 50): Promise<AdminActivityI
     cupResponses,
     results,
     disputes,
+    leadDecisions,
   ] = await Promise.all([
     prisma.portalMessage.findMany({
       where: {
@@ -251,6 +253,7 @@ export async function getAdminLatestActivity(limit = 50): Promise<AdminActivityI
         },
       },
     }),
+    getAdminLeadDecisionActivity(sourceLimit),
   ]);
 
   const activity: AdminActivityItem[] = [];
@@ -313,7 +316,7 @@ export async function getAdminLatestActivity(limit = 50): Promise<AdminActivityI
     });
   }
 
-  activity.push(...paymentActivity);
+  activity.push(...paymentActivity, ...leadDecisions);
 
   for (const confirmation of confirmations) {
     if (confirmation.confirmedByUser?.role === "ADMIN") continue;
