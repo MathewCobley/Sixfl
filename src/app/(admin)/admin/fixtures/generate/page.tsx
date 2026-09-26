@@ -354,7 +354,7 @@ export default async function FixtureGeneratorPage({
           <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
             <h3 className="text-lg font-semibold text-white">What happens after you click generate?</h3>
             <p className="mt-2 text-sm leading-6 text-amber-50/70">
-              Fixtures are saved as unpublished drafts with the teams’ standard match fee attached. No team payment requests are sent until fixtures are published.
+              Fixtures are saved as unpublished drafts with each team’s fee attached. If free double-headers are selected, a team’s second game on the same fixture night is stored at £0. No team payment requests are sent until fixtures are published.
             </p>
           </div>
 
