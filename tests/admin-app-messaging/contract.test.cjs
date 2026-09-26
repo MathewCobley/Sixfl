@@ -145,3 +145,25 @@ test("Comms and Chat keep independent sidebar alert badges", () => {
   assert.match(sidebar, /sixflSupportNeedsReplyCount > 0/);
   assert.match(layout, /"\/admin\/chat#sixfl-inbox"/);
 });
+
+
+test("Comms opens on team conversations and keeps senders behind a Send messages tab", () => {
+  const page = read("src/app/(admin)/admin/messaging/page.tsx");
+  const tabs = read("src/components/admin/communications/CommunicationsTabs.tsx");
+
+  assert.match(tabs, /label: "Inbox"/);
+  assert.match(tabs, /href: "\/admin\/messaging\?view=send"/);
+  assert.match(tabs, /label: "Send messages"/);
+  assert.match(tabs, /searchParams\.get\("view"\) === "send"/);
+
+  assert.match(page, /const selectedView = sp\.view === "send" \? "send" : "inbox"/);
+  assert.match(page, /selectedView === "inbox"[\s\S]*<AdminMessagesInbox/);
+  assert.match(page, /selectedView === "send"[\s\S]*<CommunicationsTeamLauncher/);
+  assert.match(page, /selectedView === "send"[\s\S]*<CommunicationsProspectLauncher/);
+  assert.match(page, /selectedView === "send"[\s\S]*<CommunicationsLeagueLauncher/);
+  assert.match(page, /selectedView === "send"[\s\S]*<CommunicationsLeadLauncher/);
+
+  const sendStart = page.indexOf('{selectedView === "send" ? (');
+  const inboxStart = page.indexOf('{selectedView === "inbox" ? (', sendStart);
+  assert.ok(sendStart >= 0 && inboxStart > sendStart);
+});
