@@ -73,6 +73,7 @@ const Home = load("src/components/player/PlayerAppHome.tsx", {
 });
 const Header = load("src/components/player/PlayerPwaPortalHeader.tsx", {
   "next/image": { __esModule: true, default: NextImage },
+  "next/link": Link,
   "next/navigation": navigation,
   "@heroicons/react/24/solid": solid,
 });
