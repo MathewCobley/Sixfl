@@ -1,0 +1,35 @@
+name: Portal closed-system links
+
+on:
+  pull_request:
+    paths:
+      - "src/app/captain/team/**"
+      - "src/app/player/team/**"
+      - "src/app/(public)/referee/**"
+      - "src/components/captain/**"
+      - "src/components/player/**"
+      - "src/components/referee/**"
+      - "src/components/news/LatestNews.tsx"
+      - "src/components/news/NewsCard.tsx"
+      - "tests/app-closed-system.test.cjs"
+      - ".github/workflows/app-closed-system.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-closed-system-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify app links stay inside their portal
+        run: node --test tests/app-closed-system.test.cjs

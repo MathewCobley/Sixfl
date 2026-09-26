@@ -181,8 +181,19 @@ test("repository-wide scan finds no alternate public report links or implementat
         const source = read(file);
         if (!/weekly-report|matchweek.?report/i.test(source)) continue;
         matches.push(file);
-        const publiclyReachable = file.startsWith("src/app/(public)/") || file.startsWith("src/app/captain/") || file.startsWith("src/components/leagues/");
-        if (publiclyReachable) assert.equal(file, legacyPath, `Unexpected private-report exposure in ${file}`);
+        const publiclyReachable = file.startsWith("src/app/(public)/") || file.startsWith("src/app/captain/") || file.startsWith("src/app/player/") || file.startsWith("src/components/leagues/");
+        const publishedPortalReaders = new Set([
+          "src/app/captain/team/[teamid]/news/page.tsx",
+          "src/app/captain/team/[teamid]/more/page.tsx",
+          "src/app/player/team/[teamid]/news/page.tsx",
+          "src/app/player/team/[teamid]/more/page.tsx",
+        ]);
+        if (publiclyReachable) {
+          assert.ok(
+            file === legacyPath || publishedPortalReaders.has(file),
+            `Unexpected private-report exposure in ${file}`,
+          );
+        }
       }
     }
   }

@@ -9,15 +9,17 @@ export default function NewsCard({
   featured = false,
   compact = false,
   integrated = false,
+  articleHref,
 }: {
   news: PublishedNews;
   teamId?: string;
   featured?: boolean;
   compact?: boolean;
   integrated?: boolean;
+  articleHref?: string;
 }) {
   const a = news.article;
-  const url = newsPath(news.leagueSlug, a.matchDate);
+  const url = articleHref ?? newsPath(news.leagueSlug, a.matchDate);
   const teamMatches = a.matches.filter((m) => teamId && [m.teamAId, m.teamBId].includes(teamId));
   const goals = a.matches.reduce((sum, match) => sum + match.scoreA + match.scoreB, 0);
 

@@ -9,6 +9,7 @@ import {
   NotificationDispatchStatus,
 } from "@prisma/client";
 
+import CopyToClipboardButton from "@/components/admin/CopyToClipboardButton";
 import ProspectInterestChaseCard from "@/components/captain/prospects/ProspectInterestChaseCard";
 import FormListboxField from "@/components/ui/FormListboxField";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -234,7 +235,7 @@ function getPromotionState(input: {
         : "Already in the active squad. They can register later and will link when added as a SIXFL user.",
       tone: "muted",
       showSignupCta: !input.hasLinkedUser,
-      signupLabel: "Open signup link",
+      signupLabel: "Copy signup link",
     };
   }
 
@@ -254,7 +255,7 @@ function getPromotionState(input: {
       reason: "You can promote this prospect now. They will show in the squad straight away, and you can get them to register later using the same email.",
       tone: "warning",
       showSignupCta: true,
-      signupLabel: "Open signup link",
+      signupLabel: "Copy signup link",
     };
   }
 
@@ -369,7 +370,6 @@ export default async function CaptainProspectsPage({
 
   const savedMessage = getSavedMessage(filters.saved);
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
-  const joinUrl = team.joinSlug ? `/teams/join/${team.joinSlug}` : null;
   const absoluteJoinUrl = team.joinSlug
     ? `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/teams/join/${team.joinSlug}`
     : `${process.env.NEXTAUTH_URL ?? "https://www.sixfl.co.uk"}/register-interest`;
@@ -393,7 +393,7 @@ export default async function CaptainProspectsPage({
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href={`/captain/team/${teamid}`} className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">Back to overview</Link>
               <Link href={`/captain/team/${teamid}/squad`} className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20">Open squad</Link>
-              {joinUrl ? <a href={joinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">Open join page</a> : null}
+              {team.joinSlug ? <CopyToClipboardButton text={absoluteJoinUrl} label="Copy signup link" className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white" /> : null}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
@@ -531,7 +531,7 @@ export default async function CaptainProspectsPage({
                         <input type="hidden" name="prospectId" value={prospect.id} />
                         <button type="submit" disabled={!promotionState.canPromote} className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition ${promotionState.canPromote ? "border border-emerald-400/30 bg-emerald-500/15 text-emerald-50 hover:bg-emerald-500/20" : "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"}`}>Promote to squad</button>
                       </form>
-                      {promotionState.showSignupCta ? <a href={joinUrl ?? absoluteJoinUrl} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white">{promotionState.signupLabel}</a> : null}
+                      {promotionState.showSignupCta ? <CopyToClipboardButton text={absoluteJoinUrl} label={promotionState.signupLabel} className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white" /> : null}
                     </div>
                   </div>
 

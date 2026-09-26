@@ -81,16 +81,18 @@ const tabs = (
     exact: false,
   },
   {
-    href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
-      previewMembershipId
-        ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
-        : ""
-    }`,
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/goal-of-the-month`,
+      previewMembershipId,
+    ),
     label: "Goal of the Month",
     exact: false,
   },
   {
-    href: "/player/referrals",
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/referrals`,
+      previewMembershipId,
+    ),
     label: "Refer a team · £75",
     exact: false,
   },
