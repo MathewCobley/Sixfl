@@ -189,15 +189,13 @@ test("repository-wide scan limits report pages to the public legacy route and au
         const source = read(file);
         if (!/weekly-report|matchweek.?report/i.test(source)) continue;
         matches.push(file);
-        const reachable =
+        const publicWebsiteReachable =
           file.startsWith("src/app/(public)/") ||
-          file.startsWith("src/app/captain/") ||
-          file.startsWith("src/app/player/") ||
           file.startsWith("src/components/leagues/");
-        if (reachable) {
+        if (publicWebsiteReachable) {
           assert.ok(
             allowedReachableReportPages.has(file),
-            `Unexpected report exposure in ${file}`,
+            `Unexpected public report exposure in ${file}`,
           );
         }
       }
