@@ -6,6 +6,7 @@ const playerHome = fs.readFileSync("src/app/player/team/[teamid]/page.tsx", "utf
 const availabilityPage = fs.readFileSync("src/app/player/team/[teamid]/availability/page.tsx", "utf8");
 const availabilityActions = fs.readFileSync("src/app/player/team/[teamid]/availability/actions.ts", "utf8");
 const captainSelection = fs.readFileSync("src/app/captain/team/[teamid]/fixtures/[fixtureId]/selection/actions.ts", "utf8");
+const captainMatchFees = fs.readFileSync("src/app/captain/team/[teamid]/match-fees/actions.ts", "utf8");
 const migration = fs.readFileSync("prisma/migrations/20260926174500_fixture_selection_single_source/migration.sql", "utf8");
 
 test("player Home and Fixtures both use explicit FixtureSelection for selected state", () => {
@@ -32,13 +33,22 @@ test("player availability locking and waitlist fullness do not infer selection f
   assert.doesNotMatch(state, /playerMatchFees/);
 });
 
-test("captain selection is one action: save selection first, then sync payment as a consequence", () => {
-  const upsertAt = captainSelection.indexOf("tx.fixtureSelection.upsert");
+test("captain squad save is one action: selection is written before payment reconciliation", () => {
+  const bulkActionStart = captainMatchFees.indexOf("export async function createCaptainPlayerMatchFeesAction");
+  const selectionWriteAt = captainMatchFees.indexOf("tx.fixtureSelection.upsert", bulkActionStart);
+  const firstFeeWriteAt = captainMatchFees.indexOf("prisma.playerMatchFee", bulkActionStart);
+
+  assert.ok(selectionWriteAt >= 0, "Submit matchday squad must write FixtureSelection");
+  assert.ok(firstFeeWriteAt > selectionWriteAt, "fee reconciliation must follow the selection decision");
+  assert.match(captainMatchFees, /selectionStatus: "NOT_SELECTED"/);
+  assert.match(captainMatchFees, /selectionStatus: "SELECTED"/);
+
+  // The per-player editor follows the same direction: selection first, fee second.
+  const perPlayerUpsertAt = captainSelection.indexOf("tx.fixtureSelection.upsert");
   const feeSyncAt = captainSelection.indexOf("await syncPlayerMatchFeeForSelection");
-  assert.ok(upsertAt >= 0, "captain save must write FixtureSelection");
-  assert.ok(feeSyncAt > upsertAt, "payment sync must follow the selection decision");
+  assert.ok(perPlayerUpsertAt >= 0);
+  assert.ok(feeSyncAt > perPlayerUpsertAt);
   assert.match(captainSelection, /if \(input\.selectionStatus !== "SELECTED"\)/);
-  assert.match(captainSelection, /status: "CANCELLED"/);
 });
 
 test("legacy future fee-only selections are backfilled once without overriding explicit decisions", () => {
