@@ -159,16 +159,6 @@ async function getFixtureSelectionContext(input: {
           matchdayTargetSize: true,
         },
       },
-      playerMatchFees: {
-        where: {
-          teamId: input.teamId,
-          status: { not: "CANCELLED" },
-        },
-        select: {
-          teamMemberId: true,
-          status: true,
-        },
-      },
       selections: {
         where: {
           teamMember: { teamId: input.teamId },
@@ -262,10 +252,9 @@ function getSelectionState(input: {
       ? input.fixture.homeTeam.matchdayTargetSize ?? 0
       : input.fixture.awayTeam.matchdayTargetSize ?? 0;
   const selectedMemberIds = new Set(
-    [
-      ...input.fixture.playerMatchFees.map((fee) => fee.teamMemberId),
-      ...input.fixture.selections.map((selection) => selection.teamMemberId),
-    ].filter((id): id is string => Boolean(id)),
+    input.fixture.selections
+      .map((selection) => selection.teamMemberId)
+      .filter((id): id is string => Boolean(id)),
   );
 
   return {
