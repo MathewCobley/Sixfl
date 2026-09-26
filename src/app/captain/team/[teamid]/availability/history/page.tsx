@@ -4,6 +4,7 @@
 // Note: Next.js route params for this segment are intentionally lowercase `teamid`.
 
 import Link from "next/link";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -339,7 +340,208 @@ export default async function CaptainAvailabilityHistoryPage({
   ).length;
 
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
+          <header className="rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
+              Availability
+            </p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-xl font-black tracking-tight">Availability history</h1>
+                <p className="mt-1 text-[11px] leading-4 text-white/40">
+                  See who responds reliably and review previous matchday availability.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full border border-white/10 bg-black/15 px-2.5 py-1 text-[10px] font-bold text-white/45">
+                {fixtures.length} fixtures
+              </span>
+            </div>
+            <Link
+              href={"/captain/team/" + teamid + "/availability"}
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-100"
+            >
+              Current availability
+            </Link>
+          </header>
+
+          <section className="grid grid-cols-4 gap-1.5" aria-label="Historic availability totals">
+            {[
+              ["Available", totalAvailable, "text-emerald-200"],
+              ["Maybe", totalMaybe, "text-amber-200"],
+              ["Out", totalUnavailable, "text-red-200"],
+              ["Ignored", totalIgnored, "text-white/55"],
+            ].map(([label, value, tone]) => (
+              <div key={String(label)} className="rounded-xl border border-white/[0.07] bg-black/15 px-2 py-2 text-center">
+                <div className={"text-lg font-black tabular-nums " + tone}>{value}</div>
+                <div className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-white/30">{label}</div>
+              </div>
+            ))}
+          </section>
+
+          <section className="overflow-hidden rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035]">
+            <div className="border-b border-white/[0.07] px-3.5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-black text-white">Who needs chasing?</h2>
+                  <p className="mt-0.5 text-[10px] text-white/35">Worst responders shown first.</p>
+                </div>
+                <div className="flex gap-1">
+                  <span className="rounded-lg border border-red-400/20 bg-red-500/10 px-2 py-1 text-[9px] font-black text-red-100">{neverRespondedCount} never</span>
+                  <span className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-black text-emerald-100">{reliableCount} reliable</span>
+                </div>
+              </div>
+            </div>
+
+            {playerReliability.length === 0 ? (
+              <div className="p-4 text-sm text-white/45">No squad members found yet.</div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {playerReliability.map((player) => (
+                  <details key={player.member.id} className="group">
+                    <summary className="cursor-pointer list-none px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-black text-white">{player.memberName}</div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                              <div
+                                className="h-full rounded-full bg-emerald-400/80"
+                                style={{ width: `${Math.min(player.responseRate, 100)}%` }}
+                              />
+                            </div>
+                            <span className="shrink-0 text-[10px] font-bold tabular-nums text-white/45">
+                              {formatPercent(player.responseRate)}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={"shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold " + getReliabilityClasses(player.reliabilityLabel)}>
+                          {player.reliabilityLabel}
+                        </span>
+                      </div>
+                    </summary>
+                    <div className="border-t border-white/[0.06] bg-black/10 p-3.5">
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          ["Ignored", player.ignored, "text-red-200"],
+                          ["Available", player.available, "text-emerald-200"],
+                          ["Maybe", player.maybe, "text-amber-200"],
+                          ["Selected", player.selected, "text-violet-200"],
+                        ].map(([label, value, tone]) => (
+                          <div key={String(label)} className="rounded-xl border border-white/[0.06] bg-black/15 p-2 text-center">
+                            <div className={"text-sm font-black tabular-nums " + tone}>{value}</div>
+                            <div className="text-[8px] uppercase tracking-wide text-white/25">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-white/35">
+                        Last response: {formatShortDate(player.lastRespondedAt)}
+                      </p>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <div className="px-1">
+              <h2 className="text-sm font-black text-white">Previous fixtures</h2>
+              <p className="mt-0.5 text-[10px] text-white/35">Tap a fixture to see every player&apos;s response and selection.</p>
+            </div>
+            {fixtures.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/45">
+                No previous fixtures found yet.
+              </div>
+            ) : (
+              fixtures.map((fixture) => {
+                const availabilityByMemberId = new Map(
+                  fixture.availabilities.map((item) => [item.teamMemberId, item]),
+                );
+                const selectionByMemberId = new Map(
+                  fixture.selections.map((item) => [item.teamMemberId, item]),
+                );
+                const availableCount = fixture.availabilities.filter((item) => item.response === "AVAILABLE").length;
+                const maybeCount = fixture.availabilities.filter((item) => item.response === "MAYBE").length;
+                const unavailableCount = fixture.availabilities.filter((item) => item.response === "UNAVAILABLE").length;
+                const respondedCount = fixture.availabilities.filter((item) => item.response !== "NO_RESPONSE").length;
+                const ignoredCount = Math.max(team.members.length - respondedCount, 0);
+                const selectedCount = fixture.selections.filter((item) => item.selectionStatus === "SELECTED").length;
+                const resultLabel = fixture.result
+                  ? fixture.result.homeScore + " - " + fixture.result.awayScore
+                  : "No result";
+
+                return (
+                  <details key={fixture.id} className="group overflow-hidden rounded-[1.1rem] border border-white/[0.07] bg-white/[0.03]">
+                    <summary className="cursor-pointer list-none px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-black text-white/80">
+                            {getFixtureLabel({
+                              homeTeamName: fixture.homeTeam.name,
+                              awayTeamName: fixture.awayTeam.name,
+                            })}
+                          </div>
+                          <div className="mt-1 text-[10px] leading-4 text-white/35">
+                            {formatDateTime(fixture.kickoffAt)} · {resultLabel}
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold text-violet-200">
+                          {selectedCount} selected
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-100">A {availableCount}</span>
+                        <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-100">M {maybeCount}</span>
+                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-bold text-red-100">Out {unavailableCount}</span>
+                        <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[9px] font-bold text-white/40">No reply {ignoredCount}</span>
+                      </div>
+                    </summary>
+                    <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                      {team.members.map((member) => {
+                        const availability = availabilityByMemberId.get(member.id);
+                        const selection = selectionByMemberId.get(member.id);
+                        const response = availability?.response ?? "NO_RESPONSE";
+                        const selectionStatus = selection?.selectionStatus ?? "NOT_SELECTED";
+                        const memberName = member.user.name || member.user.email || "Unnamed user";
+                        return (
+                          <div key={member.id} className="px-3.5 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-black text-white/75">{memberName}</div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  <span className={"rounded-full border px-2 py-0.5 text-[9px] font-bold " + getResponseClasses(response)}>
+                                    {getResponseLabel(response)}
+                                  </span>
+                                  {selectionStatus !== "NOT_SELECTED" ? (
+                                    <span className={"rounded-full border px-2 py-0.5 text-[9px] font-bold " + getSelectionClasses(selectionStatus)}>
+                                      {getSelectionLabel(selectionStatus)}
+                                    </span>
+                                  ) : null}
+                                  {selection?.isCaptain ? <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold text-amber-100">Captain</span> : null}
+                                  {selection?.isGoalkeeper ? <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[9px] font-bold text-sky-100">GK</span> : null}
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-[9px] text-white/30">
+                                {formatRespondedAt(availability?.respondedAt ?? null)}
+                              </span>
+                            </div>
+                            {availability?.note ? <p className="mt-1.5 text-[10px] leading-4 text-white/35">{availability.note}</p> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                );
+              })
+            )}
+          </section>
+        </main>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
@@ -685,6 +887,8 @@ export default async function CaptainAvailabilityHistoryPage({
           })}
         </div>
       )}
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
