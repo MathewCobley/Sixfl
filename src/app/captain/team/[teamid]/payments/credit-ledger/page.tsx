@@ -66,7 +66,22 @@ export default async function TeamCreditLedgerPage({
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-credit-ledger-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > div:first-child { gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > div:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > div:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > div:first-child a { min-height:2.65rem !important; width:100% !important; border-radius:.8rem !important; font-size:.72rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > section:first-of-type { border-radius:1.05rem !important; padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > section:first-of-type p:nth-child(2) { margin-top:.25rem !important; font-size:1.65rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > section:last-of-type { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page > section:last-of-type > div:first-child { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page article { padding:.75rem .85rem !important; grid-template-columns:minmax(0,1fr) auto !important; gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page article > div:nth-child(2) { text-align:right !important; }
+        body:has(.captain-app-header) .captain-credit-ledger-page article > div:nth-child(3) { grid-column:1 / -1; display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,.06); padding-top:.5rem; }
+      `}</style>
+      <div className="captain-credit-ledger-page space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/60">
@@ -165,5 +180,6 @@ export default async function TeamCreditLedgerPage({
         </p>
       ) : null}
     </div>
+    </>
   );
 }
