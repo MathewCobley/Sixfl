@@ -57,7 +57,11 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/phone-chrome-browser" --no-save --package-lock=false playwright@1.55.0 esbuild@0.27.4
           node "$RUNNER_TEMP/phone-chrome-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
       - name: Real hydrated chrome scrolling in phone modes and PC iframe
-        run: NODE_PATH="$RUNNER_TEMP/phone-chrome-browser/node_modules" node tests/phone-app-chrome/browser.cjs
+        shell: bash
+        run: |
+          mkdir -p artifacts/phone-app-chrome
+          set -o pipefail
+          NODE_PATH="$RUNNER_TEMP/phone-chrome-browser/node_modules" node tests/phone-app-chrome/browser.cjs 2>&1 | tee artifacts/phone-app-chrome/browser-output.log
       - name: Retain prepared product source and role inventory
         if: always() && steps.checkout.outcome == 'success'
         run: |
