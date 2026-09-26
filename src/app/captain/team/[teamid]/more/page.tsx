@@ -12,6 +12,7 @@ import {
   DocumentCheckIcon,
   GiftIcon,
   LifebuoyIcon,
+  NewspaperIcon,
   PlayCircleIcon,
   ShieldCheckIcon,
   ShoppingBagIcon,
@@ -36,6 +37,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
       { href: `${base}/match-fees`, label: "Matchday squad", icon: UserGroupIcon },
       { href: `${base}/payments`, label: "Team payments", icon: BanknotesIcon },
       { href: `${base}/results-history`, label: "Team results", icon: TrophyIcon },
+      { href: `${base}/news`, label: "Matchweek reports", icon: NewspaperIcon },
     ] },
     { label: "Team", rows: [
       { href: `${base}/player-pool`, label: "PlayerPool", icon: UserGroupIcon },
