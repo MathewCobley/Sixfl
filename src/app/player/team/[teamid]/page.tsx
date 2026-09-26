@@ -21,6 +21,7 @@ import PlayerAppHome from "@/components/player/PlayerAppHome";
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
+import { getLeagueStandings } from "@/lib/standings";
 import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
 import { prisma } from "@/lib/prisma";
 import {
@@ -239,6 +240,10 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   if (!team) notFound();
 
+  const leagueStandingsPromise = team.league?.id
+    ? getLeagueStandings(team.league.id)
+    : Promise.resolve(null);
+
   const now = new Date();
   const publishedFixtureFilter = { publishedAt: { not: null } };
   const feeLookupEmails = Array.from(
@@ -262,7 +267,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       ]
     : [];
 
-  const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
+  const [upcomingFixtures, recentFixtures, squadMembers, playerFees, leagueStandings] = await Promise.all([
     prisma.fixture.findMany({
       where: {
         ...publishedFixtureFilter,
@@ -355,7 +360,21 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           },
         })
       : Promise.resolve([]),
+    leagueStandingsPromise,
   ]);
+
+  const leagueDivision = leagueStandings?.divisions.find((candidate) =>
+    candidate.rows.some((row) => row.teamId === teamid),
+  );
+  const hasPopulatedDivisions = Boolean(
+    leagueStandings?.hasDivisions &&
+    leagueStandings.divisions.some((candidate) => candidate.rows.length > 0),
+  );
+  const leagueTableRows = leagueDivision?.rows ??
+    (hasPopulatedDivisions ? [] : leagueStandings?.rows ?? []);
+  const leagueTableTitle = leagueDivision
+    ? `${team.league?.name ?? "League"} · ${leagueDivision.name}`
+    : team.league?.name ?? null;
 
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
   const paidFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.PAID);
@@ -497,6 +516,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           nextSelectionStatus={nextSelectionStatus}
           unreadChatCount={unreadChatCount}
           previewMembershipId={previewMembership?.id ?? null}
+          leagueTableRows={leagueTableRows}
+          leagueTableTitle={leagueTableTitle}
         />
       </PlayerPwaModeOnly>
       <PlayerPwaModeOnly mode="web">
