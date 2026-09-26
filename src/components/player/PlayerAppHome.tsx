@@ -103,10 +103,6 @@ function selectionCopy(status: PlayerSelectionStatus) {
 
 export default function PlayerAppHome({
   teamId,
-  teamName,
-  teamLogoUrl,
-  playerName,
-  playerImageUrl,
   playerRoleLabel,
   squadNumber,
   preferredPosition,
