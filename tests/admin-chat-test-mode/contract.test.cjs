@@ -56,3 +56,16 @@ test("admin messaging audit includes ADMIN test messages", () => {
   assert.match(dashboard, /PortalMessageSenderRole\.CAPTAIN/);
   assert.match(dashboard, /PortalMessageSenderRole\.PLAYER/);
 });
+
+
+test("admin SIXFL inbox hides empty support conversations", () => {
+  const dashboard = read("src/lib/admin/app-messaging.ts");
+  const page = read("src/app/(admin)/admin/chat/page.tsx");
+
+  assert.match(
+    dashboard,
+    /conversation\.type !== PortalConversationType\.SIXFL[\s\S]*conversation\.messages\.length > 0/,
+  );
+  assert.match(page, /conversation\.conversationType === "SIXFL"/);
+  assert.match(page, /No messages in this conversation yet/);
+});
