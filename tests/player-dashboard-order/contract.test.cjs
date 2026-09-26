@@ -23,7 +23,8 @@ function load(file, mocks, source = read(file)) {
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', 'fetch', code)(id => {
     if (Object.hasOwn(mocks, id)) return mocks[id];
-    if (id === 'react' || id === 'react/jsx-runtime') return require(id);
+    if (id === '@/components/pwa/PinnedAppChrome') return load('src/components/pwa/PinnedAppChrome.tsx', mocks);
+    if (id === 'react' || id === 'react-dom' || id === 'react/jsx-runtime') return require(id);
     if (id === 'next/link') return ({ children, ...props }) => h('a', props, children);
     throw Error(`Unexpected dependency ${id} in ${file}`);
   }, mod, mod.exports, () => { throw Error('External request forbidden'); });

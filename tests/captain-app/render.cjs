@@ -53,7 +53,7 @@ function harness(options = {}) {
           logoUrl: options.teamLogoUrl || null,
         };
       } } } };
-      if (['react', 'react/jsx-runtime', '@heroicons/react/24/outline'].includes(id)) return require(id);
+      if (['react', 'react-dom', 'react/jsx-runtime', '@heroicons/react/24/outline'].includes(id)) return require(id);
       if (id.startsWith('@/') || id.startsWith('.')) {
         const target = id.startsWith('@/') ? path.resolve('src', id.slice(2)) : path.resolve(path.dirname(absolute), id);
         const found = [target, target + '.tsx', target + '.ts'].find(f => fs.existsSync(f) && fs.statSync(f).isFile());

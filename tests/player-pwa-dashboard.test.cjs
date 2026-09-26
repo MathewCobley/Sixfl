@@ -116,8 +116,29 @@ test("player PWA header stays clean and team badges render without white discs",
 
   assert.doesNotMatch(header, /leagueName|teamLabel|season/);
   assert.doesNotMatch(header, /rounded-full border border-white\/10 bg-white/);
-  assert.doesNotMatch(home, /rounded-full border border-white\/10 bg-white/);
-  assert.doesNotMatch(home, /rounded-full bg-white/);
+  // A role label may be a pill; the invariant applies to the actual badge
+  // images and their enclosing elements, regardless of utility class order.
+  const ts = require("typescript");
+  const source = ts.createSourceFile("PlayerAppHome.tsx", home, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let badgeCount = 0;
+  function walk(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === "img") {
+      const src = node.attributes.properties.find(p => ts.isJsxAttribute(p) && p.name.text === "src");
+      if (src && /[Ll]ogoUrl/.test(src.getText(source))) {
+        badgeCount++;
+        for (let current = node; current; current = current.parent) {
+          const attributes = ts.isJsxElement(current) ? current.openingElement.attributes
+            : ts.isJsxSelfClosingElement(current) ? current.attributes : null;
+          const cls = attributes?.properties.find(p => ts.isJsxAttribute(p) && p.name.text === "className");
+          const text = cls?.getText(source) || "";
+          assert.ok(!(/rounded-full/.test(text) && /bg-white/.test(text)), "badge must not gain a white backing disc");
+        }
+      }
+    }
+    ts.forEachChild(node, walk);
+  }
+  walk(source);
+  assert.equal(badgeCount, 3, "both fixture badges and recent-opponent badge are checked");
 });
 
 test("recent form includes each opponent badge without adding opponent-name clutter", () => {
@@ -349,7 +370,11 @@ test("player app requires the current Player Agreement before portal access", ()
   assert.match(layout, /!isAdmin/);
   assert.match(layout, /hasTeamMembership/);
 
-  assert.match(gate, /I have read and agree/);
+  assert.match(gate, /getCurrentAgreement\(agreementType\)/);
+  assert.match(gate, /\{agreement.checkboxLabel\}/);
+  const { loadSource } = require("./admin-activity/load.cjs");
+  const { getCurrentAgreement } = loadSource("src/lib/agreements.ts", { "@/lib/prisma": { prisma: {} } });
+  assert.equal(getCurrentAgreement("PLAYER").checkboxLabel, "I have read and agree to the SIXFL Player Agreement.");
   assert.match(gate, /name="agree"/);
   assert.match(gate, /required/);
   assert.match(gate, /Accept and continue/);

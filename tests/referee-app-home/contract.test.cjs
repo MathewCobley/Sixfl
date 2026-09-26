@@ -15,7 +15,7 @@ function load(file, mocks = {}) {
     },
   }).outputText;
   new Function("require", "module", "exports", code)(
-    (id) => (id in mocks ? mocks[id] : require(id)),
+    (id) => (id in mocks ? mocks[id] : id === "@/components/pwa/PinnedAppChrome" ? load("src/components/pwa/PinnedAppChrome.tsx").default : require(id)),
     mod,
     mod.exports,
   );
