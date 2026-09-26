@@ -60,8 +60,8 @@ test('live league landing stays uncluttered and matchweek labels stay on one lin
   const newsCard = read('src/components/news/NewsCard.tsx');
 
   assert.doesNotMatch(publicLayout, /PublicLeagueSeasonSwitcherBridge/);
-  assert.match(quickLinks, /pathname\?\.replace\(\/\\\/$\/, ""\) === landingPath/);
-  assert.match(quickLinks, /return null/);
+  assert.match(quickLinks, /usePathname/);
+  assert.match(quickLinks, /landingPath\) return null/);
   assert.match(latestNews, /whitespace-nowrap text-\[1\.15rem\][\s\S]*Matchweek/);
   assert.match(newsCard, /whitespace-nowrap text-\[1\.45rem\][\s\S]*Matchweek/);
 });
