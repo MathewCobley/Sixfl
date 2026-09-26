@@ -129,7 +129,7 @@ export default function MobileLeagueTable({
 
   return (
     <>
-      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.15rem_2.75rem_2.75rem] items-center gap-1.5 border-b border-white/[0.07] bg-black/15 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.1em] text-white/35">
+      <div className="grid grid-cols-[3rem_minmax(0,1fr)_2.15rem_2.75rem_2.75rem] items-center gap-1.5 border-b border-white/[0.07] bg-black/15 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.1em] text-white/35">
         <span className="w-full text-center">Pos</span>
         <span>Team</span>
         <span className="w-full text-center">P</span>
@@ -147,7 +147,7 @@ export default function MobileLeagueTable({
               key={row.teamId}
               className={`group ${isCurrentTeam ? "bg-emerald-500/[0.08]" : "bg-black/15"}`}
             >
-              <summary className="grid min-h-[3.75rem] cursor-pointer list-none grid-cols-[2.75rem_minmax(0,1fr)_2.15rem_2.75rem_2.75rem] items-center gap-1.5 px-3 py-2 [&::-webkit-details-marker]:hidden">
+              <summary className="grid min-h-[3.75rem] cursor-pointer list-none grid-cols-[3rem_minmax(0,1fr)_2.15rem_2.75rem_2.75rem] items-center gap-1.5 px-3 py-2 [&::-webkit-details-marker]:hidden">
                 <span className="flex w-full items-center justify-center gap-0.5">
                   <span
                     className={`flex h-8 min-w-8 items-center justify-center rounded-xl border px-1 text-xs font-black ${
