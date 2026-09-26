@@ -52,6 +52,22 @@ test('public layout resolves relative canonicals but never supplies one inherite
   assert.equal(metadata.robots, undefined, 'Do not alter public indexing permissions');
 });
 
+test('live league landing stays uncluttered while archive and subpage navigation remain available elsewhere', () => {
+  const quickLinks = read('src/components/leagues/LeagueQuickLinks.tsx');
+  const seasonSwitcher = read('src/components/layout/PublicLeagueSeasonSwitcherBridge.tsx');
+  const latestNews = read('src/components/news/LatestNews.tsx');
+  const newsCard = read('src/components/news/NewsCard.tsx');
+
+  assert.match(quickLinks, /pathname\?\.replace\(\/\\\/$\/, ""\) === landingPath/);
+  assert.match(quickLinks, /return null/);
+  assert.match(
+    seasonSwitcher,
+    /isLeagueLandingPath\(pathname, slug\) && !isArchiveRequest[\s\S]*removeExistingSwitcher\(\)[\s\S]*return/,
+  );
+  assert.match(latestNews, /whitespace-nowrap text-\[1\.15rem\][\s\S]*Matchweek/);
+  assert.match(newsCard, /whitespace-nowrap text-\[1\.45rem\][\s\S]*Matchweek/);
+});
+
 for (const [name, address, expected] of [
   ["Queen Mary's School", 'Topcliffe, Thirsk, North Yorkshire', 'Topcliffe'],
   ['Woodhouse Grove School', 'Apperley Bridge, West Yorkshire', 'Apperley Bridge'],
