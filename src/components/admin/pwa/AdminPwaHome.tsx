@@ -85,10 +85,10 @@ export default function AdminPwaHome({
             </h1>
           </div>
           <Link
-            href="/admin/pwa"
+            href="/admin/test-apps"
             className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/60"
           >
-            App tools
+            Test apps
           </Link>
         </div>
       </section>
@@ -290,10 +290,10 @@ export default function AdminPwaHome({
             SIXFL TV
           </Link>
           <Link
-            href="/admin/pwa"
+            href="/admin/test-apps"
             className="rounded-2xl border border-sky-400/15 bg-sky-500/[0.07] p-4 text-sm font-bold text-sky-100"
           >
-            App tools
+            Test apps
           </Link>
           <Link
             href="/admin/more"
