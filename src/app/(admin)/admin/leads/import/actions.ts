@@ -128,6 +128,51 @@ function getFirstByHeaderContains(row: Record<string, string>, needles: string[]
   return "";
 }
 
+function isPlausibleContactName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 80) return false;
+  if (isValidEmail(trimmed)) return false;
+  if (normalizeUkMobileNumber(cleanPhone(trimmed))) return false;
+  if (/^l:/i.test(trimmed)) return false;
+  if (/^https?:\/\//i.test(trimmed)) return false;
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return false;
+  if (!/[a-z]/i.test(trimmed)) return false;
+  return trimmed.split(/\s+/).length <= 6;
+}
+
+function inferContactNameFromUnlabelledMetaColumns(row: Record<string, string>) {
+  const entries = Object.entries(row);
+  const emailIndex = entries.findIndex(([, value]) => isValidEmail(value.trim()));
+  if (emailIndex < 0) return "";
+
+  const phoneIndex = entries.findIndex(([, value]) =>
+    Boolean(normalizeUkMobileNumber(cleanPhone(value))),
+  );
+
+  // Meta's current export places email, full name and phone next to each other,
+  // but may leave all three headings blank. Prefer the value between email and
+  // phone, then the value immediately after email.
+  if (phoneIndex > emailIndex + 1) {
+    for (let index = emailIndex + 1; index < phoneIndex; index += 1) {
+      const [key, value] = entries[index];
+      if (/^column\d+$/.test(key) && isPlausibleContactName(value)) {
+        return value.trim();
+      }
+    }
+  }
+
+  const nextEntry = entries[emailIndex + 1];
+  if (
+    nextEntry &&
+    /^column\d+$/.test(nextEntry[0]) &&
+    isPlausibleContactName(nextEntry[1])
+  ) {
+    return nextEntry[1].trim();
+  }
+
+  return "";
+}
+
 function buildContactName(row: Record<string, string>) {
   const explicitContactName = getFirstNonEmpty(row, ["contactName", "name", "fullName", "full_name"]);
   if (explicitContactName) return explicitContactName;
@@ -137,6 +182,9 @@ function buildContactName(row: Record<string, string>) {
 
   const combined = `${firstName} ${lastName}`.trim();
   if (combined) return combined;
+
+  const inferredMetaName = inferContactNameFromUnlabelledMetaColumns(row);
+  if (inferredMetaName) return inferredMetaName;
 
   const email = findEmail(row);
   if (!email) return "";
@@ -174,9 +222,21 @@ function cleanPhone(value: string) {
 }
 
 function findPhone(row: Record<string, string>) {
-  return cleanPhone(
+  const namedPhone = cleanPhone(
     getFirstNonEmpty(row, ["phone", "phoneNumber", "phone_number", "mobile", "telephone"]),
   );
+  if (namedPhone) return namedPhone;
+
+  // Current Meta exports can leave the phone heading blank. In that case,
+  // identify the phone by the value itself rather than relying on a header.
+  for (const value of Object.values(row)) {
+    const candidate = cleanPhone(value);
+    if (candidate && normalizeUkMobileNumber(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "";
 }
 
 function normalizeAnswer(value: string) {
@@ -238,11 +298,14 @@ function platformLabel(value: string) {
 }
 
 function inferMetaArea(row: Record<string, string>) {
+  const campaignName = getFirstNonEmpty(row, ["campaignName", "campaign_name"]);
+  const formName = getFirstNonEmpty(row, ["formName", "form_name"]);
   const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
   const adSetName = getFirstNonEmpty(row, ["adsetName", "adset_name"]);
 
-  for (const candidate of [adName, adSetName]) {
+  for (const candidate of [adName, adSetName, campaignName, formName]) {
     if (!candidate) continue;
+
     const parts = candidate
       .split(/\s+[–—-]\s+/)
       .map((part) => part.trim())
@@ -250,6 +313,19 @@ function inferMetaArea(row: Record<string, string>) {
 
     if (parts.length >= 2 && /^heartlands$/i.test(parts[0])) {
       return parts[1];
+    }
+
+    const firstPart = (parts[0] ?? candidate)
+      .replace(/\s+team$/i, "")
+      .replace(/\s+(lead|leads|campaign|form)$/i, "")
+      .trim();
+
+    if (
+      firstPart &&
+      firstPart.length <= 50 &&
+      !/^(sixfl|meta|facebook|instagram|team|football)$/i.test(firstPart)
+    ) {
+      return firstPart;
     }
   }
 
@@ -354,18 +430,57 @@ export async function importLeadsAction(
   const inferredLeagueSlugs = Array.from(
     new Set(rows.map(inferMetaLeagueSlug).filter(Boolean)),
   );
-  const inferredLeagues = inferredLeagueSlugs.length
-    ? await prisma.league.findMany({
-        where: {
-          slug: { in: inferredLeagueSlugs },
-          isActive: true,
-        },
-        select: { id: true, slug: true },
-      })
-    : [];
+  const inferredAreas = Array.from(
+    new Set(rows.map(inferMetaArea).filter(Boolean)),
+  );
+
+  const [inferredLeagues, currentCompetitions] = await Promise.all([
+    inferredLeagueSlugs.length
+      ? prisma.league.findMany({
+          where: {
+            slug: { in: inferredLeagueSlugs },
+            isActive: true,
+          },
+          select: { id: true, slug: true },
+        })
+      : Promise.resolve([]),
+    inferredAreas.length
+      ? prisma.leagueCompetition.findMany({
+          where: {
+            isActive: true,
+            area: { in: inferredAreas, mode: "insensitive" },
+            currentLeagueId: { not: null },
+          },
+          select: {
+            area: true,
+            currentLeague: {
+              select: { id: true, isActive: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
   const inferredLeagueIdBySlug = new Map(
     inferredLeagues.map((league) => [league.slug, league.id]),
   );
+
+  const currentLeagueIdByArea = new Map<string, string>();
+  for (const competition of currentCompetitions) {
+    const area = competition.area?.trim().toLowerCase();
+    const leagueId = competition.currentLeague?.isActive
+      ? competition.currentLeague.id
+      : null;
+    if (!area || !leagueId) continue;
+
+    const existing = currentLeagueIdByArea.get(area);
+    if (!existing) {
+      currentLeagueIdByArea.set(area, leagueId);
+    } else if (existing !== leagueId) {
+      // Ambiguous areas must remain unset rather than guessing.
+      currentLeagueIdByArea.delete(area);
+    }
+  }
 
   const parsedRows = rows.map((row, index) => {
     const email = findEmail(row);
@@ -376,9 +491,11 @@ export async function importLeadsAction(
     const area = areaOverride || getFirstNonEmpty(row, ["area", "location"]) || inferMetaArea(row);
     const source = buildSource(row, sourceOverride);
     const inferredLeagueSlug = inferMetaLeagueSlug(row);
-    const leagueId = inferredLeagueSlug
-      ? inferredLeagueIdBySlug.get(inferredLeagueSlug) ?? null
-      : null;
+    const leagueId =
+      (inferredLeagueSlug
+        ? inferredLeagueIdBySlug.get(inferredLeagueSlug) ?? null
+        : null) ??
+      (area ? currentLeagueIdByArea.get(area.trim().toLowerCase()) ?? null : null);
 
     return {
       rowNumber: index + 2,
@@ -482,6 +599,8 @@ export async function importLeadsAction(
           email: true,
           phone: true,
           phoneNormalized: true,
+          area: true,
+          leagueId: true,
         },
       })
     : [];
@@ -525,6 +644,48 @@ export async function importLeadsAction(
   const duplicateRowNumbers = new Set(
     duplicateMatches.map((match) => match.rowNumber),
   );
+
+  // Re-uploading a current Meta export should repair earlier imports that were
+  // created from the old blank-heading assumptions, without creating duplicates.
+  for (const row of validRows) {
+    if (!duplicateRowNumbers.has(row.rowNumber)) continue;
+
+    const matchedLead =
+      (row.email
+        ? existingLeads.find(
+            (lead) => lead.email && normalizeEmail(lead.email) === row.email,
+          )
+        : undefined) ??
+      (row.phoneNormalized
+        ? existingLeads.find((lead) => lead.phoneNormalized === row.phoneNormalized)
+        : undefined);
+
+    if (!matchedLead) continue;
+
+    const emailPrefix = row.email ? row.email.split("@")[0] : "";
+    const shouldRepairName =
+      Boolean(row.contactName) &&
+      row.contactName.trim().toLowerCase() !== emailPrefix.toLowerCase() &&
+      matchedLead.contactName.trim().toLowerCase() === emailPrefix.toLowerCase();
+
+    const data: Prisma.InterestLeadUpdateInput = {};
+    if (shouldRepairName) data.contactName = row.contactName;
+    if (!matchedLead.phoneNormalized && row.phoneNormalized) {
+      data.phone = row.phone;
+      data.phoneNormalized = row.phoneNormalized;
+    }
+    if (!matchedLead.area && row.area) data.area = row.area;
+    if (!matchedLead.leagueId && row.leagueId) {
+      data.league = { connect: { id: row.leagueId } };
+    }
+
+    if (Object.keys(data).length > 0) {
+      await prisma.interestLead.update({
+        where: { id: matchedLead.id },
+        data,
+      });
+    }
+  }
 
   // Imports are deliberately duplicate-safe. A matching email OR normalized
   // phone is skipped so re-uploading a Meta export cannot create duplicate leads.
