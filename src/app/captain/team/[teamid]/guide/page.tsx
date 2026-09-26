@@ -4,7 +4,6 @@ import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } f
 // ========================================
 
 import Link from "next/link";
-import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 
 import {
@@ -192,95 +191,25 @@ export default async function CaptainGuidePage({
 
   return (
     <>
-      <CaptainPwaModeOnly mode="app">
-        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
-          <header className="px-1 pb-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
-              Captain app
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">Captain Guide</h1>
-            <p className="mt-2 text-sm leading-5 text-white/45">
-              A quick reference for running {team.name}. Open only the section you need.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link
-                href={"/captain/team/" + team.id + "/rules"}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 text-xs font-black text-emerald-100"
-              >
-                Match Rules
-              </Link>
-              <Link
-                href={"/captain/team/" + team.id + "/league-rules"}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-black text-white/70"
-              >
-                League Rules
-              </Link>
-            </div>
-          </header>
-
-          <section className="space-y-2">
-            {guideSections.map((section, index) => (
-              <details
-                key={section.title}
-                open={index === 0}
-                className="group overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.035]"
-              >
-                <summary className="flex min-h-12 cursor-pointer list-none items-start justify-between gap-3 px-3.5 py-3 text-sm font-black text-white [&::-webkit-details-marker]:hidden">
-                  <span>{section.title}</span>
-                  <span aria-hidden="true" className="text-lg leading-none text-white/30 transition group-open:rotate-45">+</span>
-                </summary>
-                <div className="space-y-2 border-t border-white/[0.06] p-3">
-                  {section.items.map((item) => (
-                    <p key={item} className="text-xs leading-5 text-white/55">{item}</p>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </section>
-
-          <section className="overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.035]">
-            <div className="border-b border-white/[0.06] px-3.5 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Captain terms</p>
-              <h2 className="mt-1 text-sm font-black text-white">Responsibility agreement</h2>
-            </div>
-            <div className="p-3.5">
-              {onboardingStatus.isAgreementAccepted ? (
-                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100/80">
-                  Agreement accepted{acceptedAt ? " on " + acceptedAt : ""}
-                  {onboardingStatus.captainAgreementVersion
-                    ? " · version " + onboardingStatus.captainAgreementVersion
-                    : ""}.
-                </div>
-              ) : (
-                <form action={acceptCaptainAgreementAction} className="space-y-3">
-                  <input type="hidden" name="teamid" value={team.id} />
-                  <label className="flex cursor-pointer gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                    <input
-                      type="checkbox"
-                      name="accepted"
-                      required
-                      className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-400"
-                    />
-                    <span className="text-xs leading-5 text-white/60">
-                      {CAPTAIN_AGREEMENT_TEXT} (version {CAPTAIN_AGREEMENT_VERSION}.)
-                    </span>
-                  </label>
-                  <button
-                    type="submit"
-                    className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-300 px-4 text-sm font-black text-black"
-                  >
-                    I understand and accept
-                  </button>
-                </form>
-              )}
-            </div>
-          </section>
-        </main>
-      </CaptainPwaModeOnly>
-
-      <CaptainPwaModeOnly mode="web">
-        <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <style>{`
+        body:has(.captain-app-header) .captain-guide-page { display:grid; gap:.7rem; }
+        body:has(.captain-app-header) .captain-guide-hero { border-radius:1.15rem; box-shadow:none; background:rgba(255,255,255,.035); }
+        body:has(.captain-app-header) .captain-guide-hero > div { padding:.9rem; }
+        body:has(.captain-app-header) .captain-guide-hero h1 { margin-top:.2rem; font-size:1.25rem; line-height:1.3; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-hero p[class*="max-w-"] { margin-top:.35rem; font-size:.75rem; line-height:1.25rem; color:rgba(255,255,255,.48); }
+        body:has(.captain-app-header) .captain-guide-hero a:first-of-type { display:none; }
+        body:has(.captain-app-header) .captain-guide-hero div[class*="mt-6"] { margin-top:.7rem; display:grid; grid-template-columns:1fr 1fr; gap:.45rem; }
+        body:has(.captain-app-header) .captain-guide-hero a { min-height:2.6rem; justify-content:center; border-radius:.75rem; padding:.55rem .65rem; font-size:.7rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-jumps { display:none; }
+        body:has(.captain-app-header) .captain-guide-grid { grid-template-columns:minmax(0,1fr); gap:.5rem; }
+        body:has(.captain-app-header) .captain-guide-card { border-radius:1.05rem; padding:.85rem; }
+        body:has(.captain-app-header) .captain-guide-card h2 { font-size:.9rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-card ul { margin-top:.55rem; gap:.45rem; font-size:.72rem; line-height:1.15rem; }
+        body:has(.captain-app-header) .captain-guide-page > section:last-child { border-radius:1.05rem; }
+        body:has(.captain-app-header) .captain-guide-page > section:last-child > div { padding:.85rem; }
+      `}</style>
+      <div className="captain-guide-page space-y-8">
+      <section className="captain-guide-hero overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             Captain guide
@@ -316,7 +245,7 @@ export default async function CaptainGuidePage({
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="captain-guide-jumps grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {quickLinks.map((title) => (
           <a
             key={title}
@@ -331,12 +260,12 @@ export default async function CaptainGuidePage({
         ))}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="captain-guide-grid grid gap-4 lg:grid-cols-3">
         {guideSections.map((section) => (
           <article
             key={section.title}
             id={getSectionId(section.title)}
-            className="scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+            className="captain-guide-card scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
           >
             <h2 className="text-lg font-semibold text-white">{section.title}</h2>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-white/62">
@@ -394,8 +323,7 @@ export default async function CaptainGuidePage({
           )}
         </div>
       </section>
-        </div>
-      </CaptainPwaModeOnly>
+    </div>
     </>
   );
 }
