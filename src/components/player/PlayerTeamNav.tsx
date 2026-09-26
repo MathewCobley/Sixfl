@@ -89,7 +89,10 @@ const tabs = (
     exact: false,
   },
   {
-    href: "/player/referrals",
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/referrals`,
+      previewMembershipId,
+    ),
     label: "Refer a team · £75",
     exact: false,
   },
