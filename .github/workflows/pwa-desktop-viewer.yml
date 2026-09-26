@@ -1,0 +1,72 @@
+name: Desktop app viewer
+
+on:
+  pull_request:
+    paths:
+      - 'src/app/(admin)/admin/pwa/**'
+      - 'src/app/(admin)/admin/test-apps/**'
+      - 'src/components/admin/PwaDiagnosticsPanel.tsx'
+      - 'src/components/admin/pwa/PwaViewerPicker.tsx'
+      - 'src/components/admin/pwa/AdminPwaHome.tsx'
+      - 'tests/admin-test-apps.test.cjs'
+      - 'tests/pwa-desktop-viewer/**'
+      - '.github/workflows/pwa-desktop-viewer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: desktop-app-viewer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/desktop_viewer_test
+      NEXTAUTH_SECRET: isolated-viewer-test-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Authorised desktop viewer and fixed launcher contracts
+        run: node --test tests/admin-test-apps.test.cjs tests/pwa-desktop-viewer/contract.test.cjs
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - name: Prepared-source viewer and existing critical contracts
+        run: |
+          node --test tests/admin-test-apps.test.cjs tests/pwa-desktop-viewer/contract.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
+          npx tsc --noEmit
+      - name: Production build
+        run: npx next build
+      - name: Isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/viewer-browser" --no-save --package-lock=false playwright@1.55.0 esbuild@0.27.4
+          node "$RUNNER_TEMP/viewer-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real component PC selection and persistence
+        run: NODE_PATH="$RUNNER_TEMP/viewer-browser/node_modules" node tests/pwa-desktop-viewer/browser.cjs
+      - name: Retain prepared source and preview inventory
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          mkdir -p artifacts/pwa-desktop-viewer
+          git diff -- src > artifacts/pwa-desktop-viewer/preparation.diff
+          git grep -n -E 'PwaViewerPicker|PwaDiagnosticsPanel|/admin/test-apps|sixfl-admin-pwa-viewer-selection|captain-preview|referee-preview' -- src scripts tests > artifacts/pwa-desktop-viewer/source-inventory.txt
+          tar -czf artifacts/pwa-desktop-viewer/prepared-source.tgz 'src/app/(admin)/admin/pwa' 'src/app/(admin)/admin/test-apps' src/components/admin/PwaDiagnosticsPanel.tsx src/components/admin/pwa/PwaViewerPicker.tsx tests/admin-test-apps.test.cjs tests/pwa-desktop-viewer
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.checkout.outcome == 'success'
+        with:
+          name: desktop-app-viewer-${{ github.sha }}
+          path: artifacts/pwa-desktop-viewer/
+          retention-days: 7
+          if-no-files-found: error

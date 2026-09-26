@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import PwaViewerPicker, {
+  type PwaViewerData,
+} from "@/components/admin/pwa/PwaViewerPicker";
 
 type CheckTone = "good" | "warn" | "neutral";
 
@@ -208,7 +211,11 @@ async function collectDiagnostics(): Promise<DiagnosticsState> {
   };
 }
 
-export default function PwaDiagnosticsPanel() {
+export default function PwaDiagnosticsPanel({
+  viewerData,
+}: {
+  viewerData: PwaViewerData;
+}) {
   const [state, setState] = useState<DiagnosticsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
@@ -375,6 +382,8 @@ export default function PwaDiagnosticsPanel() {
 
   return (
     <div className="space-y-6">
+      <PwaViewerPicker data={viewerData} onPreview={loadPreviewPath} />
+
       <section className="rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_36%),rgba(255,255,255,0.03)] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.3)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -385,17 +394,11 @@ export default function PwaDiagnosticsPanel() {
               PWA diagnostics
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-              Technical checks for the installed web app. For day-to-day Captain, Player and Referee testing, use the fixed Test apps launcher.
+              Technical checks for the installed web app. For day-to-day portal testing, use the Viewer Picker above and the phone preview below.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/admin/test-apps"
-              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
-            >
-              Open Test apps
-            </Link>
             <button
               type="button"
               onClick={() => void refresh()}

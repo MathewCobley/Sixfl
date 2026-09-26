@@ -18,10 +18,20 @@ test("admin Test apps uses the three fixed preview identities", () => {
   assert.match(page, /\/admin\/referees\/\$\{stefan\.id\}\/referee-preview/);
 });
 
-test("admin app exposes Test apps without a general viewer picker", () => {
+test("fixed Test apps remains a direct launcher, not a general viewer picker", () => {
   assert.equal((adminHome.match(/href="\/admin\/test-apps"/g) || []).length, 2);
   assert.match(more, /\{ label: "Test apps", href: "\/admin\/test-apps" \}/);
-  assert.doesNotMatch(diagnostics, /PwaViewerPicker|viewerData/);
-  assert.doesNotMatch(diagnosticsPage, /PwaViewerPicker|viewerData|prisma\.team\.findMany/);
-  assert.match(diagnostics, /Open Test apps/);
+  assert.doesNotMatch(page, /PwaViewerPicker|viewerData|<iframe/);
+  assert.match(page, /No picker needed/);
+});
+
+test("PC diagnostics retains its separate authenticated viewer and phone-preview wiring", () => {
+  assert.match(diagnosticsPage, /await requireAdmin\(\)/);
+  assert.ok(diagnosticsPage.indexOf("await requireAdmin()") < diagnosticsPage.indexOf("prisma.team.findMany"));
+  assert.match(diagnosticsPage, /<PwaDiagnosticsPanel viewerData=\{viewerData\}/);
+  assert.match(diagnosticsPage, /href="\/admin\/test-apps"/);
+  assert.match(diagnosticsPage, /Open fixed Test apps/);
+  assert.match(diagnostics, /<PwaViewerPicker data=\{viewerData\} onPreview=\{loadPreviewPath\}/);
+  assert.match(diagnostics, /<iframe/);
+  assert.ok(diagnostics.indexOf("<PwaViewerPicker") < diagnostics.indexOf("PWA diagnostics"), "chooser must remain above diagnostics");
 });
