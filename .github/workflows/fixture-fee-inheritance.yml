@@ -59,7 +59,7 @@ jobs:
           import subprocess
           cases = [
             ('src/lib/payments/fixture-fee-policy.ts', 'fixtureSideFee ?? standardFee ?? legacyFee', 'fixtureSideFee ?? legacyFee ?? standardFee'),
-            ('src/app/api/admin/fixtures/generate-next-week/route.ts', 'select: { id: true, name: true, standardMatchFeePence: true }', 'select: { id: true, name: true }'),
+            ('src/app/api/admin/fixtures/generate-next-week/route.ts', 'select: { id: true, name: true, standardMatchFeePence: true, playsOnceDoublePoints: true }', 'select: { id: true, name: true, playsOnceDoublePoints: true }'),
           ]
           for name, before, after in cases:
             p=Path(name); original=p.read_text(); assert before in original
