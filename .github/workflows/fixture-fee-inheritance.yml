@@ -4,6 +4,7 @@ on:
     paths:
       - "src/lib/payments/fixture-fee-policy.ts"
       - "src/lib/payments/fixture-match-fees.ts"
+      - "src/lib/fixtures/double-header-schedule.ts"
       - "src/app/(admin)/admin/fixtures/**"
       - "src/app/api/admin/fixtures/**"
       - "src/app/api/admin/night-board/update-match/**"
