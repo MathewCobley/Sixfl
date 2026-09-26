@@ -261,28 +261,30 @@ export default async function AdminMessagesPage({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/admin/templates"
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-              >
-                Templates
-              </Link>
+            {selectedView === "send" ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/admin/templates"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  Templates
+                </Link>
 
-              <Link
-                href="/admin/teams"
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-              >
-                Team contacts
-              </Link>
+                <Link
+                  href="/admin/teams"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  Team contacts
+                </Link>
 
-              <Link
-                href="/admin/leads"
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
-              >
-                Leads console
-              </Link>
-            </div>
+                <Link
+                  href="/admin/leads"
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  Leads console
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           {selectedView === "inbox" ? (
