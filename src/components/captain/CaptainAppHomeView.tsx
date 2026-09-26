@@ -62,8 +62,6 @@ function TeamMark({ team }: { team: FixtureTeam }) {
 
 export default function CaptainAppHomeView({
   teamId,
-  teamName,
-  teamLogoUrl,
   nextFixture,
   leaguePosition,
   reportsDue,
@@ -111,27 +109,8 @@ export default function CaptainAppHomeView({
 
   return (
     <div className={styles.home} data-captain-app-home>
-      <section className={styles.identity}>
-        <div className={styles.identityTop}>
-          <div className={styles.identityBadge} aria-hidden="true">
-            {teamLogoUrl ? (
-              <img src={teamLogoUrl} alt="" />
-            ) : (
-              <span>{initials(teamName)}</span>
-            )}
-          </div>
-          <div className={styles.identityText}>
-            <h1>{teamName}</h1>
-            <div className={styles.identityPills}>
-              <span className={styles.rolePill}>Captain</span>
-              {leaguePosition !== "—" ? (
-                <span className={styles.positionPill}>{leaguePosition} in the league</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.summary} aria-label="Team overview">
+      <section className={styles.overviewStrip} aria-label="Team overview">
+        <div className={styles.summary}>
           <Link href={`${base}/table`} className={styles.metric}
             aria-label={leaguePosition === "—" ? "League position unavailable" : `League position: ${leaguePosition}`}>
             <strong>{leaguePosition}</strong>
