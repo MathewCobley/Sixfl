@@ -122,3 +122,102 @@ test('badge polling reads only; conversation creation and read receipts are not 
   assert.match(nav, /unreadCount: unreadChatCount/);
   assert.doesNotMatch(nav, /unreadCount: unreadMessageCount/);
 });
+
+
+test('unread total ignores archived and stale Regulars chats so badge matches the visible chat list', async () => {
+  const unreadByConversation = new Map([
+    ['team', 2],
+    ['visible-group', 1],
+    ['archived-group', 4],
+    ['stale-regulars', 5],
+  ]);
+  const conversations = [
+    {
+      id: 'team',
+      type: 'TEAM',
+      conversationKey: 'TEAM:demo',
+      latestMessageAt: new Date('2026-09-26T12:00:00Z'),
+      members: [],
+      reads: [{ lastReadAt: new Date('2026-09-26T11:00:00Z'), archivedAt: null }],
+    },
+    {
+      id: 'visible-group',
+      type: 'SELECTED_GROUP',
+      conversationKey: 'SELECTED_GROUP:demo:u1:u2',
+      latestMessageAt: new Date('2026-09-26T12:05:00Z'),
+      members: [{ userId: 'u1' }, { userId: 'u2' }],
+      reads: [{ lastReadAt: new Date('2026-09-26T11:00:00Z'), archivedAt: null }],
+    },
+    {
+      id: 'archived-group',
+      type: 'SELECTED_GROUP',
+      conversationKey: 'SELECTED_GROUP:demo:u1:u3',
+      latestMessageAt: new Date('2026-09-26T10:00:00Z'),
+      members: [{ userId: 'u1' }, { userId: 'u3' }],
+      reads: [{ lastReadAt: new Date('2026-09-26T09:00:00Z'), archivedAt: new Date('2026-09-26T10:30:00Z') }],
+    },
+    {
+      id: 'stale-regulars',
+      type: 'REGULARS',
+      conversationKey: 'REGULARS:demo:u1',
+      latestMessageAt: new Date('2026-09-26T12:10:00Z'),
+      members: [{ userId: 'u1' }],
+      reads: [{ lastReadAt: new Date('2026-09-26T11:00:00Z'), archivedAt: null }],
+    },
+  ];
+
+  const helper = load('src/lib/portal-messaging.ts', {
+    '@prisma/client': {
+      PortalConversationType: {
+        TEAM: 'TEAM',
+        SIXFL: 'SIXFL',
+        CAPTAIN_PLAYER: 'CAPTAIN_PLAYER',
+        CAPTAIN_CAPTAIN: 'CAPTAIN_CAPTAIN',
+        REGULARS: 'REGULARS',
+        SELECTED_GROUP: 'SELECTED_GROUP',
+      },
+      TeamRole: { CAPTAIN: 'CAPTAIN' },
+    },
+    '@/lib/prisma': {
+      prisma: {
+        portalConversation: { findMany: async () => conversations },
+        teamMember: {
+          findMany: async () => [
+            { userId: 'u1', isRegular: true, role: 'PLAYER' },
+            { userId: 'u2', isRegular: true, role: 'PLAYER' },
+            { userId: 'captain', isRegular: false, role: 'CAPTAIN' },
+          ],
+        },
+        portalMessage: {
+          count: async ({ where }) => unreadByConversation.get(where.conversationId) ?? 0,
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    await helper.getPortalChatUnreadCount({
+      teamId: 'demo',
+      userId: 'u1',
+      role: 'PLAYER',
+    }),
+    3,
+  );
+});
+
+test('chat makes unread locations explicit and immediately synchronises the app badge', () => {
+  const chat = fs.readFileSync('src/components/messaging/PortalChat.tsx', 'utf8');
+  const playerNav = fs.readFileSync('src/components/player/PlayerTeamNav.tsx', 'utf8');
+  const captainNav = fs.readFileSync('src/components/captain/CaptainPwaBottomNav.tsx', 'utf8');
+  const route = fs.readFileSync('src/app/api/portal-chat/team/[teamid]/route.ts', 'utf8');
+
+  assert.match(route, /unreadCountBeforeOpen/);
+  assert.match(route, /firstUnreadMessageId/);
+  assert.match(chat, /aria-label="Unread chats"/);
+  assert.match(chat, /\{item\.unreadCount\} unread/);
+  assert.match(chat, /New messages start here/);
+  assert.match(chat, /new message\{openedUnread\.count === 1 \? "" : "s"\}/);
+  assert.match(chat, /sixfl:chat-unread-count/);
+  assert.match(playerNav, /sixfl:chat-unread-count/);
+  assert.match(captainNav, /sixfl:chat-unread-count/);
+});
