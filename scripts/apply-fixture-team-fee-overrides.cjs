@@ -152,11 +152,19 @@ replaceOnce(
   '        matchFeePence: standardFeePence,\n        homeMatchFeePence: homeStandardMatchFeePence,\n        awayMatchFeePence: awayStandardMatchFeePence,\n        publishedAt: null,',
 );
 
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
-  'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  const homeFee = homeTeam.standardMatchFeePence ?? 0;\n  const awayFee = awayTeam.standardMatchFeePence ?? 0;\n  const highestFee = Math.max(homeFee, awayFee);\n  return highestFee > 0 ? highestFee : null;\n}',
-  'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  return Math.max(\n    homeTeam.standardMatchFeePence ?? 4000,\n    awayTeam.standardMatchFeePence ?? 4000,\n  );\n}',
-);
+const divisionGeneratorPath =
+  "src/app/(admin)/admin/fixtures/generate/division-actions.ts";
+const divisionGeneratorIsNative = fs
+  .readFileSync(path.join(root, divisionGeneratorPath), "utf8")
+  .includes("getDoubleHeaderFixtureFeePence");
+
+if (!divisionGeneratorIsNative) {
+  replaceOnce(
+    divisionGeneratorPath,
+    'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  const homeFee = homeTeam.standardMatchFeePence ?? 0;\n  const awayFee = awayTeam.standardMatchFeePence ?? 0;\n  const highestFee = Math.max(homeFee, awayFee);\n  return highestFee > 0 ? highestFee : null;\n}',
+    'function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {\n  return Math.max(\n    homeTeam.standardMatchFeePence ?? 4000,\n    awayTeam.standardMatchFeePence ?? 4000,\n  );\n}',
+  );
+}
 
 // Match just the fee fields, not the closing type/object. Native division
 // generation now also stores doublePoints after these fields.
@@ -166,11 +174,13 @@ replaceOnce(
   '    status: FixtureStatus;\n    matchFeePence: number | null;\n    homeMatchFeePence: number;\n    awayMatchFeePence: number;',
 );
 
-replaceOnce(
-  "src/app/(admin)/admin/fixtures/generate/division-actions.ts",
-  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),',
-  '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,\n          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,',
-);
+if (!divisionGeneratorIsNative) {
+  replaceOnce(
+    divisionGeneratorPath,
+    '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),',
+    '          status,\n          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),\n          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,\n          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,',
+  );
+}
 
 replaceOnce(
   "src/app/(admin)/admin/fixtures/generate/division-actions.ts",

@@ -8,6 +8,7 @@ const generationPath = 'src/app/api/admin/fixtures/generate-next-week/route.ts';
 const singlePath = 'src/app/api/admin/fixtures/publish-one/route.ts';
 const batchPath = 'src/app/(admin)/admin/fixtures/publish-actions.ts';
 const policyPath = 'src/lib/payments/fixture-fee-policy.ts';
+const doubleHeaderSchedulePath = 'src/lib/fixtures/double-header-schedule.ts';
 
 // Compile the real raw/prepared server modules. All I/O is replaced explicitly;
 // an unexpected app dependency fails closed rather than reaching any provider.
@@ -36,6 +37,7 @@ function loader(mocks = {}) {
   return load;
 }
 const policy = loader()(policyPath);
+const doubleHeaderSchedule = loader()(doubleHeaderSchedulePath);
 function project(row, select) {
   if (!row || !select) return row;
   return Object.fromEntries(Object.entries(select).filter(([,v])=>v).map(([k,v])=>
@@ -146,6 +148,66 @@ async function publish(h, mode, row) {
 }
 function amounts(h) {return Object.fromEntries(h.charges.filter(c=>c.status!=='VOID').map(c=>[c.teamId,c.amountPence]));}
 function draft(h,extra={}) {return h.insert({leagueId:'league',homeTeamId:'ripon',awayTeamId:'swaz',kickoffAt:new Date('2099-01-01T20:40:00Z'),round:1,pitch:'Pitch 1',matchFeePence:4000,...extra});}
+
+function generateRoundRobinRounds(teamIds) {
+  const ids = [...teamIds];
+  if (ids.length % 2 === 1) ids.push(null);
+  const rounds = [];
+  let rotating = [...ids];
+
+  for (let round = 0; round < rotating.length - 1; round += 1) {
+    const pairs = [];
+    for (let index = 0; index < rotating.length / 2; index += 1) {
+      const a = rotating[index];
+      const b = rotating[rotating.length - 1 - index];
+      if (a && b) pairs.push({ homeId: a, awayId: b });
+    }
+    rounds.push(pairs);
+    const fixed = rotating[0];
+    const rest = rotating.slice(1);
+    rest.unshift(rest.pop());
+    rotating = [fixed, ...rest];
+  }
+
+  return rounds;
+}
+
+test('9-team double round robin packs into 12 fair six-game nights with four free second games per team',()=>{
+  const teamIds = Array.from({length:9},(_,index)=>`team-${index+1}`);
+  const firstHalf = generateRoundRobinRounds(teamIds);
+  const rounds = [
+    ...firstHalf,
+    ...firstHalf.map(round=>round.map(pair=>({...pair}))),
+  ];
+  const nights = doubleHeaderSchedule.packFixtureRoundsIntoNights(rounds,6,true);
+
+  assert.equal(nights.length,12);
+  assert.ok(nights.every(night=>night.length===6));
+
+  const doubleHeaderWeeks = Object.fromEntries(teamIds.map(teamId=>[teamId,0]));
+  for (const night of nights) {
+    const appearances = Object.fromEntries(teamIds.map(teamId=>[teamId,0]));
+    for (const pair of night) {
+      appearances[pair.homeId] += 1;
+      appearances[pair.awayId] += 1;
+    }
+    for (const teamId of teamIds) {
+      assert.ok(appearances[teamId]===1 || appearances[teamId]===2);
+      if (appearances[teamId]===2) doubleHeaderWeeks[teamId] += 1;
+    }
+  }
+
+  assert.deepEqual(Object.values(doubleHeaderWeeks),Array(9).fill(4));
+  assert.equal(doubleHeaderSchedule.getDoubleHeaderFixtureFeePence({
+    standardFeePence:4000,appearancesBeforeThisFixture:0,freeDoubleHeaders:true,
+  }),4000);
+  assert.equal(doubleHeaderSchedule.getDoubleHeaderFixtureFeePence({
+    standardFeePence:4000,appearancesBeforeThisFixture:1,freeDoubleHeaders:true,
+  }),0);
+  assert.equal(doubleHeaderSchedule.getDoubleHeaderFixtureFeePence({
+    standardFeePence:4000,appearancesBeforeThisFixture:1,freeDoubleHeaders:false,
+  }),4000);
+});
 
 test('fee policy preserves explicit overrides, £0, team standards and legacy/default fallback',()=>{
   for (const [side,standard,legacy,want] of [[0,3600,4000,0],[1800,3600,4000,1800],[4200,3600,4000,4200],

@@ -330,6 +330,16 @@ export default async function FixtureGeneratorPage({
               </span>
             </label>
 
+            <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-sky-400/20 bg-sky-500/[0.08] p-4">
+              <input type="checkbox" name="freeDoubleHeaders" className="mt-1" />
+              <span>
+                <span className="block text-sm font-semibold text-sky-100">Double-header second games are free</span>
+                <span className="mt-1 block text-sm leading-6 text-sky-100/65">
+                  Uses spare slots to let a team play twice on the same fixture night where needed. The team pays its normal fee for its first game that night and £0 for its second game.
+                </span>
+              </span>
+            </label>
+
             <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4">
               <input type="checkbox" name="clearExisting" className="mt-1" />
               <span>
@@ -344,7 +354,7 @@ export default async function FixtureGeneratorPage({
           <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
             <h3 className="text-lg font-semibold text-white">What happens after you click generate?</h3>
             <p className="mt-2 text-sm leading-6 text-amber-50/70">
-              Fixtures are saved as unpublished drafts with the teams’ standard match fee attached. No team payment requests are sent until fixtures are published.
+              Fixtures are saved as unpublished drafts with each team’s fee attached. If free double-headers are selected, a team’s second game on the same fixture night is stored at £0. No team payment requests are sent until fixtures are published.
             </p>
           </div>
 

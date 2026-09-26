@@ -9,10 +9,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
-  formatTimeInLondon,
   getLondonMinutesSinceMidnight,
   parseLondonDateTime,
 } from "@/lib/datetime/london";
+import {
+  getDoubleHeaderFixtureFeePence,
+  packFixtureRoundsIntoNights,
+} from "@/lib/fixtures/double-header-schedule";
 import { ensureSeasonTeamRowsForLeague } from "@/lib/league-season-teams";
 import { voidFixtureMatchFeeChargesOrThrow } from "@/lib/payments/fixture-match-fees";
 import { prisma } from "@/lib/prisma";
@@ -122,13 +125,6 @@ function isKickoffAllowed(kickoffAt: Date, homeTeam: TeamSchedulingRule, awayTea
   return { allowed: true, reason: null };
 }
 
-function getStandardFixtureFee(homeTeam: TeamSchedulingRule, awayTeam: TeamSchedulingRule) {
-  return Math.max(
-    homeTeam.standardMatchFeePence ?? 4000,
-    awayTeam.standardMatchFeePence ?? 4000,
-  );
-}
-
 function generateRounds(teamIds: string[]): Pair[][] {
   const ids: (string | null)[] = [...teamIds];
   if (ids.length < 2) return [];
@@ -177,6 +173,90 @@ function sortPairsByRestriction(pairs: Pair[], teamMap: Map<string, TeamScheduli
     );
     return aLimit - bLimit;
   });
+}
+
+
+function scheduleNightPairs(input: {
+  pairs: Pair[];
+  teamMap: Map<string, TeamSchedulingRule>;
+  sessionBase: Date;
+  slotMinutes: number;
+  slotCount: number;
+  pitches: number;
+  roundNumber: number;
+}) {
+  const orderedPairs = sortPairsByRestriction(input.pairs, input.teamMap);
+  const positions = Array.from(
+    { length: input.slotCount * input.pitches },
+    (_, index) => ({
+      positionIndex: index,
+      slotIndex: Math.floor(index / input.pitches),
+      pitchNumber: (index % input.pitches) + 1,
+    }),
+  );
+  const usedPositions = new Set<number>();
+  const teamsBySlot = Array.from(
+    { length: input.slotCount },
+    () => new Set<string>(),
+  );
+  const scheduled = new Array<{
+    pair: Pair;
+    kickoffAt: Date;
+    pitchNumber: number;
+    position: number;
+  }>(orderedPairs.length);
+
+  function place(pairIndex: number): boolean {
+    if (pairIndex >= orderedPairs.length) return true;
+
+    const pair = orderedPairs[pairIndex];
+    const homeTeam = input.teamMap.get(pair.homeId);
+    const awayTeam = input.teamMap.get(pair.awayId);
+
+    if (!homeTeam || !awayTeam) {
+      throw new Error("Fixture generation failed because a team was missing.");
+    }
+
+    for (const position of positions) {
+      if (usedPositions.has(position.positionIndex)) continue;
+
+      const slotTeams = teamsBySlot[position.slotIndex];
+      if (slotTeams.has(pair.homeId) || slotTeams.has(pair.awayId)) continue;
+
+      const kickoffAt = addMinutes(
+        input.sessionBase,
+        position.slotIndex * input.slotMinutes,
+      );
+      const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);
+      if (!allowed.allowed) continue;
+
+      usedPositions.add(position.positionIndex);
+      slotTeams.add(pair.homeId);
+      slotTeams.add(pair.awayId);
+      scheduled[pairIndex] = {
+        pair,
+        kickoffAt,
+        pitchNumber: position.pitchNumber,
+        position: position.positionIndex + 1,
+      };
+
+      if (place(pairIndex + 1)) return true;
+
+      usedPositions.delete(position.positionIndex);
+      slotTeams.delete(pair.homeId);
+      slotTeams.delete(pair.awayId);
+    }
+
+    return false;
+  }
+
+  if (!place(0)) {
+    throw new Error(
+      `Unable to generate fixtures for week ${input.roundNumber}. The available kick-off slots cannot fit every game without putting a team in two matches at once or breaking a team kick-off restriction.`,
+    );
+  }
+
+  return scheduled.sort((a, b) => a.position - b.position);
 }
 
 function getRefereeIdsByPitch(formData: FormData, pitches: number) {
@@ -344,6 +424,7 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
   const pitches = parseRequiredPositiveInt(formData.get("pitches"), "Pitches", 1);
   const startRound = parseRequiredPositiveInt(formData.get("startRound"), "Start week", 1);
   const doubleRoundRobin = String(formData.get("doubleRoundRobin") || "") === "on";
+  const freeDoubleHeaders = String(formData.get("freeDoubleHeaders") || "") === "on";
   const clearExisting = String(formData.get("clearExisting") || "") === "on";
   const venueId = parseOptionalString(formData.get("venueId"));
   const status = parseFixtureStatus(formData.get("status"));
@@ -423,50 +504,72 @@ export async function generateDraftFixturesWithDivisionsAction(formData: FormDat
     doublePoints: boolean;
   }> = [];
 
-  let nightOffset = 0;
+  const fixtureNights = packFixtureRoundsIntoNights(
+    rounds,
+    gamesPerSession,
+    freeDoubleHeaders,
+  );
 
-  rounds.forEach((pairs, roundIndex) => {
-    const roundNumber = startRound + roundIndex;
-    for (let chunkStart = 0; chunkStart < pairs.length; chunkStart += gamesPerSession) {
-      const nightlyPairs = sortPairsByRestriction(pairs.slice(chunkStart, chunkStart + gamesPerSession), teamMap);
-      const sessionBase = addDays(startDateTime, nightOffset * weekGapDays);
+  fixtureNights.forEach((pairs, nightIndex) => {
+    const roundNumber = startRound + nightIndex;
+    const sessionBase = addDays(startDateTime, nightIndex * weekGapDays);
+    const scheduledPairs = scheduleNightPairs({
+      pairs,
+      teamMap,
+      sessionBase,
+      slotMinutes,
+      slotCount,
+      pitches,
+      roundNumber,
+    });
+    const appearancesOnNight = new Map<string, number>();
 
-      nightlyPairs.forEach((pair, nightlyIndex) => {
-        const slotIndex = Math.floor(nightlyIndex / pitches);
-        const pitchNumber = (nightlyIndex % pitches) + 1;
-        if (slotIndex >= slotCount) throw new Error("Fixture generation tried to use more slots than the session allows.");
+    for (const scheduledPair of scheduledPairs) {
+      const pair = scheduledPair.pair;
+      const homeTeam = teamMap.get(pair.homeId);
+      const awayTeam = teamMap.get(pair.awayId);
+      if (!homeTeam || !awayTeam) {
+        throw new Error("Fixture generation failed because a team was missing.");
+      }
 
-        const kickoffAt = addMinutes(sessionBase, slotIndex * slotMinutes);
-        const homeTeam = teamMap.get(pair.homeId);
-        const awayTeam = teamMap.get(pair.awayId);
-        if (!homeTeam || !awayTeam) throw new Error("Fixture generation failed because a team was missing.");
-
-        const allowed = isKickoffAllowed(kickoffAt, homeTeam, awayTeam);
-        if (!allowed.allowed) {
-          throw new Error(`Unable to generate fixtures. Week ${roundNumber} would place ${homeTeam.name} vs ${awayTeam.name} at ${formatTimeInLondon(kickoffAt)}, but ${allowed.reason}`);
-        }
-
-        fixturesToCreate.push({
-          leagueId,
-          divisionId,
-          homeTeamId: pair.homeId,
-          awayTeamId: pair.awayId,
-          venueId,
-          refereeId: refereeIdsByPitch[pitchNumber - 1] ?? null,
-          kickoffAt,
-          round: roundNumber,
-          position: chunkStart + nightlyIndex + 1,
-          pitch: `Pitch ${pitchNumber}`,
-          status,
-          matchFeePence: getStandardFixtureFee(homeTeam, awayTeam),
-          homeMatchFeePence: homeTeam.standardMatchFeePence ?? 4000,
-          awayMatchFeePence: awayTeam.standardMatchFeePence ?? 4000,
-          doublePoints:
-            homeTeam.playsOnceDoublePoints || awayTeam.playsOnceDoublePoints,
-        });
+      const homeAppearances = appearancesOnNight.get(pair.homeId) ?? 0;
+      const awayAppearances = appearancesOnNight.get(pair.awayId) ?? 0;
+      const homeMatchFeePence = getDoubleHeaderFixtureFeePence({
+        standardFeePence: homeTeam.standardMatchFeePence ?? 4000,
+        appearancesBeforeThisFixture: homeAppearances,
+        freeDoubleHeaders,
+      });
+      const awayMatchFeePence = getDoubleHeaderFixtureFeePence({
+        standardFeePence: awayTeam.standardMatchFeePence ?? 4000,
+        appearancesBeforeThisFixture: awayAppearances,
+        freeDoubleHeaders,
       });
 
-      nightOffset += 1;
+      appearancesOnNight.set(pair.homeId, homeAppearances + 1);
+      appearancesOnNight.set(pair.awayId, awayAppearances + 1);
+
+      fixturesToCreate.push({
+        leagueId,
+        divisionId,
+        homeTeamId: pair.homeId,
+        awayTeamId: pair.awayId,
+        venueId,
+        refereeId:
+          refereeIdsByPitch[scheduledPair.pitchNumber - 1] ?? null,
+        kickoffAt: scheduledPair.kickoffAt,
+        round: roundNumber,
+        position: scheduledPair.position,
+        pitch: `Pitch ${scheduledPair.pitchNumber}`,
+        status,
+        matchFeePence: Math.max(
+          homeMatchFeePence,
+          awayMatchFeePence,
+        ),
+        homeMatchFeePence,
+        awayMatchFeePence,
+        doublePoints:
+          homeTeam.playsOnceDoublePoints || awayTeam.playsOnceDoublePoints,
+      });
     }
   });
 
