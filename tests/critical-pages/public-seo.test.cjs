@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
+const read = file => fs.readFileSync(file, 'utf8');
 
 function load(file, mocks = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
@@ -50,6 +51,19 @@ test('public layout resolves relative canonicals but never supplies one inherite
   assert.equal(metadata.metadataBase.origin, urls.PUBLIC_SITE_ORIGIN);
   assert.equal(metadata.alternates?.canonical, undefined);
   assert.equal(metadata.robots, undefined, 'Do not alter public indexing permissions');
+});
+
+test('live league landing stays uncluttered and matchweek labels stay on one line', () => {
+  const publicLayout = read('src/app/(public)/layout.tsx');
+  const quickLinks = read('src/components/leagues/LeagueQuickLinks.tsx');
+  const latestNews = read('src/components/news/LatestNews.tsx');
+  const newsCard = read('src/components/news/NewsCard.tsx');
+
+  assert.doesNotMatch(publicLayout, /PublicLeagueSeasonSwitcherBridge/);
+  assert.match(quickLinks, /usePathname/);
+  assert.match(quickLinks, /landingPath\) return null/);
+  assert.match(latestNews, /whitespace-nowrap text-\[1\.15rem\][\s\S]*Matchweek/);
+  assert.match(newsCard, /whitespace-nowrap text-\[1\.45rem\][\s\S]*Matchweek/);
 });
 
 for (const [name, address, expected] of [

@@ -141,7 +141,7 @@ export default function NewsCard({
         <div className="relative z-10 flex w-full items-end justify-between gap-5 p-5 sm:p-6">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.26em] text-emerald-300">SIXFL</p>
-            <p className="mt-1 text-3xl font-black uppercase tracking-[-0.04em] sm:text-4xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} News` : "Matchnight News"}</p>
+            <p className="mt-1 whitespace-nowrap text-[1.45rem] font-black uppercase leading-tight tracking-[-0.04em] sm:text-4xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} News` : "Matchnight News"}</p>
           </div>
           <div className="shrink-0 rounded-2xl border border-white/10 bg-black/55 px-4 py-3 text-center backdrop-blur-sm">
             <p className="text-2xl font-black text-emerald-300">{a.matches.length}</p>

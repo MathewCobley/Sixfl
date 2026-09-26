@@ -89,7 +89,7 @@ export default function LatestNews({
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-300">New from SIXFL</p>
-          <h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">{items?.[0]?.matchweekNumber ? `Matchweek ${items[0].matchweekNumber} report` : "Latest matchnight report"}</h2>
+          <h2 className="mt-1 whitespace-nowrap text-[1.15rem] font-black leading-tight tracking-tight sm:text-3xl">{items?.[0]?.matchweekNumber ? `Matchweek ${items[0].matchweekNumber} report` : "Latest matchnight report"}</h2>
         </div>
         <Link href={url} className="inline-flex min-h-10 items-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-emerald-200 transition hover:bg-white/[0.08]">All news →</Link>
       </div>
