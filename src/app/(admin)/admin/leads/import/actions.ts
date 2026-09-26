@@ -401,12 +401,7 @@ export async function importLeadsAction(
   const seenPhones = new Set<string>();
 
   const validRows = parsedRows.filter((row) => {
-    if (!row.email) {
-      errors.push(`Row ${row.rowNumber}: missing email.`);
-      return false;
-    }
-
-    if (!isValidEmail(row.email)) {
+    if (row.email && !isValidEmail(row.email)) {
       errors.push(`Row ${row.rowNumber}: invalid email "${row.email}".`);
       return false;
     }
@@ -416,14 +411,26 @@ export async function importLeadsAction(
       return false;
     }
 
-    if (row.phone && !row.phoneNormalized) {
-      errors.push(
-        `Row ${row.rowNumber}: rejected non-UK or invalid phone "${row.phone}".`,
-      );
+    if (!row.email && !row.phoneNormalized) {
+      if (row.phone) {
+        errors.push(
+          `Row ${row.rowNumber}: no usable contact details. Phone "${row.phone}" is not a valid UK mobile number and no email was supplied.`,
+        );
+      } else {
+        errors.push(
+          `Row ${row.rowNumber}: missing contact details. An email address or UK mobile number is required.`,
+        );
+      }
       return false;
     }
 
-    if (seenEmails.has(row.email)) {
+    if (row.phone && !row.phoneNormalized && row.email) {
+      errors.push(
+        `Row ${row.rowNumber}: ignored invalid/non-UK phone "${row.phone}" and imported using the email address.`,
+      );
+    }
+
+    if (row.email && seenEmails.has(row.email)) {
       errors.push(`Row ${row.rowNumber}: duplicate email "${row.email}" within CSV.`);
       return false;
     }
@@ -433,7 +440,7 @@ export async function importLeadsAction(
       return false;
     }
 
-    seenEmails.add(row.email);
+    if (row.email) seenEmails.add(row.email);
     if (row.phoneNormalized) seenPhones.add(row.phoneNormalized);
     return true;
   });
@@ -450,7 +457,7 @@ export async function importLeadsAction(
     };
   }
 
-  const emails = validRows.map((row) => row.email);
+  const emails = validRows.flatMap((row) => (row.email ? [row.email] : []));
   const phones = validRows.flatMap((row) => (row.phoneNormalized ? [row.phoneNormalized] : []));
   const duplicateWhere: Prisma.InterestLeadWhereInput[] = [
     ...(emails.length
@@ -480,9 +487,11 @@ export async function importLeadsAction(
     : [];
 
   const duplicateMatches = validRows.flatMap((row) => {
-    const emailMatch = existingLeads.find(
-      (lead) => lead.email && normalizeEmail(lead.email) === row.email,
-    );
+    const emailMatch = row.email
+      ? existingLeads.find(
+          (lead) => lead.email && normalizeEmail(lead.email) === row.email,
+        )
+      : undefined;
     const phoneMatch = row.phoneNormalized
       ? existingLeads.find((lead) => lead.phoneNormalized === row.phoneNormalized)
       : undefined;
@@ -544,8 +553,8 @@ export async function importLeadsAction(
     interestType: row.interestType,
     status: LeadStatus.NEW,
     contactName: row.contactName,
-    email: row.email,
-    phone: row.phone || null,
+    email: row.email || null,
+    phone: row.phoneNormalized ? row.phone : null,
     phoneNormalized: row.phoneNormalized,
     teamName: row.teamName || null,
     area: row.area || null,
