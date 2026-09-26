@@ -273,7 +273,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
       ]
     : [];
 
-  const [upcomingFixtures, recentFixtures, squadMembers, playerFees, leagueStandings] = await Promise.all([
+  const [upcomingFixtures, recentFixtures, squadMembers, playerFees] = await Promise.all([
     prisma.fixture.findMany({
       where: {
         ...publishedFixtureFilter,
@@ -366,8 +366,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
           },
         })
       : Promise.resolve([]),
-    leagueStandingsPromise,
   ]);
+  const leagueStandings = await leagueStandingsPromise;
 
   const leagueDivision = leagueStandings?.divisions.find((candidate) =>
     candidate.rows.some((row) => relatedTeamIds.includes(row.teamId)),
