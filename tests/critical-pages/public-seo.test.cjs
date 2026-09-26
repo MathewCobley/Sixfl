@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
+const read = file => fs.readFileSync(file, 'utf8');
 
 function load(file, mocks = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
