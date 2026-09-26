@@ -190,8 +190,26 @@ export default async function CaptainGuidePage({
   const acceptedAt = formatAcceptedAt(onboardingStatus.captainAgreementAcceptedAt);
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-guide-page { display:grid; gap:.7rem; }
+        body:has(.captain-app-header) .captain-guide-hero { border-radius:1.15rem; box-shadow:none; background:rgba(255,255,255,.035); }
+        body:has(.captain-app-header) .captain-guide-hero > div { padding:.9rem; }
+        body:has(.captain-app-header) .captain-guide-hero h1 { margin-top:.2rem; font-size:1.25rem; line-height:1.3; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-hero p[class*="max-w-"] { margin-top:.35rem; font-size:.75rem; line-height:1.25rem; color:rgba(255,255,255,.48); }
+        body:has(.captain-app-header) .captain-guide-hero a:first-of-type { display:none; }
+        body:has(.captain-app-header) .captain-guide-hero div[class*="mt-6"] { margin-top:.7rem; display:grid; grid-template-columns:1fr 1fr; gap:.45rem; }
+        body:has(.captain-app-header) .captain-guide-hero a { min-height:2.6rem; justify-content:center; border-radius:.75rem; padding:.55rem .65rem; font-size:.7rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-jumps { display:none; }
+        body:has(.captain-app-header) .captain-guide-grid { grid-template-columns:minmax(0,1fr); gap:.5rem; }
+        body:has(.captain-app-header) .captain-guide-card { border-radius:1.05rem; padding:.85rem; }
+        body:has(.captain-app-header) .captain-guide-card h2 { font-size:.9rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-guide-card ul { margin-top:.55rem; gap:.45rem; font-size:.72rem; line-height:1.15rem; }
+        body:has(.captain-app-header) .captain-guide-page > section:last-child { border-radius:1.05rem; }
+        body:has(.captain-app-header) .captain-guide-page > section:last-child > div { padding:.85rem; }
+      `}</style>
+      <div className="captain-guide-page space-y-8">
+      <section className="captain-guide-hero overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             Captain guide
@@ -227,7 +245,7 @@ export default async function CaptainGuidePage({
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="captain-guide-jumps grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {quickLinks.map((title) => (
           <a
             key={title}
@@ -242,12 +260,12 @@ export default async function CaptainGuidePage({
         ))}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="captain-guide-grid grid gap-4 lg:grid-cols-3">
         {guideSections.map((section) => (
           <article
             key={section.title}
             id={getSectionId(section.title)}
-            className="scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+            className="captain-guide-card scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
           >
             <h2 className="text-lg font-semibold text-white">{section.title}</h2>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-white/62">
@@ -306,5 +324,6 @@ export default async function CaptainGuidePage({
         </div>
       </section>
     </div>
+    </>
   );
 }
