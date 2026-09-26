@@ -137,11 +137,13 @@ export default async function AdminMessagesPage({
     count?: string;
     skipped?: string;
     error?: string;
+    view?: string;
   }>;
 }) {
   const { user: replyActor } = await requireAdmin();
 
   const sp = (await searchParams) ?? {};
+  const selectedView = sp.view === "send" ? "send" : "inbox";
   const selectedFilter = normaliseFilter(sp.filter);
   const selectedThreadId = sp.thread?.trim() || "";
   const composeNotice = getComposeNotice({
@@ -248,13 +250,13 @@ export default async function AdminMessagesPage({
 
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                  Messages and replies
+                  {selectedView === "send" ? "Send messages" : "Team conversations"}
                 </h1>
 
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60 md:text-base">
-                  Email and SMS only. View inbound replies, track unread conversations,
-                  and launch team, prospect, lead and whole-league communications here.
-                  App chat now has its own Chat tab.
+                  {selectedView === "send"
+                    ? "Choose who you want to contact. Team, prospect, lead and league senders are kept here away from the inbox."
+                    : "Email and SMS replies first. Review unread team conversations and continue the thread without the sending tools getting in the way."}
                 </p>
               </div>
             </div>
@@ -283,6 +285,7 @@ export default async function AdminMessagesPage({
             </div>
           </div>
 
+          {selectedView === "inbox" ? (
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">
@@ -336,6 +339,7 @@ export default async function AdminMessagesPage({
               </div>
             </div>
           </div>
+          ) : null}
         </section>
 
         {composeNotice ? (
@@ -351,6 +355,7 @@ export default async function AdminMessagesPage({
         ) : null}
 
 
+        {selectedView === "send" ? (
         <div className="grid gap-6 xl:grid-cols-2 3xl:grid-cols-5">
           <CommunicationsTeamLauncher
             teams={teams.map((team) => ({
@@ -384,7 +389,9 @@ export default async function AdminMessagesPage({
             </Link>
           </section>
         </div>
+        ) : null}
 
+        {selectedView === "inbox" ? (
         <AdminMessagesInbox
           threads={threads.map((thread) => ({
             id: thread.id,
@@ -522,6 +529,7 @@ export default async function AdminMessagesPage({
               : null
           }
         />
+        ) : null}
       </div>
     </div>
   );
