@@ -38,6 +38,7 @@ const groups = [
       { label: "Users", href: "/admin/users" },
       { label: "Queue", href: "/admin/queue" },
       { label: "Templates", href: "/admin/templates" },
+      { label: "Test apps", href: "/admin/test-apps" },
       { label: "PWA / phone preview", href: "/admin/pwa" },
       { label: "Public site", href: "/" },
     ],
