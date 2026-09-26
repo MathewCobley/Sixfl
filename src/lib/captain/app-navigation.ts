@@ -30,7 +30,7 @@ export function getCaptainAppSection(pathname: string, teamId: string): {
     "player-pool": "PlayerPool",
     "player-stats": "Player stats",
     "veo-priority": "Priority score",
-    news: "Newsletters",
+    news: "Matchweek reports",
     "goal-of-the-month": "Goal of the Month",
     "league-rules": "League rules",
     tv: "SIXFL TV",
