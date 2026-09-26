@@ -218,7 +218,7 @@ export default async function CaptainGuidePage({
               Open match rules
             </Link>
             <Link
-              href="/league-rules"
+              href={`/captain/team/${team.id}/league-rules`}
               className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
             >
               Open league rules
