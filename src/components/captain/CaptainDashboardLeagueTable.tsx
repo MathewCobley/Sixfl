@@ -7,6 +7,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import MobileLeagueTable from "@/components/league/MobileLeagueTable";
 import type { LeagueFormResult, LeagueTableRow } from "@/lib/leagueTable";
 
 function normaliseLogoUrl(value?: string | null) {
@@ -93,15 +94,6 @@ function FormBadges({ row, compact = false }: { row: LeagueTableRow; compact?: b
   );
 }
 
-function MobileStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-center">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">{label}</div>
-      <div className="mt-1 text-sm font-black text-white">{value}</div>
-    </div>
-  );
-}
-
 export default function CaptainDashboardLeagueTable({
   rows,
   title,
@@ -184,75 +176,10 @@ export default function CaptainDashboardLeagueTable({
       {displayRows.length > 0 ? (
         <>
           <div className="lg:hidden">
-            <div className="grid grid-cols-[2.15rem_minmax(0,1fr)_2.25rem_2.7rem_2.7rem] items-center gap-2 border-b border-white/[0.07] bg-black/15 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.12em] text-white/30">
-              <span className="text-center">Pos</span>
-              <span>Team</span>
-              <span className="text-center">P</span>
-              <span className="text-center">GD</span>
-              <span className="text-center">Pts</span>
-            </div>
-
-            <div className="divide-y divide-white/[0.07]">
-              {displayRows.map((row, index) => {
-                const isTop = index === 0;
-                const isCurrentTeam = currentTeamIds.has(row.teamId);
-
-                return (
-                  <details
-                    key={`${row.teamId}-mobile`}
-                    className={`group ${isCurrentTeam ? "bg-emerald-500/[0.08]" : "bg-black/15"}`}
-                  >
-                    <summary className="grid min-h-[3.85rem] cursor-pointer list-none grid-cols-[2.15rem_minmax(0,1fr)_2.25rem_2.7rem_2.7rem] items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-xl border text-xs font-black ${
-                          isTop || isCurrentTeam
-                            ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                            : "border-white/10 bg-white/[0.035] text-white/65"
-                        }`}
-                      >
-                        {index + 1}
-                      </span>
-
-                      <span className="flex min-w-0 items-center gap-2">
-                        <TeamBadge row={row} size={40} />
-                        <span className="min-w-0">
-                          <span className="block truncate text-[12px] font-black leading-4 text-white">
-                            {row.teamName}
-                          </span>
-                          {isCurrentTeam ? (
-                            <span className="mt-0.5 block text-[8px] font-black uppercase tracking-[0.1em] text-emerald-300">
-                              Your team
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-
-                      <span className="text-center text-xs font-bold tabular-nums text-white/65">{row.played}</span>
-                      <span className="text-center text-xs font-bold tabular-nums text-white/70">
-                        {formatGoalDifference(row.goalDifference)}
-                      </span>
-                      <span className="text-center text-sm font-black tabular-nums text-emerald-100">{row.points}</span>
-                    </summary>
-
-                    <div className="border-t border-white/[0.06] bg-black/20 px-3 pb-3 pt-2.5">
-                      <div className="grid grid-cols-5 gap-1.5">
-                        <MobileStat label="W" value={row.won} />
-                        <MobileStat label="D" value={row.drawn} />
-                        <MobileStat label="L" value={row.lost} />
-                        <MobileStat label="GF" value={row.goalsFor} />
-                        <MobileStat label="GA" value={row.goalsAgainst} />
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-2.5 py-2">
-                        <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/35">
-                          Recent form
-                        </span>
-                        <FormBadges row={row} compact />
-                      </div>
-                    </div>
-                  </details>
-                );
-              })}
-            </div>
+            <MobileLeagueTable
+              rows={displayRows}
+              currentTeamIds={[...currentTeamIds]}
+            />
           </div>
 
           <div className="hidden w-full overflow-hidden lg:block">

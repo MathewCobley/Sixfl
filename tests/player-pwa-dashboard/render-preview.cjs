@@ -47,6 +47,7 @@ const outline = {
   UserCircleIcon: Icon,
 };
 const solid = { UserCircleIcon: Icon };
+const movementSolid = { ArrowDownIcon: Icon, ArrowUpIcon: Icon };
 const navigation = {
   usePathname: () => "/player/team/example-team",
   useSearchParams: () => new URLSearchParams("previewMembershipId=example-membership&pwaPreview=1"),
@@ -68,9 +69,17 @@ const NextImage = ({ src, alt, ...props }) => h("img", {
   src: typeof src === "string" && src.startsWith("/") ? logoData : src,
 });
 
+const MobileLeagueTable = load("src/components/league/MobileLeagueTable.tsx", {
+  "next/image": { __esModule: true, default: NextImage },
+  "@heroicons/react/20/solid": movementSolid,
+});
 const Home = load("src/components/player/PlayerAppHome.tsx", {
   "next/link": Link,
   "@heroicons/react/24/outline": outline,
+  "@/components/league/MobileLeagueTable": {
+    __esModule: true,
+    default: MobileLeagueTable,
+  },
 });
 const Header = load("src/components/player/PlayerPwaPortalHeader.tsx", {
   "next/image": { __esModule: true, default: NextImage },
@@ -124,6 +133,54 @@ const homeMarkup = renderToStaticMarkup(h(Home, {
   nextSelectionStatus: "SELECTED",
   unreadChatCount: 3,
   previewMembershipId: "example-membership",
+  leagueTableTitle: "Thirsk Tuesday Men's · Premiership",
+  leagueTableRows: [
+    {
+      teamId: "example-team",
+      teamName: "Thirsk Town Frazzles",
+      teamLogoUrl: teamBadge,
+      played: 8,
+      won: 6,
+      drawn: 1,
+      lost: 1,
+      goalsFor: 29,
+      goalsAgainst: 14,
+      goalDifference: 15,
+      points: 19,
+      recentForm: ["W", "W", "D", "W", "W"],
+      movement: "UP",
+    },
+    {
+      teamId: "other-1",
+      teamName: "Richmond Legends",
+      teamLogoUrl: badges[0],
+      played: 8,
+      won: 5,
+      drawn: 1,
+      lost: 2,
+      goalsFor: 24,
+      goalsAgainst: 17,
+      goalDifference: 7,
+      points: 16,
+      recentForm: ["W", "L", "W", "D", "W"],
+      movement: "DOWN",
+    },
+    {
+      teamId: "other-2",
+      teamName: "Mush United",
+      teamLogoUrl: badges[1],
+      played: 8,
+      won: 4,
+      drawn: 1,
+      lost: 3,
+      goalsFor: 21,
+      goalsAgainst: 19,
+      goalDifference: 2,
+      points: 13,
+      recentForm: ["L", "W", "W", "L", "D"],
+      movement: "SAME",
+    },
+  ],
 }));
 
 const headerMarkup = renderToStaticMarkup(h(Header, {
