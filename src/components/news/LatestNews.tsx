@@ -63,7 +63,13 @@ export default function LatestNews({
         }
       >
         {items?.length ? (
-          <NewsCard news={items[0]} teamId={id} compact integrated={integrated} />
+          <NewsCard
+            news={items[0]}
+            teamId={id}
+            compact
+            integrated={integrated}
+            compactHref={`/${scope}/team/${encodeURIComponent(id)}/news?league=${encodeURIComponent(items[0].leagueSlug)}&date=${encodeURIComponent(items[0].article.matchDate)}`}
+          />
         ) : (
           <p
             role="status"
