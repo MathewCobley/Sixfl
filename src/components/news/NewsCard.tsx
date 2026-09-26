@@ -9,22 +9,25 @@ export default function NewsCard({
   featured = false,
   compact = false,
   integrated = false,
+  compactHref,
 }: {
   news: PublishedNews;
   teamId?: string;
   featured?: boolean;
   compact?: boolean;
   integrated?: boolean;
+  compactHref?: string;
 }) {
   const a = news.article;
   const url = newsPath(news.leagueSlug, a.matchDate);
+  const compactUrl = compactHref ?? url;
   const teamMatches = a.matches.filter((m) => teamId && [m.teamAId, m.teamBId].includes(teamId));
   const goals = a.matches.reduce((sum, match) => sum + match.scoreA + match.scoreB, 0);
 
   if (compact && integrated) {
     return (
       <article className="overflow-hidden rounded-[1.05rem] border border-[#24372f] bg-[#0d1a14] text-white">
-        <Link href={url} className="block px-3.5 py-3 text-inherit no-underline active:bg-white/[0.025]">
+        <Link href={compactUrl} className="block px-3.5 py-3 text-inherit no-underline active:bg-white/[0.025]">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-300">
               Latest from SIXFL
