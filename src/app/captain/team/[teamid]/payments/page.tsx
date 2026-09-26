@@ -680,7 +680,35 @@ export default async function CaptainPaymentsPage({
         : null;
 
   return (
-    <div className="space-y-8">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-team-payments-page { display:grid; gap:.7rem; margin:0; }
+        body:has(.captain-app-header) .captain-team-payments-page > section,
+        body:has(.captain-app-header) .captain-team-payments-page > div { border-radius:1.05rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[class*="p-5"],
+        body:has(.captain-app-header) .captain-team-payments-page > section[class*="p-6"],
+        body:has(.captain-app-header) .captain-team-payments-page > div[class*="px-5"] { padding:.8rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] { font-size:.7rem; line-height:1.1rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] p { margin-top:.4rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] button,
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] a { min-height:2.65rem; width:100%; justify-content:center; font-size:.72rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.4rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div { border-radius:.85rem !important; padding:.65rem !important; min-width:0; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:first-child { font-size:.52rem; line-height:.75rem; letter-spacing:.08em; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:nth-child(2) { margin-top:.2rem; font-size:1rem; line-height:1.2; font-weight:800; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:nth-child(3) { display:none; }
+        body:has(.captain-app-header) .captain-team-payments-page h2[class*="text-2xl"],
+        body:has(.captain-app-header) .captain-team-payments-page h2[class*="text-xl"] { font-size:.95rem !important; line-height:1.2 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-team-payments-page p[class*="leading-6"] { font-size:.7rem; line-height:1.1rem; }
+        body:has(.captain-app-header) .captain-team-payments-page form[class*="max-w-sm"] { max-width:none; width:100%; }
+        body:has(.captain-app-header) .captain-team-payments-page form[class*="max-w-sm"] button { width:100%; }
+        body:has(.captain-app-header) .captain-team-payments-page section[class*="rounded-3xl"] > div[class*="px-6"] { padding:.8rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page section[class*="rounded-3xl"] > div[class*="divide-y"] > div { padding:.75rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page a[class*="min-h-11"],
+        body:has(.captain-app-header) .captain-team-payments-page button[class*="h-12"],
+        body:has(.captain-app-header) .captain-team-payments-page button[class*="h-11"] { width:100%; min-height:2.7rem; height:auto; border-radius:.8rem; font-size:.72rem; }
+      `}</style>
+      <div className="captain-team-payments-page space-y-8">
       {linkWriteOffMessage ? (
         <p
           role={sp.links === "written_off" ? "status" : "alert"}
@@ -1550,5 +1578,6 @@ export default async function CaptainPaymentsPage({
         </div>
       </section>
     </div>
+    </>
   );
 }
