@@ -17,7 +17,7 @@ import {
 
 type TemplateAudience = "LEAD" | "TEAM" | "PLAYER" | "REFEREE" | "GENERAL";
 type InterestTypeValue = "" | "TEAM" | "PLAYER" | "REFEREE";
-type CtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "paymentUrl" | "captainDashboardUrl" | "teamJoinUrl" | "squadActivationUrl" | "fixtureUrl" | "fixturesUrl" | "referralPageUrl";
+type CtaUrlKeyValue = "" | "signupUrl" | "manageTeamUrl" | "paymentUrl" | "captainDashboardUrl" | "teamJoinUrl" | "squadActivationUrl" | "fixtureUrl" | "fixturesUrl" | "referralPageUrl" | "teamConfirmationUrl";
 type EmailTemplateFormValues = { id?:string; key:string; name:string; description:string; audience:TemplateAudience; interestType:InterestTypeValue; subject:string; body:string; ctaLabel:string; ctaUrlKey:CtaUrlKeyValue; isActive:boolean };
 type EmailTemplateFormProps = { mode:"create"|"edit"; templateType:"campaign"|"system"; initialValues?:Partial<EmailTemplateFormValues> };
 
@@ -35,7 +35,7 @@ const INTEREST_TYPE_OPTIONS:Array<{value:InterestTypeValue;label:string;descript
   {value:"REFEREE",label:"Referee",description:"Best for referee enquiry follow-up."},
 ];
 const TOKENS=[
-  "{{firstName}}","{{fullName}}","{{teamName}}","{{sixflTvPriorityScore}}","{{teamContextLine}}","{{squadActivationUrl}}","{{opponentName}}","{{leagueName}}","{{leagueDisplayName}}","{{fixtureName}}","{{kickoffLabel}}","{{kickoffDateTime}}","{{fixturesList}}","{{amount}}","{{claimCode}}","{{claimLink}}","{{captainDashboardUrl}}","{{captainFixturesUrl}}","{{signInUrl}}","{{claimUrl}}","{{pendingCaptainNotice}}","{{fixtureUrl}}","{{fixturesUrl}}","{{paymentUrl}}","{{area}}","{{preferredNight}}","{{link}}","{{yesResponseUrl}}","{{noResponseUrl}}","{{cupName}}","{{cupFormat}}","{{matchFee}}","{{venueNote}}","{{scheduleNote}}","{{responseDeadline}}","{{cta}}",
+  "{{firstName}}","{{fullName}}","{{teamName}}","{{sixflTvPriorityScore}}","{{teamContextLine}}","{{squadActivationUrl}}","{{opponentName}}","{{leagueName}}","{{leagueShortName}}","{{leagueDisplayName}}","{{leagueStartLine}}","{{leagueDetailsBlock}}","{{proposedStartDate}}","{{fixtureName}}","{{kickoffLabel}}","{{kickoffDateTime}}","{{fixturesList}}","{{amount}}","{{claimCode}}","{{claimLink}}","{{captainDashboardUrl}}","{{captainFixturesUrl}}","{{signInUrl}}","{{claimUrl}}","{{pendingCaptainNotice}}","{{fixtureUrl}}","{{fixturesUrl}}","{{paymentUrl}}","{{area}}","{{preferredNight}}","{{link}}","{{yesResponseUrl}}","{{noResponseUrl}}","{{cupName}}","{{cupFormat}}","{{matchFee}}","{{venueNote}}","{{scheduleNote}}","{{responseDeadline}}","{{cta}}",
 ] as const;
 const CUP_RESPONSE_BLOCK=[
   "SIXFL_POLL_OPTIONS_START",
@@ -47,6 +47,7 @@ const CTA_OPTIONS:Array<{value:CtaUrlKeyValue;label:string;previewUrl?:string}>=
   {value:"",label:"No button"},
   {value:"referralPageUrl",label:"Referral page",previewUrl:REFERRAL_PAGE_URL},
   {value:"signupUrl",label:"Register interest",previewUrl:"https://www.sixfl.co.uk/register-interest"},
+  {value:"teamConfirmationUrl",label:"Team decision form",previewUrl:"https://www.sixfl.co.uk/team-confirmation/preview-token"},
   {value:"manageTeamUrl",label:"Manage team",previewUrl:"https://www.sixfl.co.uk/claim?code=H862NY"},
   {value:"captainDashboardUrl",label:"Captain dashboard",previewUrl:"https://www.sixfl.co.uk/claim?code=H862NY"},
   {value:"teamJoinUrl",label:"Team join page",previewUrl:"https://www.sixfl.co.uk/teams/join/rossett-nomads"},
@@ -67,7 +68,10 @@ function previewReplace(text:string){
   .replaceAll("{{firstName}}","Jordan").replaceAll("{{fullName}}","Jordan Smith").replaceAll("{{teamName}}","Rossett Nomads").replaceAll("{{sixflTvPriorityScore}}","86")
   .replaceAll("{{teamContextLine}}","You’ve been added to the Rossett Nomads squad that plays on a Tuesday night at Rossett Sports Centre.")
   .replaceAll("{{squadActivationUrl}}","https://www.sixfl.co.uk/squad/activate/demo-token").replaceAll("{{opponentName}}","Rossett Vets")
-  .replaceAll("{{leagueName}}","Rossett Mens Tuesday").replaceAll("{{leagueDisplayName}}","Rossett Mens Tuesday — Spring 2026")
+  .replaceAll("{{leagueName}}","Rossett Mens Tuesday — Winter 2026/27").replaceAll("{{leagueShortName}}","Rossett Mens Tuesday").replaceAll("{{leagueDisplayName}}","Rossett Mens Tuesday — Winter 2026/27")
+  .replaceAll("{{leagueStartLine}}","Proposed start date: Tuesday 6 October.")
+  .replaceAll("{{leagueDetailsBlock}}","League: Rossett Mens Tuesday — Winter 2026/27\nVenue: Rossett Sports Centre\nProposed start date: Tuesday 6 October\nCost: £40 per team per match\nFormat: Weekly 6-a-side fixtures")
+  .replaceAll("{{proposedStartDate}}","Tuesday 6 October")
   .replaceAll("{{fixtureName}}","Harrogate Athletic vs Rossett Vets").replaceAll("{{kickoffLabel}}","Tue 21 Apr, 21:20").replaceAll("{{kickoffDateTime}}","Tue 21 Apr, 21:20")
   .replaceAll("{{fixturesList}}","Tue 21 Apr, 21:20 — Harrogate Athletic vs Rossett Vets\nTue 28 Apr, 20:40 — Rossett Vets vs Boroughbridge United")
   .replaceAll("{{amount}}","£30.00").replaceAll("{{claimCode}}","H862NY").replaceAll("{{claimLink}}","https://www.sixfl.co.uk/claim?code=H862NY")
