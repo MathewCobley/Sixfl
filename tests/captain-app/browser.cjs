@@ -24,7 +24,8 @@ async function main() {
     for (const width of [320, 375, 430, 768]) {
       await page.setViewportSize({ width, height: 812 });
       await show();
-      assert.equal(await page.locator('h1').innerText(), 'Dynamo Kebab');
+      assert.equal(await page.locator('.headerTitle strong').innerText(), 'Dynamo Kebab');
+      assert.equal(await page.locator('.headerTitle span').innerText(), 'Captain Portal');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       const tabs = page.locator('nav[aria-label="Captain quick navigation"] a');
       assert.equal(await tabs.count(), 6);
@@ -53,7 +54,8 @@ async function main() {
     await page.setViewportSize({ width: 320, height: 812 });
     await show({ teamName: 'Harrogate Naija Isolo FC Development Squad', data: { openIssues: 2, overdueConfirmations: 3 } });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    assert.equal(await page.locator('h1').innerText(), 'Harrogate Naija Isolo FC Development Squad');
+    assert.equal(await page.locator('.headerTitle strong').innerText(), 'Harrogate Naija Isolo FC Development Squad');
+    assert.ok(await page.locator('.headerTitle strong').evaluate(el => el.scrollWidth >= el.clientWidth));
     await page.screenshot({ path: 'artifacts/captain-app/long-name-320.png', fullPage: true });
     await show({ data: { nextFixture: null, reportsDue: 0 } });
     assert.equal(await page.getByText('No match scheduled', { exact: true }).count(), 1);
