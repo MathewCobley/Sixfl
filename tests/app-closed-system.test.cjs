@@ -65,6 +65,9 @@ test("player installed-app routes stay inside the player portal", () => {
   const availability = read(
     "src/app/player/team/[teamid]/availability/page.tsx",
   );
+  const leagueResults = read(
+    "src/app/player/team/[teamid]/league-results/page.tsx",
+  );
 
   assert.ok(home.includes("/player/team/${teamId}/news"));
   assert.ok(more.includes("/player/team/${teamid}/news"));
@@ -84,6 +87,11 @@ test("player installed-app routes stay inside the player portal", () => {
   assert.equal(appTabs.includes('href: "/goal-of-the-month'), false);
   assert.equal(appTabs.includes('href: "/league-rules"'), false);
   assert.equal(appTabs.includes('href: "/match-rules"'), false);
+
+  assert.equal(leagueResults.includes("redirect(`/leagues/"), false);
+  assert.equal(leagueResults.includes('href="/leagues/'), false);
+  assert.ok(leagueResults.includes("FixtureStatus.COMPLETED"));
+  assert.ok(leagueResults.includes("League results"));
 
   const appGate = availability.indexOf('<PlayerPwaModeOnly mode="app">');
   const webGate = availability.indexOf('<PlayerPwaModeOnly mode="web">');
