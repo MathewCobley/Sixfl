@@ -26,27 +26,27 @@ export default function NewsArticle({
   const goals = a.matches.reduce((n, m) => n + m.scoreA + m.scoreB, 0);
 
   return (
-    <article className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#f4f5f1] text-[#07130f] shadow-[0_34px_100px_rgba(0,0,0,0.38)]">
-      <header className="grid min-h-[320px] overflow-hidden bg-black lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="relative flex min-h-[300px] flex-col justify-between overflow-hidden px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[430px] lg:px-12">
-          <div className="pointer-events-none absolute -right-10 top-[-8%] h-[120%] w-24 skew-x-[-10deg] bg-emerald-400" />
-          <div className="pointer-events-none absolute -right-2 top-[-8%] h-[120%] w-3 skew-x-[-10deg] bg-white/15" />
+    <article className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#f4f5f1] text-[#07130f] shadow-[0_34px_100px_rgba(0,0,0,0.38)] sm:rounded-[2rem]">
+      <header className="grid overflow-hidden bg-black lg:min-h-[430px] lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="relative flex min-h-[250px] flex-col justify-between overflow-hidden px-5 py-6 text-white sm:min-h-[320px] sm:px-10 sm:py-10 lg:min-h-[430px] lg:px-12">
+          <div className="pointer-events-none absolute -right-7 top-[-8%] h-[120%] w-16 skew-x-[-10deg] bg-emerald-400 sm:-right-10 sm:w-24" />
+          <div className="pointer-events-none absolute -right-1 top-[-8%] h-[120%] w-2 skew-x-[-10deg] bg-white/15 sm:-right-2 sm:w-3" />
 
-          <div className="relative z-10">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-300">SIXFL matchnight</p>
-            <div className="mt-7 max-w-sm leading-none">
-              <div className="text-5xl font-black uppercase tracking-[-0.06em] sm:text-6xl lg:text-7xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber}` : "Matchnight"}</div>
-              <div className="mt-1 text-5xl font-black uppercase tracking-[-0.06em] text-transparent sm:text-6xl lg:text-7xl" style={{ WebkitTextStroke: '2px #34d399' }}>News</div>
+          <div className="relative z-10 min-w-0 pr-8 sm:pr-10">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300 sm:text-xs sm:tracking-[0.28em]">SIXFL matchnight</p>
+            <div className="mt-5 min-w-0 leading-none sm:mt-7">
+              <div className="whitespace-nowrap text-[clamp(2rem,9.5vw,3rem)] font-black uppercase tracking-[-0.065em] sm:text-6xl lg:text-7xl">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber}` : "Matchnight"}</div>
+              <div className="mt-1 whitespace-nowrap text-[clamp(2rem,9.5vw,3rem)] font-black uppercase tracking-[-0.065em] text-transparent sm:text-6xl lg:text-7xl" style={{ WebkitTextStroke: '2px #34d399' }}>News</div>
             </div>
           </div>
 
-          <div className="relative z-10 max-w-sm border-l-2 border-emerald-400 pl-4">
-            <p className="text-sm font-bold text-white">{a.leagueName}</p>
-            <p className="mt-1 text-sm text-white/60">{newsDate(a.matchDate)}</p>
+          <div className="relative z-10 max-w-[15rem] border-l-2 border-emerald-400 pl-3 sm:max-w-sm sm:pl-4">
+            <p className="text-xs font-bold leading-5 text-white sm:text-sm">{a.leagueName}</p>
+            <p className="mt-0.5 text-xs text-white/60 sm:mt-1 sm:text-sm">{newsDate(a.matchDate)}</p>
           </div>
         </div>
 
-        <div className="relative min-h-[280px] overflow-hidden border-t border-white/10 bg-[#0b2018] lg:min-h-[430px] lg:border-l lg:border-t-0">
+        <div className="relative min-h-[190px] overflow-hidden border-t border-white/10 bg-[#0b2018] sm:min-h-[250px] lg:min-h-[430px] lg:border-l lg:border-t-0">
           {a.cover ? (
             <>
               <NewsImage src={a.cover.coverUrl} alt={a.cover.coverAlt} className="absolute inset-0 h-full w-full object-cover" />
@@ -63,12 +63,18 @@ export default function NewsArticle({
               <div className="absolute left-1/2 top-[12%] h-[76%] border-l-2 border-white/20" />
               <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/20 sm:h-32 sm:w-32" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="rounded-3xl border border-white/10 bg-black/50 px-7 py-6 text-center shadow-2xl backdrop-blur-sm">
-                  <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-300">The night in numbers</p>
-                  <p className="mt-3 text-5xl font-black text-white">{a.matches.length}</p>
-                  <p className="text-sm font-semibold text-white/60">matches</p>
-                  <p className="mt-4 text-3xl font-black text-emerald-300">{goals}</p>
-                  <p className="text-sm font-semibold text-white/60">goals</p>
+                <div className="rounded-2xl border border-white/10 bg-black/50 px-5 py-4 text-center shadow-2xl backdrop-blur-sm sm:rounded-3xl sm:px-7 sm:py-6">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300 sm:text-xs sm:tracking-[0.24em]">The night in numbers</p>
+                  <div className="mt-3 flex items-end justify-center gap-8 sm:block">
+                    <div>
+                      <p className="text-3xl font-black text-white sm:text-5xl">{a.matches.length}</p>
+                      <p className="text-xs font-semibold text-white/60 sm:text-sm">matches</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-black text-emerald-300 sm:mt-4 sm:text-3xl">{goals}</p>
+                      <p className="text-xs font-semibold text-white/60 sm:text-sm">goals</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
