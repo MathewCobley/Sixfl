@@ -1,5 +1,6 @@
 /* Owned captain UI only. No global website selectors or clipped instructions. */
 .home { display: grid; gap: 12px; min-width: 0; padding: 4px 2px 8px; }
+.overviewStrip { min-width: 0; padding: 0 2px; }
 .home *, .menu *, .appHeader *, .bottomNav * { box-sizing: border-box; }
 
 .identity { overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
@@ -99,7 +100,7 @@
 .logoLink { display: flex; align-items: center; min-height: 44px; text-decoration: none; }
 .logoLink img { display: block; width: 88px; max-width: 100%; height: 26px; object-fit: contain; object-position: left center; }
 .headerTitle { min-width: 0; text-align: center; }
-.headerTitle strong { display: block; color: #f5f8f7; font-size: 14px; line-height: 1.3; font-weight: 750; overflow-wrap: anywhere; }
+.headerTitle strong { display: block; overflow: hidden; color: #f5f8f7; font-size: 13px; line-height: 1.3; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .headerTitle span { display: block; margin-top: 2px; color: #a1b5ad; font-size: 11px; line-height: 1.3; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .badgeLink { display: flex; justify-self: end; width: 44px; height: 44px; align-items: center; justify-content: center; text-decoration: none; border-radius: 12px; }
 .badgeLink img { width: 34px; height: 34px; object-fit: contain; }

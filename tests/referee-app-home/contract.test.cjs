@@ -60,7 +60,8 @@ const base = {
 test("home exposes real night details and operational routes without website escape links", () => {
   const html = renderToStaticMarkup(React.createElement(Home, base));
   for (const text of [
-    "Hi, Charlie",
+    "Charlie Cobley",
+    "Referee Portal",
     "19:30",
     "Test venue",
     "£40.00",
@@ -453,4 +454,14 @@ test("More keeps referee rules and agreement inside the referee app", () => {
   assert.match(home, /Set by SIXFL/);
   assert.match(availability, /getRefereeSetLeagues/);
   assert.match(availability, /RefereeLeagueCoverage/);
+});
+
+test("referee identity stays in the fixed app header across work screens", () => {
+  const home = fs.readFileSync("src/components/referee/RefereeAppHome.tsx", "utf8");
+  const shell = fs.readFileSync("src/components/referee/RefereeAppShell.tsx", "utf8");
+
+  assert.match(home, /\{name\}[\s\S]*Referee Portal/);
+  assert.doesNotMatch(home, /Hi, \{firstName\}/);
+  assert.match(shell, /const refereeName = user\.name \|\| user\.email \|\| "SIXFL Referee"/);
+  assert.match(shell, /\{refereeName\}[\s\S]*Referee Portal · \{title\}/);
 });
