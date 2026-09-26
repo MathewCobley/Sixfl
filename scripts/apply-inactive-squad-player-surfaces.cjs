@@ -154,10 +154,16 @@ function replaceRequired(source, before, after, label) {
   let page = read(pageFile);
 
   if (!page.includes("activeMembersForSelection")) {
-    const anchor = `  const availabilityByMemberId = new Map(
+    const anchors = [
+      `  const availabilityByMemberId = new Map(
     fixture.availabilities.map((item) => [item.teamMemberId, item]),
-  );`;
-    if (!page.includes(anchor)) throw new Error("Fixture selection active-member anchor not found.");
+  );`,
+      `  const availabilityByMemberId = new Map(
+    refreshedAvailability.map((item) => [item.teamMemberId, item]),
+  );`,
+    ];
+    const anchor = anchors.find((candidate) => page.includes(candidate));
+    if (!anchor) throw new Error("Fixture selection active-member anchor not found.");
     page = page.replace(
       anchor,
       `  const activeMembersForSelection = team.members.filter(
