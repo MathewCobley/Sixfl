@@ -25,7 +25,7 @@ function fixtureLabel(fee: PlayerLedgerAccount["fees"][number] | undefined) {
   )}`;
 }
 
-export default function PlayerLedgerStatement({account, showAudit = false}:{account:PlayerLedgerAccount; showAudit?: boolean}){
+export default function PlayerLedgerStatement({account, showAudit = false, app = false}:{account:PlayerLedgerAccount; showAudit?: boolean; app?: boolean}){
   const stateByFeeId = new Map(account.states.map(state => [state.feeId, state]));
   const feeById = new Map(account.fees.map(fee => [fee.id, fee]));
   const runningBalanceByEntryId = new Map<string, number>();
@@ -38,6 +38,111 @@ export default function PlayerLedgerStatement({account, showAudit = false}:{acco
     if (left.sequence === right.sequence) return 0;
     return left.sequence < right.sequence ? 1 : -1;
   });
+
+  if (app) {
+    return (
+      <section className="overflow-hidden rounded-[1.15rem] border border-white/[0.07] bg-white/[0.035]">
+        <div className="border-b border-white/[0.07] px-3.5 py-3">
+          <h2 className="text-sm font-black text-white">Payment history</h2>
+          <p className="mt-0.5 text-[10px] text-white/35">Most recent activity first</p>
+        </div>
+        {entries.length === 0 ? (
+          <div className="p-4 text-sm text-white/45">No payment activity recorded yet.</div>
+        ) : (
+          <div className="divide-y divide-white/[0.06]">
+            {entries.map((e) => {
+              const fee = feeById.get(e.feeId);
+              const displayDate =
+                e.kind === "OPENING_BALANCE" && fee?.fixture?.kickoffAt
+                  ? fee.fixture.kickoffAt
+                  : e.createdAt;
+              const matchLabel = fixtureLabel(fee);
+              return (
+                <details key={e.id} className="group">
+                  <summary className="cursor-pointer list-none px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-black text-white/75">{entryLabel(e.kind)}</div>
+                        <div className="mt-0.5 text-[9px] text-white/30">
+                          {formatDateTimeInLondon(displayDate, {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: e.kind === "OPENING_BALANCE" ? undefined : "2-digit",
+                            minute: e.kind === "OPENING_BALANCE" ? undefined : "2-digit",
+                          })}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className={e.amountPence > 0 ? "text-sm font-black text-amber-100" : "text-sm font-black text-emerald-100"}>
+                          {e.amountPence > 0 ? "+" : ""}{money(e.amountPence)}
+                        </div>
+                        <div className="text-[9px] text-white/25">
+                          Balance {money(runningBalanceByEntryId.get(e.id) ?? 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </summary>
+                  <div className="space-y-1 border-t border-white/[0.06] bg-black/10 p-3.5 text-[10px] leading-4 text-white/45">
+                    {matchLabel ? <p className="font-bold text-emerald-100/65">{matchLabel}</p> : null}
+                    <p>{entryReason(e.kind, e.reason)}</p>
+                    {e.receivedBy ? <p>Received by {e.receivedBy === "CAPTAIN" ? "captain — not a SIXFL bank receipt" : "SIXFL"}</p> : null}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        )}
+
+        <details className="group border-t border-white/[0.07]">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 text-sm font-black text-white [&::-webkit-details-marker]:hidden">
+            <span>Payment link history ({account.paymentLinks.length})</span>
+            <span className="text-white/25 transition group-open:rotate-45">+</span>
+          </summary>
+          <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+            {account.paymentLinks.length === 0 ? (
+              <div className="p-3.5 text-xs text-white/40">No player payment links recorded.</div>
+            ) : (
+              [...account.paymentLinks]
+                .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+                .map((link) => {
+                  const fee = feeById.get(link.feeId);
+                  const settlementLabel = getPlayerPaymentLinkSettlementLabel(link, fee, stateByFeeId.get(link.feeId));
+                  const label = link.fixtureLabel ?? fixtureLabel(fee) ?? "Player payment link";
+                  const active =
+                    !settlementLabel &&
+                    !link.isRemoved &&
+                    fee?.paymentToken === link.paymentToken &&
+                    fee?.status === "OPEN";
+                  return (
+                    <div key={link.id} className="p-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-xs font-black leading-5 text-white/70">{label}</div>
+                          <div className="mt-0.5 text-[9px] text-white/30">
+                            {formatDateTimeInLondon(link.createdAt,{day:"2-digit",month:"short",year:"numeric"})}
+                            {link.amountPence !== null ? " · " + money(link.amountPence) : ""}
+                          </div>
+                        </div>
+                        <span className={
+                          settlementLabel
+                            ? "shrink-0 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-100"
+                            : active
+                              ? "shrink-0 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-100"
+                              : "shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] font-bold text-white/45"
+                        }>
+                          {settlementLabel ?? (active ? "Ready to pay" : "Inactive")}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+          </div>
+        </details>
+      </section>
+    );
+  }
 
   return <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
     <h2 className="text-lg font-semibold">Payment history</h2>
