@@ -59,6 +59,7 @@ export default function BulkLeadSmsForm(props: any) {
     selectedArea,
     selectedNight,
     recipientCount = 0,
+    selectedQuery,
     recipientPreview = [],
     managedTeamOptions = [],
     action,
@@ -69,6 +70,7 @@ export default function BulkLeadSmsForm(props: any) {
     selectedArea?: string | undefined;
     selectedNight?: string | undefined;
     recipientCount: number;
+    selectedQuery?: string | undefined;
     recipientPreview: RecipientPreviewItem[];
     managedTeamOptions: ManagedTeamOption[];
     action: any;
@@ -166,6 +168,7 @@ export default function BulkLeadSmsForm(props: any) {
       <input type="hidden" name="selectedStatus" value={selectedStatus ?? ""} />
       <input type="hidden" name="selectedArea" value={selectedArea ?? ""} />
       <input type="hidden" name="selectedNight" value={selectedNight ?? ""} />
+      <input type="hidden" name="selectedQuery" value={selectedQuery ?? ""} />
 
       {includedLeadIds.map((id) => (
         <input key={id} type="hidden" name="includedLeadIds" value={id} />
