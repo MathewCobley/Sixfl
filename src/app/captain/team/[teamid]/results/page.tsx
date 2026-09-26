@@ -665,7 +665,23 @@ export default async function CaptainResultsPage({
     });
 
   return (
-    <div className="min-w-0 space-y-6">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-results-page { display:grid; gap:.7rem; margin:0; }
+        body:has(.captain-app-header) .captain-results-page > section:first-of-type { border-radius:1.1rem !important; box-shadow:none !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-results-page > section:first-of-type > div { padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-results-page > section:first-of-type h1 { margin-top:.15rem !important; font-size:1.15rem !important; line-height:1.25 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-results-page > section:first-of-type p[class*="max-w-"] { margin-top:.35rem !important; font-size:.72rem !important; line-height:1.1rem !important; color:rgba(255,255,255,.45) !important; }
+        body:has(.captain-app-header) .captain-results-page > section[class*="captain-app-secondary"] { padding:.75rem !important; border-radius:1rem !important; }
+        body:has(.captain-app-header) .captain-results-page > section[class*="captain-app-secondary"] h2 { font-size:.9rem !important; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 > section { border-radius:1.05rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 > section > div:first-child { padding:.8rem !important; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 > section h3 { font-size:1rem !important; line-height:1.25 !important; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 > section form { padding:.75rem !important; }
+        body:has(.captain-app-header) .captain-results-page > .space-y-4 > section button[type="submit"] { min-height:2.75rem !important; width:100% !important; border-radius:.8rem !important; font-size:.75rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-results-page min-w-0 space-y-6">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -1064,5 +1080,6 @@ export default async function CaptainResultsPage({
         })}
       </div>
     </div>
+    </>
   );
 }
