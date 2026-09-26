@@ -52,6 +52,10 @@ export default function LatestNews({
 
   if (compact) {
     const integrated = scope === "captain" && presentation === "integrated";
+    const item = items?.[0] ?? null;
+    const articleHref = item
+      ? `/${scope}/team/${encodeURIComponent(id)}/news?league=${encodeURIComponent(item.leagueSlug)}&date=${encodeURIComponent(item.article.matchDate)}`
+      : undefined;
 
     return (
       <section
@@ -62,8 +66,14 @@ export default function LatestNews({
             : "captain-app-news mx-auto w-full max-w-xl px-3 pb-2 pt-2 text-white"
         }
       >
-        {items?.length ? (
-          <NewsCard news={items[0]} teamId={id} compact integrated={integrated} />
+        {item ? (
+          <NewsCard
+            news={item}
+            teamId={id}
+            compact
+            integrated={integrated}
+            articleHref={articleHref}
+          />
         ) : (
           <p
             role="status"
