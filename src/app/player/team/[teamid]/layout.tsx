@@ -61,6 +61,21 @@ export default async function PlayerTeamLayout({
   );
   const hasTeamMembership = Boolean(viewer?.teamMembers.length);
 
+  const previewPlayers = isAdmin
+    ? await prisma.teamMember.findMany({
+        where: { teamId: teamid },
+        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      })
+    : [];
+
   if (
     viewer?.id &&
     !isAdmin &&
@@ -93,8 +108,14 @@ export default async function PlayerTeamLayout({
       {team ? (
         <Suspense fallback={null}>
           <PlayerPwaPortalHeader
+            teamId={teamid}
             teamName={team.name}
             teamLogoUrl={team.logoUrl}
+            playerName={!isAdmin ? viewer?.name ?? null : null}
+            previewPlayers={previewPlayers.map((membership) => ({
+              id: membership.id,
+              name: membership.user.name,
+            }))}
           />
         </Suspense>
       ) : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getCaptainAppSection } from "@/lib/captain/app-navigation";
@@ -16,21 +17,21 @@ export default function CaptainAppHeader({ teamId, teamName, teamLogoUrl }: {
   teamLogoUrl: string | null;
 }) {
   const { title } = getCaptainAppSection(usePathname(), teamId);
-  const headerTitle = title === "Home" ? "Captain Portal" : title;
+  const contextLabel = title === "Home" ? "Captain Portal" : `Captain Portal · ${title}`;
   return (
-    <header className={`captain-app-header ${styles.appHeader}`}>
+    <PinnedAppChrome edge="top"><header className={`captain-app-header ${styles.appHeader}`}>
       <div className={styles.headerInner}>
         <Link href={`/captain/team/${teamId}`} aria-label="SIXFL captain home" className={styles.logoLink}>
           <img src="/logo2.png" alt="SIXFL" width={88} height={26} />
         </Link>
         <div className={styles.headerTitle}>
-          <strong>{headerTitle}</strong>
-          {title !== "Home" ? <span>{teamName}</span> : null}
+          <strong>{teamName}</strong>
+          <span>{contextLabel}</span>
         </div>
         <Link href={`/captain/team/${teamId}/more`} aria-label={`More options for ${teamName}`} className={styles.badgeLink}>
           {teamLogoUrl ? <img src={teamLogoUrl} alt="" width={34} height={34} /> : <span>{initials(teamName)}</span>}
         </Link>
       </div>
-    </header>
+    </header></PinnedAppChrome>
   );
 }

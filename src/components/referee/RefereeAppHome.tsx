@@ -1,3 +1,4 @@
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -59,7 +60,6 @@ export default function RefereeAppHome({
   desktopTabs: ReactNode;
   preview: ReactNode;
 }) {
-  const firstName = name.trim().split(/\s+/)[0];
   const initials = name
     .trim()
     .split(/\s+/)
@@ -69,7 +69,7 @@ export default function RefereeAppHome({
     .toUpperCase();
   return (
     <main className="min-h-screen bg-[#07130f] text-white">
-      <header
+      <PinnedAppChrome edge="top"><header
         className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
       >
@@ -79,7 +79,10 @@ export default function RefereeAppHome({
           </Link>
 
           <div className="min-w-0 flex-1 text-center">
-            <div className="text-sm font-black tracking-tight text-white">
+            <div className="truncate text-[13px] font-black tracking-tight text-white">
+              {name}
+            </div>
+            <div className="mt-0.5 text-[9px] font-semibold text-white/45">
               Referee Portal
             </div>
           </div>
@@ -91,51 +94,39 @@ export default function RefereeAppHome({
             {initials}
           </div>
         </div>
-      </header>
+      </header></PinnedAppChrome>
       <div className="mx-auto max-w-xl space-y-3 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3">
-        <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_38%),linear-gradient(145deg,#0b1a22,#09140f)] p-3">
-          <div className="flex items-center gap-3">
-            <div
-              aria-hidden="true"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-sky-300/25 bg-black/30 text-sm font-black text-white/70"
-            >
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <h1 className="break-words text-xl font-black tracking-tight">
-                Hi, {firstName}
-              </h1>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/[0.07] bg-black/25 py-2 text-center">
+        <section aria-label="Referee overview" className="space-y-2 px-0.5">
+          <div className="grid grid-cols-3 divide-x divide-white/[0.07] overflow-hidden rounded-xl border border-white/[0.06] bg-black/20 py-2 text-center">
             <Link href="/referee/nights" className="min-h-11">
               <strong className="block text-lg tabular-nums">
                 {openCount}
               </strong>
-              <span className="text-[10px] text-white/50">Open nights</span>
+              <span className="text-[10px] text-white/45">Open nights</span>
             </Link>
             <Link href="/referee/ledger" className="min-h-11">
               <strong className="block text-lg tabular-nums">
                 {submittedCount}
               </strong>
-              <span className="text-[10px] text-white/50">Submitted</span>
+              <span className="text-[10px] text-white/45">Submitted</span>
             </Link>
             <Link href="/referee/ledger" className="min-h-11">
               <strong className="block text-lg tabular-nums text-emerald-200">
                 {dueToYou}
               </strong>
-              <span className="text-[10px] text-white/50">Due to you</span>
+              <span className="text-[10px] text-white/45">Due to you</span>
             </Link>
           </div>
-          <div className="mt-2 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5">
+
+          <div className="rounded-xl border border-white/[0.055] bg-white/[0.02] px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/45">
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/40">
                 Your regular nights
               </span>
-              <span className="text-[9px] font-semibold text-emerald-200/70">Set by SIXFL</span>
+              <span className="text-[9px] font-semibold text-emerald-200/65">Set by SIXFL</span>
             </div>
             {setNights.length > 0 ? (
-              <div className="mt-1.5 divide-y divide-white/[0.06]">
+              <div className="mt-1.5 divide-y divide-white/[0.05]">
                 {setNights.map((night) => (
                   <div key={night.id} className="py-1.5">
                     <div className="flex items-center justify-between gap-3">
@@ -261,9 +252,9 @@ export default function RefereeAppHome({
         <div className="hidden sm:block">{desktopTabs}</div>
         {children}
       </div>
-      <nav
+      <PinnedAppChrome edge="bottom"><nav
         aria-label="Referee app navigation"
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl"
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {[
@@ -300,7 +291,7 @@ export default function RefereeAppHome({
             </Link>
           ))}
         </div>
-      </nav>
+      </nav></PinnedAppChrome>
     </main>
   );
 }

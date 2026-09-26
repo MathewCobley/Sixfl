@@ -24,7 +24,8 @@ function load(file, mocks) {
   const mod = { exports: {} };
   new Function("require", "module", "exports", code)((id) => {
     if (Object.hasOwn(mocks, id)) return mocks[id];
-    if (id === "react" || id === "react/jsx-runtime") return require(id);
+    if (id === "@/components/pwa/PinnedAppChrome") return load("src/components/pwa/PinnedAppChrome.tsx", mocks);
+    if (id === "react" || id === "react-dom" || id === "react/jsx-runtime") return require(id);
     throw Error(`Unexpected dependency ${id} in ${file}`);
   }, mod, mod.exports);
   return mod.exports.default;
@@ -73,6 +74,7 @@ const Home = load("src/components/player/PlayerAppHome.tsx", {
 });
 const Header = load("src/components/player/PlayerPwaPortalHeader.tsx", {
   "next/image": { __esModule: true, default: NextImage },
+  "next/link": Link,
   "next/navigation": navigation,
   "@heroicons/react/24/solid": solid,
 });
@@ -125,8 +127,13 @@ const homeMarkup = renderToStaticMarkup(h(Home, {
 }));
 
 const headerMarkup = renderToStaticMarkup(h(Header, {
+  teamId: "example-team",
   teamName: "Thirsk Town Frazzles",
   teamLogoUrl: teamBadge,
+  playerName: null,
+  previewPlayers: [
+    { id: "example-membership", name: "Finley Bowes" },
+  ],
 }));
 const navMarkup = renderToStaticMarkup(h(Nav, {
   teamId: "example-team",
@@ -170,6 +177,8 @@ const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
     await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white"><div class="player-pwa-mode"></div>${headerMarkup}${homeMarkup}${navMarkup}</body></html>`);
     await page.waitForTimeout(100);
     const text = await page.locator("body").innerText();
+    assert.match(text, /Finley Bowes/);
+    assert.match(text, /Player Portal · Thirsk Town Frazzles/);
     assert.match(text, /SELECTED/);
     assert.match(text, /3 unread messages/);
     assert.match(text, /Thirsk School/);

@@ -1,5 +1,6 @@
 "use client";
 
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -80,7 +81,7 @@ export default function CaptainPwaBottomNav({ teamId, squadHref }: {
   // The layout already gates this to installed/preview app mode. Do not hide
   // navigation at a desktop breakpoint: landscape phones and tablets need it too.
   return (
-    <nav aria-label="Captain quick navigation" className={styles.bottomNav}>
+    <PinnedAppChrome edge="bottom"><nav aria-label="Captain quick navigation" className={styles.bottomNav}>
       <div className={styles.tabBar}>
         {items.map(({ href, label, icon: Icon, unreadCount }) => (
           <Link key={label} href={href} className={styles.tab}
@@ -96,6 +97,6 @@ export default function CaptainPwaBottomNav({ teamId, squadHref }: {
           </Link>
         ))}
       </div>
-    </nav>
+    </nav></PinnedAppChrome>
   );
 }

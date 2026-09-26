@@ -97,7 +97,7 @@ try {
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    await page.getByRole("heading", { name: "Hi, Charlie" }).waitFor();
+    await page.getByText("Charlie Cobley", { exact: true }).waitFor();
     assert.equal(await page.getByText("Referee Portal", { exact: true }).count(), 1);
     assert.equal(await page.getByText("Earns £40.00 after night", { exact: true }).count(), 1);
     assert.equal(await page.getByText("Northallerton Wednesday", { exact: true }).count(), 1);
