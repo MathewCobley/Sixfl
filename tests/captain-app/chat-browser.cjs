@@ -59,7 +59,7 @@ async function main() {
       assert.equal(await chat.getAttribute('href'), '/captain/team/demo/chat');
       assert.equal(await nav.getByRole('link', { name: /Inbox/ }).count(), 0);
       await chat.click();
-      await page.waitForFunction(() => document.querySelector('.headerTitle strong')?.textContent === 'Chat');
+      await page.waitForFunction(() => document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · Chat');
       await nav.locator('a[aria-current="page"]').getByText('Chat', { exact: true }).waitFor();
       assert.equal(await nav.locator('a[aria-current="page"]').count(), 1);
       assert.equal(await nav.getByRole('link').count(), 6);
