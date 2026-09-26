@@ -17,11 +17,13 @@ import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getOpenFixturePlayerRequests } from "@/lib/fixturePlayerRequests";
 import { prisma } from "@/lib/prisma";
+import { addDaysToDateKey, getPlayerWeeklyAvailability, toAvailabilityDateKey } from "@/lib/player-weekly-availability";
 import {
   joinPlayerFixtureWaitlistAction,
   leavePlayerFixtureWaitlistAction,
   requestPlayerWithdrawalAction,
   updatePlayerFixtureAvailabilityAction,
+  updatePlayerWeeklyAvailabilityAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -226,7 +228,7 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
               name: true,
               matchdayTargetSize: true,
               league: {
-                select: { name: true, season: true, slug: true },
+                select: { name: true, season: true, slug: true, dayOfWeek: true },
               },
             },
           },
@@ -256,7 +258,7 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
               id: true,
               name: true,
               matchdayTargetSize: true,
-              league: { select: { name: true, season: true, slug: true } },
+              league: { select: { name: true, season: true, slug: true, dayOfWeek: true } },
             },
           },
         },
@@ -274,6 +276,29 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
   const previewMembershipParam = previewMembership ? membership.id : null;
   const team = membership.team;
   const now = new Date();
+  const availabilityStart = toAvailabilityDateKey(now);
+  const availabilityEnd = addDaysToDateKey(availabilityStart, 55);
+  const weeklyAvailability = await getPlayerWeeklyAvailability({
+    teamMemberId: membership.id,
+    startDate: availabilityStart,
+    endDate: availabilityEnd,
+  });
+  const weeklyAvailabilityByDate = new Map(
+    weeklyAvailability.map((item) => [toAvailabilityDateKey(item.availabilityDate), item]),
+  );
+  const leagueNight = team.league?.dayOfWeek ?? null;
+  const dayNumberByNight: Record<string, number> = {
+    SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6,
+  };
+  const weeklyDates: string[] = [];
+  if (leagueNight && leagueNight !== "ANY") {
+    const targetDay = dayNumberByNight[leagueNight];
+    for (let offset = 0; offset <= 55; offset += 1) {
+      const key = addDaysToDateKey(availabilityStart, offset);
+      const date = new Date(`${key}T12:00:00.000Z`);
+      if (date.getUTCDay() === targetDay) weeklyDates.push(key);
+    }
+  }
 
   const fixtures = await prisma.fixture.findMany({
     where: {
@@ -459,6 +484,84 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
   return (
     <main className="min-h-screen bg-[#07130f] px-4 py-8 text-white">
       <PlayerPwaModeOnly mode="app">
+        <div className="mx-auto w-full max-w-xl px-4 pb-4 pt-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300/70">
+            Player app
+          </p>
+          <h1 className="mt-1 text-2xl font-black tracking-tight">Availability</h1>
+          <p className="mt-2 text-sm leading-6 text-white/45">
+            Set your availability for the coming weeks. Your answer will be used automatically when fixtures are published for that date.
+          </p>
+          <section className="mt-5 space-y-3">
+            {weeklyDates.length === 0 ? (
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-5 text-sm text-white/50">
+                Your team does not currently have a regular league night set.
+              </div>
+            ) : (
+              weeklyDates.map((date) => {
+                const value = weeklyAvailabilityByDate.get(date);
+                const label = new Intl.DateTimeFormat("en-GB", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "short",
+                  timeZone: "UTC",
+                }).format(new Date(`${date}T12:00:00.000Z`));
+                return (
+                  <form
+                    key={date}
+                    action={updatePlayerWeeklyAvailabilityAction}
+                    className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4"
+                  >
+                    <input type="hidden" name="teamId" value={teamid} />
+                    <input type="hidden" name="date" value={date} />
+                    {previewMembershipParam ? (
+                      <input type="hidden" name="previewMembershipId" value={previewMembershipParam} />
+                    ) : null}
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-white">{label}</div>
+                        <div className="mt-1 text-xs text-white/35">
+                          {value?.response ? getResponseLabel(value.response) : "Not answered"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {["AVAILABLE", "MAYBE", "UNAVAILABLE"].map((response) => (
+                        <label
+                          key={response}
+                          className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-black/20 px-2 text-center text-xs font-bold text-white/80"
+                        >
+                          <input
+                            type="radio"
+                            name="response"
+                            value={response}
+                            defaultChecked={value?.response === response}
+                            className="sr-only"
+                            required
+                          />
+                          {getResponseLabel(response)}
+                        </label>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      name="note"
+                      defaultValue={value?.note ?? ""}
+                      placeholder="Optional note"
+                      className="mt-3 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25"
+                    />
+                    <button
+                      type="submit"
+                      className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-black text-black active:bg-emerald-400"
+                    >
+                      Save
+                    </button>
+                  </form>
+                );
+              })
+            )}
+          </section>
+        </div>
         <PlayerAppFixtures
           teamId={teamid}
           selectedFixture={appSelectedFixture}
@@ -478,6 +581,35 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
 
       <PlayerPwaModeOnly mode="web">
         <div className="mx-auto max-w-6xl space-y-8">
+          <section className="rounded-3xl border border-emerald-400/15 bg-white/[0.04] p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">Availability planner</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Set the coming weeks in advance</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">These answers become your default availability for fixtures played on those dates. You can still deal with a specific fixture below when required.</p>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {weeklyDates.map((date) => {
+                const value = weeklyAvailabilityByDate.get(date);
+                const label = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`));
+                return (
+                  <form key={date} action={updatePlayerWeeklyAvailabilityAction} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <input type="hidden" name="teamId" value={teamid} />
+                    <input type="hidden" name="date" value={date} />
+                    {previewMembershipParam ? <input type="hidden" name="previewMembershipId" value={previewMembershipParam} /> : null}
+                    <div className="font-semibold text-white">{label}</div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {["AVAILABLE", "MAYBE", "UNAVAILABLE"].map((response) => (
+                        <label key={response} className="cursor-pointer rounded-xl border border-white/10 bg-white/[0.03] p-2 text-center text-xs text-white/75">
+                          <input type="radio" name="response" value={response} defaultChecked={value?.response === response} className="mr-1" required />
+                          {getResponseLabel(response)}
+                        </label>
+                      ))}
+                    </div>
+                    <input name="note" defaultValue={value?.note ?? ""} placeholder="Optional note" className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none" />
+                    <button type="submit" className="mt-3 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black">Save</button>
+                  </form>
+                );
+              })}
+            </div>
+          </section>
         {previewMembership ? (
           <section className="rounded-3xl border border-violet-400/25 bg-violet-500/10 p-5 text-sm text-violet-50/80">
             Admin preview: viewing as {previewedPlayerName || "this player"}.
