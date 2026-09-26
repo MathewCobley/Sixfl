@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const LAUNCH_STORAGE_KEY = "sixfl:pwa-launch-shown";
-const LAUNCH_HOLD_MS = 850;
+const LAUNCH_HOLD_MS = 1600;
 const LAUNCH_FADE_MS = 280;
 
 type LaunchPhase = "visible" | "leaving" | "hidden";
