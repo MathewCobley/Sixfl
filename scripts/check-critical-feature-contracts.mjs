@@ -318,7 +318,7 @@ expectText("captain pwa", captainAppPagePath, captainAppPage, "<CaptainAppHome",
 expectText("captain pwa", captainAppPagePath, captainAppPage, '<CaptainPwaModeOnly mode="web">', "existing captain web overview must remain separate");
 expectText("captain pwa", captainAppHomePath, captainAppHome, "requireCaptain(props.teamId)", "captain Home identity read must be authorised");
 expectText("captain pwa", captainAppHomePath, captainAppHome, "teamName={team.name}", "Home must use the saved team name rather than a generic label");
-expectText("captain pwa", captainAppViewPath, captainAppView, "<h1>{teamName}</h1>", "the saved team name must be the visible Home heading");
+expectText("captain pwa", captainAppHeaderPath, captainAppHeader, "<strong>{teamName}</strong>", "the saved team name must remain visible in the fixed app header");
 expectText("captain pwa", captainAppViewPath, captainAppView, "Next match", "captain app home must keep the next match prominent");
 expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Needs attention"', "captain app home must retain confirmation and dispute action items");
 expectText("captain pwa", captainAppViewPath, captainAppView, 'aria-label="Team tools"', "captain app home must retain compact operational shortcuts");
@@ -352,17 +352,19 @@ expectText("captain pwa", captainAppNavPath, captainAppNav, "`${base}/more`", "M
 
 
 // ---------------------------------------------------------------------------
-// ADMIN PWA VIEWER — keep the selected test subject and phone-preview route
-// when an administrator leaves and returns to the diagnostics page.
+// ADMIN TEST APPS — fixed test subjects replace the retired viewer picker.
+// Keep direct, admin-only launch paths for captain, player and referee apps.
 // ---------------------------------------------------------------------------
-const adminPwaViewerPath = "src/components/admin/pwa/PwaViewerPicker.tsx";
+const adminTestAppsPath = "src/app/(admin)/admin/test-apps/page.tsx";
 const adminPwaDiagnosticsPath = "src/components/admin/PwaDiagnosticsPanel.tsx";
-const adminPwaViewer = read(adminPwaViewerPath);
+const adminTestApps = read(adminTestAppsPath);
 const adminPwaDiagnostics = read(adminPwaDiagnosticsPath);
 
-expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "sixfl-admin-pwa-viewer-selection-v1", "viewer picker must persist the selected captain/player/referee");
-expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "window.localStorage.getItem", "viewer picker must restore persisted test subjects");
-expectText("admin pwa viewer", adminPwaViewerPath, adminPwaViewer, "storedMembership?.membershipId", "restored player selection must be validated against the restored team");
+expectText("admin pwa viewer", adminTestAppsPath, adminTestApps, 'title="Finley McIntosh"', "fixed Player test app must identify Finley McIntosh");
+expectText("admin pwa viewer", adminTestAppsPath, adminTestApps, "previewMembershipId=", "fixed Player test app must retain the selected membership");
+expectText("admin pwa viewer", adminTestAppsPath, adminTestApps, "pwaPreview=1", "fixed Player test app must open in app preview mode");
+expectText("admin pwa viewer", adminTestAppsPath, adminTestApps, "/captain-preview", "fixed Captain test app must use captain preview access");
+expectText("admin pwa viewer", adminTestAppsPath, adminTestApps, "/referee-preview", "fixed Referee test app must use referee preview access");
 expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "sixfl-admin-pwa-preview-path-v1", "phone preview must remember the last selected viewer route");
 expectText("admin pwa viewer", adminPwaDiagnosticsPath, adminPwaDiagnostics, "previewPathHydrated", "stored preview route must be restored before persistence writes defaults");
 
