@@ -158,3 +158,33 @@ test('prepared Comms filters match the actual Leads page query for every field',
     assert.deepEqual(filters.buildLeadFilterWhere(filters.parseLeadCampaignFilters(data)), actual);
   }
 });
+
+
+test('Interest Leads search is visible, case-insensitive and carried into bulk recipient filters', () => {
+  const page = fs.readFileSync('src/app/(admin)/admin/leads/page.tsx', 'utf8');
+  const email = fs.readFileSync('src/components/admin/leads/BulkLeadEmailForm.tsx', 'utf8');
+  const sms = fs.readFileSync('src/components/admin/leads/BulkLeadSmsForm.tsx', 'utf8');
+  const guarded = fs.readFileSync('src/app/(admin)/admin/leads/guarded-bulk-actions.ts', 'utf8');
+
+  assert.match(page, /data-lead-search-form/);
+  assert.match(page, /name="q"/);
+  assert.match(page, /Search team or contact name, email, phone, area or enquiry text/);
+  assert.match(page, /const selectedQuery = resolvedSearchParams\.q\?\.trim\(\) \|\| undefined/);
+  for (const field of ['teamName', 'contactName', 'email', 'phone', 'area', 'message']) {
+    assert.match(page, new RegExp(`\\{ ${field}: \\{ contains: selectedQuery, mode: "insensitive" \\} \\}`));
+    assert.match(guarded, new RegExp(`\\{ ${field}: \\{ contains: selectedQuery, mode: "insensitive" \\} \\}`));
+  }
+  assert.match(page, /selectedQuery=\{selectedQuery\}/);
+  assert.match(email, /name="selectedQuery" value=\{selectedQuery \?\? ""\}/);
+  assert.match(sms, /name="selectedQuery" value=\{selectedQuery \?\? ""\}/);
+  assert.match(guarded, /formData\.get\("selectedQuery"\)/);
+});
+
+test('prepared Lead filters preserve search alongside exclusions and prospective league', { skip: process.env.COMMS_PREPARED !== '1' }, () => {
+  const page = fs.readFileSync('src/app/(admin)/admin/leads/page.tsx', 'utf8');
+  assert.match(page, /name="excludeType" value=\{excludedType\}/);
+  assert.match(page, /name="excludeStatus" value=\{excludedStatus\}/);
+  assert.match(page, /name="league" value=\{selectedLeagueFilter\}/);
+  assert.match(page, /name="q" value=\{selectedQuery\}/);
+  assert.match(page, /buildFilteredHref\(\{ q: selectedQuery/);
+});
