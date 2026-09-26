@@ -400,6 +400,8 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   revalidatePath(`/captain/team/${teamId}/availability`);
+  revalidatePath(`/player/team/${teamId}`);
+  revalidatePath(`/player/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fees_created"));
 }
 
