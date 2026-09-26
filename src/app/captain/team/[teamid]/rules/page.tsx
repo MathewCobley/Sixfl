@@ -4,7 +4,6 @@ import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } f
 // ========================================
 
 import Link from "next/link";
-import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
@@ -134,56 +133,24 @@ export default async function CaptainRulesPage({
 
   return (
     <>
-      <CaptainPwaModeOnly mode="app">
-        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
-          <header className="px-1 pb-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
-              Captain app
-            </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">Match Rules</h1>
-            <p className="mt-2 text-sm leading-5 text-white/45">
-              The core SIXFL playing rules. Venue instructions and the referee&apos;s on-pitch decisions still apply.
-            </p>
-          </header>
-
-          <section className="space-y-2">
-            {ruleSections.map((section, index) => (
-              <details
-                key={section.title}
-                open={index === 0}
-                className="group overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.035]"
-              >
-                <summary className="flex min-h-12 cursor-pointer list-none items-start justify-between gap-3 px-3.5 py-3 text-sm font-black text-white [&::-webkit-details-marker]:hidden">
-                  <span>{section.title}</span>
-                  <span aria-hidden="true" className="text-lg leading-none text-white/30 transition group-open:rotate-45">+</span>
-                </summary>
-                <div className="space-y-2 border-t border-white/[0.06] p-3">
-                  {section.items.map((item) => (
-                    <p key={item} className="text-xs leading-5 text-white/55">{item}</p>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </section>
-
-          <section className="rounded-[1.15rem] border border-amber-400/20 bg-amber-500/10 p-3.5">
-            <div className="text-xs font-black text-white">Important</div>
-            <p className="mt-1 text-[11px] leading-5 text-amber-50/65">
-              Follow venue safety requirements and the referee&apos;s instructions. Competition limits and exceptions remain governed by the League Rules.
-            </p>
-            <Link
-              href={"/captain/team/" + team.id + "/league-rules"}
-              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-amber-300/20 bg-black/15 px-3 text-xs font-black text-amber-50"
-            >
-              Open League Rules
-            </Link>
-          </section>
-        </main>
-      </CaptainPwaModeOnly>
-
-      <CaptainPwaModeOnly mode="web">
-        <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+      <style>{`
+        body:has(.captain-app-header) .captain-match-rules-page { display:grid; gap:.7rem; }
+        body:has(.captain-app-header) .captain-match-rules-hero { border-radius:1.15rem; box-shadow:none; background:rgba(255,255,255,.035); }
+        body:has(.captain-app-header) .captain-match-rules-hero > div { padding:.9rem; }
+        body:has(.captain-app-header) .captain-match-rules-hero h1 { margin-top:.2rem; font-size:1.25rem; line-height:1.3; font-weight:800; }
+        body:has(.captain-app-header) .captain-match-rules-hero p[class*="max-w-"] { margin-top:.35rem; font-size:.75rem; line-height:1.25rem; color:rgba(255,255,255,.48); }
+        body:has(.captain-app-header) .captain-match-rules-hero a:first-of-type { display:none; }
+        body:has(.captain-app-header) .captain-match-rules-hero div[class*="mt-6"] { margin-top:.7rem; }
+        body:has(.captain-app-header) .captain-match-rules-hero a { min-height:2.6rem; flex:1; justify-content:center; border-radius:.75rem; padding:.55rem .8rem; font-size:.75rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-match-rules-jumps { display:none; }
+        body:has(.captain-app-header) .captain-match-rules-grid { grid-template-columns:minmax(0,1fr); gap:.5rem; }
+        body:has(.captain-app-header) .captain-match-rules-card { border-radius:1.05rem; padding:.85rem; }
+        body:has(.captain-app-header) .captain-match-rules-card h2 { font-size:.9rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-match-rules-card ul { margin-top:.55rem; gap:.45rem; font-size:.72rem; line-height:1.15rem; }
+        body:has(.captain-app-header) .captain-match-rules-page > section:last-child { border-radius:1.05rem; padding:.85rem; }
+      `}</style>
+      <div className="captain-match-rules-page space-y-8">
+      <section className="captain-match-rules-hero overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
             Match Rules
@@ -211,7 +178,7 @@ export default async function CaptainRulesPage({
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="captain-match-rules-jumps grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {ruleSections.map((section) => (
           <a
             key={section.title}
@@ -226,12 +193,12 @@ export default async function CaptainRulesPage({
         ))}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="captain-match-rules-grid grid gap-4 lg:grid-cols-2">
         {ruleSections.map((section) => (
           <article
             key={section.title}
             id={getRuleId(section.title)}
-            className="scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+            className="captain-match-rules-card scroll-mt-28 rounded-3xl border border-white/10 bg-white/[0.04] p-5"
           >
             <h2 className="text-lg font-semibold text-white">{section.title}</h2>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-white/62">
@@ -252,8 +219,7 @@ export default async function CaptainRulesPage({
           These are the standard SIXFL playing rules. Follow venue safety requirements and the referee’s on-pitch instructions. Competition limits and exceptions remain governed by the League Rules; agreement from the referee or opposition alone does not authorise a tenth participant.
         </p>
       </section>
-        </div>
-      </CaptainPwaModeOnly>
+    </div>
     </>
   );
 }
