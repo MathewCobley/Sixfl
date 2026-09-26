@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const tabs = [
-  { href: "/admin/messaging", label: "Inbox & communications", exact: true },
-  { href: "/admin/messaging/announcements", label: "Announcements", exact: false },
+  { href: "/admin/messaging", label: "Inbox", kind: "inbox" as const },
+  { href: "/admin/messaging?view=send", label: "Send messages", kind: "send" as const },
+  { href: "/admin/messaging/announcements", label: "Announcements", kind: "announcements" as const },
 ] as const;
 
 export default function CommunicationsTabs() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const messagingView = searchParams.get("view") === "send" ? "send" : "inbox";
 
   return (
     <nav
@@ -17,9 +20,13 @@ export default function CommunicationsTabs() {
       className="mx-4 mt-4 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-black/20 p-2 sm:mx-6 lg:mx-8"
     >
       {tabs.map((tab) => {
-        const active = tab.exact
-          ? pathname === tab.href || pathname === `${tab.href}/`
-          : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+        const active =
+          tab.kind === "inbox"
+            ? pathname === "/admin/messaging" && messagingView === "inbox"
+            : tab.kind === "send"
+              ? pathname === "/admin/messaging" && messagingView === "send"
+              : pathname === "/admin/messaging/announcements" ||
+                pathname.startsWith("/admin/messaging/announcements/");
 
         return (
           <Link
