@@ -330,6 +330,16 @@ export default async function FixtureGeneratorPage({
               </span>
             </label>
 
+            <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-sky-400/20 bg-sky-500/[0.08] p-4">
+              <input type="checkbox" name="freeDoubleHeaders" className="mt-1" />
+              <span>
+                <span className="block text-sm font-semibold text-sky-100">Double-header second games are free</span>
+                <span className="mt-1 block text-sm leading-6 text-sky-100/65">
+                  Uses spare slots to let a team play twice on the same fixture night where needed. The team pays its normal fee for its first game that night and £0 for its second game.
+                </span>
+              </span>
+            </label>
+
             <label className="flex min-h-[120px] cursor-pointer items-start gap-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-4">
               <input type="checkbox" name="clearExisting" className="mt-1" />
               <span>
