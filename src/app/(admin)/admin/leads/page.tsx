@@ -27,6 +27,7 @@ import { convertLeadToManagedSquadPlayerAction } from "./managed-squad-actions";
 import { sendPlayerPoolProfileInviteAction } from "../player-pool/actions";
 
 type SearchParams = Promise<{
+  q?: string;
   type?: string;
   status?: string;
   area?: string;
@@ -177,6 +178,7 @@ function typeClasses(type: InterestType) {
 }
 
 function buildHref(params: {
+  q?: string;
   type?: string;
   status?: string;
   area?: string;
@@ -188,6 +190,7 @@ function buildHref(params: {
   if (params.status) search.set("status", params.status);
   if (params.area) search.set("area", params.area);
   if (params.night) search.set("night", params.night);
+  if (params.q) search.set("q", params.q);
 
   const query = search.toString();
   return query ? `/admin/leads?${query}` : "/admin/leads";
@@ -241,6 +244,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
   await requireAdmin();
 
   const resolvedSearchParams = await searchParams;
+  const selectedQuery = resolvedSearchParams.q?.trim() || undefined;
   const selectedType = isInterestType(resolvedSearchParams.type) ? resolvedSearchParams.type : undefined;
   const selectedStatus = isLeadStatus(resolvedSearchParams.status) ? resolvedSearchParams.status : undefined;
   const selectedArea = resolvedSearchParams.area?.trim() || undefined;
@@ -250,6 +254,18 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
     ...(selectedType ? { interestType: selectedType } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
     ...(selectedArea ? { area: selectedArea } : {}),
+    ...(selectedQuery
+      ? {
+          OR: [
+            { teamName: { contains: selectedQuery, mode: "insensitive" } },
+            { contactName: { contains: selectedQuery, mode: "insensitive" } },
+            { email: { contains: selectedQuery, mode: "insensitive" } },
+            { phone: { contains: selectedQuery, mode: "insensitive" } },
+            { area: { contains: selectedQuery, mode: "insensitive" } },
+            { message: { contains: selectedQuery, mode: "insensitive" } },
+          ],
+        }
+      : {}),
     ...(selectedNight ? { preferredNights: { some: { night: selectedNight } } } : {}),
   };
 
@@ -419,15 +435,64 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
       </div>
 
       <AdminCard className="p-6">
+        <form
+          method="get"
+          data-lead-search-form
+          className="flex flex-col gap-3 lg:flex-row lg:items-end"
+        >
+          {selectedType ? <input type="hidden" name="type" value={selectedType} /> : null}
+          {selectedStatus ? <input type="hidden" name="status" value={selectedStatus} /> : null}
+          {selectedArea ? <input type="hidden" name="area" value={selectedArea} /> : null}
+          {selectedNight ? <input type="hidden" name="night" value={selectedNight} /> : null}
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="lead-search"
+              className="text-xs font-bold uppercase tracking-[0.18em] text-white/45"
+            >
+              Search leads
+            </label>
+            <p className="mt-1 text-sm text-white/55">
+              Search team or contact name, email, phone, area or enquiry text.
+            </p>
+            <input
+              id="lead-search"
+              name="q"
+              type="search"
+              defaultValue={selectedQuery ?? ""}
+              placeholder="Search leads..."
+              className="mt-3 h-12 w-full rounded-xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-emerald-500/60"
+            />
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              className="inline-flex h-12 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-5 text-sm font-bold text-emerald-200 transition hover:bg-emerald-500/25"
+            >
+              Search
+            </button>
+            {selectedQuery ? (
+              <Link
+                data-clear-lead-search
+                href={buildHref({ type: selectedType, status: selectedStatus, area: selectedArea, night: selectedNight })}
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                Clear search
+              </Link>
+            ) : null}
+          </div>
+        </form>
+      </AdminCard>
+
+      <AdminCard className="p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">Filters</p>
             <p className="mt-1 text-sm text-white/55">Filter the lead list without opening bulk messaging.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <FilterChip label="All" href="/admin/leads" active={!selectedType && !selectedStatus && !selectedArea && !selectedNight} />
-            {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ type })} active={selectedType === type} />)}
-            {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ type: selectedType, status })} active={selectedStatus === status} />)}
+            <FilterChip label="All" href={buildHref({ q: selectedQuery })} active={!selectedQuery && !selectedType && !selectedStatus && !selectedArea && !selectedNight} />
+            {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ q: selectedQuery, type })} active={selectedType === type} />)}
+            {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ q: selectedQuery, type: selectedType, status })} active={selectedStatus === status} />)}
           </div>
         </div>
       </AdminCard>
@@ -636,6 +701,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                 selectedArea={selectedArea}
                 selectedNight={selectedNight}
                 recipientCount={emailRecipientLeads.length}
+                selectedQuery={selectedQuery}
                 recipientPreview={emailRecipientPreview}
                 managedTeamOptions={managedTeamOptions}
                 action={sendBulkLeadEmailAction}
@@ -648,6 +714,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
                 selectedArea={selectedArea}
                 selectedNight={selectedNight}
                 recipientCount={smsRecipientLeads.length}
+                selectedQuery={selectedQuery}
                 recipientPreview={smsRecipientPreview}
                 managedTeamOptions={managedTeamOptions}
                 action={sendBulkLeadSmsAction}
