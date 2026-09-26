@@ -80,11 +80,10 @@ const tabs = (
     exact: false,
   },
   {
-    href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
-      previewMembershipId
-        ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
-        : ""
-    }`,
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/goal-of-the-month`,
+      previewMembershipId,
+    ),
     label: "Goal of the Month",
     exact: false,
   },
