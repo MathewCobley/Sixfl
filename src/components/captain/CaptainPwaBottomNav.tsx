@@ -44,15 +44,33 @@ function useChatUnreadCount(teamId: string, pathname: string) {
         if (active && request === sequence) setResult(null);
       }
     };
+    const handleUnreadCountEvent = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ teamId?: string; count?: number }>
+      ).detail;
+      if (
+        detail?.teamId === teamId &&
+        Number.isSafeInteger(detail.count) &&
+        Number(detail.count) >= 0
+      ) {
+        setResult({ teamId, count: Number(detail.count) });
+      }
+    };
+
     void refresh();
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("sixfl:chat-unread-count", handleUnreadCountEvent);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       active = false;
       controller?.abort();
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener(
+        "sixfl:chat-unread-count",
+        handleUnreadCountEvent,
+      );
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [teamId, pathname]);
