@@ -13,7 +13,9 @@ test("captain PWA keeps the real overview calculations and a separate website vi
   assert.match(server, /requireCaptain\(props.teamId\)/);
   assert.match(server, /teamName=\{team.name\}/);
   assert.match(server, /teamLogoUrl=\{team.logoUrl\}/);
-  assert.match(view, /<h1>\{teamName\}<\/h1>/);
+  assert.doesNotMatch(view, /<h1>\{teamName\}<\/h1>/);
+  assert.match(header, /<strong>\{teamName\}<\/strong>/);
+  assert.match(header, /Captain Portal/);
   assert.match(view, /className=\{styles\.matchTeams\}/);
   assert.match(view, /className=\{styles\.actionGrid\}/);
   assert.doesNotMatch(view, />Your team<|The things that need your attention/);
@@ -27,7 +29,7 @@ test("captain PWA has a native header and six permanent tabs including More", ()
   const css = read("src/components/captain/CaptainAppScreens.module.css");
   assert.match(layout, /<CaptainPwaModeOnly mode="app">[\s\S]*CaptainAppHeader/);
   assert.match(header, /SIXFL captain home/);
-  assert.match(header, /title === "Home" \? "Captain Portal" : title/);
+  assert.match(header, /const contextLabel = title === "Home" \? "Captain Portal"/);
   assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*captain-team-header/);
   assert.match(nav, /unreadCount: unreadChatCount/);
   assert.match(nav, /\/chat-unread/);
