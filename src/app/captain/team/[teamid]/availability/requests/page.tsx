@@ -75,7 +75,20 @@ export default async function CaptainPlayerRequestsPage({
   ).length;
 
   return (
-    <div className="space-y-6">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-player-requests-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-player-requests-page > section:first-child { border-radius:1.05rem !important; box-shadow:none !important; padding:.85rem !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-player-requests-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-player-requests-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-player-requests-page > div.space-y-4 { display:grid !important; gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-player-requests-page > div.space-y-4 > section { border-radius:1.05rem !important; padding:.8rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-player-requests-page > div.space-y-4 > section > div { display:grid !important; gap:.65rem !important; grid-template-columns:minmax(0,1fr) !important; }
+        body:has(.captain-app-header) .captain-player-requests-page h2 { font-size:.9rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-player-requests-page a,
+        body:has(.captain-app-header) .captain-player-requests-page button { min-height:2.65rem !important; width:100% !important; border-radius:.8rem !important; font-size:.72rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-player-requests-page space-y-6">
       <section className="overflow-hidden rounded-3xl border border-amber-400/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200/75">
           Matchday decisions
@@ -185,5 +198,6 @@ export default async function CaptainPlayerRequestsPage({
         </div>
       )}
     </div>
+    </>
   );
 }
