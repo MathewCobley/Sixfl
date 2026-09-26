@@ -27,6 +27,7 @@ test("captain PWA has a native header and six permanent tabs including More", ()
   const css = read("src/components/captain/CaptainAppScreens.module.css");
   assert.match(layout, /<CaptainPwaModeOnly mode="app">[\s\S]*CaptainAppHeader/);
   assert.match(header, /SIXFL captain home/);
+  assert.match(header, /title === "Home" \? "Captain Portal" : title/);
   assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*captain-team-header/);
   assert.match(nav, /unreadCount: unreadChatCount/);
   assert.match(nav, /\/chat-unread/);
@@ -183,4 +184,17 @@ test("captain squad payments has a native app hub instead of the website dashboa
   assert.match(layout, /<CaptainPwaModeOnly mode="app">[\s\S]*Guest approvals[\s\S]*Fixture-specific/);
   assert.match(layout, /<details[\s\S]*FixtureGuestApprovals/);
   assert.match(layout, /<CaptainPwaModeOnly mode="web">[\s\S]*FixtureGuestApprovals[\s\S]*\{children\}/);
+});
+
+
+test("portal headers identify the app while Home stays a bottom-nav destination", () => {
+  const captainHeader = read("src/components/captain/CaptainAppHeader.tsx");
+  const playerHeader = read("src/components/player/PlayerPwaPortalHeader.tsx");
+  const refereeHome = read("src/components/referee/RefereeAppHome.tsx");
+
+  assert.match(captainHeader, /Captain Portal/);
+  assert.match(playerHeader, />\s*Player Portal\s*</);
+  assert.match(refereeHome, />\s*Referee Portal\s*</);
+  assert.match(read("src/components/captain/CaptainPwaBottomNav.tsx"), /label: "Home"/);
+  assert.match(refereeHome, /label: "Home"/);
 });
