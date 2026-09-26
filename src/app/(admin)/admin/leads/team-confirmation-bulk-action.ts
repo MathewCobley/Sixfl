@@ -218,6 +218,7 @@ function buildTemplateContext(input: {
   area: string | null;
   teamName: string | null;
   leagueName: string;
+  leagueShortName: string;
   venueName: string | null;
   kickoffInfo: string | null;
   format: string | null;
@@ -235,6 +236,7 @@ function buildTemplateContext(input: {
     }),
     {
       leagueName: input.leagueName,
+      leagueShortName: input.leagueShortName,
       venueName: input.venueName?.trim() || "TBC",
       kickoffInfo: input.kickoffInfo?.trim() || "",
       format: input.format?.trim() || "Weekly 6-a-side fixtures",
@@ -334,6 +336,7 @@ export async function sendBulkTeamPlaceConfirmationEmailAction(
         area: lead.area,
         teamName: lead.teamName,
         leagueName,
+        leagueShortName: lead.league.name,
         venueName: lead.league.venueName,
         kickoffInfo: lead.league.kickoffInfo,
         format: lead.league.format,
