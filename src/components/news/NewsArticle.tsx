@@ -10,20 +10,28 @@ export const newsDate = (date: string) => new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/London',
 }).format(new Date(date.length === 10 ? `${date}T12:00:00Z` : date));
 
-/** The same article markup is used in the protected preview and public route. */
+/** Shared matchweek report presentation for the website, preview and closed player app. */
 export default function NewsArticle({
   news,
   shareUrl,
   preview = false,
   highlightTeamId,
+  appMode = false,
 }: {
   news: PublishedNews;
   shareUrl?: string;
   preview?: boolean;
   highlightTeamId?: string;
+  appMode?: boolean;
 }) {
   const a = news.article;
   const goals = a.matches.reduce((n, m) => n + m.scoreA + m.scoreB, 0);
+  const matches = appMode && highlightTeamId
+    ? [
+        ...a.matches.filter((m) => [m.teamAId, m.teamBId].includes(highlightTeamId)),
+        ...a.matches.filter((m) => ![m.teamAId, m.teamBId].includes(highlightTeamId)),
+      ]
+    : a.matches;
 
   return (
     <article className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#f4f5f1] text-[#07130f] shadow-[0_34px_100px_rgba(0,0,0,0.38)] sm:rounded-[2rem]">
@@ -111,12 +119,12 @@ export default function NewsArticle({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">{news.matchweekNumber ? `In Matchweek ${news.matchweekNumber}` : "In this matchnight report"}</p>
-              <p className="mt-1 text-sm text-[#07130f]/50">Every result from the night, in one article.</p>
+              <p className="mt-1 text-sm text-[#07130f]/50">{appMode && highlightTeamId ? "Your match first, then every result from the night." : "Every result from the night, in one article."}</p>
             </div>
-            <Link href={`/leagues/${news.leagueSlug}/results`} className="text-sm font-bold text-emerald-700 hover:text-emerald-600">Full results →</Link>
+            {!appMode ? <Link href={`/leagues/${news.leagueSlug}/results`} className="text-sm font-bold text-emerald-700 hover:text-emerald-600">Full results →</Link> : null}
           </div>
           <nav aria-label="Jump to match" className="mt-5 grid gap-x-6 sm:grid-cols-2">
-            {a.matches.map((m) => (
+            {matches.map((m) => (
               <Link key={m.fixtureId} href={`#${matchAnchor(m.fixtureId)}`} className="flex items-center justify-between gap-3 border-t border-[#07130f]/8 py-3 text-sm first:border-t-0 hover:text-emerald-700 sm:first:border-t">
                 <span className="min-w-0 truncate">{m.teamA} · {m.teamB}</span>
                 <strong className="shrink-0 rounded-full bg-[#07130f] px-3 py-1 font-black tabular-nums text-white">{m.scoreA}–{m.scoreB}</strong>
@@ -126,7 +134,7 @@ export default function NewsArticle({
         </section>
 
         <div className="mt-2">
-          {a.matches.map((m, index) => {
+          {matches.map((m, index) => {
             const highlighted = Boolean(highlightTeamId && [m.teamAId, m.teamBId].includes(highlightTeamId));
             const teamAScorers = m.scorers.filter((scorer) => scorer.team === m.teamA);
             const teamBScorers = m.scorers.filter((scorer) => scorer.team === m.teamB);
@@ -134,14 +142,18 @@ export default function NewsArticle({
               <section key={m.fixtureId} id={matchAnchor(m.fixtureId)} className="scroll-mt-6 border-b border-[#07130f]/10 py-9 sm:py-11">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-[#07130f]/35">Match {index + 1}</p>
-                  {highlighted ? <p className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-800">Featuring your team</p> : null}
+                  {highlighted ? <p className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-800">{appMode ? "Your match" : "Featuring your team"}</p> : null}
                 </div>
 
                 <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-6">
                   <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                     <NewsImage src={m.badgeA} alt={`${m.teamA} badge`} fallback={m.teamA.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
                     <div className="min-w-0 text-left">
-                      <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
+                      {appMode ? (
+                        <span className="block min-w-0 break-words text-sm font-black leading-5 sm:text-lg">{m.teamA}</span>
+                      ) : (
+                        <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
+                      )}
                       {teamAScorers.length ? (
                         <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
                           {teamAScorers.map((scorer, scorerIndex) => (
@@ -158,7 +170,11 @@ export default function NewsArticle({
                   </p>
                   <div className="flex min-w-0 items-start justify-end gap-3 sm:gap-4">
                     <div className="min-w-0 text-left">
-                      <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
+                      {appMode ? (
+                        <span className="block min-w-0 break-words text-sm font-black leading-5 sm:text-lg">{m.teamB}</span>
+                      ) : (
+                        <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
+                      )}
                       {teamBScorers.length ? (
                         <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
                           {teamBScorers.map((scorer, scorerIndex) => (
@@ -193,16 +209,22 @@ export default function NewsArticle({
         ) : null}
       </div>
 
-      <footer className="bg-[#07130f] px-5 py-7 text-white sm:px-10 lg:px-14">
-        <div className="mx-auto max-w-5xl space-y-6">
-          {shareUrl && !preview ? <NewsShare url={shareUrl} title={a.title} /> : null}
-          <nav aria-label="More from the league" className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-bold text-emerald-300">
-            <Link href={`/leagues/${news.leagueSlug}/news`}>More League News →</Link>
-            <Link href={`/leagues/${news.leagueSlug}/results`}>Results</Link>
-            <Link href={`/leagues/${news.leagueSlug}#table`}>League table</Link>
-          </nav>
-        </div>
-      </footer>
+      {appMode ? (
+        <footer className="bg-[#07130f] px-5 py-6 text-center text-xs font-black uppercase tracking-[0.18em] text-emerald-300 sm:px-10">
+          SIXFL matchweek report
+        </footer>
+      ) : (
+        <footer className="bg-[#07130f] px-5 py-7 text-white sm:px-10 lg:px-14">
+          <div className="mx-auto max-w-5xl space-y-6">
+            {shareUrl && !preview ? <NewsShare url={shareUrl} title={a.title} /> : null}
+            <nav aria-label="More from the league" className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-bold text-emerald-300">
+              <Link href={`/leagues/${news.leagueSlug}/news`}>More League News →</Link>
+              <Link href={`/leagues/${news.leagueSlug}/results`}>Results</Link>
+              <Link href={`/leagues/${news.leagueSlug}#table`}>League table</Link>
+            </nav>
+          </div>
+        </footer>
+      )}
     </article>
   );
 }
