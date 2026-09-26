@@ -196,22 +196,22 @@ export default async function CaptainPlayerPoolPage({
   const notice = savedMessage(query.saved);
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-8">
-        <div className="mb-6 flex justify-center sm:justify-start">
+    <div className="mx-auto w-full max-w-3xl space-y-4 pb-24 sm:space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
+        <div className="mb-3 flex justify-start">
           <img
             src={PLAYER_POOL_LOGO_URL}
             alt="SIXFL PlayerPool"
-            className="h-auto w-full max-w-[34rem] object-contain"
+            className="h-auto w-full max-w-[13rem] object-contain"
           />
         </div>
-        <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+        <h1 className="text-2xl font-black tracking-tight text-white">
           Players for {team.name}
         </h1>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-white/65 sm:text-base">
+        <p className="mt-2 text-sm leading-5 text-white/60">
           Available players and every introduction you have requested stay visible here from first request through to joining your squad.
         </p>
-        <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
+        <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/70">
             {team.league?.name || "Your league"}
           </span>
@@ -240,14 +240,14 @@ export default async function CaptainPlayerPoolPage({
       ) : null}
 
       {profiles.length === 0 ? (
-        <section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center">
+        <section className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center">
           <h2 className="text-xl font-bold text-white">No matching players are available right now</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-white/55">
             PlayerPool updates automatically as new players complete their profiles. SIXFL will also continue recruiting individual players for local leagues.
           </p>
         </section>
       ) : (
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="space-y-3">
           {profiles.map((profile) => {
             const statusLabel = requestStatusCopy(profile.requestStatus);
             const requestOpen = profile.requestStatus === "REQUESTED";
@@ -257,7 +257,7 @@ export default async function CaptainPlayerPoolPage({
             return (
               <article
                 key={profile.profileId}
-                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-6"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -287,7 +287,7 @@ export default async function CaptainPlayerPoolPage({
                   )}
                 </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 divide-y divide-white/10 rounded-2xl border border-white/10 bg-black/15 px-3">
                   {[
                     ["Age group", profile.ageBand],
                     ["Can play", profile.preferredPositions],
@@ -299,24 +299,24 @@ export default async function CaptainPlayerPoolPage({
                   ].map(([label, value]) => (
                     <div
                       key={label}
-                      className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3"
+                      className="flex items-start justify-between gap-4 py-3"
                     >
-                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+                      <div className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-white/40">
                         {label}
                       </div>
-                      <div className="mt-1 text-sm leading-6 text-white/75">{value || "Not specified"}</div>
+                      <div className="text-right text-sm leading-5 text-white/75">{value || "Not specified"}</div>
                     </div>
                   ))}
                 </div>
 
                 {profile.availabilitySummary ? (
-                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/65">
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm leading-5 text-white/65">
                     <span className="font-semibold text-white/80">Player notes:</span>{" "}
                     {profile.availabilitySummary}
                   </div>
                 ) : null}
 
-                <div className="mt-5 border-t border-white/10 pt-5">
+                <div className="mt-4 border-t border-white/10 pt-4">
                   {joined ? (
                     <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100/80">
                       This player is now connected to your squad.
@@ -326,7 +326,7 @@ export default async function CaptainPlayerPoolPage({
                       <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm leading-6 text-sky-100/80">
                         SIXFL approved the introduction and alerted the player. Contact them about a game or trial. Once they agree to join, add them to the squad here — no second PlayerPool form is needed.
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <Link
                           href={`/captain/team/${teamid}/prospects`}
                           className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/75 transition hover:bg-white/10"
