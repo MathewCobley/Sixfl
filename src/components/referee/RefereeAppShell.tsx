@@ -1,3 +1,4 @@
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -66,7 +67,7 @@ export default async function RefereeAppShell({
     <>
       <RefereePortalViewMode mode="app">
         <main className="min-h-screen bg-[#07130f] text-white">
-          <header
+          <PinnedAppChrome edge="top"><header
             className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
             style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
           >
@@ -95,13 +96,13 @@ export default async function RefereeAppShell({
                 <div className="h-9 w-9 shrink-0" aria-hidden="true" />
               )}
             </div>
-          </header>
+          </header></PinnedAppChrome>
 
           <div className="mx-auto max-w-xl space-y-3 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3">
             {children}
           </div>
 
-          <nav
+          <PinnedAppChrome edge="bottom"><nav
             aria-label="Referee app navigation"
             className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl"
           >
@@ -125,7 +126,7 @@ export default async function RefereeAppShell({
                 );
               })}
             </div>
-          </nav>
+          </nav></PinnedAppChrome>
         </main>
       </RefereePortalViewMode>
 

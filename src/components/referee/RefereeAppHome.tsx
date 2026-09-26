@@ -1,3 +1,4 @@
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -68,7 +69,7 @@ export default function RefereeAppHome({
     .toUpperCase();
   return (
     <main className="min-h-screen bg-[#07130f] text-white">
-      <header
+      <PinnedAppChrome edge="top"><header
         className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
       >
@@ -93,7 +94,7 @@ export default function RefereeAppHome({
             {initials}
           </div>
         </div>
-      </header>
+      </header></PinnedAppChrome>
       <div className="mx-auto max-w-xl space-y-3 px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3">
         <section aria-label="Referee overview" className="space-y-2 px-0.5">
           <div className="grid grid-cols-3 divide-x divide-white/[0.07] overflow-hidden rounded-xl border border-white/[0.06] bg-black/20 py-2 text-center">
@@ -251,9 +252,9 @@ export default function RefereeAppHome({
         <div className="hidden sm:block">{desktopTabs}</div>
         {children}
       </div>
-      <nav
+      <PinnedAppChrome edge="bottom"><nav
         aria-label="Referee app navigation"
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#050807]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl"
       >
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {[
@@ -290,7 +291,7 @@ export default function RefereeAppHome({
             </Link>
           ))}
         </div>
-      </nav>
+      </nav></PinnedAppChrome>
     </main>
   );
 }

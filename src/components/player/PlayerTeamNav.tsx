@@ -1,5 +1,6 @@
 "use client";
 
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -235,7 +236,7 @@ export default function PlayerTeamNav({
         })}
       </nav>
 
-      <nav
+      <PinnedAppChrome edge="bottom"><nav
         aria-label="Player app navigation"
         className="player-app-bottom-nav fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-[#081510]/95 shadow-[0_-14px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.35rem)" }}
@@ -276,7 +277,7 @@ export default function PlayerTeamNav({
             );
           })}
         </div>
-      </nav>
+      </nav></PinnedAppChrome>
     </>
   );
 }

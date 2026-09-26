@@ -59,7 +59,7 @@ async function main() {
       assert.equal(await chat.getAttribute('href'), '/captain/team/demo/chat');
       assert.equal(await nav.getByRole('link', { name: /Inbox/ }).count(), 0);
       await chat.click();
-      await page.waitForFunction(() => document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · Chat');
+      await page.waitForFunction(() => document.querySelector('.headerTitle strong')?.textContent === 'Dynamo Kebab' && document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · Chat');
       await nav.locator('a[aria-current="page"]').getByText('Chat', { exact: true }).waitFor();
       assert.equal(await nav.locator('a[aria-current="page"]').count(), 1);
       assert.equal(await nav.getByRole('link').count(), 6);
@@ -96,7 +96,7 @@ async function main() {
     await page.waitForTimeout(50);
     assert.equal(await nav.getByRole('link', { name: 'Chat, 2 unread', exact: true }).getAttribute('href'), '/captain/team/other/chat');
     await page.evaluate(() => window.show('other', '/captain/team/other/messages'));
-    await page.waitForFunction(() => document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · SIXFL inbox');
+    await page.waitForFunction(() => document.querySelector('.headerTitle strong')?.textContent === 'Dynamo Kebab' && document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · SIXFL inbox');
     assert.equal(await nav.locator('a[aria-current="page"]').getAttribute('aria-label'), 'More');
     const requests = await page.evaluate(() => window.requests);
     assert.ok(requests.some(r => r.url === '/api/player/team/demo/chat-unread'));

@@ -1,5 +1,6 @@
 "use client";
 
+import PinnedAppChrome from "@/components/pwa/PinnedAppChrome";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -86,7 +87,7 @@ export default function PlayerPwaPortalHeader({
 
       <div className={appMode ? "player-pwa-mode" : "player-pwa-controller"} />
 
-      <header
+      <PinnedAppChrome edge="top"><header
         className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-2.5 backdrop-blur-xl"
         style={{ paddingTop: "max(env(safe-area-inset-top), 0.72rem)" }}
       >
@@ -123,7 +124,7 @@ export default function PlayerPwaPortalHeader({
             )}
           </div>
         </div>
-      </header>
+      </header></PinnedAppChrome>
     </>
   );
 }
