@@ -4,6 +4,7 @@ import { MATCHDAY_PLAYER_LIMIT_POINTS, MATCHDAY_PLAYER_LIMIT_CROSS_REFERENCE } f
 // ========================================
 
 import Link from "next/link";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
@@ -132,7 +133,56 @@ export default async function CaptainRulesPage({
   }
 
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
+          <header className="px-1 pb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
+              Captain app
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight">Match Rules</h1>
+            <p className="mt-2 text-sm leading-5 text-white/45">
+              The core SIXFL playing rules. Venue instructions and the referee&apos;s on-pitch decisions still apply.
+            </p>
+          </header>
+
+          <section className="space-y-2">
+            {ruleSections.map((section, index) => (
+              <details
+                key={section.title}
+                open={index === 0}
+                className="group overflow-hidden rounded-[1.15rem] border border-white/10 bg-white/[0.035]"
+              >
+                <summary className="flex min-h-12 cursor-pointer list-none items-start justify-between gap-3 px-3.5 py-3 text-sm font-black text-white [&::-webkit-details-marker]:hidden">
+                  <span>{section.title}</span>
+                  <span aria-hidden="true" className="text-lg leading-none text-white/30 transition group-open:rotate-45">+</span>
+                </summary>
+                <div className="space-y-2 border-t border-white/[0.06] p-3">
+                  {section.items.map((item) => (
+                    <p key={item} className="text-xs leading-5 text-white/55">{item}</p>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </section>
+
+          <section className="rounded-[1.15rem] border border-amber-400/20 bg-amber-500/10 p-3.5">
+            <div className="text-xs font-black text-white">Important</div>
+            <p className="mt-1 text-[11px] leading-5 text-amber-50/65">
+              Follow venue safety requirements and the referee&apos;s instructions. Competition limits and exceptions remain governed by the League Rules.
+            </p>
+            <Link
+              href={"/captain/team/" + team.id + "/league-rules"}
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-amber-300/20 bg-black/15 px-3 text-xs font-black text-amber-50"
+            >
+              Open League Rules
+            </Link>
+          </section>
+        </main>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -202,6 +252,8 @@ export default async function CaptainRulesPage({
           These are the standard SIXFL playing rules. Follow venue safety requirements and the referee’s on-pitch instructions. Competition limits and exceptions remain governed by the League Rules; agreement from the referee or opposition alone does not authorise a tenth participant.
         </p>
       </section>
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
