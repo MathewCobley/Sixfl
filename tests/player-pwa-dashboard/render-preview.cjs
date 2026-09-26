@@ -73,6 +73,7 @@ const Home = load("src/components/player/PlayerAppHome.tsx", {
 });
 const Header = load("src/components/player/PlayerPwaPortalHeader.tsx", {
   "next/image": { __esModule: true, default: NextImage },
+  "next/link": Link,
   "next/navigation": navigation,
   "@heroicons/react/24/solid": solid,
 });
@@ -125,8 +126,13 @@ const homeMarkup = renderToStaticMarkup(h(Home, {
 }));
 
 const headerMarkup = renderToStaticMarkup(h(Header, {
+  teamId: "example-team",
   teamName: "Thirsk Town Frazzles",
   teamLogoUrl: teamBadge,
+  playerName: null,
+  previewPlayers: [
+    { id: "example-membership", name: "Finley Bowes" },
+  ],
 }));
 const navMarkup = renderToStaticMarkup(h(Nav, {
   teamId: "example-team",
@@ -170,22 +176,24 @@ const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
     await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white"><div class="player-pwa-mode"></div>${headerMarkup}${homeMarkup}${navMarkup}</body></html>`);
     await page.waitForTimeout(100);
     const text = await page.locator("body").innerText();
+    assert.match(text, /Finley Bowes/);
+    assert.match(text, /Player Portal · Thirsk Town Frazzles/);
     assert.match(text, /SELECTED/);
     assert.match(text, /3 unread messages/);
     assert.match(text, /Thirsk School/);
     assert.match(text, /£5\.00 outstanding/);
-    assert.match(text, /League newsletters/);
-    assert.match(await page.getByRole("link", { name: /League newsletters/ }).getAttribute("href"), /\/player\/team\/example-team\/news\?previewMembershipId=/);
+    assert.match(text, /Matchweek reports/);
+    assert.match(await page.getByRole("link", { name: /Matchweek reports/ }).getAttribute("href"), /\/player\/team\/example-team\/news\?previewMembershipId=/);
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(width <= 391, "Rendered Player PWA Home must not overflow horizontally");
     await page.screenshot({ path: path.join(out, "PLAYER-HOME-390.png"), fullPage: false });
     for (const viewportWidth of [320, 390]) {
       await page.setViewportSize({ width: viewportWidth, height: 852 });
       await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white"><main class="mx-auto max-w-xl px-3 py-4">${newsletterMarkup}</main></body></html>`);
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= viewportWidth + 1, "Newsletter reader must not overflow horizontally");
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= viewportWidth + 1, "Matchweek report reader must not overflow horizontally");
       assert.match(await page.locator("body").innerText(), /A close match with a late winner/);
       assert.equal(await page.locator("a").count(), 0, "Article content must not link out to website pages");
-      await page.screenshot({ path: path.join(out, `PLAYER-NEWSLETTER-${viewportWidth}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(out, `PLAYER-MATCHWEEK-REPORT-${viewportWidth}.png`), fullPage: true });
     }
     await page.close();
   } finally {

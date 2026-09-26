@@ -24,7 +24,8 @@ export default async function RefereeAppShell({
   title: string;
   children: ReactNode;
 }) {
-  const { authenticatedUser, isAdminPreview } = await requireReferee();
+  const { user, authenticatedUser, isAdminPreview } = await requireReferee();
+  const refereeName = user.name || user.email || "SIXFL Referee";
   const linkedPlayerMembership = !isAdminPreview
     ? await prisma.teamMember.findFirst({
         where: { userId: authenticatedUser.id },
@@ -73,8 +74,13 @@ export default async function RefereeAppShell({
               <Link href="/referee" aria-label="SIXFL referee home" className="shrink-0">
                 <img src="/logo2.png" alt="SIXFL" className="h-7 w-auto object-contain" />
               </Link>
-              <div className="min-w-0 flex-1 text-center text-sm font-black tracking-tight text-white">
-                {title}
+              <div className="min-w-0 flex-1 text-center">
+                <div className="truncate text-[13px] font-black tracking-tight text-white">
+                  {refereeName}
+                </div>
+                <div className="mt-0.5 truncate text-[9px] font-semibold text-white/45">
+                  Referee Portal · {title}
+                </div>
               </div>
               {canSwitchViewer ? (
                 <Link

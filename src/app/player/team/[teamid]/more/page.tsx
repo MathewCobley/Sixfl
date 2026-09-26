@@ -84,8 +84,8 @@ export default async function PlayerMorePage({
   const rows = [
     {
       href: withPreview(`/player/team/${teamid}/news`, previewMembershipId),
-      label: "Newsletters",
-      description: "Read the latest matchnight stories",
+      label: "Matchweek reports",
+      description: "Your match first, plus the full matchnight report",
       icon: NewspaperIcon,
     },
     {

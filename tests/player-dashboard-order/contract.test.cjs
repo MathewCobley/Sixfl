@@ -88,6 +88,11 @@ async function renderDashboard({ role = 'PLAYER', route = '', preview = false, l
                 : [{ id: 'example-player', role: 'PLAYER' }],
         }),
       },
+      teamMember: {
+        findMany: async () => [
+          { id: 'example-membership', user: { name: 'Example Player' } },
+        ],
+      },
     } },
     '@/lib/agreements': { hasAcceptedCurrentAgreement: async () => true },
     '@/components/agreements/MandatoryAgreementGate': {
@@ -184,7 +189,7 @@ test('player PWA home uses an explicit app/web gate and real SIXFL branding', ()
   const pwaHeader = read('src/components/player/PlayerPwaPortalHeader.tsx');
   const modeGate = read('src/components/player/PlayerPwaModeOnly.tsx');
   const previewRoute = read('src/app/(admin)/admin/teams/[id]/players/[membershipId]/preview/page.tsx');
-  const pwaViewerPicker = read('src/components/admin/pwa/PwaViewerPicker.tsx');
+  const testApps = read('src/app/(admin)/admin/test-apps/page.tsx');
 
   assert.match(appHome, /className="player-app-home px-3/);
   assert.doesNotMatch(appHome, /className="player-app-home hidden/);
@@ -192,7 +197,7 @@ test('player PWA home uses an explicit app/web gate and real SIXFL branding', ()
   assert.match(page, /<PlayerPwaModeOnly mode="web">\s*<div className="player-web-home/);
   assert.match(modeGate, /resolvedMode === mode/);
   assert.doesNotMatch(previewRoute, /pwaPreview=1/);
-  assert.match(pwaViewerPicker, /previewMembershipId=.*pwaPreview=1/);
+  assert.match(testApps, /previewMembershipId=\$\{encodeURIComponent\(finley\.member\.id\)\}&pwaPreview=1/);
   assert.match(pwaHeader, /src="\/logo2\.png"/);
   assert.doesNotMatch(pwaHeader, /player-pwa-controller\) \.player-app-home/);
 });

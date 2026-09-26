@@ -283,6 +283,9 @@ test("More contains only secondary app-native destinations", () => {
   assert.doesNotMatch(more, /Everything here stays inside|row\.description/);
   assert.match(more, /Rules and help/);
   assert.match(more, /min-h-14/);
+  assert.match(more, /Matchweek reports/);
+  assert.match(more, /\/news/);
+  assert.doesNotMatch(more, /Newsletters/);
   assert.match(more, /My stats/);
   assert.match(more, /SIXFL TV/);
   assert.match(more, /label: "Goal of the Month"/);
@@ -363,4 +366,19 @@ test("player app requires the current Player Agreement before portal access", ()
   assert.match(migration, /"version"/);
   assert.match(migration, /"acceptedAt"/);
   assert.match(migration, /AgreementAcceptance_userId_agreementType_version_key/);
+});
+
+test("player fixed header owns the player identity and Home does not repeat it", () => {
+  const layout = read("src/app/player/team/[teamid]/layout.tsx");
+  const header = read("src/components/player/PlayerPwaPortalHeader.tsx");
+  const home = read("src/components/player/PlayerAppHome.tsx");
+
+  assert.match(layout, /playerName=\{!isAdmin \? viewer\?\.name \?\? null : null\}/);
+  assert.match(layout, /previewPlayers=\{previewPlayers\.map/);
+  assert.match(header, /const displayName = previewPlayerName \|\| playerName\?\.trim\(\) \|\| "SIXFL Player"/);
+  assert.match(header, /\{displayName\}/);
+  assert.match(header, /Player Portal · \{teamName\}/);
+  assert.match(header, /src="\/logo2\.png"/);
+  assert.match(home, /aria-label="Player overview"/);
+  assert.doesNotMatch(home, /<h1[^>]*>\s*\{playerName/);
 });

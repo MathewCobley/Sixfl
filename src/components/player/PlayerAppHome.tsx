@@ -103,10 +103,6 @@ function selectionCopy(status: PlayerSelectionStatus) {
 
 export default function PlayerAppHome({
   teamId,
-  teamName,
-  teamLogoUrl,
-  playerName,
-  playerImageUrl,
   playerRoleLabel,
   squadNumber,
   preferredPosition,
@@ -180,60 +176,29 @@ export default function PlayerAppHome({
   return (
     <section className="player-app-home px-3 pb-24 pt-2 text-white">
       <div className="mx-auto w-full max-w-xl space-y-3">
-        <section className="overflow-hidden rounded-[1.45rem] border border-sky-400/20 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_38%),linear-gradient(145deg,#0b1a22,#09140f)] shadow-[0_14px_42px_rgba(0,0,0,0.28)]">
-          <div className="flex items-center gap-3 px-3 pb-3 pt-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-sky-300/25 bg-black/30">
-              {playerImageUrl ? (
-                <img
-                  src={playerImageUrl}
-                  alt={playerName ? `${playerName} profile` : "Player profile"}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-base font-black text-white/60">
-                  {initials(playerName)}
+        <section className="px-0.5" aria-label="Player overview">
+          <div className="mb-2 flex min-h-6 items-center justify-between gap-2 px-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {squadNumber ? (
+                <span className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black text-emerald-100">
+                  #{squadNumber}
                 </span>
-              )}
+              ) : null}
+              <span className="truncate rounded-full border border-white/10 bg-white/[0.035] px-2 py-0.5 text-[9px] font-semibold text-white/55">
+                {preferredPosition || playerRoleLabel || "Player"}
+              </span>
             </div>
-
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-xl font-black tracking-tight text-white">
-                {playerName || "SIXFL Player"}
-              </h1>
-              <p className="mt-0.5 truncate text-sm font-medium text-white/65">{teamName}</p>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {squadNumber ? (
-                  <span className="rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-100">
-                    #{squadNumber}
-                  </span>
-                ) : null}
-                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">
-                  {preferredPosition || playerRoleLabel || "Player"}
-                </span>
-                {unreadChatCount > 0 ? (
-                  <span className="rounded-full border border-violet-400/30 bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold text-violet-100">
-                    {unreadMessageLabel}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              {teamLogoUrl ? (
-                <img
-                  src={teamLogoUrl}
-                  alt={`${teamName} badge`}
-                  className="max-h-12 max-w-12 object-contain"
-                />
-              ) : (
-                <span className="text-sm font-black text-white/40">
-                  {initials(teamName)}
-                </span>
-              )}
-            </div>
+            {unreadChatCount > 0 ? (
+              <Link
+                href={chatHref}
+                className="shrink-0 rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[9px] font-semibold text-violet-100"
+              >
+                {unreadMessageLabel}
+              </Link>
+            ) : null}
           </div>
 
-          <div className="mx-3 mb-3 grid grid-cols-[1fr_1fr_1fr_1.45fr] divide-x divide-white/10 overflow-hidden rounded-xl border border-white/[0.07] bg-black/25">
+          <div className="grid grid-cols-[1fr_1fr_1fr_1.45fr] divide-x divide-white/[0.07] overflow-hidden rounded-xl border border-white/[0.06] bg-black/20">
             {[
               ["Matches", stats.appearances],
               ["Goals", stats.goals],
@@ -245,7 +210,7 @@ export default function PlayerAppHome({
                 className="px-2 py-2 text-center active:bg-white/[0.04]"
               >
                 <div className="text-lg font-black tabular-nums text-white">{value}</div>
-                <div className="text-[9px] text-white/45">{label}</div>
+                <div className="text-[9px] text-white/40">{label}</div>
               </Link>
             ))}
             <Link
@@ -257,7 +222,7 @@ export default function PlayerAppHome({
                 <span className={`block truncate text-[11px] font-bold ${availability.tone}`}>
                   {availability.label}
                 </span>
-                <span className="block text-[9px] text-white/35">Next match</span>
+                <span className="block text-[9px] text-white/30">Next match</span>
               </span>
             </Link>
           </div>
@@ -395,8 +360,8 @@ export default function PlayerAppHome({
         >
           <NewspaperIcon className="h-6 w-6 shrink-0 text-emerald-300" />
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-black">League newsletters</h2>
-            <p className="mt-1 text-xs text-white/50">Read the latest matchnight stories</p>
+            <h2 className="text-sm font-black">Matchweek reports</h2>
+            <p className="mt-1 text-xs text-white/50">Your match first, then the full matchnight report</p>
           </div>
           <ChevronRightIcon className="h-5 w-5 shrink-0 text-emerald-200" />
         </Link>

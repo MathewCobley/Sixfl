@@ -6,7 +6,7 @@ for (const teamName of ['Dynamo Kebab', 'Harrogate Naija Isolo FC', 'A&B United'
   test(`Home renders the saved team name: ${teamName}`, async () => {
     const { html, calls } = await renderScreen({ teamName });
     const escaped = teamName.replaceAll('&', '&amp;');
-    assert.ok(html.includes(`<h1>${escaped}</h1>`));
+    assert.match(html, new RegExp(`class="headerTitle"[^>]*>[\\s\\S]*<strong>${escaped}</strong>`));
     assert.doesNotMatch(html, /Your team<|The things that need your attention|Quick actions|Open fixture/);
     assert.deepEqual(calls.authorisations, ['demo']);
     assert.equal(calls.identityReads.length, 1);
@@ -54,7 +54,9 @@ test('Home uses the same visual hierarchy as the player app without losing capta
   ]) assert.ok(html.includes(text), text);
   assert.match(html, /class="actionGrid"/);
   assert.match(html, /class="matchTeams"/);
-  assert.match(html, /class="identityBadge"/);
+  assert.match(html, /class="overviewStrip"/);
+  assert.match(html, /Captain Portal/);
+  assert.doesNotMatch(html, /class="identityBadge"/);
 });
 
 test('Home has an obvious in-app league table shortcut', async () => {
