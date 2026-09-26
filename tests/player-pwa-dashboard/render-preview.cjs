@@ -207,6 +207,33 @@ const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
       assert.match(await page.locator("body").innerText(), /A close match with a late winner/);
       assert.equal(await page.locator('[aria-label="Matchweek report cover"]').count(), 1, "Matchweek report cover image must render");
       assert.equal(await page.locator('a[href^="/"]').count(), 0, "Article content must not link out to website pages");
+      const scorerLines = await page.locator("[data-app-goalscorer]").evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node);
+          return {
+            height: node.getBoundingClientRect().height,
+            lineHeight: Number.parseFloat(style.lineHeight),
+            scrollWidth: node.scrollWidth,
+            clientWidth: node.clientWidth,
+          };
+        }),
+      );
+      for (const scorer of scorerLines) {
+        assert.ok(scorer.height <= scorer.lineHeight * 1.2, "App goalscorers should stay on one line");
+        assert.ok(scorer.scrollWidth <= scorer.clientWidth + 1, "App goalscorers must fit their column");
+      }
+      const teamNames = await page.locator("[data-app-team-name]").evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node);
+          return {
+            height: node.getBoundingClientRect().height,
+            lineHeight: Number.parseFloat(style.lineHeight),
+          };
+        }),
+      );
+      for (const teamName of teamNames) {
+        assert.ok(teamName.height <= teamName.lineHeight * 2.2, "App team names should fit within two lines");
+      }
       await page.screenshot({ path: path.join(out, `PLAYER-MATCHWEEK-REPORT-${viewportWidth}.png`), fullPage: true });
     }
     await page.close();
