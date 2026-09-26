@@ -206,7 +206,22 @@ export default async function EditCaptainSquadPlayerPage({
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
-    <div className="space-y-8">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-edit-player-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-edit-player-page > section:first-child { border-radius:1.05rem !important; box-shadow:none !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-edit-player-page > section:first-child > div { padding:.85rem !important; gap:.65rem !important; }
+        body:has(.captain-app-header) .captain-edit-player-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.1rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-edit-player-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.05rem !important; }
+        body:has(.captain-app-header) .captain-edit-player-page > section:not(:first-child) { border-radius:1.05rem !important; padding:.8rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-edit-player-page > section h2 { font-size:.9rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-edit-player-page form { gap:.65rem !important; }
+        body:has(.captain-app-header) .captain-edit-player-page form [class*="md:grid-cols-2"] { grid-template-columns:minmax(0,1fr) !important; gap:.65rem !important; }
+        body:has(.captain-app-header) .captain-edit-player-page input,
+        body:has(.captain-app-header) .captain-edit-player-page textarea { border-radius:.8rem !important; }
+        body:has(.captain-app-header) .captain-edit-player-page button[type="submit"] { min-height:2.75rem !important; width:100% !important; border-radius:.8rem !important; font-size:.75rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-edit-player-page space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1fr_auto] lg:px-8 lg:py-8">
           <div className="flex items-start gap-4">
@@ -438,5 +453,6 @@ export default async function EditCaptainSquadPlayerPage({
         </form>
       </section>
     </div>
+    </>
   );
 }
