@@ -20,6 +20,7 @@ import { authOptions } from "@/auth";
 import PlayerAppHome from "@/components/player/PlayerAppHome";
 import PlayerFixtureTeams from "@/components/player/PlayerFixtureTeams";
 import PlayerPwaModeOnly from "@/components/player/PlayerPwaModeOnly";
+import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { getLeagueStandings } from "@/lib/standings";
 import { getPortalChatUnreadCount } from "@/lib/portal-messaging";
@@ -240,11 +241,16 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
 
   if (!team) notFound();
 
-  const leagueStandingsPromise = team.league?.id
-    ? getLeagueStandings(team.league.id)
-    : Promise.resolve(null);
+  const relatedContext = await getCaptainRelatedTeamContext(teamid);
+  const displayLeague = relatedContext?.currentLeague ?? team.league;
+  const displayLeagueName =
+    relatedContext?.competitionName ?? displayLeague?.name ?? null;
+  const relatedTeamIds = relatedContext?.relatedTeamIds ?? [teamid];
 
   const now = new Date();
+  const leagueStandingsPromise = displayLeague?.id
+    ? getLeagueStandings(displayLeague.id)
+    : Promise.resolve(null);
   const publishedFixtureFilter = { publishedAt: { not: null } };
   const feeLookupEmails = Array.from(
     new Set(
@@ -364,7 +370,7 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   ]);
 
   const leagueDivision = leagueStandings?.divisions.find((candidate) =>
-    candidate.rows.some((row) => row.teamId === teamid),
+    candidate.rows.some((row) => relatedTeamIds.includes(row.teamId)),
   );
   const hasPopulatedDivisions = Boolean(
     leagueStandings?.hasDivisions &&
@@ -373,8 +379,8 @@ export default async function PlayerTeamPage({ params, searchParams }: PageProps
   const leagueTableRows = leagueDivision?.rows ??
     (hasPopulatedDivisions ? [] : leagueStandings?.rows ?? []);
   const leagueTableTitle = leagueDivision
-    ? `${team.league?.name ?? "League"} · ${leagueDivision.name}`
-    : team.league?.name ?? null;
+    ? `${displayLeagueName ?? "League"} · ${leagueDivision.name}`
+    : displayLeagueName;
 
   const openFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.OPEN);
   const paidFees = playerFees.filter((fee) => fee.status === PlayerMatchFeeStatus.PAID);
