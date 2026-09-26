@@ -83,6 +83,19 @@ function getLeadFilterWhere(formData: FormData, contactField: "email" | "phone")
     .trim()
     .toUpperCase();
   const includedLeadIds = getIncludedLeadIds(formData);
+  const selectedQuery = String(formData.get("selectedQuery") ?? "").trim();
+  const searchWhere: Prisma.InterestLeadWhereInput | null = selectedQuery
+    ? {
+        OR: [
+          { teamName: { contains: selectedQuery, mode: "insensitive" } },
+          { contactName: { contains: selectedQuery, mode: "insensitive" } },
+          { email: { contains: selectedQuery, mode: "insensitive" } },
+          { phone: { contains: selectedQuery, mode: "insensitive" } },
+          { area: { contains: selectedQuery, mode: "insensitive" } },
+          { message: { contains: selectedQuery, mode: "insensitive" } },
+        ],
+      }
+    : null;
 
   const where: Prisma.InterestLeadWhereInput = {
     OR: [
@@ -116,6 +129,7 @@ function getLeadFilterWhere(formData: FormData, contactField: "email" | "phone")
           not: "",
         },
       },
+      ...(searchWhere ? [searchWhere] : []),
     ],
     ...(includedLeadIds.length > 0
       ? {
