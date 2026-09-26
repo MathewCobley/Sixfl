@@ -78,27 +78,44 @@ start();`;
     const t=top.getBoundingClientRect(),b=bottom.getBoundingClientRect(),v=window.visualViewport;
     return {top:t.top,topBottom:t.bottom,bottom:b.bottom,bottomTop:b.top,visibleTop:v?.offsetTop||0,visibleBottom:(v?.offsetTop||0)+(v?.height||innerHeight),space:document.querySelector('[data-app-header-space]').getBoundingClientRect().height,first:document.querySelector('[data-first-content]').getBoundingClientRect().top,scroll:scrollY,topParent:top.parentElement.tagName,bottomParent:bottom.parentElement.tagName};
    });
+   // ResizeObserver and visualViewport are asynchronous, particularly in WebKit.
+   // Wait for the actual required geometry instead of assuming a 100ms deadline.
+   async function settled(minHeight=30){
+    try{await page.waitForFunction(min=>{
+     const t=document.querySelector('[data-app-chrome-edge="top"]').getBoundingClientRect();
+     const b=document.querySelector('[data-app-chrome-edge="bottom"]').getBoundingClientRect();
+     const s=document.querySelector('[data-app-header-space]').getBoundingClientRect();
+     const v=window.visualViewport;
+     return t.height>min && Math.abs(s.height-t.height)<2 && Math.abs(t.top-(v?.offsetTop||0))<2 && Math.abs(b.bottom-((v?.offsetTop||0)+(v?.height||innerHeight)))<2;
+    },minHeight,{timeout:5000});}catch(error){
+     console.error(engine.name(),role,'unsettled chrome',await bounds());
+     await page.screenshot({path:path.join(out,`${engine.name()}-${role}-failure.png`)});
+     throw error;
+    }
+   }
+   await settled();
    const initial=await bounds();assert.equal(initial.topParent,'BODY');assert.equal(initial.bottomParent,'BODY');assert.ok(initial.first>=initial.topBottom-1,role+' content covered');
    for(const size of [{width:390,height:844},{width:844,height:390},{width:390,height:530}]){
-    await page.setViewportSize(size);await page.evaluate(()=>window.scrollTo(0,900));await page.waitForTimeout(150);
+    await page.setViewportSize(size);await page.evaluate(()=>window.scrollTo(0,900));await settled();
     const after=await bounds();assert.ok(after.scroll>200,role+' real document scroll');assert.ok(Math.abs(after.top-after.visibleTop)<2,role+' header left viewport');assert.ok(Math.abs(after.bottom-after.visibleBottom)<2,role+' footer left viewport');assert.ok(Math.abs(after.space-(after.topBottom-after.top))<2,role+' spacer stale');
    }
    await page.setViewportSize({width:390,height:844});
    // Simulate larger safe-area/font wrapping height without a hard-coded spacer.
    await page.locator('[data-app-chrome-edge="top"] > header').evaluate(el=>{el.style.paddingTop='52px';el.style.paddingBottom='20px';});
-   await page.waitForTimeout(100);const resized=await bounds();assert.ok(resized.space>90,role+' header height not observed');
+   await settled(90);const resized=await bounds();assert.ok(resized.space>90,role+' header height not observed');
    await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));await page.waitForTimeout(100);
    const last=await page.locator('[data-last-action]').boundingBox(),now=await bounds();assert.ok(last.y+last.height<=now.bottomTop+2,role+' bottom action obscured');
    await page.screenshot({path:path.join(out,`${engine.name()}-${role}-scrolled.png`)});
    const links=await page.locator('[data-app-chrome-edge="bottom"] a').evaluateAll(els=>els.map(a=>a.getAttribute('href')));
    assert.equal(links.length,role==='captain'?6:5);assert.ok(links.every(href=>href.startsWith(role.startsWith('referee')?'/referee':`/${role}/team/phone-test`)));
-   await page.evaluate(()=>window.unmountApp());assert.equal(await page.locator('[data-app-chrome-edge]').count(),0,'portal cleaned after route unmount');assert.deepEqual(errors,[]);
+   await page.evaluate(()=>window.unmountApp());await page.locator('[data-app-chrome-edge]').first().waitFor({state:'detached'});assert.equal(await page.locator('[data-app-chrome-edge]').count(),0,'portal cleaned after route unmount');assert.deepEqual(errors,[]);
    checks.push(`${engine.name()}: ${role} pinned across document scroll, portrait/landscape/short viewport, measured header, reachable final action and cleanup`);
    await context.close();
   }
   // Browser/web mode must not acquire invisible blocking bars or new app menus.
   const context=await browser.newContext({viewport:{width:1280,height:900}});const page=await context.newPage();
-  await page.goto(origin+'/player/team/phone-test?role=player');await page.getByRole('navigation',{name:'Player team sections'}).waitFor();await page.waitForTimeout(100);
+  await page.goto(origin+'/player/team/phone-test?role=player');await page.getByRole('navigation',{name:'Player team sections'}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('[data-app-header-space]')?.getBoundingClientRect().height===0);
   assert.equal(await page.getByRole('navigation',{name:'Player app navigation'}).isVisible(),false);assert.equal(await page.locator('[data-app-header-space]').evaluate(el=>el.getBoundingClientRect().height),0);
   await page.goto(origin+'/admin/pwa');const frame=page.frames().find(f=>f.url().includes('/player/team/'));assert.ok(frame);
   await frame.locator('[data-app-chrome-edge="top"] > header').waitFor({state:'visible'});await frame.evaluate(()=>window.scrollTo(0,700));await page.waitForTimeout(100);
