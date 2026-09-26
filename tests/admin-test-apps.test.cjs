@@ -11,7 +11,7 @@ const diagnosticsPage = fs.readFileSync("src/app/(admin)/admin/pwa/page.tsx", "u
 test("admin Test apps uses the three fixed preview identities", () => {
   assert.match(page, /requireAdmin\(\)/);
   assert.match(page, /Kebab · Hakan/);
-  assert.match(page, /Finn McIntosh/);
+  assert.match(page, /Finley McIntosh/);
   assert.match(page, /hasNamePart\(referee\.name, "stefan"\)/);
   assert.match(page, /\/admin\/teams\/\$\{kebabTeam\.id\}\/captain-preview/);
   assert.match(page, /previewMembershipId=\$\{encodeURIComponent\(finn\.member\.id\)\}/);
