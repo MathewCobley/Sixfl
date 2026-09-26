@@ -7,6 +7,7 @@ test("captain PWA keeps the real overview calculations and a separate website vi
   const page = read("src/app/captain/team/[teamid]/page.tsx");
   const server = read("src/components/captain/CaptainAppHome.tsx");
   const view = read("src/components/captain/CaptainAppHomeView.tsx");
+  const header = read("src/components/captain/CaptainAppHeader.tsx");
   assert.match(page, /<CaptainPwaModeOnly mode="app">[\s\S]*<CaptainAppHome/);
   assert.match(page, /<CaptainPwaModeOnly mode="web">/);
   assert.match(page, /CaptainVeoPriorityCard/);
@@ -195,7 +196,7 @@ test("portal headers identify the app while Home stays a bottom-nav destination"
   const refereeHome = read("src/components/referee/RefereeAppHome.tsx");
 
   assert.match(captainHeader, /Captain Portal/);
-  assert.match(playerHeader, />\s*Player Portal\s*</);
+  assert.match(playerHeader, /Player Portal · \{teamName\}/);
   assert.match(refereeHome, />\s*Referee Portal\s*</);
   assert.match(read("src/components/captain/CaptainPwaBottomNav.tsx"), /label: "Home"/);
   assert.match(refereeHome, /label: "Home"/);
