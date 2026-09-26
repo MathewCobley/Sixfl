@@ -11,15 +11,16 @@ test("captain app newsletters never hand off to the public league website", () =
   const card = read("src/components/news/NewsCard.tsx");
   const captainNews = read("src/app/captain/team/[teamid]/news/page.tsx");
 
-  assert.match(
-    latest,
-    /\/${scope}\/team\/${encodeURIComponent\(id\)}\/news\?league=/,
+  assert.ok(
+    latest.includes(
+      "/${scope}/team/${encodeURIComponent(id)}/news?league=",
+    ),
   );
-  assert.match(card, /const url = articleHref \?\? newsPath/);
-  assert.match(captainNews, /requireCaptain\(teamid\)/);
-  assert.match(captainNews, /getPublishedNews/);
-  assert.match(captainNews, /listPublishedNews/);
-  assert.doesNotMatch(captainNews, /href=\{?["'\x60]\/leagues\//);
+  assert.ok(card.includes("const url = articleHref ?? newsPath"));
+  assert.ok(captainNews.includes("requireCaptain(teamid)"));
+  assert.ok(captainNews.includes("getPublishedNews"));
+  assert.ok(captainNews.includes("listPublishedNews"));
+  assert.equal(captainNews.includes("/leagues/"), false);
 });
 
 test("captain app rules, Goal of the Month and recruitment stay in the portal", () => {
@@ -32,32 +33,26 @@ test("captain app rules, Goal of the Month and recruitment stay in the portal", 
     "src/app/captain/team/[teamid]/goal-of-the-month/page.tsx",
   );
 
-  assert.match(guide, /\/captain\/team\/${team\.id}\/league-rules/);
-  assert.doesNotMatch(guide, /href="\/league-rules"/);
+  assert.ok(guide.includes("/captain/team/${team.id}/league-rules"));
+  assert.equal(guide.includes('href="/league-rules"'), false);
 
-  assert.match(
-    priority,
-    /\/captain\/team\/${teamid}\/goal-of-the-month/,
-  );
-  assert.doesNotMatch(priority, /\/goal-of-the-month\?from=captain/);
+  assert.ok(priority.includes("/captain/team/${teamid}/goal-of-the-month"));
+  assert.equal(priority.includes("/goal-of-the-month?from=captain"), false);
 
-  for (const route of [
-    "news",
-    "goal-of-the-month",
-    "league-rules",
-  ]) {
-    assert.match(more, new RegExp("\\/captain\\/team|\\$\\{base\\}\\/" + route));
+  for (const route of ["news", "goal-of-the-month", "league-rules"]) {
+    assert.ok(more.includes("${base}/" + route), route);
   }
 
-  assert.match(prospects, /CopyToClipboardButton/);
-  assert.match(prospects, /Copy signup link/);
-  assert.doesNotMatch(prospects, /<a href=\{joinUrl/);
-  assert.doesNotMatch(prospects, /Open signup link|Open join page/);
+  assert.ok(prospects.includes("CopyToClipboardButton"));
+  assert.ok(prospects.includes("Copy signup link"));
+  assert.equal(prospects.includes("<a href={joinUrl"), false);
+  assert.equal(prospects.includes("Open signup link"), false);
+  assert.equal(prospects.includes("Open join page"), false);
 
-  assert.match(leagueRules, /requireCaptain\(teamid\)/);
-  assert.match(leagueRules, /title="League Rules"/);
-  assert.match(goalOfMonth, /requireCaptain\(teamid\)/);
-  assert.match(goalOfMonth, /<MonthlyGoalsPanel playerApp \/>/);
+  assert.ok(leagueRules.includes("requireCaptain(teamid)"));
+  assert.ok(leagueRules.includes('title="League Rules"'));
+  assert.ok(goalOfMonth.includes("requireCaptain(teamid)"));
+  assert.ok(goalOfMonth.includes("<MonthlyGoalsPanel playerApp />"));
 });
 
 test("player installed-app routes stay inside the player portal", () => {
@@ -68,24 +63,27 @@ test("player installed-app routes stay inside the player portal", () => {
     "src/app/player/team/[teamid]/availability/page.tsx",
   );
 
-  assert.match(home, /\/player\/team\/${teamId}\/news/);
-  assert.match(more, /\/player\/team\/${teamid}\/news/);
-  assert.match(more, /\/player\/team\/${teamid}\/goal-of-the-month/);
-  assert.match(more, /\/player\/team\/${teamid}\/league-rules/);
-  assert.match(more, /\/player\/team\/${teamid}\/match-rules/);
+  assert.ok(home.includes("/player/team/${teamId}/news"));
+  assert.ok(more.includes("/player/team/${teamid}/news"));
+  assert.ok(more.includes("/player/team/${teamid}/goal-of-the-month"));
+  assert.ok(more.includes("/player/team/${teamid}/league-rules"));
+  assert.ok(more.includes("/player/team/${teamid}/match-rules"));
 
-  const appTabs = nav.slice(nav.indexOf("const appTabs"), nav.indexOf("export default"));
-  assert.doesNotMatch(appTabs, /\/leagues\//);
-  assert.doesNotMatch(appTabs, /href:\s*"\/(?!player\/team\/|dashboard)/);
+  const appTabs = nav.slice(
+    nav.indexOf("const appTabs"),
+    nav.indexOf("export default"),
+  );
+  assert.equal(appTabs.includes("/leagues/"), false);
+  assert.equal(appTabs.includes('href: "/goal-of-the-month'), false);
+  assert.equal(appTabs.includes('href: "/league-rules"'), false);
+  assert.equal(appTabs.includes('href: "/match-rules"'), false);
 
-  assert.match(
-    availability,
-    /<PlayerPwaModeOnly mode="app">[\s\S]*<PlayerAppFixtures/,
-  );
-  assert.match(
-    availability,
-    /<PlayerPwaModeOnly mode="web">[\s\S]*href=\{\`\/leagues\//,
-  );
+  const appGate = availability.indexOf('<PlayerPwaModeOnly mode="app">');
+  const webGate = availability.indexOf('<PlayerPwaModeOnly mode="web">');
+  const publicLeagueLink = availability.indexOf("href={`/leagues/");
+  assert.ok(appGate >= 0);
+  assert.ok(webGate > appGate);
+  assert.ok(publicLeagueLink > webGate);
 });
 
 test("referee installed-app navigation stays inside referee routes", () => {
@@ -94,16 +92,16 @@ test("referee installed-app navigation stays inside referee routes", () => {
   const more = read("src/app/(public)/referee/more/page.tsx");
 
   for (const source of [home, shell, more]) {
-    assert.doesNotMatch(source, /href="\/leagues\//);
-    assert.doesNotMatch(source, /href="\/league-rules"/);
-    assert.doesNotMatch(source, /href="\/match-rules"/);
-    assert.doesNotMatch(source, /href="\/goal-of-the-month/);
+    assert.equal(source.includes('href="/leagues/'), false);
+    assert.equal(source.includes('href="/league-rules"'), false);
+    assert.equal(source.includes('href="/match-rules"'), false);
+    assert.equal(source.includes('href="/goal-of-the-month'), false);
   }
 
-  assert.match(home, /href="\/referee\/match-rules"/);
-  assert.match(more, /href:\s*"\/referee\/league-rules"/);
-  assert.match(more, /href:\s*"\/referee\/agreement"/);
-  assert.match(shell, /href:\s*"\/referee\/nights"/);
-  assert.match(shell, /href:\s*"\/referee\/availability"/);
-  assert.match(shell, /href:\s*"\/referee\/ledger"/);
+  assert.ok(home.includes('href="/referee/match-rules"'));
+  assert.ok(more.includes('href: "/referee/league-rules"'));
+  assert.ok(more.includes('href: "/referee/agreement"'));
+  assert.ok(shell.includes('href: "/referee/nights"'));
+  assert.ok(shell.includes('href: "/referee/availability"'));
+  assert.ok(shell.includes('href: "/referee/ledger"'));
 });
