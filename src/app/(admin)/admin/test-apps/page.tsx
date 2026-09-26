@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TeamRole, UserRole } from "@prisma/client";
+import { TeamMode, TeamRole, UserRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/requireAdmin";
@@ -142,7 +142,7 @@ export default async function AdminTestAppsPage() {
     kebabTeams.find(
       (team) =>
         team.league?.isActive &&
-        team.teamMode !== "MANAGED" &&
+        team.teamMode !== TeamMode.MANAGED &&
         team.members.some(
           (member) =>
             member.role === TeamRole.CAPTAIN &&
@@ -151,7 +151,7 @@ export default async function AdminTestAppsPage() {
     ) ??
     kebabTeams.find(
       (team) =>
-        team.teamMode !== "MANAGED" &&
+        team.teamMode !== TeamMode.MANAGED &&
         team.members.some(
           (member) =>
             member.role === TeamRole.CAPTAIN &&
