@@ -1,4 +1,6 @@
 import Link from "next/link";
+import MobileLeagueTable from "@/components/league/MobileLeagueTable";
+import type { LeagueTableRow } from "@/lib/leagueTable";
 import {
   BanknotesIcon,
   CalendarDaysIcon,
@@ -115,6 +117,8 @@ export default function PlayerAppHome({
   nextSelectionStatus,
   unreadChatCount,
   previewMembershipId,
+  leagueTableRows,
+  leagueTableTitle,
 }: {
   teamId: string;
   teamName: string;
@@ -133,6 +137,8 @@ export default function PlayerAppHome({
   nextSelectionStatus: PlayerSelectionStatus | null;
   unreadChatCount: number;
   previewMembershipId: string | null;
+  leagueTableRows: LeagueTableRow[];
+  leagueTableTitle: string | null;
 }) {
   const availability = availabilityCopy(nextAvailability);
   const selection = nextSelectionStatus ? selectionCopy(nextSelectionStatus) : null;
@@ -352,6 +358,30 @@ export default function PlayerAppHome({
               <div className="mt-0.5 truncate text-[10px] text-white/45">{fourthAction.body}</div>
             </div>
           </Link>
+        </section>
+
+        <section className="overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-white/[0.03]">
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300/75">
+                League table
+              </p>
+              <h2 className="mt-1 truncate text-sm font-black text-white">
+                {leagueTableTitle || "Current standings"}
+              </h2>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold text-white/35">
+              {leagueTableRows.length} teams
+            </span>
+          </div>
+
+          {leagueTableRows.length > 0 ? (
+            <MobileLeagueTable rows={leagueTableRows} currentTeamIds={[teamId]} />
+          ) : (
+            <div className="px-3 py-4 text-xs text-white/45">
+              Your league table will appear here once your division is ready.
+            </div>
+          )}
         </section>
 
         <Link
