@@ -120,7 +120,22 @@ export default async function CaptainTeamKitPage({
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-team-kit-page { display:grid; gap:.7rem; padding-bottom:5.5rem; }
+        body:has(.captain-app-header) .captain-team-kit-page > section { border-radius:1.05rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-team-kit-page > section:first-of-type { padding:.85rem !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-team-kit-page > section:first-of-type h1 { margin-top:.25rem !important; font-size:1.15rem !important; line-height:1.25 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-team-kit-page > section:first-of-type p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; color:rgba(255,255,255,.45) !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form { display:grid !important; gap:.7rem !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > section { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > section > div[class*="border-b"] { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > section h2 { font-size:.95rem !important; line-height:1.2 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > section p[class*="max-w-"] { margin-top:.35rem !important; font-size:.68rem !important; line-height:1.05rem !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > div:last-child { display:grid !important; grid-template-columns:1fr 1fr !important; gap:.5rem !important; }
+        body:has(.captain-app-header) .captain-team-kit-page form > div:last-child button { min-height:2.8rem !important; width:100% !important; border-radius:.8rem !important; font-size:.75rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-team-kit-page space-y-8 pb-12">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -252,5 +267,6 @@ export default async function CaptainTeamKitPage({
         />
       )}
     </div>
+    </>
   );
 }
