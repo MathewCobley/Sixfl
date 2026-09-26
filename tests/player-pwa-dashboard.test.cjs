@@ -283,6 +283,9 @@ test("More contains only secondary app-native destinations", () => {
   assert.doesNotMatch(more, /Everything here stays inside|row\.description/);
   assert.match(more, /Rules and help/);
   assert.match(more, /min-h-14/);
+  assert.match(more, /Matchweek reports/);
+  assert.match(more, /\/news/);
+  assert.doesNotMatch(more, /Newsletters/);
   assert.match(more, /My stats/);
   assert.match(more, /SIXFL TV/);
   assert.match(more, /label: "Goal of the Month"/);
