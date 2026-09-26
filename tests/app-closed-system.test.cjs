@@ -12,6 +12,7 @@ test("captain app newsletters never hand off to the public league website", () =
   const captainNews = read("src/app/captain/team/[teamid]/news/page.tsx");
   const captainLayout = read("src/app/captain/team/[teamid]/layout.tsx");
   const captainNavigation = read("src/lib/captain/app-navigation.ts");
+  const routeBridges = read("src/components/RouteScopedBridges.tsx");
 
   assert.ok(
     latest.includes(
@@ -27,6 +28,10 @@ test("captain app newsletters never hand off to the public league website", () =
   assert.ok(captainLayout.includes("<CaptainAppHeader"));
   assert.ok(captainLayout.includes("<CaptainPwaBottomNav"));
   assert.ok(captainNavigation.includes('news: "Matchweek reports"'));
+  assert.ok(captainNews.includes("data-captain-matchweek-toolbar"));
+  assert.ok(captainNews.includes("whitespace-nowrap"));
+  assert.ok(routeBridges.includes("const isCaptainNews ="));
+  assert.ok(routeBridges.includes("!isCaptainNews ? <CaptainHeaderLeaguePositionBridge /> : null"));
 });
 
 test("captain app rules, Goal of the Month and recruitment stay in the portal", () => {

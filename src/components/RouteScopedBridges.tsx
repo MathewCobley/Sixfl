@@ -95,6 +95,7 @@ export default function RouteScopedBridges() {
   const isAdmin = pathname.startsWith("/admin");
   const isCaptain = pathname.startsWith("/captain/");
   const isPlayer = pathname.startsWith("/player/");
+  const isCaptainNews = /^\/captain\/team\/[^/]+\/news(?:\/|$)/.test(pathname);
   const isCaptainMatchFees = /^\/captain\/team\/[^/]+\/match-fees\/?$/.test(pathname);
   const isAdminLeagues = pathname.startsWith("/admin/leagues/");
   const isAdminTeam = /^\/admin\/teams\/[^/]+\/?$/.test(pathname);
@@ -126,7 +127,7 @@ export default function RouteScopedBridges() {
       {isCaptain ? (
         <>
           <CaptainAdditionalCaptainBridge />
-          <CaptainHeaderLeaguePositionBridge />
+          {!isCaptainNews ? <CaptainHeaderLeaguePositionBridge /> : null}
           <CaptainPlayerModeBridge />
           <CaptainStoredPredictionBridge />
           <FixturePaymentWordingBridge />
