@@ -5,7 +5,12 @@ on:
     paths:
       - "src/app/(admin)/admin/page.tsx"
       - "src/lib/admin/latest-activity.ts"
+      - "src/lib/admin/lead-decision-activity.ts"
       - "src/lib/admin/payment-activity.ts"
+      - "src/lib/leads/teamPlaceConfirmation.ts"
+      - "src/lib/leads/team-lead-player-choice.ts"
+      - "src/lib/leads/team-lead-decisions.ts"
+      - "src/app/(public)/team-confirmation/**"
       - "src/lib/payments/payment-receipt-presentation.ts"
       - "src/lib/payments/player-ledger-markers.ts"
       - "src/components/admin/AdminLatestActivity.tsx"
@@ -47,31 +52,43 @@ jobs:
       EMAIL_REPLY_DOMAIN: example.invalid
     steps:
       - uses: actions/checkout@v4
+        id: checkout
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npx prisma generate
-      - name: Test payment identity, newest 50 and read-only PostgreSQL reference matching
-        run: node --test tests/admin-activity/*.test.cjs
+      - name: Test lead decisions, payment identity, newest 50 and read-only PostgreSQL matching
+        run: node --test tests/admin-activity/*.test.cjs tests/catterick-interest/contract.test.cjs
       - name: Prepare exact production source
         run: npm run prebuild
       - run: npx prisma generate
-      - name: Repeat activity tests after production preparation
-        run: node --test tests/admin-activity/*.test.cjs
+      - name: Repeat activity and response contracts after production preparation
+        run: |
+          node --test tests/admin-activity/*.test.cjs tests/catterick-interest/contract.test.cjs
+          node scripts/check-critical-feature-contracts.mjs
       - name: Verify admin activity mounting and authorised data loading
         run: |
           node -e 'const fs=require("node:fs"),a=require("node:assert/strict"),p=fs.readFileSync("src/app/(admin)/admin/page.tsx","utf8");a.match(p,/await requireAdmin\(\)/);a.match(p,/getAdminLatestActivity\(50\)/);a.match(p,/<AdminLatestActivity/);'
       - run: npx tsc --noEmit
+      - name: Production build
+        run: npx next build
       - name: Install browser tooling outside application dependencies
         run: npm install --prefix "$RUNNER_TEMP/activity-browser" --no-save --package-lock=false playwright@1.55.0 esbuild@0.27.4
       - name: Install Chromium
         run: node "$RUNNER_TEMP/activity-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Exercise Previous 10 and Next 10 and all pagination boundaries
         run: NODE_PATH="$RUNNER_TEMP/activity-browser/node_modules" node tests/admin-activity/browser.cjs
+      - name: Retain prepared source and repository-wide activity inventory
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          mkdir -p artifacts/admin-activity
+          git diff -- src > artifacts/admin-activity/preparation.diff
+          git grep -n -E 'getAdminLatestActivity|AdminLatestActivity|LeadTeamConfirmation|recordIndividualPlayerChoice|confirmTeamPlaceFromLead|recordTeamLeadDecline|lead-decision:' -- src scripts tests > artifacts/admin-activity/source-inventory.txt
+          tar -czf artifacts/admin-activity/prepared-source.tgz src/lib/admin src/lib/leads src/components/admin/AdminLatestActivity.tsx 'src/app/(admin)/admin/page.tsx' 'src/app/(public)/team-confirmation' tests/admin-activity tests/catterick-interest
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         with:
           name: admin-activity-history-${{ github.sha }}
           path: artifacts/admin-activity/
