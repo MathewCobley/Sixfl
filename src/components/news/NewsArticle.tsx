@@ -145,49 +145,114 @@ export default function NewsArticle({
                   {highlighted ? <p className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-800">{appMode ? "Your match" : "Featuring your team"}</p> : null}
                 </div>
 
-                <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-6">
-                  <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-                    <NewsImage src={m.badgeA} alt={`${m.teamA} badge`} fallback={m.teamA.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
-                    <div className="min-w-0 text-left">
-                      {appMode ? (
-                        <span className="block min-w-0 break-words text-sm font-black leading-5 sm:text-lg">{m.teamA}</span>
-                      ) : (
-                        <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
-                      )}
-                      {teamAScorers.length ? (
-                        <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                {appMode ? (
+                  <>
+                    <div
+                      data-app-match-scoreboard
+                      className="mt-4 grid grid-cols-[minmax(0,1fr)_3.75rem_minmax(0,1fr)] items-start gap-1.5"
+                    >
+                      <div className="min-w-0 text-center">
+                        <NewsImage
+                          src={m.badgeA}
+                          alt={`${m.teamA} badge`}
+                          fallback={m.teamA.slice(0, 2).toUpperCase()}
+                          className="mx-auto h-9 w-9 object-contain"
+                        />
+                        <span
+                          data-app-team-name
+                          className="mx-auto mt-1.5 block min-w-0 max-w-[8.5rem] text-balance text-[clamp(0.66rem,3vw,0.78rem)] font-black leading-[1.05rem]"
+                        >
+                          {m.teamA}
+                        </span>
+                      </div>
+                      <p
+                        aria-label={`${m.scoreA} to ${m.scoreB}`}
+                        className="self-start whitespace-nowrap rounded-lg bg-[#07130f] px-2 py-2 text-xl font-black tabular-nums text-white"
+                      >
+                        {m.scoreA}<span className="px-1 text-white/35">–</span>{m.scoreB}
+                      </p>
+                      <div className="min-w-0 text-center">
+                        <NewsImage
+                          src={m.badgeB}
+                          alt={`${m.teamB} badge`}
+                          fallback={m.teamB.slice(0, 2).toUpperCase()}
+                          className="mx-auto h-9 w-9 object-contain"
+                        />
+                        <span
+                          data-app-team-name
+                          className="mx-auto mt-1.5 block min-w-0 max-w-[8.5rem] text-balance text-[clamp(0.66rem,3vw,0.78rem)] font-black leading-[1.05rem]"
+                        >
+                          {m.teamB}
+                        </span>
+                      </div>
+                    </div>
+
+                    {teamAScorers.length || teamBScorers.length ? (
+                      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#07130f]/10 pt-2.5">
+                        <ul aria-label={`${m.teamA} goalscorers`} className="min-w-0 space-y-0.5 text-left text-[clamp(0.58rem,2.6vw,0.68rem)] leading-4 text-[#304139]">
                           {teamAScorers.map((scorer, scorerIndex) => (
-                            <li key={`${m.fixtureId}-a-${scorer.name}-${scorerIndex}`}>
+                            <li
+                              data-app-goalscorer
+                              key={`${m.fixtureId}-a-${scorer.name}-${scorerIndex}`}
+                              className="relative min-w-0 whitespace-nowrap pl-2.5 tracking-[-0.01em]"
+                            >
+                              <span aria-hidden="true" className="absolute left-0 text-emerald-700">•</span>
                               {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
                             </li>
                           ))}
                         </ul>
-                      ) : null}
-                    </div>
-                  </div>
-                  <p aria-label={`${m.scoreA} to ${m.scoreB}`} className="self-start whitespace-nowrap rounded-xl bg-[#07130f] px-3 py-2 text-2xl font-black tabular-nums text-white sm:px-5 sm:py-3 sm:text-3xl">
-                    {m.scoreA}<span className="px-1.5 text-white/35">–</span>{m.scoreB}
-                  </p>
-                  <div className="flex min-w-0 items-start justify-end gap-3 sm:gap-4">
-                    <div className="min-w-0 text-left">
-                      {appMode ? (
-                        <span className="block min-w-0 break-words text-sm font-black leading-5 sm:text-lg">{m.teamB}</span>
-                      ) : (
-                        <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
-                      )}
-                      {teamBScorers.length ? (
-                        <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                        <ul aria-label={`${m.teamB} goalscorers`} className="min-w-0 space-y-0.5 text-left text-[clamp(0.58rem,2.6vw,0.68rem)] leading-4 text-[#304139]">
                           {teamBScorers.map((scorer, scorerIndex) => (
-                            <li key={`${m.fixtureId}-b-${scorer.name}-${scorerIndex}`}>
+                            <li
+                              data-app-goalscorer
+                              key={`${m.fixtureId}-b-${scorer.name}-${scorerIndex}`}
+                              className="relative min-w-0 whitespace-nowrap pl-2.5 tracking-[-0.01em]"
+                            >
+                              <span aria-hidden="true" className="absolute left-0 text-emerald-700">•</span>
                               {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
                             </li>
                           ))}
                         </ul>
-                      ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-6">
+                    <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                      <NewsImage src={m.badgeA} alt={`${m.teamA} badge`} fallback={m.teamA.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
+                      <div className="min-w-0 text-left">
+                        <Link href={`/teams/${encodeURIComponent(m.teamAId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamA}</Link>
+                        {teamAScorers.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                            {teamAScorers.map((scorer, scorerIndex) => (
+                              <li key={`${m.fixtureId}-a-${scorer.name}-${scorerIndex}`}>
+                                {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
                     </div>
-                    <NewsImage src={m.badgeB} alt={`${m.teamB} badge`} fallback={m.teamB.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
+                    <p aria-label={`${m.scoreA} to ${m.scoreB}`} className="self-start whitespace-nowrap rounded-xl bg-[#07130f] px-3 py-2 text-2xl font-black tabular-nums text-white sm:px-5 sm:py-3 sm:text-3xl">
+                      {m.scoreA}<span className="px-1.5 text-white/35">–</span>{m.scoreB}
+                    </p>
+                    <div className="flex min-w-0 items-start justify-end gap-3 sm:gap-4">
+                      <div className="min-w-0 text-left">
+                        <Link href={`/teams/${encodeURIComponent(m.teamBId)}`} className="block min-w-0 break-words text-sm font-black leading-5 hover:text-emerald-700 sm:text-lg">{m.teamB}</Link>
+                        {teamBScorers.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-left text-xs leading-5 text-[#304139] marker:text-emerald-700 sm:text-sm">
+                            {teamBScorers.map((scorer, scorerIndex) => (
+                              <li key={`${m.fixtureId}-b-${scorer.name}-${scorerIndex}`}>
+                                {scorer.name}{scorer.goals > 1 ? ` ×${scorer.goals}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                      <NewsImage src={m.badgeB} alt={`${m.teamB} badge`} fallback={m.teamB.slice(0, 2).toUpperCase()} className="h-11 w-11 shrink-0 object-contain sm:h-14 sm:w-14" />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <h2 className="sr-only">{m.teamA} {m.scoreA}–{m.scoreB} {m.teamB}</h2>
                 <p className="mt-6 max-w-4xl whitespace-pre-line break-words text-base leading-8 text-[#25342d] sm:text-lg sm:leading-9">{m.paragraph}</p>

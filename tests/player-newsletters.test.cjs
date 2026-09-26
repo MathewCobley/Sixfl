@@ -82,6 +82,7 @@ test('reader uses the real Matchweek News report with its image, team match firs
   const {html}=await render({search:{league:'harrogate',date:'2026-09-22'}});
   for(const text of ['SIXFL matchnight','Matchweek 12','News','Matchweek 12 cover','The night at Harrogate','A great matchnight','A close finish','Alex','Sam','See you next week','Your match','2–1']) assert.ok(html.includes(text),text);
   assert.match(html,/Your match first, then every result from the night/);
+  for (const marker of ['data-app-match-scoreboard','data-app-team-name','data-app-goalscorer','aria-label="Our team goalscorers"']) assert.ok(html.includes(marker), marker);
   assert.ok(html.indexOf('A close finish') < html.indexOf('Around the league story'), 'team match must be shown before unrelated matches');
   const links=[...html.matchAll(/href="([^"]+)"/g)].map(m=>m[1]);
   assert.ok(links.includes('/player/team/team/news?all=1'));
