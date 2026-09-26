@@ -3,6 +3,7 @@
 // ========================================
 
 import Link from "next/link";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { notFound } from "next/navigation";
 
 import { getCaptainRelatedTeamContext } from "@/lib/captain/related-teams";
@@ -107,7 +108,189 @@ export default async function TeamWeeksUnavailablePage({
   const noticeCount = notices.length;
 
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
+          <header className="rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
+              Fixture planning
+            </p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-xl font-black tracking-tight">Future availability</h1>
+                <p className="mt-1 text-[11px] leading-4 text-white/40">
+                  Tell SIXFL about weeks your team cannot play or needs a particular kick-off time.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-black text-amber-100">
+                {noticeCount} notice{noticeCount === 1 ? "" : "s"}
+              </span>
+            </div>
+            <Link
+              href={"/captain/team/" + teamid + "/fixtures"}
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-white/70"
+            >
+              View fixtures
+            </Link>
+          </header>
+
+          {savedMessage ? (
+            <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100">
+              {savedMessage}
+            </section>
+          ) : null}
+          {errorMessage ? (
+            <section className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-100">
+              {errorMessage}
+            </section>
+          ) : null}
+
+          <details className="group overflow-hidden rounded-2xl border border-amber-400/15 bg-amber-500/[0.06]">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3.5 text-xs font-bold text-amber-100 [&::-webkit-details-marker]:hidden">
+              <span>How fixture planning works</span>
+              <span className="text-white/25 transition group-open:rotate-45">+</span>
+            </summary>
+            <div className="space-y-2 border-t border-amber-400/10 p-3.5 text-[11px] leading-5 text-amber-50/60">
+              <p>Your team is assumed available unless you tell us otherwise.</p>
+              <p>Use a time restriction for a one-off requirement such as “after 8pm”. For a permanent restriction, contact SIXFL.</p>
+              <p>Once that week&apos;s fixtures are published, the week is locked and changes need to go through SIXFL.</p>
+            </div>
+          </details>
+
+          <section className="space-y-2">
+            {weeks.map((weekStart) => {
+              const key = weekKey(weekStart);
+              const notice = noticeByWeek.get(key) ?? null;
+              const locked = publishedWeekKeys.has(key);
+              const currentType = notice?.restrictionType ?? "AVAILABLE";
+              const summary = locked
+                ? "Fixtures published"
+                : restrictionSummary({
+                    type: currentType,
+                    earliestKickoff: notice?.earliestKickoff,
+                    latestKickoff: notice?.latestKickoff,
+                  });
+
+              return (
+                <details
+                  key={key}
+                  className={
+                    "group overflow-hidden rounded-[1.1rem] border " +
+                    (currentType === "UNAVAILABLE"
+                      ? "border-red-400/20 bg-red-500/[0.055]"
+                      : currentType === "TIME_RESTRICTION"
+                        ? "border-amber-400/20 bg-amber-500/[0.05]"
+                        : "border-white/[0.07] bg-white/[0.03]")
+                  }
+                >
+                  <summary className="cursor-pointer list-none px-3.5 py-3 [&::-webkit-details-marker]:hidden">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-white">
+                          {formatWeekLabel(weekStart)}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-white/30">
+                          Week commencing {key.split("-").reverse().join("/")}
+                        </div>
+                      </div>
+                      <span
+                        className={
+                          "shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold " +
+                          (locked
+                            ? "border-white/10 bg-white/[0.04] text-white/40"
+                            : currentType === "UNAVAILABLE"
+                              ? "border-red-400/25 bg-red-500/10 text-red-100"
+                              : currentType === "TIME_RESTRICTION"
+                                ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
+                                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100")
+                        }
+                      >
+                        {summary}
+                      </span>
+                    </div>
+                  </summary>
+
+                  <form action={saveTeamWeekUnavailabilityAction} className="border-t border-white/[0.06] p-3.5">
+                    <input type="hidden" name="teamId" value={teamid} />
+                    <input type="hidden" name="weekStart" value={key} />
+
+                    {locked ? (
+                      <p className="text-xs leading-5 text-white/45">
+                        Fixtures for this week have already been published. Contact SIXFL if circumstances have changed.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          {[
+                            ["AVAILABLE", "Available as normal", "border-emerald-400/15 bg-emerald-500/[0.05]"],
+                            ["UNAVAILABLE", "Cannot play this week", "border-red-400/15 bg-red-500/[0.05]"],
+                            ["TIME_RESTRICTION", "Need a kick-off time", "border-amber-400/15 bg-amber-500/[0.05]"],
+                          ].map(([value, label, tone]) => (
+                            <label key={value} className={"flex min-h-11 items-center gap-3 rounded-xl border px-3 text-xs font-bold text-white/70 " + tone}>
+                              <input
+                                type="radio"
+                                name="restrictionType"
+                                value={value}
+                                defaultChecked={currentType === value}
+                                className="h-4 w-4"
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="text-[11px] font-semibold text-white/55">
+                            <span className="mb-1.5 block">Earliest kick-off</span>
+                            <input
+                              type="time"
+                              name="earliestKickoff"
+                              defaultValue={notice?.earliestKickoff ?? ""}
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-amber-400/40"
+                            />
+                          </label>
+                          <label className="text-[11px] font-semibold text-white/55">
+                            <span className="mb-1.5 block">Latest kick-off</span>
+                            <input
+                              type="time"
+                              name="latestKickoff"
+                              defaultValue={notice?.latestKickoff ?? ""}
+                              className="h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-amber-400/40"
+                            />
+                          </label>
+                        </div>
+
+                        <label className="block">
+                          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-white/35">
+                            Note
+                          </span>
+                          <input
+                            name="note"
+                            defaultValue={notice?.note ?? ""}
+                            maxLength={500}
+                            placeholder="e.g. work commitments — after 8pm only"
+                            className="h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+                          />
+                        </label>
+
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-black"
+                        >
+                          Save this week
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                </details>
+              );
+            })}
+          </section>
+        </main>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-6 px-6 py-7 lg:grid-cols-[1fr_auto] lg:items-end lg:px-8 lg:py-9">
           <div>
@@ -298,6 +481,8 @@ export default async function TeamWeeksUnavailablePage({
           );
         })}
       </section>
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
