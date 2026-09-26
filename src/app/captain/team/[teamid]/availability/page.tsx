@@ -256,20 +256,20 @@ export default async function CaptainAvailabilityPage({
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
-        <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
+    <div className="mx-auto w-full max-w-3xl space-y-4 px-0 pb-24 sm:space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+        <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
               Matchday planning
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">
               Availability
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
+            <p className="mt-2 text-sm leading-5 text-white/60">
               Manage availability fixture-by-fixture. Use the chase button for players who have not replied. Use reset after a postponed fixture is rearranged.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
                 {team.league?.name ?? "No league assigned"}
                 {team.league?.season ? ` - ${team.league.season}` : ""}
@@ -282,7 +282,7 @@ export default async function CaptainAvailabilityPage({
                 {fixtures.length} fixture{fixtures.length === 1 ? "" : "s"} shown
               </span>
             </div>
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <Link
                 href={`/captain/team/${teamid}/availability/history`}
                 className="captain-app-web-only inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/20"
@@ -306,30 +306,30 @@ export default async function CaptainAvailabilityPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-2">
-            <div className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5">
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
                 Available
               </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{totalAvailable}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{totalAvailable}</p>
             </div>
-            <div className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5">
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100/70">
                 Maybe
               </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{totalMaybe}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{totalMaybe}</p>
             </div>
-            <div className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5">
+            <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-100/70">
                 Unavailable
               </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{totalUnavailable}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{totalUnavailable}</p>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 No response
               </p>
-              <p className="mt-3 text-3xl font-semibold text-white">{totalNoResponse}</p>
+              <p className="mt-1 text-xl font-semibold text-white">{totalNoResponse}</p>
             </div>
           </div>
         </div>
@@ -346,7 +346,7 @@ export default async function CaptainAvailabilityPage({
         </section>
       ) : null}
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {fixtures.length === 0 ? (
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-sm text-white/60">
             No upcoming or recently postponed fixtures found.
@@ -379,16 +379,16 @@ export default async function CaptainAvailabilityPage({
             <section
               key={fixture.id}
               id={`fixture-${fixture.id}`}
-              className="scroll-mt-8 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04]"
+              className="scroll-mt-8 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]"
             >
-              <div className="border-b border-white/10 px-6 py-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+                <div className="space-y-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                       Fixture
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-semibold text-white">
+                      <h2 className="text-lg font-semibold leading-tight text-white">
                         {fixture.homeTeam.name} vs {fixture.awayTeam.name}
                       </h2>
                       <span
@@ -406,7 +406,7 @@ export default async function CaptainAvailabilityPage({
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100">
                       Available {availableCount}
                     </span>
@@ -464,7 +464,7 @@ export default async function CaptainAvailabilityPage({
                   return (
                     <div
                       key={member.id}
-                      className={`grid gap-4 px-6 py-5 xl:grid-cols-[1fr_340px] ${
+                      className={`space-y-4 px-4 py-4 sm:px-5 ${
                         isInjured
                           ? "border-l-4 border-l-red-400 bg-red-500/[0.06]"
                           : ""
@@ -535,7 +535,7 @@ export default async function CaptainAvailabilityPage({
                       </div>
 
                       <div className="space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <Link
                             href={`/captain/team/${teamid}/squad/${member.id}/edit`}
                             className="inline-flex w-full items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-center text-sm font-medium text-sky-100 transition hover:bg-sky-500/15"
@@ -589,7 +589,7 @@ export default async function CaptainAvailabilityPage({
                               />
                               <button
                                 type="submit"
-                                className="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+                                className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
                               >
                                 Save response
                               </button>
