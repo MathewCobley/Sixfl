@@ -141,16 +141,28 @@ const navMarkup = renderToStaticMarkup(h(Nav, {
   showTeamChat: false,
 }));
 
+const FullNewsArticle = load("src/components/news/NewsArticle.tsx", {
+  "next/link": Link,
+  "@/lib/league-news/types": { matchAnchor: (id) => `match-${id}` },
+  "./NewsImage": ({ alt, className }) => h("span", { className, "aria-label": alt }, "IMG"),
+  "./NewsShare": () => null,
+});
 const Newsletter = load("src/components/player/PlayerNewsArticle.tsx", {
-  "@/components/news/NewsArticle": { newsDate: value => value },
-  "@/components/news/NewsImage": ({ alt, className }) => h("span", { className, "aria-label": alt }, "FC"),
+  "@/components/news/NewsArticle": { __esModule: true, default: FullNewsArticle, newsDate: value => value },
 });
 const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
   teamId: "example-team",
   news: {
+    id: "news-preview",
+    leagueSlug: "harrogate",
+    publishedAt: "2026-09-23",
+    updatedAt: "2026-09-23",
+    matchweekNumber: 12,
     article: {
       title: "A dramatic night of football in Harrogate",
-      leagueName: "Harrogate Tuesday Men's", matchDate: "2026-09-22", cover: null,
+      leagueName: "Harrogate Tuesday Men's",
+      matchDate: "2026-09-22",
+      cover: { coverUrl: "/matchweek-report.jpg", coverAlt: "Matchweek report cover", coverCaption: "Harrogate matchnight" },
       introduction: "All the stories from another exciting night.", closing: "See you next week.",
       matches: [{ fixtureId: "fixture", teamAId: "example-team", teamBId: "other", teamA: "Thirsk Town Frazzles", teamB: "Harrogate Naija Isolo FC", badgeA: null, badgeB: null, scoreA: 12, scoreB: 11, paragraph: "A close match with a late winner.", scorers: [{ name: "Alex Example", team: "Thirsk Town Frazzles", goals: 3 }], playersOfMatch: [{ name: "Sam Example", team: "Harrogate Naija Isolo FC" }] }],
     },
@@ -193,7 +205,8 @@ const newsletterMarkup = renderToStaticMarkup(h(Newsletter, {
       await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-[#07130f] text-white"><main class="mx-auto max-w-xl px-3 py-4">${newsletterMarkup}</main></body></html>`);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= viewportWidth + 1, "Matchweek report reader must not overflow horizontally");
       assert.match(await page.locator("body").innerText(), /A close match with a late winner/);
-      assert.equal(await page.locator("a").count(), 0, "Article content must not link out to website pages");
+      assert.equal(await page.locator('[aria-label="Matchweek report cover"]').count(), 1, "Matchweek report cover image must render");
+      assert.equal(await page.locator('a[href^="/"]').count(), 0, "Article content must not link out to website pages");
       await page.screenshot({ path: path.join(out, `PLAYER-MATCHWEEK-REPORT-${viewportWidth}.png`), fullPage: true });
     }
     await page.close();
