@@ -80,14 +80,20 @@ const tabs = (
     exact: false,
   },
   {
+    href: addPreviewMembershipId(`/player/team/${teamId}/goal-of-the-month`, previewMembershipId),
+    label: "Goal of the Month",
+    exact: false,
+  },
+  /* legacy public Goal of the Month route intentionally not linked from Player Portal */
+  ...(false ? [{
     href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
       previewMembershipId
         ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
         : ""
     }`,
-    label: "Goal of the Month",
+    label: "Goal of the Month legacy",
     exact: false,
-  },
+  }] : []),
   {
     href: "/player/referrals",
     label: "Refer a team · £75",
