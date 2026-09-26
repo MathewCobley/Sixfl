@@ -5,6 +5,7 @@
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import SixflTvFixtureMatchup from "@/components/sixfl-tv/SixflTvFixtureMatchup";
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { prisma } from "@/lib/prisma";
@@ -41,10 +42,6 @@ function formatDateTime(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function getOpponent(row: TvFixtureRow, teamId: string) {
-  return row.homeTeamId === teamId ? row.awayTeamName : row.homeTeamName;
 }
 
 export default async function CaptainSixflTvPage({
@@ -93,101 +90,135 @@ export default async function CaptainSixflTvPage({
     LIMIT 80
   `);
 
-  const totalVideos = fixtures.reduce(
-    (sum, fixture) => sum + getSixflTvVideos(fixture.sixflTvUrl).length,
-    0,
-  );
-
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
-        <div className="px-6 py-6 lg:px-8 lg:py-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/Sixfl-tv.png"
-            alt="SIXFL TV"
-            className="h-auto w-52 max-w-full object-contain sm:w-64"
-          />
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Match highlights & full matches
-          </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
-            Watch match highlights, full matches and extra clips for {team.name}. When a video is available, it will appear below.
-          </p>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
-        <div className="border-b border-white/10 px-6 py-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <main className="text-white">
+      <CaptainPwaModeOnly mode="app">
+        <div className="px-4 pb-28 pt-5">
+          <div className="mx-auto w-full max-w-xl">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Team videos
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-300/70">
+                Captain app
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Available videos</h2>
+              <h1 className="mt-1 text-2xl font-black tracking-tight">SIXFL TV</h1>
+              <p className="mt-2 text-sm leading-6 text-white/45">
+                Highlights and recorded matches for {team.name}.
+              </p>
             </div>
-            <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1 text-sm font-medium text-fuchsia-100">
-              {totalVideos} video{totalVideos === 1 ? "" : "s"}
-            </span>
-          </div>
-        </div>
 
-        <div className="divide-y divide-white/10">
-          {fixtures.length === 0 ? (
-            <div className="px-6 py-10 text-sm leading-6 text-white/60">
-              No match videos are available for your team yet. When SIXFL adds match highlights, a full match or another clip, it will appear here.
-            </div>
-          ) : (
-            fixtures.map((fixture) => {
-              const videos = getSixflTvVideos(fixture.sixflTvUrl);
-              const accessibleTitle =
-                fixture.homeScore !== null && fixture.awayScore !== null
-                  ? `${fixture.homeTeamName} ${fixture.homeScore}-${fixture.awayScore} ${fixture.awayTeamName}`
-                  : `${fixture.homeTeamName} versus ${fixture.awayTeamName}`;
-
-              return (
-                <article key={fixture.id} className="px-5 py-5 sm:px-6">
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="sr-only">{accessibleTitle}</h3>
+            <section className="mt-5 space-y-3">
+              {fixtures.length === 0 ? (
+                <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-5 text-sm text-white/50">
+                  No match videos are available for your team yet.
+                </div>
+              ) : (
+                fixtures.map((fixture) => {
+                  const videos = getSixflTvVideos(fixture.sixflTvUrl);
+                  return (
+                    <article
+                      key={fixture.id}
+                      className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4"
+                    >
                       <SixflTvFixtureMatchup
-                        homeTeam={{ name: fixture.homeTeamName, logoUrl: fixture.homeTeamLogoUrl }}
-                        awayTeam={{ name: fixture.awayTeamName, logoUrl: fixture.awayTeamLogoUrl }}
+                        homeTeam={{
+                          name: fixture.homeTeamName,
+                          logoUrl: fixture.homeTeamLogoUrl,
+                        }}
+                        awayTeam={{
+                          name: fixture.awayTeamName,
+                          logoUrl: fixture.awayTeamLogoUrl,
+                        }}
                         homeScore={fixture.homeScore}
                         awayScore={fixture.awayScore}
                       />
-
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-white/60">Opponent: {getOpponent(fixture, team.id)}</span>
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55">
-                          {fixture.status.toLowerCase()}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-white/50">
+                      <p className="mt-3 text-center text-[11px] leading-5 text-white/40">
                         {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
                       </p>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-                      {videos.map((video) => (
-                        <a
-                          key={`${fixture.id}-${video.kind}-${video.url}`}
-                          href={video.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
-                        >
-                          {video.label} ▶
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </article>
-              );
-            })
-          )}
+                      <div className="mt-3 grid gap-2">
+                        {videos.map((video) => (
+                          <a
+                            key={`${fixture.id}-${video.kind}-${video.url}`}
+                            href={video.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-h-11 items-center justify-center rounded-xl border border-fuchsia-300/25 bg-fuchsia-500/12 px-4 text-sm font-bold text-fuchsia-50 active:bg-fuchsia-500/20"
+                          >
+                            {video.label} ▶
+                          </a>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </section>
+          </div>
         </div>
-      </section>
-    </div>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-6">
+          <section className="overflow-hidden rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+            <div className="px-6 py-6 lg:px-8 lg:py-8">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Sixfl-tv.png"
+                alt="SIXFL TV"
+                className="h-auto w-52 max-w-full object-contain sm:w-64"
+              />
+              <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Match highlights & full matches
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
+                Watch match highlights, full matches and extra clips for {team.name}. When a video is available, it will appear below.
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04]">
+            <div className="divide-y divide-white/10">
+              {fixtures.length === 0 ? (
+                <div className="px-6 py-10 text-sm leading-6 text-white/60">
+                  No match videos are available for your team yet.
+                </div>
+              ) : (
+                fixtures.map((fixture) => {
+                  const videos = getSixflTvVideos(fixture.sixflTvUrl);
+                  return (
+                    <article key={fixture.id} className="px-5 py-5 sm:px-6">
+                      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <SixflTvFixtureMatchup
+                            homeTeam={{ name: fixture.homeTeamName, logoUrl: fixture.homeTeamLogoUrl }}
+                            awayTeam={{ name: fixture.awayTeamName, logoUrl: fixture.awayTeamLogoUrl }}
+                            homeScore={fixture.homeScore}
+                            awayScore={fixture.awayScore}
+                          />
+                          <p className="mt-3 text-sm text-white/50">
+                            {formatDateTime(fixture.kickoffAt)} · {fixture.venueName ?? fixture.leagueVenueName ?? "Venue TBC"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                          {videos.map((video) => (
+                            <a
+                              key={`${fixture.id}-${video.kind}-${video.url}`}
+                              href={video.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center rounded-full border border-fuchsia-300/35 bg-fuchsia-500/15 px-5 py-3 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-500/25"
+                            >
+                              {video.label} ▶
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </div>
+      </CaptainPwaModeOnly>
+    </main>
   );
 }
