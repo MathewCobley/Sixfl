@@ -52,6 +52,7 @@ function harness({initial=[],unauthorised=false,missingEmail=false,failQueue=fal
     '@/lib/managed-squad/squadStatus':{getTeamMemberSquadStatusMap:async()=>new Map()},
     '@/lib/teamMemberProfiles':{getTeamMemberProfilesByTeamMemberIds:async()=>new Map()},
     '@/lib/payments/player-ledger':{isPlayerFeeLedgerControlled:async id=>rows.some(r=>r.id===id&&r.controlled),pausePlayerFeeCollection:async()=>{throw Error('No pause in this test');}},
+    '@/lib/payments/player-payment-link-history':{setPlayerPaymentLinkAuditActor:async()=>{},},
     'next/cache':{revalidatePath:()=>{}},
     '@/lib/payments/cancel-player-match-fee-notifications':{cancelQueuedPlayerMatchFeeNotificationDispatches:async()=>{}},
     '@/lib/payments/fixture-match-fees':{syncFixtureMatchFeeCharges:async()=>({activeCharges:[{id:'charge',teamId:'team',amountPence:4000}]})},
