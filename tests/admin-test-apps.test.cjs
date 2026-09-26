@@ -14,7 +14,7 @@ test("admin Test apps uses the three fixed preview identities", () => {
   assert.match(page, /Finley McIntosh/);
   assert.match(page, /hasNamePart\(referee\.name, "stefan"\)/);
   assert.match(page, /\/admin\/teams\/\$\{kebabTeam\.id\}\/captain-preview/);
-  assert.match(page, /previewMembershipId=\$\{encodeURIComponent\(finn\.member\.id\)\}/);
+  assert.match(page, /previewMembershipId=\$\{encodeURIComponent\(finley\.member\.id\)\}/);
   assert.match(page, /\/admin\/referees\/\$\{stefan\.id\}\/referee-preview/);
 });
 
