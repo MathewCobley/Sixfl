@@ -3,6 +3,7 @@
 // ========================================
 
 import { notFound } from "next/navigation";
+import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import { TeamRole } from "@prisma/client";
 
 import { formatDateTimeInLondon } from "@/lib/datetime/london";
@@ -259,7 +260,7 @@ function buildTemplates(input: {
   return templates;
 }
 
-function TemplateCard({ template }: { template: WhatsAppTemplate }) {
+function TemplateCard({ template, app = false }: { template: WhatsAppTemplate; app?: boolean }) {
   const toneClasses =
     template.tone === "emerald"
       ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100/80"
@@ -270,26 +271,26 @@ function TemplateCard({ template }: { template: WhatsAppTemplate }) {
           : "border-white/10 bg-white/[0.04] text-white/70";
 
   return (
-    <article className={`rounded-3xl border p-5 ${toneClasses}`}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <article className={`${app ? "rounded-[1.1rem] p-3.5" : "rounded-3xl p-5"} border ${toneClasses}`}>
+      <div className={app ? "space-y-3" : "flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"}>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-80">
             {template.eyebrow}
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">{template.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-white/60">{template.description}</p>
+          <h2 className={app ? "mt-1 text-sm font-black text-white" : "mt-2 text-xl font-semibold text-white"}>{template.title}</h2>
+          <p className={app ? "mt-1 text-[11px] leading-4 text-white/45" : "mt-2 text-sm leading-6 text-white/60"}>{template.description}</p>
         </div>
         <a
           href={getWhatsAppShareUrl(template.message)}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-200"
+          className={app ? "inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-300 px-4 text-sm font-black text-black" : "inline-flex shrink-0 items-center justify-center rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-200"}
         >
           Open in WhatsApp
         </a>
       </div>
 
-      <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-white/75">
+      <pre className={app ? "mt-3 max-h-28 overflow-hidden whitespace-pre-wrap rounded-xl border border-white/[0.07] bg-black/20 p-3 text-[10px] leading-4 text-white/50" : "mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-white/75"}>
         {template.message}
       </pre>
     </article>
@@ -302,21 +303,23 @@ function PlayerWhatsAppCard({
   usesWhatsapp,
   message,
   status,
+  app = false,
 }: {
   player: { name: string; role: TeamRole };
   phone: string | null;
   usesWhatsapp: boolean;
   message: string;
   status: string;
+  app?: boolean;
 }) {
   const href = getWhatsAppDirectUrl({ phone, message });
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className={app ? "border-b border-white/[0.06] px-3.5 py-3 last:border-b-0" : "rounded-2xl border border-white/10 bg-black/20 p-4"}>
+      <div className={app ? "flex items-center justify-between gap-3" : "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="font-semibold text-white">{player.name}</div>
+            <div className={app ? "text-xs font-black text-white" : "font-semibold text-white"}>{player.name}</div>
             <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/55">
               {getRoleLabel(player.role)}
             </span>
@@ -326,7 +329,7 @@ function PlayerWhatsAppCard({
               </span>
             ) : null}
           </div>
-          <div className="mt-1 text-sm text-white/45">
+          <div className={app ? "mt-1 text-[10px] text-white/35" : "mt-1 text-sm text-white/45"}>
             {phone || "No phone saved"} · {getResponseLabel(status)}
           </div>
         </div>
@@ -336,12 +339,12 @@ function PlayerWhatsAppCard({
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"
+            className={app ? "inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 text-xs font-black text-emerald-100" : "inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/15"}
           >
             WhatsApp player
           </a>
         ) : (
-          <span className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/40">
+          <span className={app ? "shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] text-white/35" : "rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/40"}>
             Add phone first
           </span>
         )}
@@ -475,7 +478,89 @@ export default async function CaptainWhatsAppPage({
     : "Hi {{name}}, can you confirm your availability for the next SIXFL game please?";
 
   return (
-    <div className="space-y-8">
+    <>
+      <CaptainPwaModeOnly mode="app">
+        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
+          <header className="rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
+              Captain comms
+            </p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-xl font-black tracking-tight">WhatsApp tools</h1>
+                <p className="mt-1 text-[11px] leading-4 text-white/40">
+                  Open a ready-made message in WhatsApp, then choose who to send it to.
+                </p>
+              </div>
+              {nextFixture ? (
+                <span className="shrink-0 rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-black text-amber-100">
+                  {noResponseMembers.length} no reply
+                </span>
+              ) : null}
+            </div>
+            {nextFixture ? (
+              <div className="mt-3 rounded-xl border border-sky-400/15 bg-sky-500/[0.06] px-3 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-sky-100/50">Next fixture</div>
+                <div className="mt-0.5 text-xs font-black text-white">
+                  {getFixtureDetails(team.id, nextFixture).label}
+                </div>
+                <div className="mt-0.5 text-[10px] text-white/35">{formatKickoff(nextFixture.kickoffAt)}</div>
+              </div>
+            ) : null}
+          </header>
+
+          {team.teamMode === "MANAGED" ? (
+            <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-[11px] leading-5 text-amber-100/75">
+              SIXFL may already be sending automated availability reminders for this managed team. These WhatsApp messages are optional captain messages.
+            </section>
+          ) : null}
+
+          <section className="space-y-2">
+            <div className="px-1">
+              <h2 className="text-sm font-black text-white">Group messages</h2>
+              <p className="mt-0.5 text-[10px] text-white/35">{templates.length} ready-made templates</p>
+            </div>
+            {templates.map((template) => (
+              <TemplateCard key={template.title} template={template} app />
+            ))}
+          </section>
+
+          <section className="overflow-hidden rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035]">
+            <div className="border-b border-white/[0.07] px-3.5 py-3">
+              <h2 className="text-sm font-black text-white">Message a player</h2>
+              <p className="mt-0.5 text-[10px] leading-4 text-white/35">
+                Opens WhatsApp with the player&apos;s number and a pre-filled availability message.
+              </p>
+            </div>
+            {team.members.length === 0 ? (
+              <div className="p-4 text-sm text-white/45">No squad contacts yet.</div>
+            ) : (
+              <div>
+                {team.members.map((member) => {
+                  const profile = profilesByMemberId.get(member.id) ?? null;
+                  const playerName = getPlayerDisplayName(member.user);
+                  const response = nextAvailabilityByMemberId.get(member.id) ?? "NO_RESPONSE";
+                  const message = individualMessage.replace(/{{name}}/g, playerName.split(/\s+/)[0] || playerName);
+                  return (
+                    <PlayerWhatsAppCard
+                      key={member.id}
+                      player={{ name: playerName, role: member.role }}
+                      phone={profile?.phone ?? null}
+                      usesWhatsapp={usesWhatsappByUserId.get(member.user.id) ?? false}
+                      message={message}
+                      status={response}
+                      app
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+      </CaptainPwaModeOnly>
+
+      <CaptainPwaModeOnly mode="web">
+        <div className="space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-7 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
@@ -572,6 +657,8 @@ export default async function CaptainWhatsAppPage({
           )}
         </div>
       </section>
-    </div>
+        </div>
+      </CaptainPwaModeOnly>
+    </>
   );
 }
