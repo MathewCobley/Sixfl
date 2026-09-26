@@ -48,7 +48,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
       { href: `${base}/whatsapp`, label: "WhatsApp tools", icon: ChatBubbleLeftRightIcon },
     ] },
     { label: "SIXFL TV & competitions", rows: [
-      { href: `${base}/news`, label: "Newsletters", icon: NewspaperIcon },
+      { href: `${base}/news`, label: "Matchweek reports", icon: NewspaperIcon },
       { href: `${base}/tv`, label: "SIXFL TV", icon: PlayCircleIcon },
       { href: `${base}/goal-of-the-month`, label: "Goal of the Month", icon: TrophyIcon },
       { href: `${base}/veo-priority`, label: "Priority score", icon: TrophyIcon },
