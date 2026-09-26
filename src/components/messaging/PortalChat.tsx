@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { Fragment, FormEvent, useEffect, useRef, useState } from "react";
 
 import PushNotificationControl from "@/components/pwa/PushNotificationControl";
 import {
@@ -60,6 +60,8 @@ type ChatResponse = {
       | "SIXFL";
     title: string;
     memberUserIds: string[];
+    unreadCountBeforeOpen: number;
+    firstUnreadMessageId: string | null;
   };
   conversations: ConversationItem[];
   audienceOptions: Array<{
@@ -206,6 +208,9 @@ export default function PortalChat({
   const [archivingGroup, setArchivingGroup] = useState(false);
   const [notifyTeam, setNotifyTeam] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [openedUnreadByRef, setOpenedUnreadByRef] = useState<
+    Record<string, { count: number; firstMessageId: string | null }>
+  >({});
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const initialConversationApplied = useRef(false);
 
@@ -237,6 +242,25 @@ export default function PortalChat({
       }
 
       setData(payload);
+      if (!silent) {
+        setOpenedUnreadByRef((current) => ({
+          ...current,
+          [ref]: {
+            count: payload.selected.unreadCountBeforeOpen,
+            firstMessageId: payload.selected.firstUnreadMessageId,
+          },
+        }));
+      }
+
+      const visibleUnreadCount = payload.conversations.reduce(
+        (sum, item) => sum + item.unreadCount,
+        0,
+      );
+      window.dispatchEvent(
+        new CustomEvent("sixfl:chat-unread-count", {
+          detail: { teamId, count: visibleUnreadCount },
+        }),
+      );
       setFeedback(null);
     } catch (error) {
       if (!silent) {
@@ -515,6 +539,23 @@ export default function PortalChat({
 
   const selectedItem =
     data?.conversations.find((item) => item.ref === selectedRef) ?? null;
+  const openedUnread = openedUnreadByRef[selectedRef] ?? {
+    count: 0,
+    firstMessageId: null,
+  };
+  const unreadItems = (data?.conversations ?? [])
+    .filter((item) => item.unreadCount > 0)
+    .slice()
+    .sort((a, b) => {
+      if (a.unreadCount !== b.unreadCount) return b.unreadCount - a.unreadCount;
+      const aTime = a.latestMessageAt ? new Date(a.latestMessageAt).getTime() : 0;
+      const bTime = b.latestMessageAt ? new Date(b.latestMessageAt).getTime() : 0;
+      return bTime - aTime;
+    });
+  const remainingUnreadCount = unreadItems.reduce(
+    (sum, item) => sum + item.unreadCount,
+    0,
+  );
   const teamItems = data?.conversations.filter((item) => item.kind === "TEAM") ?? [];
   const groupItems =
     data?.conversations.filter((item) => item.kind === "GROUP") ?? [];
@@ -755,6 +796,36 @@ export default function PortalChat({
             </div>
           ) : null}
 
+          {unreadItems.length > 0 ? (
+            <section className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-3" aria-label="Unread chats">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">
+                  Unread
+                </span>
+                <span className="text-xs font-bold text-emerald-100">
+                  {remainingUnreadCount} message{remainingUnreadCount === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="mt-2 space-y-1">
+                {unreadItems.map((item) => (
+                  <button
+                    key={item.ref}
+                    type="button"
+                    onClick={() => setSelectedRef(item.ref)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2 text-left active:bg-white/[0.06]"
+                  >
+                    <span className="min-w-0 truncate text-xs font-semibold text-white/80">
+                      {item.title}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">
+                      {item.unreadCount} unread
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="space-y-2">
             {teamItems.map((item) => (
               <ConversationButton
@@ -904,38 +975,48 @@ export default function PortalChat({
             ) : data?.messages.length ? (
               <div className="space-y-3">
                 {data.messages.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`flex ${item.isMine ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={[
-                        "max-w-[88%] rounded-2xl border px-4 py-3 sm:max-w-[72%]",
-                        item.isMine
-                          ? "border-emerald-400/20 bg-emerald-500/12 text-emerald-50"
-                          : "border-white/10 bg-white/[0.055] text-white/85",
-                      ].join(" ")}
-                    >
-                      <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
-                        <span>{item.isMine ? "You" : item.senderName}</span>
-                        {item.isAdminTest ? (
-                          <span className="rounded-full bg-violet-400/10 px-1.5 py-0.5 text-violet-200/80">
-                            Test
-                          </span>
-                        ) : null}
-                        {item.senderRole === "CAPTAIN" && !item.isMine ? (
-                          <span className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-emerald-200/80">
-                            Captain
-                          </span>
-                        ) : null}
-                        <span>·</span>
-                        <span>{formatTime(item.createdAt)}</span>
+                  <Fragment key={item.id}>
+                    {item.id === openedUnread.firstMessageId ? (
+                      <div className="flex items-center gap-3 py-1" aria-label="New messages start here">
+                        <span className="h-px flex-1 bg-emerald-400/25" />
+                        <span className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-200">
+                          {openedUnread.count} new message{openedUnread.count === 1 ? "" : "s"}
+                        </span>
+                        <span className="h-px flex-1 bg-emerald-400/25" />
                       </div>
-                      <div className="whitespace-pre-wrap break-words text-sm leading-6">
-                        {item.body}
+                    ) : null}
+                    <div
+                      className={`flex ${item.isMine ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={[
+                          "max-w-[88%] rounded-2xl border px-4 py-3 sm:max-w-[72%]",
+                          item.isMine
+                            ? "border-emerald-400/20 bg-emerald-500/12 text-emerald-50"
+                            : "border-white/10 bg-white/[0.055] text-white/85",
+                        ].join(" ")}
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
+                          <span>{item.isMine ? "You" : item.senderName}</span>
+                          {item.isAdminTest ? (
+                            <span className="rounded-full bg-violet-400/10 px-1.5 py-0.5 text-violet-200/80">
+                              Test
+                            </span>
+                          ) : null}
+                          {item.senderRole === "CAPTAIN" && !item.isMine ? (
+                            <span className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-emerald-200/80">
+                              Captain
+                            </span>
+                          ) : null}
+                          <span>·</span>
+                          <span>{formatTime(item.createdAt)}</span>
+                        </div>
+                        <div className="whitespace-pre-wrap break-words text-sm leading-6">
+                          {item.body}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </Fragment>
                 ))}
                 <div ref={bottomRef} />
               </div>

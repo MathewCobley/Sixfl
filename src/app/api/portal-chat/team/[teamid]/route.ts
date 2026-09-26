@@ -953,25 +953,49 @@ export async function GET(
   ]);
   if (!team) return jsonError("Team not found.", 404);
 
-  const messages = await prisma.portalMessage.findMany({
-    where: {
-      conversationId: selected.conversation.id,
-      deletedAt: null,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      body: true,
-      senderUserId: true,
-      senderRole: true,
-      isAdminTest: true,
-      createdAt: true,
-      senderUser: {
-        select: { name: true, email: true },
+  const [messages, selectedReadBeforeOpen] = await Promise.all([
+    prisma.portalMessage.findMany({
+      where: {
+        conversationId: selected.conversation.id,
+        deletedAt: null,
       },
-    },
-  });
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        body: true,
+        senderUserId: true,
+        senderRole: true,
+        isAdminTest: true,
+        createdAt: true,
+        senderUser: {
+          select: { name: true, email: true },
+        },
+      },
+    }),
+    context.isPreview
+      ? Promise.resolve(null)
+      : prisma.portalConversationRead.findUnique({
+          where: {
+            conversationId_userId: {
+              conversationId: selected.conversation.id,
+              userId: context.effectiveUserId,
+            },
+          },
+          select: { lastReadAt: true },
+        }),
+  ]);
+
+  const orderedMessages = messages.slice().reverse();
+  const unreadBeforeOpen = context.isPreview
+    ? []
+    : orderedMessages.filter(
+        (message) =>
+          message.senderUserId !== context.effectiveUserId &&
+          message.createdAt.getTime() >
+            (selectedReadBeforeOpen?.lastReadAt?.getTime() ?? 0),
+      );
+  const firstUnreadMessageId = unreadBeforeOpen[0]?.id ?? null;
 
   if (!context.isPreview) {
     await prisma.portalConversationRead.upsert({
@@ -1012,9 +1036,11 @@ export async function GET(
       type: selected.conversation.type,
       title: selected.title || selected.conversation.title || "Conversation",
       memberUserIds: selected.memberUserIds ?? [],
+      unreadCountBeforeOpen: unreadBeforeOpen.length,
+      firstUnreadMessageId,
     },
     conversations: list,
-    messages: messages.reverse().map((message) => ({
+    messages: orderedMessages.map((message) => ({
       id: message.id,
       body: message.body,
       senderUserId: message.senderUserId,
