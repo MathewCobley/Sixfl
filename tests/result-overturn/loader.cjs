@@ -9,6 +9,7 @@ function load(file, stubs = {}) {
   m.require = spec => {
     if (Object.hasOwn(stubs, spec)) return stubs[spec];
     const local = spec.startsWith('@/') ? path.resolve('src', spec.slice(2)) : spec.startsWith('.') ? path.resolve(path.dirname(filename), spec) : null;
+    if (local && /\.css$/.test(local) && fs.existsSync(local)) return new Proxy({}, { get: (_target, key) => String(key) });
     if (local) for (const suffix of ['', '.ts', '.tsx']) if (fs.existsSync(local + suffix) && fs.statSync(local + suffix).isFile()) return load(local + suffix, stubs);
     return require(spec);
   };
