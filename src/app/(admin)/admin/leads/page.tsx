@@ -490,9 +490,9 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: S
             <p className="mt-1 text-sm text-white/55">Filter the lead list without opening bulk messaging.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <FilterChip label="All" href="/admin/leads" active={!selectedType && !selectedStatus && !selectedArea && !selectedNight} />
-            {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ type })} active={selectedType === type} />)}
-            {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ type: selectedType, status })} active={selectedStatus === status} />)}
+            <FilterChip label="All" href={buildHref({ q: selectedQuery })} active={!selectedQuery && !selectedType && !selectedStatus && !selectedArea && !selectedNight} />
+            {Object.values(InterestType).map((type) => <FilterChip key={type} label={formatInterestType(type)} href={buildHref({ q: selectedQuery, type })} active={selectedType === type} />)}
+            {Object.values(LeadStatus).map((status) => <FilterChip key={status} label={formatLeadStatus(status)} href={buildHref({ q: selectedQuery, type: selectedType, status })} active={selectedStatus === status} />)}
           </div>
         </div>
       </AdminCard>
