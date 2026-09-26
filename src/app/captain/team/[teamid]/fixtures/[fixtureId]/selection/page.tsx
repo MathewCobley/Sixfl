@@ -175,7 +175,19 @@ export default async function CaptainFixtureSelectionPage({
   const errorMessage = filters.error ? decodeURIComponent(filters.error) : null;
 
   return (
-    <div className="space-y-8">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-fixture-selection-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:first-child { border-radius:1.05rem !important; box-shadow:none !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:first-child > div { padding:.85rem !important; gap:.6rem !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:last-child { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:last-child > div > div { padding:.75rem .85rem !important; gap:.6rem !important; grid-template-columns:minmax(0,1fr) !important; }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:last-child form { margin-top:.65rem !important; padding-top:.65rem !important; border-top:1px solid rgba(255,255,255,.07); }
+        body:has(.captain-app-header) .captain-fixture-selection-page > section:last-child form button { min-height:2.7rem !important; width:100% !important; font-size:.75rem !important; font-weight:800 !important; }
+      `}</style>
+      <div className="captain-fixture-selection-page space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8 lg:py-8">
           <div>
@@ -384,5 +396,6 @@ export default async function CaptainFixtureSelectionPage({
         </div>
       </section>
     </div>
+    </>
   );
 }
