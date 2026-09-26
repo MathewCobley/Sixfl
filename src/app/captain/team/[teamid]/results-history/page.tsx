@@ -100,7 +100,19 @@ export default async function CaptainResultsHistoryPage({
   const stored = await getStoredAiPreviewsByFixtureIds(fixtures.map((fixture) => fixture.id));
 
   return (
-    <div className="space-y-6 pb-12">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-results-history-page { display:grid; gap:.7rem; padding-bottom:5.5rem; }
+        body:has(.captain-app-header) .captain-results-history-page > section:first-child { border-radius:1.05rem !important; padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; color:rgba(255,255,255,.42) !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:last-child { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:last-child > div:first-child { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:last-child article { padding:.75rem .85rem !important; gap:.55rem !important; grid-template-columns:minmax(0,1fr) auto !important; align-items:center !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:last-child article h2 { font-size:.78rem !important; line-height:1.1rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-results-history-page > section:last-child article p { font-size:.62rem !important; line-height:.95rem !important; }
+      `}</style>
+      <div className="captain-results-history-page space-y-6 pb-12">
       <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 sm:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
           Results
@@ -238,5 +250,6 @@ export default async function CaptainResultsHistoryPage({
         </section>
       )}
     </div>
+    </>
   );
 }
