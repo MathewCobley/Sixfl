@@ -395,8 +395,8 @@ export default function PlayerAppHome({
         >
           <NewspaperIcon className="h-6 w-6 shrink-0 text-emerald-300" />
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-black">League newsletters</h2>
-            <p className="mt-1 text-xs text-white/50">Read the latest matchnight stories</p>
+            <h2 className="text-sm font-black">Matchweek reports</h2>
+            <p className="mt-1 text-xs text-white/50">Your match first, then the full matchnight report</p>
           </div>
           <ChevronRightIcon className="h-5 w-5 shrink-0 text-emerald-200" />
         </Link>
