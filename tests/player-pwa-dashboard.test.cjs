@@ -212,7 +212,7 @@ test("player PWA fixtures shows availability and real saved selection state", ()
   assert.match(app, /You're selected/);
   assert.match(app, /Can you play\?/);
   assert.match(actions, /selectionStatus: "SELECTED"/);
-  assert.match(actions, /input\.fixture\.selections\.map/);
+  assert.match(actions, /input\.fixture\.selections\s*\.map/);
 });
 
 test("player PWA fixtures surfaces cancellations and keeps results inside the app", () => {
