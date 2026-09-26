@@ -149,14 +149,6 @@ async function injectSeasonSwitcher(pathname: string | null) {
       }
     }
 
-    // Keep the live league landing page clean. Historical season navigation
-    // remains available when somebody explicitly opens an archived season, and
-    // on the league's deeper fixture/result/stat pages.
-    if (isLeagueLandingPath(pathname, slug) && !isArchiveRequest) {
-      removeExistingSwitcher();
-      return;
-    }
-
     const switcher = createSwitcher(payload, slug);
     if (!switcher) return;
 
