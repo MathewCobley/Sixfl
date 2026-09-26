@@ -242,7 +242,22 @@ export default async function CaptainHelpPage({
   }
 
   return (
-    <div className="space-y-8">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-help-page { display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-help-page > section:first-child { border-radius:1.05rem !important; box-shadow:none !important; background:rgba(255,255,255,.035) !important; }
+        body:has(.captain-app-header) .captain-help-page > section:first-child > div { padding:.85rem !important; }
+        body:has(.captain-app-header) .captain-help-page > section:first-child h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-help-page > section:first-child p[class*="max-w-"] { margin-top:.35rem !important; font-size:.72rem !important; line-height:1.1rem !important; }
+        body:has(.captain-app-header) .captain-help-page > section:nth-child(2) { display:none !important; }
+        body:has(.captain-app-header) .captain-help-page > section:last-child { display:grid !important; gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-help-page article { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-help-page article > div:first-child { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-help-page article > div:last-child { padding:.75rem .85rem !important; }
+        body:has(.captain-app-header) .captain-help-page article h2 { margin-top:.2rem !important; font-size:.9rem !important; line-height:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-help-page article p { font-size:.68rem !important; line-height:1.05rem !important; }
+      `}</style>
+      <div className="captain-help-page space-y-8">
       <section className="overflow-hidden rounded-3xl border border-emerald-400/15 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.03))] shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
         <div className="px-6 py-6 lg:px-8 lg:py-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">
@@ -306,5 +321,6 @@ export default async function CaptainHelpPage({
         ))}
       </section>
     </div>
+    </>
   );
 }
