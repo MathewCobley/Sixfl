@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCaptain } from "@/lib/requireCaptain";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Newsletters | SIXFL Captain App" };
+export const metadata = { title: "Matchweek reports | SIXFL Captain App" };
 
 type Search = {
   page?: string;
@@ -57,12 +57,12 @@ export default async function CaptainNewsPage({
     return (
       <main className="mx-auto w-full max-w-xl px-3 pt-4 text-white">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h1 className="text-xl font-black">Newsletter</h1>
+          <h1 className="text-xl font-black">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} report` : "Matchweek report"}</h1>
           <Link
             href={href()}
             className="inline-flex min-h-11 items-center rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-emerald-200"
           >
-            All newsletters
+            All reports
           </Link>
         </div>
         <div className="pb-28">
@@ -81,9 +81,9 @@ export default async function CaptainNewsPage({
 
   return (
     <main className="mx-auto w-full max-w-xl px-3 pt-4 text-white">
-      <h1 className="text-2xl font-black">Newsletters</h1>
+      <h1 className="text-2xl font-black">Matchweek reports</h1>
       <p className="mt-1 text-sm text-white/50">
-        Matchnight stories featuring {team.name}.
+        Matchnight reports featuring {team.name}.
       </p>
 
       <div className="space-y-3 pb-28 pt-4">
@@ -118,7 +118,7 @@ export default async function CaptainNewsPage({
                   {news.article.introduction}
                 </p>
                 <span className="mt-3 inline-flex min-h-8 items-center text-xs font-bold text-emerald-300">
-                  Read newsletter →
+                  Read matchweek report →
                 </span>
               </div>
             </Link>
@@ -126,13 +126,13 @@ export default async function CaptainNewsPage({
         ) : (
           <p className="rounded-2xl border border-white/10 p-5 text-sm leading-6 text-white/55">
             {page > 1
-              ? "No more newsletters to show."
-              : "Your team's newsletters will appear here once published."}
+              ? "No more matchweek reports to show."
+              : "Your team's matchweek reports will appear here once published."}
           </p>
         )}
 
         <nav
-          aria-label="Newsletter pages"
+          aria-label="Matchweek report pages"
           className="flex justify-between gap-3 text-sm font-bold text-emerald-200"
         >
           {page > 1 ? (
@@ -140,7 +140,7 @@ export default async function CaptainNewsPage({
               className="inline-flex min-h-11 items-center px-2"
               href={href({ page: String(page - 1) })}
             >
-              Newer newsletters
+              Newer reports
             </Link>
           ) : (
             <span />
@@ -150,7 +150,7 @@ export default async function CaptainNewsPage({
               className="inline-flex min-h-11 items-center px-2"
               href={href({ page: String(page + 1) })}
             >
-              Older newsletters
+              Older reports
             </Link>
           ) : null}
         </nav>
