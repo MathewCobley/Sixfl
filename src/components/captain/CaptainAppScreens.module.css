@@ -2,7 +2,7 @@
 .home { display: grid; gap: 12px; min-width: 0; padding: 4px 2px 8px; }
 .home *, .menu *, .appHeader *, .bottomNav * { box-sizing: border-box; }
 
-.identity { overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.identity { overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .identityTop { display: flex; align-items: center; gap: 12px; padding: 8px 7px 9px; }
 .identityBadge { display: grid; width: 58px; height: 58px; flex: 0 0 58px; place-items: center; overflow: hidden; border: 2px solid rgba(125,211,252,.25); border-radius: 50%; background: rgba(0,0,0,.3); color: #d7f8e8; font-size: 15px; font-weight: 800; }
 .identityBadge img { display: block; max-width: 52px; max-height: 52px; object-fit: contain; }
