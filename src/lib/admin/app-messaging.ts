@@ -124,7 +124,13 @@ export async function getAdminInternalChatConversations(
     },
   });
 
-  return conversations.map((conversation) => ({
+  return conversations
+    .filter(
+      (conversation) =>
+        conversation.type !== PortalConversationType.SIXFL ||
+        conversation.messages.length > 0,
+    )
+    .map((conversation) => ({
     id: conversation.id,
     teamName: conversation.team.name,
     conversationType: conversation.type,
