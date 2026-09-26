@@ -1,0 +1,61 @@
+name: Phone app chrome
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/pwa/**'
+      - 'src/components/captain/CaptainAppHeader.tsx'
+      - 'src/components/captain/CaptainAppScreens.module.css'
+      - 'src/components/player/PlayerPwaPortalHeader.tsx'
+      - 'src/components/player/PlayerTeamNav.tsx'
+      - 'src/components/referee/**'
+      - 'src/app/mobile.css'
+      - 'tests/phone-app-chrome/**'
+      - '.github/workflows/phone-app-chrome.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: phone-app-chrome-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/phone_chrome_test
+      NEXTAUTH_SECRET: isolated-phone-chrome-only
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      RESEND_API_KEY: re_nonfunctional_ci_placeholder
+      EMAIL_FROM: SIXFL <noreply@example.invalid>
+      EMAIL_REPLY_DOMAIN: example.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect native source and existing scroll owners
+        run: |
+          mkdir -p artifacts/phone-app-chrome
+          tar -czf artifacts/phone-app-chrome/native-source.tgz src scripts tests config docs .github/workflows package.json package-lock.json tsconfig.json next.config.ts postcss.config.mjs AGENTS.md ENGINEERING.md DEV_RULES.md
+          git grep -n -E 'position: (fixed|sticky|static)|overflow|transform|PwaAppFrame|PwaPortalHeader|PwaBottomNav' -- src > artifacts/phone-app-chrome/scroll-inventory.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-app-chrome-source-${{ github.sha }}
+          path: artifacts/phone-app-chrome/
+          retention-days: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild
+      - run: npx prisma generate
+      - run: node scripts/check-critical-feature-contracts.mjs
+      - name: Record prepared scroll owners
+        run: |
+          tar -czf artifacts/phone-app-chrome/prepared-source.tgz src scripts tests
+          git diff -- src scripts > artifacts/phone-app-chrome/preparation.diff
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-app-chrome-prepared-${{ github.sha }}
+          path: artifacts/phone-app-chrome/
+          retention-days: 3
