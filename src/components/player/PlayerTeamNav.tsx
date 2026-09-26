@@ -81,16 +81,18 @@ const tabs = (
     exact: false,
   },
   {
-    href: `/goal-of-the-month?from=player&teamId=${encodeURIComponent(teamId)}${
-      previewMembershipId
-        ? `&previewMembershipId=${encodeURIComponent(previewMembershipId)}`
-        : ""
-    }`,
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/goal-of-the-month`,
+      previewMembershipId,
+    ),
     label: "Goal of the Month",
     exact: false,
   },
   {
-    href: "/player/referrals",
+    href: addPreviewMembershipId(
+      `/player/team/${teamId}/referrals`,
+      previewMembershipId,
+    ),
     label: "Refer a team · £75",
     exact: false,
   },
@@ -176,30 +178,12 @@ export default function PlayerTeamNav({
       }
     }
 
-    function handleUnreadCountEvent(event: Event) {
-      const detail = (
-        event as CustomEvent<{ teamId?: string; count?: number }>
-      ).detail;
-      if (
-        detail?.teamId === teamId &&
-        Number.isSafeInteger(detail.count) &&
-        Number(detail.count) >= 0
-      ) {
-        setLiveUnreadChatCount(Number(detail.count));
-      }
-    }
-
     setLiveUnreadChatCount(unreadChatCount);
     void refreshUnreadCount();
     const timer = window.setInterval(refreshUnreadCount, 30000);
-    window.addEventListener("sixfl:chat-unread-count", handleUnreadCountEvent);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      window.removeEventListener(
-        "sixfl:chat-unread-count",
-        handleUnreadCountEvent,
-      );
     };
   }, [teamId, previewMembershipId, unreadChatCount]);
 
