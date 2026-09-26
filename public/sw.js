@@ -1,5 +1,7 @@
-const CACHE_NAME = "sixfl-static-v2";
+const CACHE_NAME = "sixfl-static-v3";
+const OFFLINE_PAGE = "/offline.html";
 const CORE_ASSETS = [
+  OFFLINE_PAGE,
   "/icon.png",
   "/apple-icon.png",
   "/favicon-192.png",
@@ -44,6 +46,39 @@ function isSafeStaticRequest(request, url) {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  if (
+    event.request.method === "GET" &&
+    url.origin === self.location.origin &&
+    event.request.mode === "navigate"
+  ) {
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(event.request);
+        } catch {
+          const offlinePage = await caches.match(OFFLINE_PAGE, {
+            ignoreSearch: true,
+          });
+
+          if (offlinePage) return offlinePage;
+
+          return new Response(
+            "SIXFL is offline. Reconnect to the internet and try again.",
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Cache-Control": "no-store",
+              },
+            },
+          );
+        }
+      })(),
+    );
+    return;
+  }
+
   if (!isSafeStaticRequest(event.request, url)) return;
 
   event.respondWith(
