@@ -80,7 +80,7 @@ export default function RefereeAppHome({
 
           <div className="min-w-0 flex-1 text-center">
             <div className="text-sm font-black tracking-tight text-white">
-              Home
+              Referee Portal
             </div>
           </div>
 
