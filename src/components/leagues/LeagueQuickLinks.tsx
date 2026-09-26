@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type LeagueQuickLinksProps = {
   slug: string;
@@ -11,6 +14,10 @@ export default function LeagueQuickLinks({
   contextHref,
   contextLabel,
 }: LeagueQuickLinksProps) {
+  const pathname = usePathname();
+  const landingPath = `/leagues/${slug}`;
+  if (pathname?.replace(/\/$/, "") === landingPath) return null;
+
   const links = [
     ...(contextHref && contextLabel
       ? [{ href: contextHref, label: contextLabel }]
