@@ -90,7 +90,7 @@ export default async function CaptainPriorityScorePage({
               Open SIXFL TV
             </Link>
             <Link
-              href={`/goal-of-the-month?from=captain&teamId=${encodeURIComponent(teamid)}`}
+              href={`/captain/team/${teamid}/goal-of-the-month`}
               className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-fuchsia-50 transition hover:bg-fuchsia-400/15"
             >
               Goal of the Month
