@@ -186,6 +186,7 @@ test("repository-wide scan finds no alternate public report links or implementat
           "src/app/captain/team/[teamid]/news/page.tsx",
           "src/app/captain/team/[teamid]/more/page.tsx",
           "src/app/player/team/[teamid]/news/page.tsx",
+          "src/app/player/team/[teamid]/more/page.tsx",
         ]);
         if (publiclyReachable) {
           assert.ok(
