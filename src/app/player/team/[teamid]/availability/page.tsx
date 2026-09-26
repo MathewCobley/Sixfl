@@ -300,9 +300,8 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
         take: 1,
       },
       selections: {
-        where: { teamMemberId: membership.id },
-        select: { selectionStatus: true },
-        take: 1,
+        where: { teamMember: { teamId: teamid } },
+        select: { teamMemberId: true, selectionStatus: true },
       },
     },
   });
@@ -379,8 +378,11 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
     previewMembership?.user?.name || previewMembership?.user?.email;
 
   const appFixtures: PlayerAppFixtureItem[] = fixtures.map((fixture) => {
-    const explicitlySelected =
-      fixture.selections[0]?.selectionStatus === "SELECTED";
+    const explicitlySelected = fixture.selections.some(
+      (selection) =>
+        selection.teamMemberId === membership.id &&
+        selection.selectionStatus === "SELECTED",
+    );
     const selectedCount = fixture.selections.filter(
       (selection) => selection.selectionStatus === "SELECTED",
     ).length;
