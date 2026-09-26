@@ -6,6 +6,8 @@ on:
       - "src/app/(admin)/admin/email-templates/**"
       - "src/components/admin/email-templates/**"
       - "src/lib/email/**"
+      - "prisma/migrations/20260926121500_reusable_team_interest_followup/**"
+      - "tests/team-interest-followup.test.cjs"
       - "scripts/check-email-template-create-completion.mjs"
       - "scripts/check-template-save-runtime.mjs"
       - "scripts/check-template-save-browser.mjs"
@@ -50,6 +52,9 @@ jobs:
       - name: Check email template create completion
         run: node scripts/check-email-template-create-completion.mjs
 
+      - name: Check reusable team interest follow-up
+        run: node --test tests/team-interest-followup.test.cjs
+
       - name: Generate Prisma client
         run: npx prisma generate
 
@@ -66,6 +71,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: npx prisma validate
+
+      - name: Re-check reusable team interest follow-up after preparation
+        run: node --test tests/team-interest-followup.test.cjs
 
       - name: Type-check application source
         run: npx tsc --noEmit
