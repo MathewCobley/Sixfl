@@ -466,12 +466,13 @@ export async function importLeadsAction(
   );
 
   const currentLeagueIdByArea = new Map<string, string>();
+  const ambiguousAreas = new Set<string>();
   for (const competition of currentCompetitions) {
     const area = competition.area?.trim().toLowerCase();
     const leagueId = competition.currentLeague?.isActive
       ? competition.currentLeague.id
       : null;
-    if (!area || !leagueId) continue;
+    if (!area || !leagueId || ambiguousAreas.has(area)) continue;
 
     const existing = currentLeagueIdByArea.get(area);
     if (!existing) {
@@ -479,6 +480,7 @@ export async function importLeadsAction(
     } else if (existing !== leagueId) {
       // Ambiguous areas must remain unset rather than guessing.
       currentLeagueIdByArea.delete(area);
+      ambiguousAreas.add(area);
     }
   }
 
