@@ -373,8 +373,8 @@ test("decorative website-style eyebrows are removed from referee app screens", (
   const night = fs.readFileSync("src/app/(public)/referee/night/[id]/page.tsx", "utf8");
   const refereePage = fs.readFileSync("src/app/(public)/referee/page.tsx", "utf8");
 
-  assert.doesNotMatch(home, /Referee Portal|Ready for match night/);
-  assert.match(home, />\s*Home\s*</);
+  assert.doesNotMatch(home, /Ready for match night/);
+  assert.match(home, />\s*Referee Portal\s*</);
   assert.doesNotMatch(nights, />\s*Match nights\s*</);
   assert.doesNotMatch(ledger, />\s*Payment history\s*</);
   assert.doesNotMatch(rules, />\s*Quick reference\s*</);
