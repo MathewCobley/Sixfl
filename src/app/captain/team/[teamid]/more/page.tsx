@@ -51,6 +51,7 @@ export default async function CaptainMorePage({ params }: { params: Promise<{ te
     { label: "SIXFL TV & competitions", rows: [
       { href: `${base}/tv`, label: "SIXFL TV", icon: PlayCircleIcon },
       { href: `${base}/veo-priority`, label: "Priority score", icon: TrophyIcon },
+      { href: `${base}/goal-of-the-month`, label: "Goal of the Month", icon: TrophyIcon },
       { href: `${base}/cup-invitations`, label: "Cup invitations", icon: GiftIcon },
     ] },
     { label: "Help", rows: [
