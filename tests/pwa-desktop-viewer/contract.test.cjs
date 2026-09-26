@@ -18,8 +18,8 @@ function harness(deny = false) {
   const page = loadSource(pagePath, {
     '@/lib/prisma': { prisma },
     '@/lib/requireAdmin': { requireAdmin: async () => { calls.push('admin'); if (deny) throw new Error('Denied'); } },
-    '@/components/admin/PwaDiagnosticsPanel': { default: Panel },
-    'next/link': { default: function Link() { return null; } },
+    '@/components/admin/PwaDiagnosticsPanel': Panel,
+    'next/link': function Link() { return null; },
   }).default;
   return { page, calls, Panel };
 }
