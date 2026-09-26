@@ -13,7 +13,7 @@ test("player Home and Fixtures both use explicit FixtureSelection for selected s
   assert.match(playerHome, /prisma\.fixtureSelection\.findFirst/);
   assert.match(playerHome, /nextSelection\?\.selectionStatus === "SELECTED"/);
 
-  assert.match(availabilityPage, /fixture\.selections\[0\]\?\.selectionStatus === "SELECTED"/);
+  assert.match(availabilityPage, /fixture\.selections\.some\([\s\S]*selection\.selectionStatus === "SELECTED"/);
   assert.match(availabilityPage, /selected: explicitlySelected/);
   assert.doesNotMatch(availabilityPage, /legacySelected/);
   assert.doesNotMatch(availabilityPage, /selected: explicitlySelected \|\|/);
