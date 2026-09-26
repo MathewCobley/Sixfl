@@ -5,7 +5,10 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const h = React.createElement;
-const article = { id:'news1', leagueSlug:'harrogate', publishedAt:'2026-09-23', updatedAt:'2026-09-23', article:{ leagueName:'Harrogate', matchDate:'2026-09-22', title:'A great matchnight', introduction:'The latest stories', closing:'See you next week', cover:null, matches:[{fixtureId:'f',teamAId:'team',teamBId:'other',teamA:'Our team',teamB:'Opponents',badgeA:null,badgeB:null,scoreA:2,scoreB:1,paragraph:'A close finish',scorers:[{team:'Our team',name:'Alex',goals:2}],playersOfMatch:[{team:'Our team',name:'Sam'}]}] } };
+const article = { id:'news1', leagueSlug:'harrogate', publishedAt:'2026-09-23', updatedAt:'2026-09-23', matchweekNumber:12, article:{ leagueName:'Harrogate', matchDate:'2026-09-22', title:'A great matchnight', introduction:'The latest stories', closing:'See you next week', cover:null, matches:[
+  {fixtureId:'other-fixture',teamAId:'other-a',teamBId:'other-b',teamA:'Other A',teamB:'Other B',badgeA:null,badgeB:null,scoreA:4,scoreB:4,paragraph:'Around the league story',scorers:[],playersOfMatch:[]},
+  {fixtureId:'f',teamAId:'team',teamBId:'other',teamA:'Our team',teamB:'Opponents',badgeA:null,badgeB:null,scoreA:2,scoreB:1,paragraph:'A close finish',scorers:[{team:'Our team',name:'Alex',goals:2}],playersOfMatch:[{team:'Our team',name:'Sam'}]},
+] } };
 function load(file, mocks) {
   const code = ts.transpileModule(fs.readFileSync(file,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true,target:ts.ScriptTarget.ES2022}}).outputText;
   const mod={exports:{}};
@@ -57,10 +60,18 @@ test('reader rejects unpublished, incomplete and unrelated articles',async()=>{
   await assert.rejects(render({search:{league:'harrogate'}}),/NOT_FOUND/);
   await assert.rejects(render({search,news:{...article,article:{...article.article,matches:[]}}}),/NOT_FOUND/);
 });
-test('reader includes full report, scores, scorers and awards without website exits',async()=>{
+test('reader puts the player team match first, then the rest of the league, without website exits',async()=>{
   const {html}=await render({search:{league:'harrogate',date:'2026-09-22'}});
-  for(const text of ['A great matchnight','A close finish','Alex','Sam','See you next week','Your match','2–1']) assert.ok(html.includes(text),text);
+  for(const text of ['Matchweek 12 report','A great matchnight','A close finish','Alex','Sam','See you next week','Your match','Around the league','2–1']) assert.ok(html.includes(text),text);
+  assert.ok(html.indexOf('A close finish') < html.indexOf('Around the league story'), 'team match must be shown before unrelated matches');
   const links=[...html.matchAll(/href="([^"]+)"/g)].map(m=>m[1]);
   assert.deepEqual(links,['/player/team/team/news']);
   assert.match((await render({items:[]})).html,/once published/);
+});
+
+test('feed is explicitly matchweek reports and leads with the player team score',async()=>{
+  const {html}=await render();
+  for(const text of ['Matchweek reports','Your match first','Your match','Our team','Opponents','2–1','From the full matchweek report','Read matchweek report →']) assert.ok(html.includes(text),text);
+  assert.doesNotMatch(html,/Newsletters|Read newsletter/);
+  assert.ok(html.indexOf('Your match') < html.indexOf('A great matchnight'));
 });
