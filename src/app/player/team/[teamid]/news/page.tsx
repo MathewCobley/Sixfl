@@ -12,7 +12,7 @@ import PlayerNewsArticle from "@/components/player/PlayerNewsArticle";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Matchweek reports | SIXFL Player" };
 
-type Search = { page?: string; league?: string; date?: string; previewMembershipId?: string };
+type Search = { page?: string; all?: string; league?: string; date?: string; previewMembershipId?: string };
 
 export default async function PlayerNewsPage({ params, searchParams }: {
   params: Promise<{ teamid: string }>;
@@ -46,7 +46,7 @@ export default async function PlayerNewsPage({ params, searchParams }: {
     return <main className="mx-auto w-full max-w-xl px-3 pt-4 text-white">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-xl font-black">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} report` : "Matchweek report"}</h1>
-        <Link href={href()} className="inline-flex min-h-11 items-center rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-emerald-200">All reports</Link>
+        <Link href={href({ all: "1" })} className="inline-flex min-h-11 items-center rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-emerald-200">All reports</Link>
       </div>
       <div className="pb-28"><PlayerNewsArticle news={news} teamId={teamid} /></div>
     </main>;
@@ -54,6 +54,15 @@ export default async function PlayerNewsPage({ params, searchParams }: {
   const requestedPage = Number(sp.page);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 10000) : 1;
   const feed = await listPublishedNews({ teamId: teamid, page, limit: 8 });
+
+  // The Home/More "Matchweek reports" entry point should open the latest
+  // published report that actually features this team. The archive remains
+  // available through the explicit All reports link.
+  if (sp.all !== "1" && !sp.page && feed.items[0]) {
+    const latest = feed.items[0];
+    redirect(href({ league: latest.leagueSlug, date: latest.article.matchDate }));
+  }
+
   return <main className="mx-auto w-full max-w-xl px-3 pt-4 text-white">
     <h1 className="text-2xl font-black">Matchweek reports</h1>
     <p className="mt-1 text-sm text-white/50">Your match first, with the full SIXFL matchnight report behind it.</p>
@@ -95,8 +104,8 @@ export default async function PlayerNewsPage({ params, searchParams }: {
         </Link>;
       }) : <p className="rounded-2xl border border-white/10 p-5 text-sm leading-6 text-white/55">{page > 1 ? "No more matchweek reports to show." : "Your team's matchweek reports will appear here once published."}</p>}
       <nav aria-label="Matchweek report pages" className="flex justify-between gap-3 text-sm font-bold text-emerald-200">
-        {page > 1 ? <Link className="inline-flex min-h-11 items-center px-2" href={href({ page: String(page - 1) })}>Newer reports</Link> : <span />}
-        {feed.hasMore ? <Link className="inline-flex min-h-11 items-center px-2" href={href({ page: String(page + 1) })}>Older reports</Link> : null}
+        {page > 1 ? <Link className="inline-flex min-h-11 items-center px-2" href={href({ all: "1", page: String(page - 1) })}>Newer reports</Link> : <span />}
+        {feed.hasMore ? <Link className="inline-flex min-h-11 items-center px-2" href={href({ all: "1", page: String(page + 1) })}>Older reports</Link> : null}
       </nav>
     </div>
   </main>;
