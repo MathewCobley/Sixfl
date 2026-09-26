@@ -180,7 +180,26 @@ export default async function Page({
   ).length;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-5 text-white">
+    <>
+      <style>{`
+        body:has(.captain-app-header) .captain-outstanding-player-payments { max-width:40rem !important; padding:.25rem 0 5.5rem !important; display:grid; gap:.65rem; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div:first-child { display:grid !important; grid-template-columns:1fr 1fr !important; gap:.5rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div:first-child a { min-height:2.65rem; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,.09); border-radius:.8rem; background:rgba(255,255,255,.035); text-decoration:none; font-size:.7rem; font-weight:800; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments header h1 { margin-top:.2rem !important; font-size:1.15rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments header p:last-child { margin-top:.35rem !important; font-size:.7rem !important; line-height:1.1rem !important; color:rgba(255,255,255,.43) !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > section.grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.4rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > section.grid > div { padding:.65rem !important; border-radius:.85rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > section.grid > div > div:first-child { font-size:1rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > section.grid > div > div:last-child { margin-top:.15rem !important; font-size:.55rem !important; line-height:.8rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div.space-y-4 { display:grid !important; gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div.space-y-4 > section { border-radius:1.05rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div.space-y-4 > section > div:first-child { padding:.75rem .85rem !important; display:grid !important; grid-template-columns:minmax(0,1fr) auto !important; align-items:center !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div.space-y-4 > section h2 { font-size:.85rem !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments > div.space-y-4 > section > div:last-child > div { padding:.75rem .85rem !important; grid-template-columns:minmax(0,1fr) !important; gap:.55rem !important; }
+        body:has(.captain-app-header) .captain-outstanding-player-payments a[class*="min-h-"],
+        body:has(.captain-app-header) .captain-outstanding-player-payments button { min-height:2.55rem !important; border-radius:.75rem !important; font-size:.68rem !important; font-weight:800 !important; }
+      `}</style>
+      <main className="captain-outstanding-player-payments mx-auto max-w-6xl space-y-6 p-5 text-white">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           className="text-emerald-200 underline"
@@ -328,5 +347,6 @@ export default async function Page({
         </section>
       )}
     </main>
+    </>
   );
 }
