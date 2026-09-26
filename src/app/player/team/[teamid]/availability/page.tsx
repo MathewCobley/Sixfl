@@ -300,13 +300,8 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
         take: 1,
       },
       selections: {
-        where: { teamMemberId: membership.id },
-        select: { selectionStatus: true },
-        take: 1,
-      },
-      playerMatchFees: {
-        where: { teamId: teamid, status: { not: "CANCELLED" } },
-        select: { teamMemberId: true },
+        where: { teamMember: { teamId: teamid } },
+        select: { teamMemberId: true, selectionStatus: true },
       },
     },
   });
@@ -357,9 +352,9 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
     null;
   const selectedAvailability = selectedFixture?.availabilities[0] ?? null;
   const selectedMemberIds = new Set(
-    (selectedFixture?.playerMatchFees ?? [])
-      .map((fee) => fee.teamMemberId)
-      .filter((id): id is string => Boolean(id)),
+    (selectedFixture?.selections ?? [])
+      .filter((selection) => selection.selectionStatus === "SELECTED")
+      .map((selection) => selection.teamMemberId),
   );
   const targetSize = team.matchdayTargetSize ?? 0;
   const squadIsFull = targetSize > 0 && selectedMemberIds.size >= targetSize;
@@ -383,16 +378,14 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
     previewMembership?.user?.name || previewMembership?.user?.email;
 
   const appFixtures: PlayerAppFixtureItem[] = fixtures.map((fixture) => {
-    const legacySelected = fixture.playerMatchFees.some(
-      (fee) => fee.teamMemberId === membership.id,
+    const explicitlySelected = fixture.selections.some(
+      (selection) =>
+        selection.teamMemberId === membership.id &&
+        selection.selectionStatus === "SELECTED",
     );
-    const explicitlySelected =
-      fixture.selections[0]?.selectionStatus === "SELECTED";
-    const selectedCount = new Set(
-      fixture.playerMatchFees
-        .map((fee) => fee.teamMemberId)
-        .filter((id): id is string => Boolean(id)),
-    ).size;
+    const selectedCount = fixture.selections.filter(
+      (selection) => selection.selectionStatus === "SELECTED",
+    ).length;
 
     return {
       id: fixture.id,
@@ -414,7 +407,7 @@ export default async function PlayerAvailabilityPage({ params, searchParams }: P
       },
       availabilityResponse: fixture.availabilities[0]?.response ?? null,
       availabilityNote: fixture.availabilities[0]?.note ?? null,
-      selected: explicitlySelected || legacySelected,
+      selected: explicitlySelected,
       squadPicked: targetSize > 0 && selectedCount >= targetSize,
     };
   });

@@ -170,16 +170,65 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
     redirect(getMatchFeesPath(teamId, fixtureId, "&error=fixture_not_found"));
   }
 
-  const selectedMemberIds = players
+  const requestedMemberIds = players
     .filter((player) => player.type === "member")
     .map((player) => player.id);
   const selectedProspectIds = players
     .filter((player) => player.type === "prospect")
     .map((player) => player.id);
+
+  const validSelectedMembers = requestedMemberIds.length
+    ? await prisma.teamMember.findMany({
+        where: {
+          teamId,
+          id: { in: requestedMemberIds },
+        },
+        select: { id: true },
+      })
+    : [];
+  const selectedMemberIds = validSelectedMembers.map((member) => member.id);
   const profileByMemberId = await getTeamMemberProfilesByTeamMemberIds(selectedMemberIds);
   const baseNote = access?.isAdmin
     ? getString(formData, "note") || null
     : "Submitted by captain";
+
+  // Saving the matchday squad is the one captain decision. FixtureSelection is
+  // authoritative; fees are synchronised afterwards as a consequence.
+  await prisma.$transaction(async (tx) => {
+    await tx.fixtureSelection.updateMany({
+      where: {
+        fixtureId,
+        teamMember: { teamId },
+        ...(selectedMemberIds.length
+          ? { teamMemberId: { notIn: selectedMemberIds } }
+          : {}),
+      },
+      data: {
+        selectionStatus: "NOT_SELECTED",
+        isCaptain: false,
+        isGoalkeeper: false,
+      },
+    });
+
+    for (const teamMemberId of selectedMemberIds) {
+      await tx.fixtureSelection.upsert({
+        where: {
+          fixtureId_teamMemberId: {
+            fixtureId,
+            teamMemberId,
+          },
+        },
+        update: {
+          selectionStatus: "SELECTED",
+        },
+        create: {
+          fixtureId,
+          teamMemberId,
+          selectionStatus: "SELECTED",
+        },
+      });
+    }
+  });
 
   for (const player of players) {
     if (player.type === "member") {
@@ -351,6 +400,8 @@ export async function createCaptainPlayerMatchFeesAction(formData: FormData) {
 
   revalidatePath(getMatchFeesPath(teamId, fixtureId));
   revalidatePath(`/captain/team/${teamId}/availability`);
+  revalidatePath(`/player/team/${teamId}`);
+  revalidatePath(`/player/team/${teamId}/availability`);
   redirect(getMatchFeesPath(teamId, fixtureId, "&saved=fees_created"));
 }
 

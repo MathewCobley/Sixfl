@@ -9,6 +9,8 @@ on:
       - 'tests/player-dashboard-order/**'
       - 'tests/player-pwa-dashboard/**'
       - 'tests/player-newsletters.test.cjs'
+      - 'tests/fixture-selection-single-source.test.cjs'
+      - 'prisma/migrations/20260926174500_fixture_selection_single_source/**'
       - '.github/workflows/player-dashboard-order.yml'
   workflow_dispatch:
 permissions:
@@ -37,12 +39,12 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Native layout and template composition
-        run: node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs
+        run: node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs tests/fixture-selection-single-source.test.cjs
       - name: Prepare application once
         run: npm run prebuild && npx prisma generate
       - name: Prepared order and existing feature safeguards
         run: |
-          node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs
+          node --test tests/player-dashboard-order/contract.test.cjs tests/player-newsletters.test.cjs tests/fixture-selection-single-source.test.cjs
           node scripts/check-critical-feature-contracts.mjs
       - name: Build prepared production application
         run: npx next build
