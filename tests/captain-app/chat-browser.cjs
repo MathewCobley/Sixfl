@@ -96,7 +96,7 @@ async function main() {
     await page.waitForTimeout(50);
     assert.equal(await nav.getByRole('link', { name: 'Chat, 2 unread', exact: true }).getAttribute('href'), '/captain/team/other/chat');
     await page.evaluate(() => window.show('other', '/captain/team/other/messages'));
-    await page.waitForFunction(() => document.querySelector('.headerTitle strong')?.textContent === 'SIXFL inbox');
+    await page.waitForFunction(() => document.querySelector('.headerTitle span')?.textContent === 'Captain Portal · SIXFL inbox');
     assert.equal(await nav.locator('a[aria-current="page"]').getAttribute('aria-label'), 'More');
     const requests = await page.evaluate(() => window.requests);
     assert.ok(requests.some(r => r.url === '/api/player/team/demo/chat-unread'));
