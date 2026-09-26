@@ -431,7 +431,7 @@ const referralPreparation = read(referralPreparationPath);
 
 expectText("team referrals", playerReferralPagePath, playerReferralPage, "Refer a team and earn £75", "player referral reward page must remain available");
 expectText("team referrals", playerReferralPagePath, playerReferralPage, "register-interest?type=team&ref=", "player referral page must generate a team-registration link containing the referral code");
-expectText("team referrals", playerTeamNavPath, playerTeamNav, 'href: "/player/referrals"', "player navigation must permanently expose the referral page");
+expectText("team referrals", playerTeamNavPath, playerTeamNav, "/player/team/${teamId}/referrals", "player portal navigation must keep referrals inside the current team app");
 expectText("team referrals", playerTeamNavPath, playerTeamNav, "Refer a team · £75", "player navigation must clearly advertise the £75 team referral reward");
 expectText("team referrals", homepagePath, homepage, 'href: "/player/referrals"', "public homepage must expose the referral scheme");
 expectText("team referrals", homepagePath, homepage, "Refer a team · Earn £75", "homepage referral entry point must explain the reward");
