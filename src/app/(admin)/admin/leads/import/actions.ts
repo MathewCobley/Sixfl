@@ -297,15 +297,37 @@ function platformLabel(value: string) {
   return value.trim() || "Meta";
 }
 
+const META_MARKETING_AREAS = [
+  "Rawdon",
+  "Thirsk",
+  "Catterick",
+  "Richmond",
+  "Wetherby",
+  "Northallerton",
+  "Harrogate",
+  "Ripon",
+  "York",
+  "Leeds",
+] as const;
+
 function inferMetaArea(row: Record<string, string>) {
   const campaignName = getFirstNonEmpty(row, ["campaignName", "campaign_name"]);
   const formName = getFirstNonEmpty(row, ["formName", "form_name"]);
   const adName = getFirstNonEmpty(row, ["adName", "ad_name"]);
   const adSetName = getFirstNonEmpty(row, ["adsetName", "adset_name"]);
+  const candidates = [campaignName, formName, adName, adSetName].filter(Boolean);
+  const haystack = candidates.join(" | ").toLowerCase();
+  const normalizedHaystack =
+    " " + haystack.replace(/[^a-z0-9]+/g, " ").trim() + " ";
 
-  for (const candidate of [adName, adSetName, campaignName, formName]) {
-    if (!candidate) continue;
+  for (const area of META_MARKETING_AREAS) {
+    const normalizedArea = area.toLowerCase();
+    if (normalizedHaystack.includes(" " + normalizedArea + " ")) {
+      return area;
+    }
+  }
 
+  for (const candidate of candidates) {
     const parts = candidate
       .split(/\s+[–—-]\s+/)
       .map((part) => part.trim())
@@ -313,19 +335,6 @@ function inferMetaArea(row: Record<string, string>) {
 
     if (parts.length >= 2 && /^heartlands$/i.test(parts[0])) {
       return parts[1];
-    }
-
-    const firstPart = (parts[0] ?? candidate)
-      .replace(/\s+team$/i, "")
-      .replace(/\s+(lead|leads|campaign|form)$/i, "")
-      .trim();
-
-    if (
-      firstPart &&
-      firstPart.length <= 50 &&
-      !/^(sixfl|meta|facebook|instagram|team|football)$/i.test(firstPart)
-    ) {
-      return firstPart;
     }
   }
 
@@ -430,58 +439,53 @@ export async function importLeadsAction(
   const inferredLeagueSlugs = Array.from(
     new Set(rows.map(inferMetaLeagueSlug).filter(Boolean)),
   );
-  const inferredAreas = Array.from(
-    new Set(rows.map(inferMetaArea).filter(Boolean)),
-  );
-
-  const [inferredLeagues, currentCompetitions] = await Promise.all([
-    inferredLeagueSlugs.length
-      ? prisma.league.findMany({
-          where: {
-            slug: { in: inferredLeagueSlugs },
-            isActive: true,
-          },
-          select: { id: true, slug: true },
-        })
-      : Promise.resolve([]),
-    inferredAreas.length
-      ? prisma.leagueCompetition.findMany({
-          where: {
-            isActive: true,
-            area: { in: inferredAreas, mode: "insensitive" },
-            currentLeagueId: { not: null },
-          },
-          select: {
-            area: true,
-            currentLeague: {
-              select: { id: true, isActive: true },
-            },
-          },
-        })
-      : Promise.resolve([]),
-  ]);
-
+  const inferredLeagues = inferredLeagueSlugs.length
+    ? await prisma.league.findMany({
+        where: {
+          slug: { in: inferredLeagueSlugs },
+          isActive: true,
+        },
+        select: { id: true, slug: true },
+      })
+    : [];
   const inferredLeagueIdBySlug = new Map(
     inferredLeagues.map((league) => [league.slug, league.id]),
   );
 
-  const currentLeagueIdByArea = new Map<string, string>();
-  const ambiguousAreas = new Set<string>();
-  for (const competition of currentCompetitions) {
-    const area = competition.area?.trim().toLowerCase();
-    const leagueId = competition.currentLeague?.isActive
-      ? competition.currentLeague.id
-      : null;
-    if (!area || !leagueId || ambiguousAreas.has(area)) continue;
+  const currentLeagueCandidates = await prisma.league.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { competitionId: null },
+        { currentForCompetitions: { some: { isActive: true } } },
+      ],
+    },
+    select: {
+      id: true,
+      area: true,
+      name: true,
+      slug: true,
+      venueName: true,
+    },
+  });
 
-    const existing = currentLeagueIdByArea.get(area);
-    if (!existing) {
-      currentLeagueIdByArea.set(area, leagueId);
-    } else if (existing !== leagueId) {
-      // Ambiguous areas must remain unset rather than guessing.
-      currentLeagueIdByArea.delete(area);
-      ambiguousAreas.add(area);
-    }
+  function inferLeagueIdFromArea(area: string) {
+    const normalizedArea = area.trim().toLowerCase();
+    if (!normalizedArea) return null;
+
+    const exactMatches = currentLeagueCandidates.filter(
+      (league) => league.area?.trim().toLowerCase() === normalizedArea,
+    );
+    if (exactMatches.length === 1) return exactMatches[0].id;
+    if (exactMatches.length > 1) return null;
+
+    const fuzzyMatches = currentLeagueCandidates.filter((league) =>
+      [league.area, league.name, league.slug, league.venueName].some((value) =>
+        value?.trim().toLowerCase().includes(normalizedArea),
+      ),
+    );
+
+    return fuzzyMatches.length === 1 ? fuzzyMatches[0].id : null;
   }
 
   const parsedRows = rows.map((row, index) => {
@@ -493,11 +497,9 @@ export async function importLeadsAction(
     const area = areaOverride || getFirstNonEmpty(row, ["area", "location"]) || inferMetaArea(row);
     const source = buildSource(row, sourceOverride);
     const inferredLeagueSlug = inferMetaLeagueSlug(row);
-    const leagueId =
-      (inferredLeagueSlug
-        ? inferredLeagueIdBySlug.get(inferredLeagueSlug) ?? null
-        : null) ??
-      (area ? currentLeagueIdByArea.get(area.trim().toLowerCase()) ?? null : null);
+    const leagueId = inferredLeagueSlug
+      ? inferredLeagueIdBySlug.get(inferredLeagueSlug) ?? inferLeagueIdFromArea(area)
+      : inferLeagueIdFromArea(area);
 
     return {
       rowNumber: index + 2,
