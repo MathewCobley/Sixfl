@@ -166,14 +166,14 @@ export default async function AdminTestAppsPage() {
       hasNamePart(member.user.name, "hakan"),
   ) ?? null;
 
-  const finnMemberships = teams.flatMap((team) =>
+  const finleyMemberships = teams.flatMap((team) =>
     team.members
-      .filter((member) => normalise(member.user.name) === "finn mcintosh")
+      .filter((member) => normalise(member.user.name) === "finley mcintosh")
       .map((member) => ({ member, team })),
   );
-  const finn =
-    finnMemberships.find(({ team }) => team.league?.isActive) ??
-    finnMemberships[0] ??
+  const finley =
+    finleyMemberships.find(({ team }) => team.league?.isActive) ??
+    finleyMemberships[0] ??
     null;
 
   const stefanCandidates = referees.filter((referee) =>
@@ -187,8 +187,8 @@ export default async function AdminTestAppsPage() {
     kebabTeam && hakanCaptain
       ? `/admin/teams/${kebabTeam.id}/captain-preview`
       : null;
-  const playerHref = finn
-    ? `/player/team/${finn.team.id}?previewMembershipId=${encodeURIComponent(finn.member.id)}&pwaPreview=1`
+  const playerHref = finley
+    ? `/player/team/${finley.team.id}?previewMembershipId=${encodeURIComponent(finley.member.id)}&pwaPreview=1`
     : null;
   const refereeHref = stefan
     ? `/admin/referees/${stefan.id}/referee-preview?to=${encodeURIComponent("/referee?pwaPreview=1")}`
@@ -232,14 +232,14 @@ export default async function AdminTestAppsPage() {
 
         <TestAppCard
           eyebrow="Player app"
-          title="Finn McIntosh"
+          title="Finley McIntosh"
           detail={
-            finn
-              ? `${finn.team.name} · ${leagueLabel(finn.team)}`
+            finley
+              ? `${finley.team.name} · ${leagueLabel(finley.team)}`
               : "Fixed player test account"
           }
           href={playerHref}
-          unavailableText="Finn McIntosh was not found in a squad"
+          unavailableText="Finley McIntosh was not found in a squad"
           badge="P"
         />
 
