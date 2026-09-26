@@ -11,7 +11,6 @@ import { getPlayerPaymentDisplay, getPlayerReceiptStates } from "@/lib/payments/
 
 import { pausePlayerFeeCollection, visiblePlayerLedgerStateSql, writeOffPlayerFeeBalances } from "@/lib/payments/player-ledger";
 import Link from "next/link";
-import CaptainPwaModeOnly from "@/components/captain/CaptainPwaModeOnly";
 import TeamKitFundTransferPanel from "@/components/captain/TeamKitFundTransferPanel";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
@@ -682,438 +681,34 @@ export default async function CaptainPaymentsPage({
 
   return (
     <>
-      <CaptainPwaModeOnly mode="app">
-        <main className="mx-auto w-full max-w-xl space-y-3 pb-24 text-white">
-          <header className="rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035] p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/70">
-              Team finances
-            </p>
-            <div className="mt-1 flex items-end justify-between gap-3">
-              <div>
-                <h1 className="text-xl font-black tracking-tight">Team payments</h1>
-                <p className="mt-1 text-[11px] text-white/40">{team.name}</p>
-              </div>
-              <div className="text-right">
-                <div className={ledger.outstandingPence > 0 ? "text-2xl font-black tabular-nums text-amber-100" : "text-2xl font-black tabular-nums text-emerald-100"}>
-                  {formatMoney(ledger.outstandingPence)}
-                </div>
-                <div className="text-[9px] font-bold uppercase tracking-wide text-white/30">Balance due</div>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-1.5">
-              <div className="rounded-xl border border-white/[0.07] bg-black/15 px-2 py-2 text-center">
-                <div className="text-base font-black tabular-nums text-white">{ledger.openChargeCount}</div>
-                <div className="text-[9px] uppercase tracking-wide text-white/30">Due charges</div>
-              </div>
-              <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.07] px-2 py-2 text-center">
-                <div className="text-base font-black tabular-nums text-emerald-100">{formatMoney(creditBalancePence)}</div>
-                <div className="text-[9px] uppercase tracking-wide text-white/30">Credit</div>
-              </div>
-              <div className="rounded-xl border border-sky-400/15 bg-sky-500/[0.07] px-2 py-2 text-center">
-                <div className="text-base font-black tabular-nums text-sky-100">{formatMoney(Math.max(kitFundLedger.balancePence, 0))}</div>
-                <div className="text-[9px] uppercase tracking-wide text-white/30">Kit fund</div>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link
-                href={"/captain/team/" + team.id + "/player-payments"}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-100"
-              >
-                Squad payments
-              </Link>
-              <Link
-                href={"/captain/team/" + team.id + "/payments/credit-ledger"}
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-white/70"
-              >
-                Credit history
-              </Link>
-            </div>
-          </header>
-
-          {linkWriteOffMessage ? (
-            <section role={sp.links === "written_off" ? "status" : "alert"} className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-xs leading-5 text-red-50">
-              {linkWriteOffMessage}
-            </section>
-          ) : null}
-          {subscriptionMessage ? (
-            <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-white/60">
-              {subscriptionMessage}
-            </section>
-          ) : null}
-          {sp.links === "closed" ? (
-            <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100">
-              Remaining unpaid player links were closed.
-            </section>
-          ) : sp.links === "invalid" ? (
-            <section className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
-              Those player links could not be changed. Refresh and try again.
-            </section>
-          ) : null}
-          {creditMessage ? (
-            <section className={sp.credit === "used" ? "rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100" : "rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100"}>
-              {creditMessage}
-            </section>
-          ) : null}
-          {flexiblePaymentMessage ? (
-            <section className={sp.flexpay === "success" || sp.flexpay === "covered" ? "rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-xs leading-5 text-emerald-100" : "rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100"}>
-              {flexiblePaymentMessage}
-            </section>
-          ) : null}
-
-          {paymentOrder.enabled && olderTeamBalancePence > 0 && paymentOrder.next ? (
-            <section className="rounded-[1.2rem] border border-amber-400/25 bg-amber-500/10 p-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-white">Older balance must be cleared first</div>
-                  <p className="mt-1 text-[11px] leading-4 text-amber-50/65">
-                    {formatMoney(olderTeamBalancePence)} remains across {olderChargeCount} older charge{olderChargeCount === 1 ? "" : "s"}.
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full border border-amber-300/20 bg-black/15 px-2 py-1 text-[10px] font-bold text-amber-100">
-                  Oldest first
-                </span>
-              </div>
-              <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/15 p-3">
-                <div className="text-[11px] text-white/40">Next charge</div>
-                <div className="mt-1 text-lg font-black text-white">{formatMoney(paymentOrder.next.outstandingPence)}</div>
-              </div>
-              {creditBalancePence > 0 ? (
-                <form action={useTeamCreditAction} className="mt-2">
-                  <input type="hidden" name="teamId" value={team.id} />
-                  <input type="hidden" name="chargeId" value={paymentOrder.next.chargeId} />
-                  <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-black">
-                    Use {formatMoney(Math.min(creditBalancePence, paymentOrder.next.outstandingPence))} credit
-                  </button>
-                </form>
-              ) : paymentOrder.next.paymentToken ? (
-                <Link
-                  href={"/pay/charge/" + paymentOrder.next.paymentToken}
-                  className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-black"
-                >
-                  Pay oldest charge
-                </Link>
-              ) : null}
-            </section>
-          ) : null}
-
-          {flexiblePaymentTarget && flexiblePaymentMaxPence > 0 ? (
-            <section className="rounded-[1.2rem] border border-emerald-400/20 bg-emerald-500/[0.07] p-3.5">
-              <div className="text-sm font-black text-white">Make a team payment</div>
-              <p className="mt-1 text-[11px] leading-4 text-white/45">
-                Applied to the oldest eligible team balance first. Maximum now {formatMoney(flexiblePaymentMaxPence)}.
-              </p>
-              <form
-                action={"/captain/team/" + team.id + "/payments/make-payment"}
-                method="post"
-                className="mt-3 flex gap-2"
-              >
-                <label className="relative min-w-0 flex-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-white/45">£</span>
-                  <input
-                    name="amount"
-                    type="number"
-                    inputMode="decimal"
-                    min="0.01"
-                    max={(flexiblePaymentMaxPence / 100).toFixed(2)}
-                    step="0.01"
-                    placeholder="0.00"
-                    required
-                    className="h-12 w-full rounded-xl border border-white/10 bg-black/25 pl-7 pr-3 text-base font-black text-white outline-none placeholder:text-white/25 focus:border-emerald-300/50"
-                  />
-                </label>
-                <button type="submit" className="min-h-12 shrink-0 rounded-xl bg-emerald-400 px-4 text-sm font-black text-black">
-                  Continue
-                </button>
-              </form>
-            </section>
-          ) : null}
-
-          {(outstandingPlayerSummary?.feeCount ?? 0) > 0 ? (
-            <Link
-              href={"/captain/team/" + team.id + "/player-payments/accounts"}
-              className="block rounded-[1.2rem] border border-amber-400/20 bg-amber-500/[0.08] p-3.5"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-white">Player payments outstanding</div>
-                  <p className="mt-1 text-[11px] leading-4 text-amber-50/65">
-                    {outstandingPlayerSummary.feeCount} unpaid fee{outstandingPlayerSummary.feeCount === 1 ? "" : "s"} across your players.
-                  </p>
-                </div>
-                <div className="shrink-0 text-lg font-black text-amber-100">
-                  {formatMoney(outstandingPlayerSummary.balancePence)}
-                </div>
-              </div>
-              <div className="mt-2 text-[10px] font-bold text-amber-100/70">Open player payment links →</div>
-            </Link>
-          ) : null}
-
-          <details className="group overflow-hidden rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035]">
-            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 [&::-webkit-details-marker]:hidden">
-              <span>
-                <span className="block text-sm font-black text-white">Saved card</span>
-                <span className="mt-0.5 block text-[10px] text-white/35">
-                  {hasSavedCard ? "Ready for matchday payments" : hasStripeCustomer ? "Setup incomplete" : "Not set up"}
-                </span>
-              </span>
-              <span className={hasSavedCard ? "rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black text-emerald-100" : "rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-black text-white/45"}>
-                {hasSavedCard ? "Active" : "Open"}
-              </span>
-            </summary>
-            <div className="space-y-2 border-t border-white/[0.06] p-3.5">
-              <p className="text-xs leading-5 text-white/45">
-                SIXFL only takes an outstanding one-off matchday team payment on fixture day. Player payments and team credit reduce it first.
-              </p>
-              <form action={"/captain/team/" + team.id + "/payments/setup-saved-card"} method="post">
-                <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-300 px-4 text-sm font-black text-black">
-                  {hasSavedCard ? "Replace saved card" : hasStripeCustomer ? "Continue card setup" : "Set up saved card"}
-                </button>
-              </form>
-              {hasSavedCard ? (
-                <form action={"/captain/team/" + team.id + "/payments/manage-saved-card"} method="post">
-                  <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-sm font-bold text-white/75">
-                    Manage saved card
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          </details>
-
-          <TeamKitFundTransferPanel
-            teamId={team.id}
-            teamCreditPence={Math.max(creditLedger.balancePence, 0)}
-            kitFundBalancePence={Math.max(kitFundLedger.balancePence, 0)}
-            entries={kitFundLedger.entries.slice(0, 8).map((entry) => ({
-              id: entry.id,
-              entryType: entry.entryType,
-              amountPence: entry.amountPence,
-              description: entry.description,
-              createdAtIso: entry.createdAt.toISOString(),
-            }))}
-          />
-
-          <section className="overflow-hidden rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035]">
-            <div className="flex items-center justify-between border-b border-white/[0.07] px-3.5 py-3">
-              <div>
-                <h2 className="text-sm font-black">Charges</h2>
-                <p className="mt-0.5 text-[10px] text-white/35">Tap a charge for the payment breakdown and actions.</p>
-              </div>
-              <span className="text-[10px] font-semibold text-white/35">{ledger.entries.length}</span>
-            </div>
-
-            {ledger.entries.length === 0 ? (
-              <div className="p-4 text-sm text-white/45">No charges recorded yet.</div>
-            ) : (
-              <div className="divide-y divide-white/[0.06]">
-                {ledger.entries.map((entry) => {
-                  const paymentDecision = paymentOrder.decision(entry.chargeId);
-                  const creditAvailableForChargePence = paymentDecision.allowed
-                    ? Math.min(creditBalancePence, entry.outstandingPence)
-                    : 0;
-                  const payableAfterCreditPence = Math.max(
-                    entry.outstandingPence - creditAvailableForChargePence,
-                    0,
-                  );
-                  const canPayOnline =
-                    paymentDecision.allowed &&
-                    Boolean(entry.paymentToken) &&
-                    entry.displayStatus !== "PAID" &&
-                    entry.displayStatus !== "VOID" &&
-                    payableAfterCreditPence > 0;
-                  const canUseCredit =
-                    paymentDecision.allowed &&
-                    creditAvailableForChargePence > 0 &&
-                    entry.displayStatus !== "PAID" &&
-                    entry.displayStatus !== "VOID" &&
-                    entry.outstandingPence > 0;
-                  const context = [entry.leagueName, entry.leagueSeason, entry.divisionName]
-                    .filter(Boolean)
-                    .join(" · ");
-                  const playerCollectionDetails = entry.fixtureId
-                    ? playerCollectionsByTeamFixture.get(entry.teamId + ":" + entry.fixtureId) ?? []
-                    : [];
-                  const playerLinksOpenPence = Math.max(
-                    entry.playerOpenPence,
-                    playerCollectionDetails.reduce((sum, payment) => sum + payment.outstandingPence, 0),
-                  );
-                  const totalAppliedPence = Math.min(entry.settledPence, entry.amountPence);
-
-                  return (
-                    <details key={entry.chargeId} className="group">
-                      <summary className="cursor-pointer list-none px-3.5 py-3 [&::-webkit-details-marker]:hidden">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-black text-white/80">
-                              {entry.fixtureId ? entry.fixtureLabel : entry.title}
-                            </div>
-                            <div className="mt-1 text-[10px] text-white/35">
-                              {entry.dueDate
-                                ? "Due " + formatPaymentFixtureDate(entry.dueDate)
-                                : entry.kickoffAt
-                                  ? "Fixture " + formatPaymentFixtureDate(entry.kickoffAt)
-                                  : context || "Team charge"}
-                            </div>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <div className={entry.outstandingPence > 0 ? "text-sm font-black text-amber-100" : "text-sm font-black text-emerald-100"}>
-                              {formatMoney(entry.outstandingPence)}
-                            </div>
-                            <div className="text-[9px] uppercase tracking-wide text-white/30">remaining</div>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className={["inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide", getChargeStatusTone(entry.displayStatus)].join(" ")}>
-                            {formatChargeStatus(entry.displayStatus, entry.waivedPence + entry.playerSubsidyPence)}
-                          </span>
-                          <span className="text-[10px] text-white/25 transition group-open:rotate-45">+</span>
-                        </div>
-                      </summary>
-
-                      <div className="space-y-3 border-t border-white/[0.06] bg-black/10 p-3.5">
-                        <p className="text-xs leading-5 text-white/50">{getCurrentSettlementText(entry)}</p>
-
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <div className="rounded-xl border border-white/[0.06] bg-black/15 p-2 text-center">
-                            <div className="text-xs font-black">{formatMoney(entry.amountPence)}</div>
-                            <div className="text-[8px] uppercase tracking-wide text-white/25">Charge</div>
-                          </div>
-                          <div className="rounded-xl border border-white/[0.06] bg-black/15 p-2 text-center">
-                            <div className="text-xs font-black text-emerald-100">{formatMoney(totalAppliedPence)}</div>
-                            <div className="text-[8px] uppercase tracking-wide text-white/25">Applied</div>
-                          </div>
-                          <div className="rounded-xl border border-white/[0.06] bg-black/15 p-2 text-center">
-                            <div className={entry.outstandingPence > 0 ? "text-xs font-black text-amber-100" : "text-xs font-black text-emerald-100"}>
-                              {formatMoney(entry.outstandingPence)}
-                            </div>
-                            <div className="text-[8px] uppercase tracking-wide text-white/25">Due</div>
-                          </div>
-                        </div>
-
-                        {playerCollectionDetails.length > 0 ? (
-                          <details className="rounded-xl border border-white/[0.07] bg-white/[0.025]">
-                            <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-bold text-white/60 [&::-webkit-details-marker]:hidden">
-                              Player contributions ({playerCollectionDetails.length})
-                            </summary>
-                            <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
-                              {playerCollectionDetails.map((player) => (
-                                <div key={player.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                                  <div className="min-w-0">
-                                    <div className="truncate text-xs font-bold text-white/70">{player.name}</div>
-                                    <div className="text-[10px] text-white/35">{player.statusLabel}</div>
-                                  </div>
-                                  <div className="shrink-0 text-xs font-black text-white/70">{formatMoney(player.amountPence)}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        ) : null}
-
-                        {creditAvailableForChargePence > 0 ? (
-                          <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/[0.07] p-3 text-xs leading-5 text-emerald-50/70">
-                            {formatMoney(creditAvailableForChargePence)} team credit is available for this charge.
-                            {payableAfterCreditPence > 0 ? " " + formatMoney(payableAfterCreditPence) + " would remain." : " It covers the remaining balance."}
-                          </div>
-                        ) : null}
-
-                        {canUseCredit ? (
-                          <form action={useTeamCreditAction}>
-                            <input type="hidden" name="teamId" value={team.id} />
-                            <input type="hidden" name="chargeId" value={entry.chargeId} />
-                            <button type="submit" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-black text-emerald-100">
-                              Use {formatMoney(creditAvailableForChargePence)} credit
-                            </button>
-                          </form>
-                        ) : null}
-
-                        {canPayOnline ? (
-                          <Link
-                            href={"/pay/charge/" + entry.paymentToken}
-                            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-400 px-4 text-sm font-black text-black"
-                          >
-                            {creditAvailableForChargePence > 0
-                              ? "Pay " + formatMoney(payableAfterCreditPence) + " after credit"
-                              : "Pay now"}
-                          </Link>
-                        ) : null}
-
-                        {playerLinksOpenPence > 0 ? (
-                          <details className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3">
-                            <summary className="cursor-pointer text-xs font-bold text-amber-100">
-                              Player links still open · {formatMoney(playerLinksOpenPence)}
-                            </summary>
-                            <p className="mt-2 text-[11px] leading-4 text-amber-50/65">
-                              Pause them to stop collection while keeping the debt, or permanently write them off.
-                            </p>
-                            <form action={closeSettledChargePlayerLinksAction} className="mt-2">
-                              <input type="hidden" name="teamId" value={team.id} />
-                              <input type="hidden" name="chargeId" value={entry.chargeId} />
-                              <button type="submit" className="inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-amber-300/25 bg-black/15 px-3 text-xs font-bold text-amber-50">
-                                Pause unpaid player links
-                              </button>
-                            </form>
-                            <details className="mt-2 rounded-xl border border-red-400/20 bg-red-500/10 p-2.5">
-                              <summary className="cursor-pointer text-[11px] font-bold text-red-100">Write off player debt</summary>
-                              <form action={writeOffUnpaidPlayerLinksAction} className="mt-2 space-y-2">
-                                <input type="hidden" name="teamId" value={team.id} />
-                                <input type="hidden" name="chargeId" value={entry.chargeId} />
-                                <label className="flex items-start gap-2 text-[10px] leading-4 text-red-50/75">
-                                  <input type="checkbox" name="confirmWriteOff" value="yes" required className="mt-0.5" />
-                                  <span>I understand the players will no longer owe this money and the team still owes the fixture balance.</span>
-                                </label>
-                                <button type="submit" className="inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-red-500 px-3 text-xs font-black text-white">
-                                  Write off {formatMoney(playerLinksOpenPence)}
-                                </button>
-                              </form>
-                            </details>
-                          </details>
-                        ) : null}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          <details className="group overflow-hidden rounded-[1.2rem] border border-white/[0.07] bg-white/[0.035]">
-            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 [&::-webkit-details-marker]:hidden">
-              <span>
-                <span className="block text-sm font-black text-white">Payment history</span>
-                <span className="mt-0.5 block text-[10px] text-white/35">Last {paymentTransactions.length} recorded payments</span>
-              </span>
-              <span className="text-white/25 transition group-open:rotate-45">+</span>
-            </summary>
-            <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
-              {paymentTransactions.length === 0 ? (
-                <div className="p-4 text-sm text-white/45">No payments recorded yet.</div>
-              ) : (
-                paymentTransactions.map((tx) => {
-                  const playerFeeId = extractPlayerFeeId(tx.notes);
-                  const playerFeeInfo = playerFeeId ? playerFeeInfoById.get(playerFeeId) ?? null : null;
-                  return (
-                    <div key={tx.id} className="flex items-start justify-between gap-3 px-3.5 py-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-black text-white/75">
-                          {playerFeeInfo ? "Paid by " + playerFeeInfo.payerName : tx.charge?.title ?? "Payment"}
-                        </div>
-                        <div className="mt-1 text-[10px] leading-4 text-white/35">
-                          {getPaymentReceiptLabel(tx)} · {formatUkDateTime(tx.paidAt)}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-sm font-black text-emerald-100">{formatMoney(tx.amountPence)}</div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </details>
-        </main>
-      </CaptainPwaModeOnly>
-
-      <CaptainPwaModeOnly mode="web">
-        <div className="space-y-8">
+      <style>{`
+        body:has(.captain-app-header) .captain-team-payments-page { display:grid; gap:.7rem; margin:0; }
+        body:has(.captain-app-header) .captain-team-payments-page > section,
+        body:has(.captain-app-header) .captain-team-payments-page > div { border-radius:1.05rem !important; box-shadow:none !important; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[class*="p-5"],
+        body:has(.captain-app-header) .captain-team-payments-page > section[class*="p-6"],
+        body:has(.captain-app-header) .captain-team-payments-page > div[class*="px-5"] { padding:.8rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] { font-size:.7rem; line-height:1.1rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] p { margin-top:.4rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] button,
+        body:has(.captain-app-header) .captain-team-payments-page > section[data-team-payment-order] a { min-height:2.65rem; width:100%; justify-content:center; font-size:.72rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:.4rem; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div { border-radius:.85rem !important; padding:.65rem !important; min-width:0; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:first-child { font-size:.52rem; line-height:.75rem; letter-spacing:.08em; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:nth-child(2) { margin-top:.2rem; font-size:1rem; line-height:1.2; font-weight:800; }
+        body:has(.captain-app-header) .captain-team-payments-page > section.grid > div p:nth-child(3) { display:none; }
+        body:has(.captain-app-header) .captain-team-payments-page h2[class*="text-2xl"],
+        body:has(.captain-app-header) .captain-team-payments-page h2[class*="text-xl"] { font-size:.95rem !important; line-height:1.2 !important; font-weight:800 !important; }
+        body:has(.captain-app-header) .captain-team-payments-page p[class*="leading-6"] { font-size:.7rem; line-height:1.1rem; }
+        body:has(.captain-app-header) .captain-team-payments-page form[class*="max-w-sm"] { max-width:none; width:100%; }
+        body:has(.captain-app-header) .captain-team-payments-page form[class*="max-w-sm"] button { width:100%; }
+        body:has(.captain-app-header) .captain-team-payments-page section[class*="rounded-3xl"] > div[class*="px-6"] { padding:.8rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page section[class*="rounded-3xl"] > div[class*="divide-y"] > div { padding:.75rem !important; }
+        body:has(.captain-app-header) .captain-team-payments-page a[class*="min-h-11"],
+        body:has(.captain-app-header) .captain-team-payments-page button[class*="h-12"],
+        body:has(.captain-app-header) .captain-team-payments-page button[class*="h-11"] { width:100%; min-height:2.7rem; height:auto; border-radius:.8rem; font-size:.72rem; }
+      `}</style>
+      <div className="captain-team-payments-page space-y-8">
       {linkWriteOffMessage ? (
         <p
           role={sp.links === "written_off" ? "status" : "alert"}
@@ -1982,8 +1577,7 @@ export default async function CaptainPaymentsPage({
           )}
         </div>
       </section>
-        </div>
-      </CaptainPwaModeOnly>
+    </div>
     </>
   );
 }
