@@ -54,6 +54,7 @@ async function renderCaptainView({ kind = 'overview', teamid = 'nomads', awarded
     } },
   };
   for (const name of ['CaptainDashboardLeagueTable', 'CaptainOnboardingChecklist', 'CaptainVeoPriorityCard', 'CaptainTeamNudges']) stubs[`@/components/captain/${name}`] = noopComponent;
+  stubs['@/components/captain/CaptainPwaModeOnly'] = { default: p => p.mode === 'web' ? p.children : null, __esModule: true };
   stubs['@/components/leagues/DivisionAwareDashboardTables'] = noopComponent;
   const file = kind === 'overview' ? 'src/app/captain/team/[teamid]/page.tsx' : 'src/app/captain/team/[teamid]/results-history/page.tsx';
   const Page = load(file, stubs).default;
