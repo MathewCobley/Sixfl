@@ -55,12 +55,17 @@ export default async function CaptainNewsPage({
     }
 
     return (
-      <main className="mx-auto w-full max-w-xl px-3 pt-4 text-white">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h1 className="text-xl font-black">{news.matchweekNumber ? `Matchweek ${news.matchweekNumber} report` : "Matchweek report"}</h1>
+      <main className="mx-auto w-full max-w-xl px-3 pt-2 text-white">
+        <div
+          data-captain-matchweek-toolbar
+          className="mb-3 flex min-w-0 items-center justify-between gap-3"
+        >
+          <h1 className="min-w-0 truncate whitespace-nowrap text-sm font-black tracking-tight text-white">
+            {news.matchweekNumber ? `Matchweek ${news.matchweekNumber} report` : "Matchweek report"}
+          </h1>
           <Link
             href={href()}
-            className="inline-flex min-h-11 items-center rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-emerald-200"
+            className="inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.05] px-3 text-[11px] font-bold text-emerald-200"
           >
             All reports
           </Link>
