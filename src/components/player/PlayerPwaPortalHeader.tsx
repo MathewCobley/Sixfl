@@ -15,17 +15,34 @@ function isPwaPhonePreviewFrame() {
   } catch {
     return false;
   }
-}
+} 
+
+type PreviewPlayer = {
+  id: string;
+  name: string | null;
+};
 
 export default function PlayerPwaPortalHeader({
+  teamId,
   teamName,
   teamLogoUrl,
+  playerName,
+  previewPlayers = [],
 }: {
+  teamId: string;
   teamName: string;
   teamLogoUrl: string | null;
+  playerName: string | null;
+  previewPlayers?: PreviewPlayer[];
 }) {
   const searchParams = useSearchParams();
   const [appMode, setAppMode] = useState(false);
+  const previewMembershipId =
+    searchParams.get("previewMembershipId")?.trim() || null;
+  const previewPlayerName = previewMembershipId
+    ? previewPlayers.find((player) => player.id === previewMembershipId)?.name?.trim() || null
+    : null;
+  const displayName = previewPlayerName || playerName?.trim() || "SIXFL Player";
 
   useEffect(() => {
     const standalone = window.matchMedia("(display-mode: standalone)").matches;
@@ -69,22 +86,25 @@ export default function PlayerPwaPortalHeader({
       <div className={appMode ? "player-pwa-mode" : "player-pwa-controller"} />
 
       <header
-        className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-3 backdrop-blur-xl"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 0.8rem)" }}
+        className="player-pwa-portal-header sticky top-0 z-40 border-b border-white/[0.07] bg-[#06110e]/95 px-4 pb-2.5 backdrop-blur-xl"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.72rem)" }}
       >
-        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
+        <div className="mx-auto grid w-full max-w-xl grid-cols-[6.2rem_minmax(0,1fr)_2.6rem] items-center gap-2">
           <Image
             src="/logo2.png"
             alt="SIXFL"
             width={180}
             height={48}
             priority
-            className="h-7 w-auto object-contain"
+            className="h-6 w-auto max-w-[6.2rem] object-contain object-left"
           />
 
-          <div className="min-w-0 flex-1 text-center">
-            <div className="text-sm font-black tracking-tight text-white">
-              Player Portal
+          <div className="min-w-0 text-center">
+            <div className="truncate text-[13px] font-black tracking-tight text-white">
+              {displayName}
+            </div>
+            <div className="mt-0.5 truncate text-[9px] font-semibold text-white/45">
+              Player Portal · {teamName}
             </div>
           </div>
 
@@ -100,6 +120,7 @@ export default function PlayerPwaPortalHeader({
             )}
           </div>
         </div>
+        <span className="sr-only" data-player-header-team-id={teamId}>{teamId}</span>
       </header>
     </>
   );
