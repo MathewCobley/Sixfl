@@ -13,6 +13,7 @@ import { formatDateTimeInLondon } from "@/lib/datetime/london";
 import { publishedFixtureWhere } from "@/lib/fixtures/publishing";
 import { getTeamMemberSquadStatusMap } from "@/lib/managed-squad/squadStatus";
 import { prisma } from "@/lib/prisma";
+import { backfillFixtureAvailabilityFromWeekly } from "@/lib/player-weekly-availability";
 import { requireCaptain } from "@/lib/requireCaptain";
 import { getTeamMemberProfilesByTeamMemberIds } from "@/lib/teamMemberProfiles";
 import {
@@ -195,6 +196,32 @@ export default async function CaptainAvailabilityPage({
   const fixtureIds = fixtures.map((fixture) => fixture.id);
   const teamMemberIds = team.members.map((member) => member.id);
 
+  for (const fixture of fixtures) {
+    await backfillFixtureAvailabilityFromWeekly({
+      fixtureId: fixture.id,
+      teamId: teamid,
+      kickoffAt: fixture.kickoffAt,
+      teamMemberIds,
+    });
+  }
+
+  const refreshedFixtures = fixtureIds.length
+    ? await prisma.fixture.findMany({
+        where: { id: { in: fixtureIds } },
+        orderBy: [{ kickoffAt: "asc" }],
+        include: {
+          homeTeam: { select: { id: true, name: true } },
+          awayTeam: { select: { id: true, name: true } },
+          venue: { select: { name: true } },
+          availabilities: {
+            where: { teamMember: { teamId: teamid } },
+            select: { id: true, response: true, note: true, respondedAt: true, teamMemberId: true },
+          },
+        },
+      })
+    : [];
+
+  fixtures.splice(0, fixtures.length, ...refreshedFixtures);
   const [
     teamMemberProfilesByMemberId,
     squadStatusByMemberId,
