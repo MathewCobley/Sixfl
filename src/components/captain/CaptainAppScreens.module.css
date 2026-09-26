@@ -1,5 +1,6 @@
 /* Owned captain UI only. No global website selectors or clipped instructions. */
 .home { display: grid; gap: 12px; min-width: 0; padding: 4px 2px 8px; }
+.overviewStrip { min-width: 0; padding: 0 2px; }
 .home *, .menu *, .appHeader *, .bottomNav * { box-sizing: border-box; }
 
 .identity { overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
