@@ -11,8 +11,9 @@ test("Meta lead importer supports current blank contact headings", () => {
   assert.match(source, /inferContactNameFromUnlabelledMetaColumns/);
   assert.match(source, /\^column\\d\+\$/);
   assert.match(source, /normalizeUkMobileNumber\(candidate\)/);
-  assert.match(source, /currentLeagueIdByArea/);
-  assert.match(source, /leagueCompetition\.findMany/);
+  assert.match(source, /META_MARKETING_AREAS/);
+  assert.match(source, /currentLeagueCandidates/);
+  assert.match(source, /inferLeagueIdFromArea/);
   assert.match(source, /shouldRepairName/);
   assert.match(source, /matchedLead\.phoneNormalized/);
   assert.match(source, /!matchedLead\.area/);
