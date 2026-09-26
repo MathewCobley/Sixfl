@@ -285,7 +285,7 @@ export default async function CaptainVeoPriorityCard({
             Check fixture confirmation
           </Link>
         ) : null}
-        <Link href="/goal-of-the-month" className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 px-4 py-2 text-sm font-semibold text-fuchsia-50 hover:bg-fuchsia-400/10">
+        <Link href={`/captain/team/${teamId}/goal-of-the-month`} className="inline-flex min-h-11 items-center rounded-xl border border-fuchsia-300/30 px-4 py-2 text-sm font-semibold text-fuchsia-50 hover:bg-fuchsia-400/10">
           Nominate / vote for goals
         </Link>
       </div>
