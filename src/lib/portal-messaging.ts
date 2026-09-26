@@ -125,55 +125,105 @@ export async function getPortalChatUnreadCount(input: {
 }) {
   const isCaptain = isCaptainRole(input.role);
 
-  const conversations = await prisma.portalConversation.findMany({
-    where: {
-      teamId: input.teamId,
-      OR: [
-        { type: PortalConversationType.TEAM },
-        {
-          type: PortalConversationType.SIXFL,
-          participantUserId: input.userId,
-        },
-        ...(isCaptain
-          ? [
-              { type: PortalConversationType.CAPTAIN_PLAYER },
-              { type: PortalConversationType.CAPTAIN_CAPTAIN },
-            ]
-          : [
-              {
-                type: PortalConversationType.CAPTAIN_PLAYER,
-                participantUserId: input.userId,
-              },
-            ]),
-        {
-          type: PortalConversationType.REGULARS,
-          members: { some: { userId: input.userId } },
-        },
-        {
-          type: PortalConversationType.SELECTED_GROUP,
-          members: { some: { userId: input.userId } },
-        },
-      ],
-    },
-    select: {
-      id: true,
-      type: true,
-      conversationKey: true,
-      reads: {
-        where: { userId: input.userId },
-        select: { lastReadAt: true },
-        take: 1,
+  const [conversations, currentMembers] = await Promise.all([
+    prisma.portalConversation.findMany({
+      where: {
+        teamId: input.teamId,
+        OR: [
+          { type: PortalConversationType.TEAM },
+          {
+            type: PortalConversationType.SIXFL,
+            participantUserId: input.userId,
+          },
+          ...(isCaptain
+            ? [
+                { type: PortalConversationType.CAPTAIN_PLAYER },
+                { type: PortalConversationType.CAPTAIN_CAPTAIN },
+              ]
+            : [
+                {
+                  type: PortalConversationType.CAPTAIN_PLAYER,
+                  participantUserId: input.userId,
+                },
+              ]),
+          {
+            type: PortalConversationType.REGULARS,
+            members: { some: { userId: input.userId } },
+          },
+          {
+            type: PortalConversationType.SELECTED_GROUP,
+            members: { some: { userId: input.userId } },
+          },
+        ],
       },
-    },
-  });
+      select: {
+        id: true,
+        type: true,
+        conversationKey: true,
+        latestMessageAt: true,
+        members: {
+          select: { userId: true },
+        },
+        reads: {
+          where: { userId: input.userId },
+          select: { lastReadAt: true, archivedAt: true },
+          take: 1,
+        },
+      },
+    }),
+    prisma.teamMember.findMany({
+      where: { teamId: input.teamId },
+      select: { userId: true, isRegular: true, role: true },
+    }),
+  ]);
+
+  const regularUserIds = new Set(
+    currentMembers
+      .filter((member) => member.isRegular)
+      .map((member) => member.userId),
+  );
+  const captainUserIds = new Set(
+    currentMembers
+      .filter((member) => member.role === TeamRole.CAPTAIN)
+      .map((member) => member.userId),
+  );
 
   const relevantConversations = conversations.filter((conversation) => {
-    if (conversation.type !== PortalConversationType.CAPTAIN_CAPTAIN) {
-      return true;
+    if (conversation.type === PortalConversationType.CAPTAIN_CAPTAIN) {
+      const parts = conversation.conversationKey.split(":");
+      if (!parts.includes(input.userId)) return false;
     }
 
-    const parts = conversation.conversationKey.split(":");
-    return parts.includes(input.userId);
+    const archivedAt = conversation.reads[0]?.archivedAt ?? null;
+    if (
+      archivedAt &&
+      (!conversation.latestMessageAt ||
+        conversation.latestMessageAt.getTime() <= archivedAt.getTime())
+    ) {
+      return false;
+    }
+
+    if (conversation.type === PortalConversationType.REGULARS) {
+      if (regularUserIds.size === 0) return false;
+
+      const memberUserIds = conversation.members.map((member) => member.userId);
+      const memberSet = new Set(memberUserIds);
+      for (const userId of regularUserIds) {
+        if (!memberSet.has(userId)) return false;
+      }
+
+      const extraMembers = memberUserIds.filter(
+        (userId) => !regularUserIds.has(userId),
+      );
+      if (
+        extraMembers.length > 1 ||
+        extraMembers.some((userId) => !captainUserIds.has(userId))
+      ) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   const counts = await Promise.all(
