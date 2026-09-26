@@ -33,6 +33,8 @@ function availabilityLabel(response: string | null) {
       return "Maybe";
     case "UNAVAILABLE":
       return "Unavailable";
+    case "EXTRA":
+      return "Extra player";
     default:
       return "No response";
   }
